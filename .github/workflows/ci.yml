@@ -1,0 +1,63 @@
+name: CI
+
+# Product-correctness gate for MDviewer. The crown jewel is the E2E job: it runs the real
+# Chromium pagination/export suite, including the no-slice guarantee (tests/e2e/nocutoff.spec.ts)
+# that defines this project. Keep this workflow green before merging any PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One in-flight run per ref; newer pushes cancel stale runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck · Lint · Unit · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # vite 8 / vitest 4 require node ^20.19 || >=22.12; pin the active LTS.
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright · Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Install Playwright Chromium + OS deps
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests (real Chromium, incl. no-slice guarantee)
+        run: npm run test:e2e
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
