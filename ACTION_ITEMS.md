@@ -16,6 +16,18 @@
 
 ## Current State (snapshot)
 
+- **2026-06-25 (session 2)** — Dependency-currency + CI foundation landed. **11 PRs merged**, `main` green.
+  - **Deps fully current, 0 vulnerabilities:** jspdf 2→4 (security advisories), vite 6→8, vitest 2→4,
+    TypeScript 5.9→6.0, ESLint 9→10, Shiki 3→4 (all 6 pkgs in lockstep), katex 0.16→0.17, mermaid
+    11.0→11.16, GitHub Actions majors. Every open Dependabot PR (#1, #4–#12) resolved.
+  - **First CI** (`.github/workflows/ci.yml`): typecheck/lint/unit/build on a Node 20+22 matrix +
+    Playwright Chromium e2e, run against the **production bundle** (`vite preview`). Plus
+    `.github/dependabot.yml`.
+  - **Test honesty:** the settings e2e was silently no-op'ing; now drives real re-pagination via a new
+    typed `window.__mdviewer` hook (`main.ts` / `src/types/window.d.ts`).
+  - Docs synced to the new versions. Full session log + resumable state in [`ORCHESTRATOR.md`](./ORCHESTRATOR.md).
+  - Live demo (production bundle): sample → 7 pages; no-slice geometry check = **0 of 12 atomic blocks
+    straddling a page boundary**.
 - **2026-06-25** — Repo scaffolded and the app **verified working end-to-end in headless Chromium**.
   - **P0 Scaffolding `DONE`**: build/test config, agentic tooling (`bypassPermissions` + 4 safety
     hooks), pinned design specs (`docs/design/IMPLEMENTATION_SPEC.md`, `LIBRARY_NOTES.md`), seams.
@@ -53,15 +65,13 @@ Verify the core product promise in an actual browser; it cannot be proven in the
 
 Report: pass/fail per export path, and any block that got sliced (with the doc that triggered it).
 
-### AI-3 — Decide license and author for `package.json` — OPEN (2026-06-25)
-
-`package.json` and `README.md` currently carry an **MIT placeholder**. Confirm the intended license
-and author/copyright holder, then update `package.json` (`license`, `author`) and the README License
-section. If a different license is chosen, add the appropriate `LICENSE` file.
-
 ---
 
 ## Completed log
+
+- **AI-3 — Decide license and author** — DONE 2026-06-25. User confirmed: **keep the MIT placeholder.**
+  `package.json` + `README.md` already carry MIT; the author/copyright holder is intentionally left as
+  a placeholder for now. No change required. (Revisit author/`LICENSE` file only before a public release.)
 
 - **AI-2 — Install Playwright browsers + run the E2E suite** — DONE 2026-06-25. Ran
   `npx playwright install chromium` + `npm run test:e2e` → **15/15 passing**, including
