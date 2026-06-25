@@ -49,7 +49,7 @@ jobs:
         run: npm run build
 
   e2e:
-    name: E2E (Playwright · Chromium)
+    name: E2E (Playwright · Chromium · production build)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -73,8 +73,14 @@ jobs:
       # on a miss it downloads Chromium too. Either way OS libs are ensured via --with-deps.
       - name: Install Playwright Chromium (+ OS deps)
         run: npx playwright install --with-deps chromium
-      - name: E2E tests (real Chromium, incl. no-slice guarantee)
+      # Build the real artifact, then run e2e against `vite preview` so the no-slice guarantee
+      # and both export paths are validated on the shipped rolldown bundle, not just dev mode.
+      - name: Build
+        run: npm run build
+      - name: E2E tests (real Chromium, production bundle, incl. no-slice guarantee)
         run: npm run test:e2e
+        env:
+          E2E_TARGET: preview
       - name: Upload Playwright artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
