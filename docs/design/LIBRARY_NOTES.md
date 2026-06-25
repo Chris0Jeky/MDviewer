@@ -1,9 +1,9 @@
 # Library Integration Notes (verified against installed versions)
 
 Copy-pasteable, version-correct integration recipes for MDviewer's stack. Verified
-against: `markdown-it@14.2.0`, `shiki@3.23.0` (+ `@shikijs/*@3.23.0`),
-`@vscode/markdown-it-katex@1.1.2`, `katex@0.16.47`, `mermaid@11.15.0`, `pagedjs@0.4.3`,
-`jspdf@2.5.2`, `html2canvas-pro@1.6.7`. Read alongside
+against: `markdown-it@14.2.0`, `shiki@4.3.0` (+ `@shikijs/*@4.3.0`),
+`@vscode/markdown-it-katex@1.1.2`, `katex@0.17.0`, `mermaid@11.16.0`, `pagedjs@0.4.3`,
+`jspdf@4.2.1`, `html2canvas-pro@1.6.7`. Read alongside
 [`IMPLEMENTATION_SPEC.md`](./IMPLEMENTATION_SPEC.md).
 
 ## TypeScript constraints (the build is strict)
@@ -85,7 +85,7 @@ md.use((mk as unknown as { default?: typeof mk }).default ?? mk, {
 Synchronous (renders during `md.render`). Block math → `<span class="katex-display">`.
 Height depends on fonts → `await document.fonts.ready` before pagination.
 
-## 3. Shiki 3.x (`src/render/highlight.ts`, `markdown.ts`)
+## 3. Shiki 4.x (`src/render/highlight.ts`, `markdown.ts`)
 
 Fine-grained bundle: dynamic-import only the langs/themes you ship so Vite code-splits them.
 Highlighter is async — `await getHighlighter()` ONCE before `md.render`.

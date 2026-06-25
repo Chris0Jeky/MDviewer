@@ -26,7 +26,7 @@ re-implement breaking here.
 - The exported PDF is ALWAYS dark-on-white regardless of screen theme — `@media print`
   forces the Shiki light side and light callout backgrounds. Do not let screen theme
   leak into the PDF.
-- jspdf is 2.5.2: use `addImage`/`addPage`/`save`; named import `{ jsPDF }`; never
+- jspdf is 4.2.1 (API unchanged from 2.x): use `addImage`/`addPage`/`save`; named import `{ jsPDF }`; never
   `.html()`. Use `PAGEDJS.pageClass` from `src/app/dom.ts` to select pages.
 - html2canvas-pro caveat: Mermaid `foreignObject` text can blank; warn on big docs and
   keep `window.print()` primary.

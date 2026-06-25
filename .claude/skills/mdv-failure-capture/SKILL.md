@@ -30,7 +30,7 @@ dropped because it is "minor" or "non-blocking."
 - Render-order regressions (paginating before fonts/Mermaid settle → misplaced breaks).
 - Paged.js teardown leaks (`style[data-pagedjs-inserted-styles]` left behind → stale
   CSS on re-paginate).
-- Shiki 3.x-vs-4.x API drift; KaTeX without `katex.min.css`; Mermaid `useMaxWidth` not
+- Shiki `@shikijs/*` version skew (all packages must move in lockstep); KaTeX without `katex.min.css`; Mermaid `useMaxWidth` not
   false (wrong measured height).
 - jsdom layout assertions sneaking into unit tests (always wrong → must be e2e).
 

@@ -18,25 +18,28 @@ local-first (no runtime network calls, nothing uploaded). Vanilla TypeScript + V
 
 Runtime: `markdown-it@14.2.0` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.0`
 · `markdown-it-toc-done-right@4.2.0` · `markdown-it-container@4.0.0` · `markdown-it-attrs@4.5.0`
-· `markdown-it-task-lists@2.1.1` · `shiki@3.23.0` (+ `@shikijs/core`, `@shikijs/langs`,
-`@shikijs/themes`, `@shikijs/markdown-it`, `@shikijs/transformers` all `3.23.0`)
-· `@vscode/markdown-it-katex@1.1.2` · `katex@0.16.47` · `mermaid@11.15.0` · `pagedjs@0.4.3`
-· `jspdf@2.5.2` · `html2canvas-pro@1.6.7`.
+· `markdown-it-task-lists@2.1.1` · `shiki@4.3.0` (+ `@shikijs/core`, `@shikijs/langs`,
+`@shikijs/themes`, `@shikijs/markdown-it`, `@shikijs/transformers` all `4.3.0`)
+· `@vscode/markdown-it-katex@1.1.2` · `katex@0.17.0` · `mermaid@11.16.0` · `pagedjs@0.4.3`
+· `jspdf@4.2.1` · `html2canvas-pro@1.6.7`.
 
-Toolchain: `vite@6` · `vitest@2` · `typescript@5.9` · `eslint@9` + `typescript-eslint@8`
+Toolchain: `vite@8` · `vitest@4` · `typescript@6.0` · `eslint@10` + `typescript-eslint@8`
 · `jsdom@25` · `@playwright/test@1.49+`.
 
 Notes that bite if ignored:
-- **Shiki is 3.x**, not 4.x. The fine-grained API (`shiki/core` `createHighlighterCore`,
+- **Shiki is 4.x** (bumped from 3.x; the fine-grained API is unchanged across the major).
+  The fine-grained API (`shiki/core` `createHighlighterCore`,
   `shiki/engine/oniguruma` `createOnigurumaEngine`, `import('shiki/wasm')`,
   `@shikijs/langs/<lang>`, `@shikijs/themes/<theme>`, `@shikijs/markdown-it/core`
-  `fromHighlighter`) is identical in 3.x — use it.
+  `fromHighlighter`) — use it. All `@shikijs/*` siblings are version-pinned in lockstep,
+  so bump them together.
 - **`@types/markdown-it-footnote@3.0.4`** intentionally pairs with runtime `4.0.0`
   (type surface unchanged). Do not "fix" the mismatch.
 - **`markdown-it-task-lists`** ships no `@types` → local shim in `src/types/`.
 - **`pagedjs`** ships no types and no `module` field → local ambient `pagedjs.d.ts`;
   Vite resolves its `browser`/`import` export condition automatically.
-- **jspdf is 2.5.2** — use `addImage`/`addPage`/`save` (we never use `.html()`).
+- **jspdf is 4.2.1** — use `addImage`/`addPage`/`save` (we never use `.html()`); this API
+  is unchanged from the prior 2.x, and the bump pulled in upstream security fixes.
 
 ## 3. The load-bearing render order (NEVER reorder)
 
