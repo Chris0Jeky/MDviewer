@@ -39,8 +39,8 @@
     "@shikijs/markdown-it": "^3.0.0",
     "@shikijs/transformers": "^3.0.0",
     "@vscode/markdown-it-katex": "^1.1.0",
-    "katex": "^0.16.10",
-    "mermaid": "^11.0.0",
+    "katex": "^0.17.0",
+    "mermaid": "^11.16.0",
     "pagedjs": "^0.4.3",
     "jspdf": "^4.2.1",
     "html2canvas-pro": "^1.5.8"
