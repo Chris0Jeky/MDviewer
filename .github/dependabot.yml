@@ -23,6 +23,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    open-pull-requests-limit: 5
     groups:
       github-actions:
         patterns: ["*"]
+        # Keep majors individual (consistent with the npm policy above) so an action
+        # major like actions/checkout v4->v5 gets its own scrutiny.
+        update-types: ["minor", "patch"]
