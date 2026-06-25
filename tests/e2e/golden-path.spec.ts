@@ -76,9 +76,10 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     expect(hasHook, "window.__mdviewer.updateSettings must be exposed by main.ts").toBe(true);
     await page.evaluate(() => window.__mdviewer!.updateSettings({ paperSize: "letter" }));
 
-    // letter (215.9mm) is wider than a4 (210mm): poll until the page is re-laid-out at the
-    // new geometry, proving the setting actually triggered a re-pagination, not a no-op.
-    await expect.poll(firstPageWidth, { timeout: 10_000 }).not.toBe(beforeWidth);
+    // letter (215.9mm) is wider than a4 (210mm): poll until the page is re-laid-out WIDER,
+    // proving the setting actually triggered a re-pagination at the new letter geometry (not
+    // a no-op, and not merely a transient mid-teardown width).
+    await expect.poll(firstPageWidth, { timeout: 10_000 }).toBeGreaterThan(beforeWidth);
 
     const count = await waitForPagination(page);
     expect(count).toBeGreaterThan(0);
