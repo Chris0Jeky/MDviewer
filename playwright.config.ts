@@ -7,10 +7,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // Cap CI parallelism: the no-slice tests measure real element heights, so CPU contention
+  // from one-worker-per-core on shared runners can cause timing flakes that retries would mask.
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: "http://localhost:5180",
     trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   webServer: {
     command: "npm run dev -- --port 5180 --strictPort",
