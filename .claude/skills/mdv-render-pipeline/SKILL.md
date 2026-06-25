@@ -32,7 +32,7 @@ wrong place and the no-slice guarantee fails.
   `SLUGIFY` so TOC links match heading ids exactly.
 - `src/render/math.ts` — KaTeX wiring; `throwOnError:false` (bad TeX renders red inline,
   never aborts the doc). `import "katex/dist/katex.min.css"` is mandatory.
-- `src/render/highlight.ts` — Shiki 3.x fine-grained core; `getHighlighter()` singleton;
+- `src/render/highlight.ts` — Shiki 4.x fine-grained core; `getHighlighter()` singleton;
   `CODE_THEME_PAIRS`; `ensureLang`. `defaultColor: "light"` so the vector PDF is correct.
 - `src/render/mermaid.ts` — `renderAllMermaid(root, theme)`; fixed-size SVG; failure →
   placeholder figure, never a throw.
@@ -41,7 +41,8 @@ wrong place and the no-slice guarantee fails.
 
 ## Gotchas
 
-- Shiki is 3.x (fine-grained API), not 4.x.
+- Shiki is 4.x (fine-grained core API, unchanged from 3.x). All `@shikijs/*` packages are
+  version-pinned in lockstep — bump them together or the type graph splits.
 - Unknown code language → fall back to `text`, never throw.
 - Use `CLASSES`/`ATTRS` from `src/app/dom.ts`; surface failures as `RenderWarning`.
 

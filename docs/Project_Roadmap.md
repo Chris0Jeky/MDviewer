@@ -23,7 +23,7 @@ Chrome with the app running. Tracked as human action items in [`../ACTION_ITEMS.
 ### P0 — Scaffolding — `DONE`
 
 - Repository, git, and agentic tooling (`CLAUDE.md`, `AGENTS.md`, skills, `autodoc/AGENT_INDEX.md`).
-- Build and test config: Vite 6, Vitest 2, TypeScript 5.9 (strict), ESLint 9, Playwright.
+- Build and test config: Vite 8, Vitest 4, TypeScript 6.0 (strict), ESLint 10, Playwright.
 - Pinned design specs: `design/IMPLEMENTATION_SPEC.md`, `design/LIBRARY_NOTES.md`.
 - Canonical seams committed: `src/app/dom.ts`, `src/app/settings.ts`, `src/app/state.ts`, the
   ambient type shims, `index.html`, and toolchain config.
