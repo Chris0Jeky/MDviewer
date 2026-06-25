@@ -1,0 +1,632 @@
+/* =============================================================================
+ * document.css — typography and component styling for the RENDERED DOCUMENT
+ * (.doc) that flows into the Paged.js page sheets. These rules cascade normally
+ * into .pagedjs_page content and apply equally on screen and in the exported
+ * PDF, so all colors here are chosen to be legible dark-on-white (the export is
+ * always light). Screen themes (app.css) recolor only the chrome, never .doc.
+ *
+ * The font family/size are driven by custom properties the app sets on .doc:
+ *   --doc-font-family   (from settings.docFont: serif | sans | slab)
+ *   --doc-font-size     (from settings.fontSizePt)
+ * Imported by main.ts. Class/id names match dom.ts CLASSES.
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * Document-scoped tokens. .doc supplies the base typography; the three font
+ * groups resolve --doc-font-family. Code blocks always use a mono stack.
+ * -------------------------------------------------------------------------- */
+.doc {
+  --doc-font-family:
+    "Source Serif 4", "Source Serif Pro", "Charter", "Georgia", "Times New Roman", serif;
+  --doc-font-size: 11pt;
+
+  --doc-mono:
+    "JetBrains Mono", "SF Mono", "SFMono-Regular", "Cascadia Code", "Menlo",
+    "Consolas", "Liberation Mono", monospace;
+
+  --doc-fg: #1a1a1a;
+  --doc-fg-muted: #555b63;
+  --doc-heading: #111418;
+  --doc-link: #1a4fb8;
+  --doc-border: #d7dbe0;
+  --doc-rule: #e3e6ea;
+  --doc-code-bg: #f5f6f8;     /* inline code chip */
+  --doc-quote-bar: #c7ccd3;
+  --doc-quote-fg: #41464d;
+
+  --doc-leading: 1.6;
+  --doc-space: 0.85em;        /* default vertical rhythm between blocks */
+
+  font-family: var(--doc-font-family);
+  font-size: var(--doc-font-size);
+  line-height: var(--doc-leading);
+  color: var(--doc-fg);
+  font-variant-ligatures: common-ligatures;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+/* Font-group selection. The app sets these via a data attribute or by reading
+ * settings; we support a data hook AND inline --doc-font-family override. */
+.doc[data-doc-font="serif"] {
+  --doc-font-family:
+    "Source Serif 4", "Source Serif Pro", "Charter", "Georgia", "Times New Roman", serif;
+}
+
+.doc[data-doc-font="sans"] {
+  --doc-font-family:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.doc[data-doc-font="slab"] {
+  --doc-font-family:
+    "Roboto Slab", "Rockwell", "Source Serif 4", "Georgia", "Times New Roman", serif;
+}
+
+/* -----------------------------------------------------------------------------
+ * Block rhythm. A predictable top/bottom margin keeps page breaks tidy.
+ * -------------------------------------------------------------------------- */
+.doc > :first-child {
+  margin-top: 0;
+}
+
+.doc > :last-child {
+  margin-bottom: 0;
+}
+
+.doc p,
+.doc ul,
+.doc ol,
+.doc dl,
+.doc blockquote,
+.doc table,
+.doc pre,
+.doc figure {
+  margin: 0 0 var(--doc-space);
+}
+
+/* -----------------------------------------------------------------------------
+ * Headings. Tight top margins create keep-with-next visual grouping; the paged
+ * break rules (print.css) add the actual break-after:avoid.
+ * -------------------------------------------------------------------------- */
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4,
+.doc h5,
+.doc h6 {
+  color: var(--doc-heading);
+  font-family: var(--doc-font-family);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.5em 0 0.5em;
+}
+
+.doc h1 {
+  font-size: 2em;
+  margin-top: 0.2em;
+  padding-bottom: 0.2em;
+  border-bottom: 2px solid var(--doc-rule);
+}
+
+.doc h2 {
+  font-size: 1.55em;
+  padding-bottom: 0.15em;
+  border-bottom: 1px solid var(--doc-rule);
+}
+
+.doc h3 {
+  font-size: 1.28em;
+}
+
+.doc h4 {
+  font-size: 1.1em;
+}
+
+.doc h5 {
+  font-size: 1em;
+  letter-spacing: 0.01em;
+}
+
+.doc h6 {
+  font-size: 0.92em;
+  color: var(--doc-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* -----------------------------------------------------------------------------
+ * .header-anchor — markdown-it-anchor's headerLink wraps heading text in a
+ * link. Keep it visually identical to the heading; only reveal the affordance
+ * subtly on hover (screen). Never underline in print.
+ * -------------------------------------------------------------------------- */
+.doc .header-anchor {
+  color: inherit;
+  text-decoration: none;
+}
+
+.doc :is(h1, h2, h3, h4, h5, h6) .header-anchor::after {
+  content: "";
+}
+
+@media screen {
+  .doc :is(h1, h2, h3, h4, h5, h6):hover .header-anchor::after {
+    content: "\00a0#";
+    color: var(--doc-link);
+    font-weight: 400;
+    opacity: 0.55;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Links and cross-references.
+ * -------------------------------------------------------------------------- */
+.doc a {
+  color: var(--doc-link);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  text-decoration-thickness: 0.06em;
+}
+
+.doc a:hover {
+  text-decoration-thickness: 0.1em;
+}
+
+.doc a.xref {
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.doc a.xref:hover {
+  text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+ * Lists.
+ * -------------------------------------------------------------------------- */
+.doc ul,
+.doc ol {
+  padding-left: 1.5em;
+}
+
+.doc li {
+  margin: 0.2em 0;
+}
+
+.doc li > ul,
+.doc li > ol {
+  margin: 0.2em 0;
+}
+
+.doc dt {
+  font-weight: 700;
+}
+
+.doc dd {
+  margin: 0 0 0.4em 1.4em;
+}
+
+/* Task lists (markdown-it-task-lists). The checkbox sits in the left gutter. */
+.doc .task-list-item {
+  list-style: none;
+  margin-left: -1.5em;
+  padding-left: 1.5em;
+  position: relative;
+}
+
+.doc .task-list-item input[type="checkbox"] {
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+  margin: 0;
+  width: 0.95em;
+  height: 0.95em;
+  accent-color: var(--doc-link);
+}
+
+.doc .task-list-item label {
+  cursor: default;
+}
+
+/* -----------------------------------------------------------------------------
+ * Inline code. (Block code coloring lives in shiki.css.)
+ * -------------------------------------------------------------------------- */
+.doc :not(pre) > code {
+  font-family: var(--doc-mono);
+  font-size: 0.88em;
+  padding: 0.12em 0.36em;
+  border-radius: 4px;
+  background: var(--doc-code-bg);
+  border: 1px solid var(--doc-border);
+  color: #b3134a; /* AA on the light chip */
+  white-space: break-spaces;
+}
+
+/* code-figure wraps a captioned/numbered listing around a <pre>. */
+.doc figure.code-figure {
+  margin: 0 0 var(--doc-space);
+}
+
+.doc figure.code-figure figcaption {
+  font-size: 0.8em;
+  color: var(--doc-fg-muted);
+  margin-top: 0.4em;
+  text-align: left;
+}
+
+/* -----------------------------------------------------------------------------
+ * Blockquote.
+ * -------------------------------------------------------------------------- */
+.doc blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0.2em 0 0.2em 1.1em;
+  border-left: 4px solid var(--doc-quote-bar);
+  color: var(--doc-quote-fg);
+  font-style: italic;
+}
+
+.doc blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* -----------------------------------------------------------------------------
+ * Tables.
+ * -------------------------------------------------------------------------- */
+.doc table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.94em;
+}
+
+.doc th,
+.doc td {
+  border: 1px solid var(--doc-border);
+  padding: 0.4em 0.6em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.doc thead th {
+  background: var(--doc-code-bg);
+  color: var(--doc-heading);
+  font-weight: 700;
+  border-bottom: 2px solid var(--doc-quote-bar);
+}
+
+.doc tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+/* -----------------------------------------------------------------------------
+ * Horizontal rule and images.
+ * -------------------------------------------------------------------------- */
+.doc hr {
+  border: 0;
+  border-top: 1px solid var(--doc-rule);
+  margin: 1.6em 0;
+}
+
+.doc img {
+  max-width: 100%;
+  height: auto;
+}
+
+.doc figure {
+  text-align: center;
+}
+
+.doc figure > figcaption {
+  font-size: 0.82em;
+  color: var(--doc-fg-muted);
+  margin-top: 0.4em;
+}
+
+/* -----------------------------------------------------------------------------
+ * Callouts (.callout + .callout-{note,tip,warning,danger} + .callout-title).
+ * Accent bar + tinted background per LIBRARY_NOTES; titles carry the accent.
+ * Backgrounds stay light so the export remains dark-on-white.
+ * -------------------------------------------------------------------------- */
+.doc .callout {
+  --callout-accent: #6b7280;
+  --callout-bg: #f4f5f7;
+  --callout-title-fg: #374151;
+
+  margin: 0 0 var(--doc-space);
+  padding: 0.7em 1em 0.75em;
+  border: 1px solid var(--doc-border);
+  border-left: 4px solid var(--callout-accent);
+  border-radius: 6px;
+  background: var(--callout-bg);
+}
+
+.doc .callout > :last-child {
+  margin-bottom: 0;
+}
+
+.doc .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0 0 0.4em;
+  font-weight: 700;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+  color: var(--callout-title-fg);
+}
+
+/* Leading glyph per kind. */
+.doc .callout-title::before {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.doc .callout-note {
+  --callout-accent: #2563eb;
+  --callout-bg: #eef4ff;
+  --callout-title-fg: #1d4ed8;
+}
+
+.doc .callout-note .callout-title::before {
+  content: "\2139\fe0f"; /* ℹ️ */
+}
+
+.doc .callout-tip {
+  --callout-accent: #0d9488;
+  --callout-bg: #e8f7f4;
+  --callout-title-fg: #0f766e;
+}
+
+.doc .callout-tip .callout-title::before {
+  content: "\1f4a1"; /* 💡 */
+}
+
+.doc .callout-warning {
+  --callout-accent: #d97706;
+  --callout-bg: #fff6e6;
+  --callout-title-fg: #b45309;
+}
+
+.doc .callout-warning .callout-title::before {
+  content: "\26a0\fe0f"; /* ⚠️ */
+}
+
+.doc .callout-danger {
+  --callout-accent: #dc2626;
+  --callout-bg: #fdecec;
+  --callout-title-fg: #b91c1c;
+}
+
+.doc .callout-danger .callout-title::before {
+  content: "\1f6d1"; /* 🛑 */
+}
+
+/* -----------------------------------------------------------------------------
+ * Table of contents (nav.toc / .toc + a.toc-link). Dot-leader rows; the page
+ * number is filled by Paged.js target-counter (print) and as a fallback by a
+ * data-page attribute the handler can write for the screen preview.
+ * -------------------------------------------------------------------------- */
+.doc nav.toc,
+.doc .toc {
+  margin: 0 0 1.6em;
+  padding: 0;
+}
+
+.doc nav.toc > ol,
+.doc nav.toc > ul,
+.doc .toc > ol,
+.doc .toc > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc .toc ol,
+.doc .toc ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.doc .toc li {
+  margin: 0.15em 0;
+}
+
+/* Each TOC row: title on the left, leader fills the gap, page number right. */
+.doc a.toc-link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  text-decoration: none;
+  color: var(--doc-fg);
+}
+
+.doc a.toc-link:hover {
+  color: var(--doc-link);
+}
+
+/* The leader dots: a flexible filler between title and page number. The print
+ * page number is injected by Paged.js via the target-counter rule in
+ * cssBuilder; on screen we fall back to attr(data-page). */
+.doc a.toc-link::after {
+  content: leader(". ") attr(data-page);
+  flex: 1 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--doc-fg-muted);
+}
+
+/* Browsers without leader() support get a dotted baseline fill instead. */
+@supports not (content: leader(". ")) {
+  .doc a.toc-link {
+    position: relative;
+  }
+
+  .doc a.toc-link .toc-text {
+    background: #fff;
+    padding-right: 0.35em;
+    position: relative;
+    z-index: 1;
+  }
+
+  .doc a.toc-link::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0.18em;
+    border-bottom: 1px dotted var(--doc-border);
+  }
+
+  .doc a.toc-link::after {
+    content: attr(data-page);
+    flex: 0 0 auto;
+    background: #fff;
+    padding-left: 0.35em;
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Footnotes. markdown-it-footnote emits .footnotes / .footnote-item /
+ * .footnote-backref; buildSource transforms the end-of-doc section into inline
+ * float:footnote spans, but the base typography for both forms lives here.
+ * -------------------------------------------------------------------------- */
+.doc sup.footnote-ref a,
+.doc a.footnote-ref {
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  color: var(--doc-link);
+  padding: 0 0.1em;
+}
+
+.doc .footnotes {
+  margin-top: 2em;
+  padding-top: 0.6em;
+  border-top: 1px solid var(--doc-rule);
+  font-size: 0.85em;
+  color: var(--doc-fg-muted);
+}
+
+.doc .footnotes hr {
+  display: none; /* the markdown-it-footnote separator; we draw our own border */
+}
+
+.doc .footnotes ol {
+  padding-left: 1.4em;
+}
+
+.doc .footnote-item {
+  margin: 0.3em 0;
+}
+
+.doc .footnote-item > p {
+  margin: 0;
+  display: inline;
+}
+
+.doc .footnote-backref {
+  text-decoration: none;
+  color: var(--doc-link);
+  margin-left: 0.3em;
+}
+
+/* The inline float-footnote span buildSource produces (rendered at page bottom
+ * by Paged.js via float:footnote in cssBuilder). */
+.doc .footnote {
+  float: footnote;
+  font-size: 0.85em;
+  color: var(--doc-fg-muted);
+}
+
+/* -----------------------------------------------------------------------------
+ * KaTeX. Inline math inherits the surrounding size; display math centers and
+ * gets a horizontal scrollbar on screen if it overflows. In print the break
+ * rules keep .katex-display atomic.
+ * -------------------------------------------------------------------------- */
+.doc .katex {
+  font-size: 1.05em;
+}
+
+.doc .katex-display {
+  margin: 1em 0;
+  text-align: center;
+}
+
+@media screen {
+  .doc .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.2em 0;
+  }
+}
+
+/* KaTeX inline parse-error color from math.ts (errorColor) renders as a span
+ * with inline color; nothing to override, but keep error text from underlining. */
+.doc .katex-error {
+  text-decoration: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * Mermaid diagrams. renderAllMermaid replaces the code block with
+ * figure.mermaid-figure containing a fixed-size SVG (useMaxWidth:false). Center
+ * it and cap the width to the column; .diagram-error is the failure placeholder.
+ * -------------------------------------------------------------------------- */
+.doc figure.mermaid-figure {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.doc figure.mermaid-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.doc figure.mermaid-figure .diagram-error {
+  display: block;
+  padding: 0.6em 0.9em;
+  margin-bottom: 0.5em;
+  border: 1px solid #f3c2c2;
+  border-left: 4px solid #dc2626;
+  border-radius: 6px;
+  background: #fdecec;
+  color: #b91c1c;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-align: left;
+}
+
+.doc figure.mermaid-figure .diagram-error + pre {
+  text-align: left;
+  font-size: 0.85em;
+}
+
+/* -----------------------------------------------------------------------------
+ * Shrink-to-fit (Tier 3) marker. The handler sets data-shrunk on scaled
+ * blocks; nothing visual is required, but expose a faint screen-only badge so
+ * the author knows a block was auto-scaled. Suppressed in print.
+ * -------------------------------------------------------------------------- */
+@media screen {
+  .doc [data-shrunk] {
+    position: relative;
+  }
+
+  .doc [data-shrunk]::after {
+    content: "scaled to fit";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.1);
+    color: #1d4ed8;
+    font-family: var(--font-ui, system-ui, sans-serif);
+    font-size: 10px;
+    font-weight: 600;
+    pointer-events: none;
+  }
+}

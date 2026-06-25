@@ -1,0 +1,507 @@
+/* =============================================================================
+ * app.css — application chrome: the grid shell, the toolbar, and the
+ * screen-theme design tokens (light / dark / sepia). This file styles the app
+ * UI only; it is NOT part of the paged stylesheet and never affects the
+ * exported/print output. The PDF is always dark-on-white (see print.css /
+ * shiki.css), independent of whichever screen theme is active here.
+ *
+ * Imported by main.ts. Coordinates with dom.ts: every id/class below matches a
+ * constant in IDS / CLASSES / ATTRS — do not hardcode names that drift.
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * Design tokens. The theme is selected by [data-app-theme] on <html>
+ * (ATTRS.appTheme). Tokens cover three WCAG-AA screen themes. Defaults below
+ * (the bare :root) mirror the light theme so the app is usable before the
+ * theme attribute is applied during bootstrap.
+ * -------------------------------------------------------------------------- */
+:root,
+:root[data-app-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f3f4f6;          /* window backdrop behind the canvas */
+  --bg-toolbar: #ffffff;
+  --bg-surface: #ffffff;      /* raised surfaces: chips, cards, controls */
+  --bg-sunken: #e9ebef;       /* segmented-control track, inset wells */
+  --bg-hover: #eef0f3;
+  --bg-active: #e3e6ea;
+  --bg-canvas: #d8dbe0;       /* grey "light table" the page sheets sit on */
+
+  --fg-strong: #111827;       /* primary text */
+  --fg: #1f2937;
+  --fg-muted: #6b7280;        /* labels, secondary text */
+  --fg-faint: #9ca3af;
+
+  --border: #d1d5db;
+  --border-strong: #b8bdc6;
+
+  --accent: #2563eb;          /* AA on white: contrast ~4.6 */
+  --accent-strong: #1d4ed8;
+  --accent-contrast: #ffffff; /* text on an accent fill */
+  --accent-soft: #dbeafe;     /* subtle accent wash for pressed toggles */
+  --accent-soft-fg: #1e40af;  /* AA text on --accent-soft */
+
+  --danger: #b91c1c;
+
+  --focus-ring: var(--accent);
+  --shadow-toolbar: 0 1px 0 var(--border), 0 2px 6px rgba(17, 24, 39, 0.06);
+  --shadow-control: 0 1px 2px rgba(17, 24, 39, 0.08);
+
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --ctl-h: 32px;              /* shared control height */
+  --gap: 8px;
+  --toolbar-pad-x: 14px;
+
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root[data-app-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-app: #15171c;
+  --bg-toolbar: #1d2026;
+  --bg-surface: #23272e;
+  --bg-sunken: #15171c;
+  --bg-hover: #2a2f37;
+  --bg-active: #323843;
+  --bg-canvas: #0f1115;
+
+  --fg-strong: #f3f4f6;
+  --fg: #e2e5ea;
+  --fg-muted: #9aa3b0;
+  --fg-faint: #6b7480;
+
+  --border: #343a44;
+  --border-strong: #454c58;
+
+  --accent: #60a5fa;          /* AA on dark surfaces */
+  --accent-strong: #93c5fd;
+  --accent-contrast: #0b1220;
+  --accent-soft: #1e293b;
+  --accent-soft-fg: #bfdbfe;
+
+  --danger: #f87171;
+
+  --focus-ring: var(--accent);
+  --shadow-toolbar: 0 1px 0 rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-app-theme="sepia"] {
+  color-scheme: light;
+
+  --bg-app: #efe6d4;
+  --bg-toolbar: #f7f0e1;
+  --bg-surface: #fbf5e9;
+  --bg-sunken: #e6dcc4;
+  --bg-hover: #efe6d2;
+  --bg-active: #e3d7bc;
+  --bg-canvas: #ddd0b4;
+
+  --fg-strong: #2e2417;
+  --fg: #43381f;     /* warm dark brown, AA on sepia surfaces */
+  --fg-muted: #7a6a4c;
+  --fg-faint: #9b8a68;
+
+  --border: #cbbd9c;
+  --border-strong: #b6a781;
+
+  --accent: #9a5b1f;          /* warm amber, AA on cream */
+  --accent-strong: #7d4715;
+  --accent-contrast: #fbf5e9;
+  --accent-soft: #ecdcbf;
+  --accent-soft-fg: #6f4012;
+
+  --danger: #a3301a;
+
+  --focus-ring: var(--accent);
+  --shadow-toolbar: 0 1px 0 var(--border), 0 2px 6px rgba(74, 58, 30, 0.12);
+  --shadow-control: 0 1px 2px rgba(74, 58, 30, 0.12);
+}
+
+/* -----------------------------------------------------------------------------
+ * Reset-ish base for the app chrome.
+ * -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* -----------------------------------------------------------------------------
+ * #app — the grid shell. Two rows: the toolbar (auto) and the canvas (1fr).
+ * -------------------------------------------------------------------------- */
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* -----------------------------------------------------------------------------
+ * Skip link — visible only on keyboard focus, jumps to the preview canvas.
+ * -------------------------------------------------------------------------- */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -56px;
+  z-index: 1000;
+  padding: 8px 14px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 120ms ease;
+}
+
+.skip-link:focus-visible {
+  top: 8px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+ * #toolbar — sticky control strip. Wraps groups separated by dividers.
+ * -------------------------------------------------------------------------- */
+#toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--gap);
+  padding: 8px var(--toolbar-pad-x);
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-toolbar);
+  user-select: none;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-group > label,
+.toolbar-group .group-label {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+.toolbar-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  min-height: 22px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+/* Push the trailing export group to the right edge. */
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+/* -----------------------------------------------------------------------------
+ * Segmented controls (.seg-control / .seg-option) — exclusive choice, e.g.
+ * paper size, margins, font. Rendered as a sunken track of buttons; the
+ * active option carries [aria-checked="true"] (radiogroup) or
+ * [aria-pressed="true"].
+ * -------------------------------------------------------------------------- */
+.seg-control {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: 2px;
+}
+
+.seg-option {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--ctl-h) - 6px);
+  min-width: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.seg-option:hover {
+  color: var(--fg-strong);
+  background: var(--bg-hover);
+}
+
+.seg-option[aria-checked="true"],
+.seg-option[aria-pressed="true"],
+.seg-option.is-selected {
+  background: var(--bg-surface);
+  color: var(--fg-strong);
+  font-weight: 600;
+  box-shadow: var(--shadow-control);
+}
+
+/* -----------------------------------------------------------------------------
+ * Toggle buttons (.toggle-btn[aria-pressed]) — boolean settings such as TOC,
+ * page numbers, line numbers.
+ * -------------------------------------------------------------------------- */
+.toggle-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.toggle-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.toggle-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-soft-fg);
+  font-weight: 600;
+}
+
+.toggle-btn[aria-pressed="true"]:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+/* Optional leading status dot inside a toggle. */
+.toggle-btn .toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+  flex: 0 0 auto;
+}
+
+.toggle-btn[aria-pressed="true"] .toggle-dot {
+  background: var(--accent);
+}
+
+/* -----------------------------------------------------------------------------
+ * Native selects and text inputs living in the toolbar (e.g. code theme,
+ * running-header text).
+ * -------------------------------------------------------------------------- */
+.toolbar-group select,
+.toolbar-group input[type="text"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toolbar-group select {
+  padding-right: 26px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--fg);
+}
+
+.toolbar-group input[type="text"] {
+  cursor: text;
+  min-width: 150px;
+}
+
+.toolbar-group input[type="text"]::placeholder {
+  color: var(--fg-faint);
+}
+
+.toolbar-group select:hover,
+.toolbar-group input[type="text"]:hover {
+  border-color: var(--border-strong);
+}
+
+/* -----------------------------------------------------------------------------
+ * Export buttons. Primary = print (vector). Secondary = rasterized fallback.
+ * -------------------------------------------------------------------------- */
+.export-primary,
+.export-secondary {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--ctl-h);
+  padding: 0 16px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.export-primary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-control);
+}
+
+.export-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.export-secondary {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+
+.export-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+/* Disabled state shared by every interactive chrome control. */
+.seg-option:disabled,
+.toggle-btn:disabled,
+.export-primary:disabled,
+.export-secondary:disabled,
+.toolbar-group select:disabled,
+.toolbar-group input[type="text"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * Focus rings. Never strip an outline without a visible replacement: every
+ * interactive control gets a 2px accent ring on keyboard focus.
+ * -------------------------------------------------------------------------- */
+:where(
+  .seg-option,
+  .toggle-btn,
+  .export-primary,
+  .export-secondary,
+  .toolbar-group select,
+  .toolbar-group input[type="text"]
+):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Mouse focus stays quiet; the :focus-visible rule above covers keyboards. */
+:where(
+  .seg-option,
+  .toggle-btn,
+  .export-primary,
+  .export-secondary
+):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Visually-hidden helper for labels read only by assistive tech. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The aria-live status node is off-screen but announced. */
+#status-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* -----------------------------------------------------------------------------
+ * Reduced motion — honour the OS preference for every transition/animation.
+ * -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

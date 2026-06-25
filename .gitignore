@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.vite/
+*.tsbuildinfo
+
+# Test + coverage artifacts
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python hook caches
+__pycache__/
+*.pyc
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.local
+
+# Claude Code local-only
+/.claude/worktrees/
+/.claude/settings.local.json
+
+# Raw machine-captured tool failures (PostToolUseFailure hook auto-capture sink).
+# The curated, git-tracked ledger is docs/agentic/failure_ledger.jsonl.
+docs/agentic/failure_autolog.jsonl

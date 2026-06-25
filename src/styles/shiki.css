@@ -1,0 +1,223 @@
+/* =============================================================================
+ * shiki.css — code-block coloring for Shiki 3.x dual-theme output, plus line
+ * numbers and highlighted-line styling.
+ *
+ * How Shiki 3.x dual-theme works here (see LIBRARY_NOTES §3): markdown.ts wires
+ * fromHighlighter with { themes: { light, dark }, defaultColor: "light",
+ * cssVariablePrefix: "--shiki-" }. Each <pre class="shiki"> and every <span>
+ * therefore carries an INLINE light color (so the vector PDF and the light/sepia
+ * screen are correct with zero extra CSS) AND a --shiki-dark custom property for
+ * the dark side. We only need to (a) opt into the dark vars on dark screens, and
+ * (b) force the light side in print so the exported PDF is always dark-on-white.
+ *
+ * Imported by main.ts. Class names match dom.ts (.shiki, .line,
+ * .line.highlighted, .with-line-numbers).
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * Base <pre class="shiki">. Shiki sets the foreground/background inline from
+ * the light theme; we only own layout (padding, radius, scroll, mono metrics).
+ * -------------------------------------------------------------------------- */
+.shiki {
+  font-family: var(--doc-mono, "JetBrains Mono", "SF Mono", "Consolas", monospace);
+  font-size: 0.85em;
+  line-height: 1.55;
+  margin: 0 0 var(--doc-space, 0.85em);
+  padding: 0.85em 1em;
+  border: 1px solid var(--doc-border, #d7dbe0);
+  border-radius: 8px;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+.shiki code {
+  display: block;
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Each tokenized line is its own block — required for line numbers and the
+ * highlighted-line background to span the full width. */
+.shiki .line {
+  display: inline-block;
+  width: 100%;
+  min-height: 1.55em;
+}
+
+/* -----------------------------------------------------------------------------
+ * SCREEN — dark theme. On a dark screen, swap each token's inline light color
+ * for its --shiki-dark counterpart and apply the dark background. This is the
+ * only place dark code colors are used; print always forces light (below).
+ *
+ * We key off prefers-color-scheme so the swap follows the OS-level dark
+ * preference, matching shiki.css's design note. The app's screen theme tokens
+ * (app.css) set color-scheme accordingly, so dark app theme → dark code.
+ * -------------------------------------------------------------------------- */
+@media screen and (prefers-color-scheme: dark) {
+  .shiki,
+  .shiki span {
+    color: var(--shiki-dark, inherit) !important;
+  }
+
+  .shiki {
+    background-color: var(--shiki-dark-bg, #0d1117) !important;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Explicit app-theme override: when the user picks the dark app theme directly
+ * (independent of OS), honour it too. data-app-theme is on <html>. */
+:root[data-app-theme="dark"] .shiki,
+:root[data-app-theme="dark"] .shiki span {
+  color: var(--shiki-dark, inherit) !important;
+}
+
+:root[data-app-theme="dark"] .shiki {
+  background-color: var(--shiki-dark-bg, #0d1117) !important;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Light and sepia app themes keep Shiki's inline light colors as-authored;
+ * no rule needed — the inline style already wins. */
+
+/* -----------------------------------------------------------------------------
+ * PRINT — force the LIGHT side, always. The exported PDF must be dark-on-white
+ * regardless of the screen theme, so we re-assert the inline light values
+ * (--shiki-light / --shiki-light-bg, populated because defaultColor:"light")
+ * and a white background with !important, defeating any dark-screen swap above.
+ * -------------------------------------------------------------------------- */
+@media print {
+  .shiki,
+  .shiki span {
+    color: var(--shiki-light, inherit) !important;
+    background-color: transparent !important;
+  }
+
+  .shiki {
+    background-color: var(--shiki-light-bg, #ffffff) !important;
+    border-color: #d7dbe0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Highlighted lines (transformerNotationHighlight / transformerMetaHighlight).
+ * A full-bleed tinted band behind the line. Tints differ per surface so the
+ * band stays visible on light, dark, and the printed white page.
+ * -------------------------------------------------------------------------- */
+.shiki .line.highlighted {
+  background-color: rgba(37, 99, 235, 0.1);
+  /* Bleed to the pre's padding edges. */
+  margin: 0 -1em;
+  padding: 0 1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  .shiki .line.highlighted {
+    background-color: rgba(96, 165, 250, 0.16);
+  }
+}
+
+:root[data-app-theme="dark"] .shiki .line.highlighted {
+  background-color: rgba(96, 165, 250, 0.16);
+}
+
+@media print {
+  .shiki .line.highlighted {
+    background-color: rgba(37, 99, 235, 0.12) !important;
+  }
+}
+
+/* Diff transformer (transformerNotationDiff): added/removed line bands. */
+.shiki .line.diff.add {
+  background-color: rgba(16, 185, 129, 0.12);
+  margin: 0 -1em;
+  padding: 0 1em;
+}
+
+.shiki .line.diff.remove {
+  background-color: rgba(239, 68, 68, 0.12);
+  margin: 0 -1em;
+  padding: 0 1em;
+}
+
+.shiki .line.diff.add::before {
+  content: "+";
+  position: absolute;
+  margin-left: -0.85em;
+  color: #059669;
+}
+
+.shiki .line.diff.remove::before {
+  content: "-";
+  position: absolute;
+  margin-left: -0.85em;
+  color: #dc2626;
+}
+
+.shiki .line.diff {
+  position: relative;
+}
+
+/* Dim non-focused lines when a focus transformer is active. */
+.shiki.has-focused .line:not(.focused) {
+  filter: blur(0.05em);
+  opacity: 0.6;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.shiki.has-focused:hover .line:not(.focused) {
+  filter: none;
+  opacity: 1;
+}
+
+/* -----------------------------------------------------------------------------
+ * Line numbers (.with-line-numbers — added by the lineNumbers() transformer
+ * when settings.showLineNumbers). A CSS counter renders the number in a fixed
+ * left gutter via .line::before. The counter is also referenced by the dynamic
+ * line-number CSS in cssBuilder, but the gutter geometry lives here statically.
+ * -------------------------------------------------------------------------- */
+.shiki.with-line-numbers {
+  counter-reset: shiki-line;
+  padding-left: 3.2em;
+}
+
+.shiki.with-line-numbers .line {
+  position: relative;
+}
+
+.shiki.with-line-numbers .line::before {
+  counter-increment: shiki-line;
+  content: counter(shiki-line);
+  position: absolute;
+  left: -2.6em;
+  width: 2em;
+  text-align: right;
+  color: var(--doc-fg-muted, #8a9099);
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Don't number a trailing empty final line Shiki sometimes emits. */
+.shiki.with-line-numbers .line:last-child:empty::before {
+  content: none;
+  counter-increment: none;
+}
+
+@media print {
+  .shiki.with-line-numbers .line::before {
+    color: #9ca3af !important;
+    opacity: 1;
+  }
+}

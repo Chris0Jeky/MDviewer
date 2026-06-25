@@ -1,0 +1,25 @@
+# Normalize line endings: store as LF, check out native on each platform.
+* text=auto eol=lf
+
+# Explicit text types
+*.ts    text
+*.js    text
+*.mjs   text
+*.json  text
+*.css   text
+*.html  text
+*.md    text
+*.py    text eol=lf
+*.yml   text
+*.yaml  text
+
+# Binary assets (never normalize)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-app-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>MDviewer — Markdown to PDF</title>
+    <meta
+      name="description"
+      content="Drag and drop Markdown to export beautiful, page-break-safe PDFs for research and code documents. Everything runs in your browser."
+    />
+    <script>
+      // Apply the saved screen theme before first paint to avoid a flash.
+      try {
+        const raw = localStorage.getItem("mdviewer.settings.v1");
+        const saved = raw ? JSON.parse(raw) : {};
+        const theme =
+          saved.screenTheme ||
+          (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-app-theme", theme);
+      } catch {
+        document.documentElement.setAttribute("data-app-theme", "light");
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#canvas">Skip to document</a>
+    <div id="app"></div>
+    <input
+      id="file-input"
+      type="file"
+      accept=".md,.markdown,text/markdown"
+      multiple
+      hidden
+    />
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

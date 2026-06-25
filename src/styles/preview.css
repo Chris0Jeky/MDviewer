@@ -1,0 +1,436 @@
+/* =============================================================================
+ * preview.css — the preview pane: the grey "light table" backdrop, the white
+ * page sheets Paged.js emits, and the floating affordances over them
+ * (drag overlay, paginating spinner, page chip, zoom control, empty state).
+ *
+ * SCREEN-ONLY. None of this is part of the paged stylesheet handed to
+ * Paged.js, and all of it is suppressed under @media print so the exported
+ * PDF carries only the page content. Imported by main.ts.
+ *
+ * Tokens come from app.css. Paged.js selectors (.pagedjs_pages /
+ * .pagedjs_page) match dom.ts PAGEDJS constants — never rename them.
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+ * #canvas — scroll container and grey backdrop. Establishes a positioning
+ * context for the floating chip / zoom / overlays.
+ * -------------------------------------------------------------------------- */
+#canvas {
+  position: relative;
+  overflow: auto;
+  background: var(--bg-canvas);
+  /* Subtle grid texture to read as a "light table". */
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.05) 1px, transparent 0);
+  background-size: 22px 22px;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #canvas {
+    scroll-behavior: auto;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * .pagedjs_pages — the flow Paged.js renders into #paged-output. On screen we
+ * centre the column of sheets and pad it generously. The zoom states below
+ * scale this whole stack.
+ * -------------------------------------------------------------------------- */
+#paged-output {
+  display: block;
+  min-height: 100%;
+}
+
+.pagedjs_pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  padding: 32px 24px 56px;
+  transform-origin: top center;
+  transition: transform 140ms ease;
+}
+
+/* -----------------------------------------------------------------------------
+ * .pagedjs_page — the white sheet. Paged.js sizes the sheet itself (from the
+ * @page rules); here we add the screen affordances: a white surface, a soft
+ * drop shadow, and a hairline border so the paper edge reads against the grey.
+ * -------------------------------------------------------------------------- */
+.pagedjs_page {
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.16),
+    0 8px 24px rgba(17, 24, 39, 0.18);
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  /* Counteract the body color so the sheet always shows dark-on-white text,
+     matching the export, regardless of the active screen theme. */
+  color: #111827;
+  overflow: hidden;
+}
+
+/* -----------------------------------------------------------------------------
+ * Zoom states. The app sets data-zoom on #canvas (or a wrapper) from
+ * settings.zoom: 'fit' | 1 | 0.5. 'fit' lets the natural mm sizing show; the
+ * numeric states scale the page stack.
+ * -------------------------------------------------------------------------- */
+#canvas[data-zoom="fit"] .pagedjs_pages {
+  transform: none;
+}
+
+#canvas[data-zoom="1"] .pagedjs_pages {
+  transform: scale(1);
+}
+
+#canvas[data-zoom="0.5"] .pagedjs_pages {
+  transform: scale(0.5);
+}
+
+/* -----------------------------------------------------------------------------
+ * #drag-overlay — full-canvas dropzone shown while a file is dragged over the
+ * window. Dashed accent frame over a dimming scrim with a "Release to open"
+ * prompt. Toggled by adding a visible/active state class or [hidden].
+ * -------------------------------------------------------------------------- */
+#drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: color-mix(in srgb, var(--accent) 14%, rgba(15, 17, 21, 0.55));
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  pointer-events: none; /* the overlay is a visual cue; drop is handled on window */
+}
+
+#drag-overlay[hidden],
+#drag-overlay:not(.is-active):not(.is-visible) {
+  display: none;
+}
+
+#drag-overlay .drag-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(560px, 80vw);
+  padding: 48px 40px;
+  border: 3px dashed var(--accent-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+}
+
+#drag-overlay .drag-icon {
+  font-size: 40px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+#drag-overlay .drag-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+#drag-overlay .drag-hint {
+  font-size: 14px;
+  color: #4b5563;
+}
+
+/* -----------------------------------------------------------------------------
+ * Paginating overlay + spinner. Shown over #canvas while Paged.js re-flows;
+ * driven by CLASSES.isPaginating on #canvas (or #app). Paged.js layout is not
+ * incremental, so this is the user's reassurance during a re-paginate.
+ * -------------------------------------------------------------------------- */
+.paginating-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: color-mix(in srgb, var(--bg-canvas) 70%, transparent);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+}
+
+#canvas.is-paginating .paginating-overlay,
+.is-paginating .paginating-overlay {
+  display: flex;
+}
+
+/* Dim the stale page stack while a fresh layout is in flight. */
+#canvas.is-paginating .pagedjs_pages,
+.is-paginating .pagedjs_pages {
+  opacity: 0.45;
+  filter: saturate(0.85);
+}
+
+.paginating-overlay .spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: mdv-spin 0.8s linear infinite;
+}
+
+.paginating-overlay .paginating-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  letter-spacing: 0.01em;
+}
+
+@keyframes mdv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paginating-overlay .spinner {
+    animation: none;
+    border-top-color: var(--accent);
+    /* Show a static partial ring rather than a frozen full ring. */
+    border-right-color: var(--accent);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * #page-chip — floating "page N of M" indicator, bottom-left of the canvas.
+ * -------------------------------------------------------------------------- */
+#page-chip {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-control);
+  pointer-events: none;
+}
+
+#page-chip[hidden] {
+  display: none;
+}
+
+#page-chip .page-chip-count {
+  color: var(--fg-strong);
+}
+
+/* -----------------------------------------------------------------------------
+ * #zoom-control — floating zoom segmented control, bottom-right of the canvas.
+ * Reuses the segmented-control look from app.css.
+ * -------------------------------------------------------------------------- */
+#zoom-control {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-control);
+}
+
+#zoom-control[hidden] {
+  display: none;
+}
+
+#zoom-control button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+#zoom-control button:hover {
+  color: var(--fg-strong);
+  background: var(--bg-hover);
+}
+
+#zoom-control button[aria-pressed="true"],
+#zoom-control button.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+#zoom-control button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+ * #empty-state — the full-window dropzone card shown when no document is open
+ * (and as the recovery state after a fatal error). Centered card on the grey
+ * canvas with a call to action.
+ * -------------------------------------------------------------------------- */
+#empty-state {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+#empty-state[hidden] {
+  display: none;
+}
+
+#empty-state .empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(520px, 88vw);
+  padding: 44px 40px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--fg);
+  text-align: center;
+  box-shadow: var(--shadow-control);
+}
+
+#empty-state .empty-icon {
+  font-size: 44px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+#empty-state .empty-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+
+#empty-state .empty-sub {
+  font-size: 14px;
+  color: var(--fg-muted);
+  max-width: 40ch;
+}
+
+#empty-state .empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+#empty-state .empty-actions button {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+#empty-state .empty-actions .empty-choose {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+#empty-state .empty-actions .empty-choose:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+#empty-state .empty-actions .empty-sample {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+
+#empty-state .empty-actions .empty-sample:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+#empty-state .empty-actions button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+#empty-state .empty-hint {
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+/* -----------------------------------------------------------------------------
+ * Print: the preview chrome must never appear in the exported/printed output.
+ * Only the page sheets survive, stripped of their screen shadow/border/scale.
+ * -------------------------------------------------------------------------- */
+@media print {
+  #toolbar,
+  #drag-overlay,
+  #empty-state,
+  #page-chip,
+  #zoom-control,
+  .paginating-overlay,
+  .skip-link {
+    display: none !important;
+  }
+
+  #canvas {
+    overflow: visible;
+    background: none;
+    background-image: none;
+  }
+
+  .pagedjs_pages {
+    display: block;
+    padding: 0;
+    gap: 0;
+    transform: none !important;
+  }
+
+  .pagedjs_page {
+    box-shadow: none;
+    border: 0;
+    margin: 0;
+  }
+}
