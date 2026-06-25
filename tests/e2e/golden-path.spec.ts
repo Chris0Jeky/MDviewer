@@ -60,17 +60,26 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await loadMarkdownIntoApp(page, SAMPLE_MD);
     await waitForPagination(page);
 
-    // Toggle to letter paper via the public app API exposed for testing, or via the
-    // toolbar if present. We drive it through the app instance when available.
-    await page.evaluate(() => {
-      const w = window as unknown as {
-        __mdviewer?: { updateSettings(p: Record<string, unknown>): void };
-      };
-      w.__mdviewer?.updateSettings({ paperSize: "letter" });
-    });
+    const firstPageWidth = () =>
+      page
+        .locator("#paged-output .pagedjs_page")
+        .first()
+        .evaluate((el) => el.getBoundingClientRect().width);
+    const beforeWidth = await firstPageWidth();
 
-    // Either the explicit API repaginated, or we force a content reload as a fallback
-    // so the assertion still validates a stable paginated state.
+    // Drive the real settings path through the app's public test hook (exposed in main.ts).
+    // Assert the hook exists so a missing hook fails loudly instead of silently no-op'ing
+    // this test (which is exactly what it did before the hook was wired).
+    const hasHook = await page.evaluate(
+      () => typeof window.__mdviewer?.updateSettings === "function",
+    );
+    expect(hasHook, "window.__mdviewer.updateSettings must be exposed by main.ts").toBe(true);
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ paperSize: "letter" }));
+
+    // letter (215.9mm) is wider than a4 (210mm): poll until the page is re-laid-out at the
+    // new geometry, proving the setting actually triggered a re-pagination, not a no-op.
+    await expect.poll(firstPageWidth, { timeout: 10_000 }).not.toBe(beforeWidth);
+
     const count = await waitForPagination(page);
     expect(count).toBeGreaterThan(0);
     await expect(page.locator("#paged-output .pagedjs_page").first()).toBeVisible();
