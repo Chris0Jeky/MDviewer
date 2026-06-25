@@ -29,6 +29,17 @@ if (!root) {
 
 const app = App.init(root);
 
+// Stable programmatic hook onto the running App (typed in src/types/window.d.ts). The e2e
+// suite drives settings/exports through this instead of coupling to toolbar DOM; it also
+// aids manual debugging. It only forwards to existing public methods — no doc content flows
+// through it, so the local-first contract is preserved.
+window.__mdviewer = {
+  updateSettings: (patch) => app.updateSettings(patch),
+  exportPrint: () => app.exportPrint(),
+  exportPdf: () => app.exportPdf(),
+  loadSample: () => app.loadSample(),
+};
+
 // The empty-state card already routes its own "Try a sample" button through App. We also
 // expose the loader on a header-level affordance if one is present in the chrome.
 const sampleTrigger = document.querySelector<HTMLElement>("[data-action='load-sample']");
