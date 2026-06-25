@@ -1,0 +1,28 @@
+# Dependabot version updates. Repo-level security updates are already enabled (they opened
+# PR #1, the jspdf advisory fix); this file adds scheduled version updates and keeps the CI
+# actions patched. Grouped minor/patch PRs cut noise; MAJOR bumps arrive as individual PRs so
+# they get full-gate scrutiny (see T-1: major jspdf/vite/vitest needed production-build e2e).
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns: ["*"]
