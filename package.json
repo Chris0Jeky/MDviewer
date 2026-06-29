@@ -53,10 +53,10 @@
     "@types/markdown-it-container": "^2.0.10",
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/node": "^22.0.0",
-    "eslint": "^10.5.0",
+    "eslint": "^10.6.0",
     "jsdom": "^25.0.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.0.0",
+    "typescript-eslint": "^8.62.1",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
   }
