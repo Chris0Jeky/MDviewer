@@ -52,7 +52,7 @@
     "@types/markdown-it": "^14.1.0",
     "@types/markdown-it-container": "^2.0.10",
     "@types/markdown-it-footnote": "^3.0.4",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.0.1",
     "eslint": "^10.5.0",
     "jsdom": "^25.0.0",
     "typescript": "^6.0.3",
