@@ -50,7 +50,7 @@
     "@playwright/test": "^1.49.0",
     "@types/katex": "^0.16.7",
     "@types/markdown-it": "^14.1.0",
-    "@types/markdown-it-container": "^2.0.10",
+    "@types/markdown-it-container": "^4.0.0",
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/node": "^22.0.0",
     "eslint": "^10.5.0",
