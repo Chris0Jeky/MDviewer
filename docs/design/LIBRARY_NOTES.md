@@ -124,9 +124,15 @@ async function create(): Promise<HighlighterCore> {
 }
 export async function ensureLang(hl: HighlighterCore, lang: string): Promise<void> {
   if (hl.getLoadedLanguages().includes(lang)) return;
-  const langs = await import("@shikijs/langs");
-  const loader = (langs as Record<string, unknown>)[lang];
-  if (loader) await hl.loadLanguage(await (loader as () => Promise<never>)());
+  // Keep this map explicit: a template-string import makes Vite bundle the whole
+  // language catalogue. Add curated subpaths as product support expands.
+  const loaders = {
+    csharp: () => import("@shikijs/langs/csharp"),
+    powershell: () => import("@shikijs/langs/powershell"),
+    terraform: () => import("@shikijs/langs/terraform"),
+  } as const;
+  const loader = loaders[lang as keyof typeof loaders];
+  if (loader) await hl.loadLanguage(loader());
 }
 
 export const CODE_THEME_PAIRS = {

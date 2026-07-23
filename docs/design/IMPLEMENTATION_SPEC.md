@@ -49,6 +49,7 @@ so pagination MUST run last, exactly once, after all async content settles.
 ```
 0  read raw markdown string (drag-drop / paste / file picker)
 1  await getHighlighter()            // singleton: createHighlighterCore + Oniguruma WASM
+1b await ensureMarkdownLanguages(hl, src)     // curated fenced grammars load before sync render
 2  createMarkdown(hl, settings).render(src)   // SYNC: Shiki (fromHighlighter) + KaTeX inline
 3  buildPaginationSource(html, settings)      // inject TOC nav; transform end-of-doc footnotes -> inline float spans
 4  await renderAllMermaid(source, theme)      // async -> fixed-size SVG (useMaxWidth:false)
@@ -204,6 +205,9 @@ export interface CodeThemePair { light: string; dark: string; }
 export const CODE_THEME_PAIRS: Record<CodeThemeId, CodeThemePair>;
 export function getHighlighter(): Promise<HighlighterCore>;
 export function ensureLang(hl: HighlighterCore, lang: string): Promise<void>;
+export function findFenceLanguages(src: string): string[];
+export function isSupportedLanguage(lang: string): boolean;
+export function ensureMarkdownLanguages(hl: HighlighterCore, src: string): Promise<void>;
 
 // src/render/markdown.ts
 import type MarkdownIt from 'markdown-it';

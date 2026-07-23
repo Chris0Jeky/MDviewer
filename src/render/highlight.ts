@@ -1,5 +1,5 @@
 /**
- * Shiki 3.x highlighter — fine-grained singleton.
+ * Shiki 4.x highlighter — fine-grained singleton.
  *
  * We use the `shiki/core` API so Vite code-splits each language/theme into its own
  * lazily-loaded chunk: only the langs and themes we ship are bundled, and the heavy
@@ -33,6 +33,91 @@ export const CODE_THEME_PAIRS: Record<CodeThemeId, CodeThemePair> = {
 
 let highlighter: HighlighterCore | null = null;
 let creating: Promise<HighlighterCore> | null = null;
+
+/**
+ * Common grammars kept off the startup path. Explicit subpath imports give Vite a
+ * bounded set of lazy chunks instead of glob-bundling the entire Shiki catalogue.
+ */
+const LAZY_LANGUAGE_LOADERS = {
+  csharp: () => import("@shikijs/langs/csharp"),
+  php: () => import("@shikijs/langs/php"),
+  ruby: () => import("@shikijs/langs/ruby"),
+  kotlin: () => import("@shikijs/langs/kotlin"),
+  swift: () => import("@shikijs/langs/swift"),
+  scala: () => import("@shikijs/langs/scala"),
+  powershell: () => import("@shikijs/langs/powershell"),
+  dockerfile: () => import("@shikijs/langs/dockerfile"),
+  toml: () => import("@shikijs/langs/toml"),
+  xml: () => import("@shikijs/langs/xml"),
+  jsx: () => import("@shikijs/langs/jsx"),
+  tsx: () => import("@shikijs/langs/tsx"),
+  vue: () => import("@shikijs/langs/vue"),
+  svelte: () => import("@shikijs/langs/svelte"),
+  graphql: () => import("@shikijs/langs/graphql"),
+  r: () => import("@shikijs/langs/r"),
+  latex: () => import("@shikijs/langs/latex"),
+  makefile: () => import("@shikijs/langs/makefile"),
+  terraform: () => import("@shikijs/langs/terraform"),
+  nginx: () => import("@shikijs/langs/nginx"),
+  ini: () => import("@shikijs/langs/ini"),
+} as const;
+
+const LANGUAGE_ALIASES: Readonly<Record<string, string>> = {
+  ts: "typescript",
+  js: "javascript",
+  py: "python",
+  sh: "bash",
+  shell: "bash",
+  md: "markdown",
+  rs: "rust",
+  yml: "yaml",
+  "c++": "cpp",
+  cc: "cpp",
+  hpp: "cpp",
+  cs: "csharp",
+  "c#": "csharp",
+  rb: "ruby",
+  kt: "kotlin",
+  ps1: "powershell",
+  docker: "dockerfile",
+  gql: "graphql",
+  tex: "latex",
+  make: "makefile",
+  tf: "terraform",
+  hcl: "terraform",
+};
+
+const BASE_LANGUAGE_IDS = new Set([
+  "typescript", "javascript", "python", "bash", "json", "markdown", "html", "css",
+  "rust", "go", "java", "c", "cpp", "sql", "yaml", "diff", "mermaid",
+  "text", "plaintext", "txt", "",
+]);
+
+function normalizeLanguageId(lang: string): string {
+  const id = lang.toLowerCase().replace(/^language-/, "");
+  return LANGUAGE_ALIASES[id] ?? id;
+}
+
+export function isSupportedLanguage(lang: string): boolean {
+  const id = normalizeLanguageId(lang);
+  return BASE_LANGUAGE_IDS.has(id) || id in LAZY_LANGUAGE_LOADERS;
+}
+
+/** Return distinct fenced-code language ids in source order. */
+export function findFenceLanguages(src: string): string[] {
+  const seen = new Set<string>();
+  const languages: string[] = [];
+  const fenceRe = /^[ \t]*(?:`{3,}|~{3,})[ \t]*([^\s`{]+)/gm;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRe.exec(src)) !== null) {
+    const id = normalizeLanguageId(match[1] ?? "");
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      languages.push(id);
+    }
+  }
+  return languages;
+}
 
 /**
  * Returns the shared highlighter, creating it on first call. Concurrent callers during
@@ -91,12 +176,16 @@ async function create(): Promise<HighlighterCore> {
  * no-op (the caller falls back to plain `text`), so this never throws on bad input.
  */
 export async function ensureLang(hl: HighlighterCore, lang: string): Promise<void> {
-  if (!lang) return;
-  if (hl.getLoadedLanguages().includes(lang)) return;
-  const langs = (await import("@shikijs/langs")) as Record<string, unknown>;
-  const loader = langs[lang];
-  if (typeof loader === "function") {
-    const loaded = await (loader as () => Promise<never>)();
-    await hl.loadLanguage(loaded);
-  }
+  const id = normalizeLanguageId(lang);
+  if (!id || hl.getLoadedLanguages().includes(id)) return;
+  const loader = LAZY_LANGUAGE_LOADERS[id as keyof typeof LAZY_LANGUAGE_LOADERS];
+  if (loader) await hl.loadLanguage(loader());
+}
+
+/** Load every supported fenced language before markdown-it's synchronous render. */
+export async function ensureMarkdownLanguages(
+  hl: HighlighterCore,
+  src: string,
+): Promise<void> {
+  for (const lang of findFenceLanguages(src)) await ensureLang(hl, lang);
 }

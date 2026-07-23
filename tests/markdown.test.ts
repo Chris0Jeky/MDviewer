@@ -171,6 +171,11 @@ describe("markdown: code highlighting integration", () => {
     expect(() => render("```not-a-real-lang\nplain text\n```")).not.toThrow();
   });
 
+  it("does not warn for a curated lazy language", () => {
+    const { warnings } = render("```csharp\npublic record Person(string Name);\n```");
+    expect(warnings).not.toContainEqual(expect.objectContaining({ kind: "lang" }));
+  });
+
   it("adds with-line-numbers only when showLineNumbers is enabled", () => {
     // Use a guaranteed-loaded grammar so the Shiki transformer pipeline (and its pre()
     // hook that adds the class) runs rather than the unknown-lang fallback path.

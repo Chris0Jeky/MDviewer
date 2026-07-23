@@ -29,7 +29,7 @@ import type { ShikiTransformer, BundledLanguage } from "shiki";
 import type { HighlighterCore } from "shiki/core";
 import type { Settings } from "../app/settings";
 import { CLASSES } from "../app/dom";
-import { CODE_THEME_PAIRS } from "./highlight";
+import { CODE_THEME_PAIRS, isSupportedLanguage } from "./highlight";
 import { registerKatex } from "./math";
 import { sanitizeRenderedHtml } from "./sanitize";
 
@@ -145,40 +145,6 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
   return md;
 }
 
-/** Fenced languages we ship a Shiki grammar for (mirrors highlight.ts `langs`). */
-const KNOWN_LANGS = new Set<string>([
-  "typescript",
-  "ts",
-  "javascript",
-  "js",
-  "python",
-  "py",
-  "bash",
-  "sh",
-  "shell",
-  "json",
-  "markdown",
-  "md",
-  "html",
-  "css",
-  "rust",
-  "rs",
-  "go",
-  "java",
-  "c",
-  "cpp",
-  "c++",
-  "sql",
-  "yaml",
-  "yml",
-  "diff",
-  "mermaid", // handled later by renderAllMermaid, not a Shiki failure
-  "text",
-  "plaintext",
-  "txt",
-  "", // bare fence (no language) is fine
-]);
-
 /**
  * Render markdown to HTML and collect best-effort warnings.
  *
@@ -211,7 +177,7 @@ export function renderMarkdown(
   let m: RegExpExecArray | null;
   while ((m = fenceRe.exec(src)) !== null) {
     const lang = (m[1] ?? "").toLowerCase().replace(/^language-/, "");
-    if (lang && !KNOWN_LANGS.has(lang) && !seenLangs.has(lang)) {
+    if (lang && !isSupportedLanguage(lang) && !seenLangs.has(lang)) {
       seenLangs.add(lang);
       warnings.push({
         kind: "lang",

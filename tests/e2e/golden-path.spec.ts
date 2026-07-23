@@ -42,6 +42,17 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     expect(await host.locator(".toc").count()).toBeGreaterThan(0);
   });
 
+  test("loads a curated code language before synchronous rendering", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(
+      page,
+      "# C# example\n\n```csharp\npublic record Person(string Name);\n```",
+    );
+    await waitForPagination(page);
+    await expect(page.locator("#paged-output pre.shiki").first()).toBeVisible();
+    await expect(page.locator("#warning-banner")).toBeHidden();
+  });
+
   test("the page chip reflects a positive page count", async ({ page }) => {
     await page.goto("/");
     await loadMarkdownIntoApp(page, SAMPLE_MD);

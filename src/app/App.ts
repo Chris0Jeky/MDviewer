@@ -14,7 +14,7 @@
  * through localStorage.
  */
 
-import { getHighlighter } from "../render/highlight";
+import { ensureMarkdownLanguages, getHighlighter } from "../render/highlight";
 import { createMarkdown, renderMarkdown } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
@@ -263,6 +263,10 @@ export class App {
 
       // 1 — highlighter singleton (await once)
       const hl = await getHighlighter();
+      if (stale()) return;
+
+      // Pre-load curated fenced-code grammars before markdown-it's synchronous render.
+      await ensureMarkdownLanguages(hl, src);
       if (stale()) return;
 
       // 2 — markdown → html (SYNC: Shiki via fromHighlighter + KaTeX inline)
