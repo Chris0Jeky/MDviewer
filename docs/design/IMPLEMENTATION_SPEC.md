@@ -238,7 +238,7 @@ export function measurePageArea(settings: Settings): PageArea;
 export function shrinkToFit(content: ParentNode, area: PageArea): void;
 
 // src/paginate/handler.ts
-export function registerHandlersOnce(area: () => PageArea): void;   // idempotent
+export function registerHandlersOnce(area: () => PageArea): Promise<void>;   // idempotent
 export function fillTocPageNumbers(host: HTMLElement): void;
 
 // src/paginate/paginate.ts

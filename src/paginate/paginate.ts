@@ -12,7 +12,6 @@
  * fill the TOC for this specific run.
  */
 
-import { Previewer } from "pagedjs";
 import type { PagedFlow } from "pagedjs";
 import { PAGEDJS } from "../app/dom";
 import { setPaginationHost } from "./handler";
@@ -42,6 +41,9 @@ export async function paginate(
   css: string,
   host: HTMLElement,
 ): Promise<PagedFlow> {
+  // Keep Paged.js off the empty-state startup path. Import before teardown so an
+  // unavailable chunk does not erase the last successfully paginated document.
+  const { Previewer } = await import("pagedjs");
   teardownPagination(host);
   setPaginationHost(host);
 

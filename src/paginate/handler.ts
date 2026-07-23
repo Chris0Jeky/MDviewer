@@ -13,7 +13,6 @@
  *   afterRendered()         -> resolve TOC leader page numbers from laid-out pages.
  */
 
-import { Handler, registerHandlers } from "pagedjs";
 import type { PageArea } from "./measure";
 import { shrinkToFit } from "./shrinkToFit";
 import { PAGEDJS, CLASSES } from "../app/dom";
@@ -26,6 +25,9 @@ let renderHost: HTMLElement | null = null;
 
 /** True once registerHandlers has been called for our handler (idempotency latch). */
 let registered = false;
+
+/** Shared in-flight import/registration so overlapping renders cannot double-register. */
+let registrationPromise: Promise<void> | null = null;
 
 /** Monotonic page counter, reset per pagination run via setPaginationHost. */
 let pageCounter = 0;
@@ -40,43 +42,50 @@ export function setPaginationHost(host: HTMLElement): void {
   pageCounter = 0;
 }
 
-class MDViewerHandler extends Handler {
-  /** Pre-layout: shrink modestly-oversized atomic blocks to fit one page (Tier 3). */
-  afterParsed(parsed: ParentNode): void {
-    if (areaProvider) shrinkToFit(parsed, areaProvider());
-  }
-
-  /**
-   * Per-page: stamp a stable 1-based page number. Paged.js sets its own counters via
-   * CSS, but we need a DOM attribute that fillTocPageNumbers can read back. Only stamp
-   * if Paged.js hasn't already provided one for this element.
-   */
-  afterPageLayout(pageElement: unknown): void {
-    const el = pageElement as HTMLElement | null | undefined;
-    if (!el || typeof el.setAttribute !== "function") return;
-    pageCounter += 1;
-    if (!el.getAttribute(PAGEDJS.pageNumberAttr)) {
-      el.setAttribute(PAGEDJS.pageNumberAttr, String(pageCounter));
-    }
-  }
-
-  /** Post-layout: fill TOC leader page numbers from the now-laid-out pages. */
-  afterRendered(): void {
-    if (renderHost) fillTocPageNumbers(renderHost);
-  }
-}
-
 /**
  * Register the MDviewer handler exactly once and (re)bind the page-area provider.
  * Safe to call on every pagination run: the global registerHandlers is invoked only
  * the first time; subsequent calls just refresh the area provider (settings change
  * the printable area between runs without re-registering the handler).
  */
-export function registerHandlersOnce(area: () => PageArea): void {
+export async function registerHandlersOnce(area: () => PageArea): Promise<void> {
   areaProvider = area;
   if (registered) return;
-  registerHandlers(MDViewerHandler);
-  registered = true;
+
+  registrationPromise ??= import("pagedjs")
+    .then(({ Handler, registerHandlers }) => {
+      class MDViewerHandler extends Handler {
+        /** Pre-layout: shrink modestly-oversized atomic blocks to fit one page (Tier 3). */
+        afterParsed(parsed: ParentNode): void {
+          if (areaProvider) shrinkToFit(parsed, areaProvider());
+        }
+
+        /** Stamp a stable 1-based page number on each laid-out page. */
+        afterPageLayout(pageElement: unknown): void {
+          const el = pageElement as HTMLElement | null | undefined;
+          if (!el || typeof el.setAttribute !== "function") return;
+          pageCounter += 1;
+          if (!el.getAttribute(PAGEDJS.pageNumberAttr)) {
+            el.setAttribute(PAGEDJS.pageNumberAttr, String(pageCounter));
+          }
+        }
+
+        /** Post-layout: fill TOC leader page numbers from the now-laid-out pages. */
+        afterRendered(): void {
+          if (renderHost) fillTocPageNumbers(renderHost);
+        }
+      }
+
+      registerHandlers(MDViewerHandler);
+      registered = true;
+    })
+    .catch((error: unknown) => {
+      // A transient chunk-load failure should be retryable on the next render.
+      registrationPromise = null;
+      throw error;
+    });
+
+  await registrationPromise;
 }
 
 /**

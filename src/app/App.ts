@@ -97,9 +97,6 @@ export class App {
     app.buildShell();
     app.applyThemeAttributes();
 
-    // Register Paged.js handlers exactly once; they read the live page area each run.
-    registerHandlersOnce(() => measurePageArea(app.settings));
-
     // Ingestion → store. The store's "change" event triggers a content render.
     app.detachInput = installInputHandlers(app.store, {
       onReject: (names) => app.onReject(names),
@@ -291,6 +288,8 @@ export class App {
       //     run, and the next render rebuilds from scratch, so no baked transforms persist.
 
       // 7 — PAGINATION LAST
+      await registerHandlersOnce(() => measurePageArea(this.settings));
+      if (stale()) return;
       const css = buildStylesheet(this.settings);
       const flow = await paginate(source, css, this.canvas.host);
       if (stale()) return;
