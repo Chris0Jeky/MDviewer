@@ -38,6 +38,11 @@ beforeEach(() => {
   // test — re-establish renderMock's behavior (and clear history) every time.
   renderMock.mockReset().mockImplementation(async (id: string, code: string) => {
     if (code.includes("FAIL")) throw new Error("mermaid parse error");
+    if (code.includes("EXTERNAL")) {
+      return {
+        svg: `<svg data-id="${id}"><image href="https://example.test/tracker.svg" /></svg>`,
+      };
+    }
     return { svg: `<svg data-id="${id}"><g></g></svg>` };
   });
   initializeMock.mockReset();
@@ -82,6 +87,15 @@ describe("renderAllMermaid: successful diagram", () => {
     const result = await renderAllMermaid(r);
     expect(result.rendered).toBe(2);
     expect(r.querySelectorAll(`figure.${CLASSES.mermaidFigure}`).length).toBe(2);
+  });
+
+  it("strips external resources from generated SVG", async () => {
+    const r = root('<pre><code class="language-mermaid">EXTERNAL</code></pre>');
+    await renderAllMermaid(r);
+    const image = r.querySelector("svg image");
+    expect(image).not.toBeNull();
+    expect(image?.hasAttribute("href")).toBe(false);
+    expect(image?.hasAttribute("xlink:href")).toBe(false);
   });
 });
 

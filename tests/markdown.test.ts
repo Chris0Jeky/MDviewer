@@ -107,6 +107,56 @@ describe("markdown: task lists", () => {
     const { html } = render("- [x] done\n- [ ] todo");
     const items = frag(html).querySelectorAll(".task-list-item");
     expect(items.length).toBe(2);
+    const inputs = frag(html).querySelectorAll<HTMLInputElement>("input[type='checkbox']");
+    expect(inputs.length).toBe(2);
+    expect(Array.from(inputs).every((input) => input.disabled)).toBe(true);
+  });
+});
+
+describe("markdown: untrusted HTML", () => {
+  it("removes executable markup and event handlers", () => {
+    const { html, warnings } = render(
+      '<script>globalThis.pwned = true</script><img src="x" onerror="globalThis.pwned=true">',
+    );
+    const root = frag(html);
+    expect(root.querySelector("script")).toBeNull();
+    expect(root.querySelector("img")?.hasAttribute("onerror")).toBe(false);
+    expect(warnings).toContainEqual(expect.objectContaining({ kind: "security" }));
+  });
+
+  it("blocks remote media and CSS fetches but keeps embedded raster images", () => {
+    const { html } = render(
+      [
+        '<img id="remote" src="https://example.test/tracker.png">',
+        '<img id="embedded" src="data:image/png;base64,AA==">',
+        '<span id="styled" style="color:red;background:url(https://example.test/x)">x</span>',
+        '<span id="image-set" style="background-image:image-set(&quot;https://example.test/x&quot; 1x)">y</span>',
+      ].join(""),
+    );
+    const root = frag(html);
+    expect(root.querySelector("#remote")?.hasAttribute("src")).toBe(false);
+    expect(root.querySelector("#embedded")?.getAttribute("src")).toBe(
+      "data:image/png;base64,AA==",
+    );
+    expect(root.querySelector("#styled")?.hasAttribute("style")).toBe(false);
+    expect(root.querySelector("#image-set")?.hasAttribute("style")).toBe(false);
+  });
+
+  it("rejects SVG data images", () => {
+    const { html } = render(
+      '<img id="svg" alt="unsafe svg" src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">',
+    );
+    const root = frag(html);
+    expect(root.querySelector("#svg")?.hasAttribute("src")).toBe(false);
+  });
+
+  it("preserves safe raw HTML and user-initiated links", () => {
+    const { html } = render(
+      '<details open><summary>More</summary><p><a href="https://example.test">Open</a></p></details>',
+    );
+    const root = frag(html);
+    expect(root.querySelector("details[open] summary")?.textContent).toBe("More");
+    expect(root.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
   });
 });
 

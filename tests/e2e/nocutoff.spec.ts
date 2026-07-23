@@ -30,6 +30,14 @@ test.describe("no atomic block straddles a page boundary", () => {
     expect(snapshot.pageCount, "fixture should span multiple pages").toBeGreaterThan(1);
     expect(snapshot.blocks.length, "fixture should contain atomic blocks").toBeGreaterThan(5);
 
+    const embeddedFigure = page.locator(
+      '.pagedjs_page img[alt="A small inline figure that should not straddle a page edge"]',
+    );
+    await expect(embeddedFigure).toBeVisible();
+    await expect
+      .poll(() => embeddedFigure.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+
     const pageByIndex = new Map<number, PageRect>(snapshot.pages.map((p) => [p.index, p]));
 
     const offenders: string[] = [];

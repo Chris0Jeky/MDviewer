@@ -10,6 +10,7 @@
  */
 
 import { CLASSES } from "../app/dom";
+import { sanitizeRenderedHtml } from "./sanitize";
 
 export type MermaidTheme = "default" | "dark" | "neutral" | "forest" | "base";
 
@@ -62,7 +63,7 @@ export async function renderAllMermaid(
       const { svg } = await mermaid.render(`mmd-${i}`, code);
       const figure = document.createElement("figure");
       figure.className = CLASSES.mermaidFigure;
-      figure.innerHTML = svg;
+      figure.innerHTML = sanitizeRenderedHtml(svg).html;
       host.replaceWith(figure);
       rendered++;
     } catch {

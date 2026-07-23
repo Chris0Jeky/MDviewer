@@ -37,16 +37,19 @@ function summarize(warnings: RenderWarning[]): string | null {
   let diagrams = 0;
   let math = 0;
   let langs = 0;
+  let security = 0;
   for (const w of warnings) {
     if (w.kind === "diagram") diagrams += 1;
     else if (w.kind === "math") math += 1;
-    else langs += 1;
+    else if (w.kind === "lang") langs += 1;
+    else security += 1;
   }
 
   const parts: string[] = [];
   if (diagrams > 0) parts.push(plural(diagrams, "diagram"));
   if (math > 0) parts.push(`${math} math`);
   if (langs > 0) parts.push(plural(langs, "language"));
+  if (security > 0) parts.push(plural(security, "security"));
 
   const total = `Rendered with ${plural(warnings.length, "warning")}`;
   return parts.length > 0 ? `${total} — ${parts.join(", ")}` : total;

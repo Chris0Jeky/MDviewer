@@ -118,6 +118,7 @@ src/
     Banner.ts                   aggregated warning banner + fatal error card (aria-live)
   render/
     markdown.ts                 createMarkdown(hl,settings); renderMarkdown(); SLUGIFY; RenderWarning
+    sanitize.ts                 DOMPurify boundary + local-first resource policy
     highlight.ts                getHighlighter() singleton; ensureLang(); CODE_THEME_PAIRS
     math.ts                     KaTeX plugin wiring (macros, throwOnError:false)
     mermaid.ts                  renderAllMermaid(root,theme) -> fixed-size SVG figures
@@ -206,10 +207,14 @@ export function ensureLang(hl: HighlighterCore, lang: string): Promise<void>;
 
 // src/render/markdown.ts
 import type MarkdownIt from 'markdown-it';
-export interface RenderWarning { kind: 'math' | 'diagram' | 'lang'; message: string; }
+export interface RenderWarning { kind: 'math' | 'diagram' | 'lang' | 'security'; message: string; }
 export function createMarkdown(hl: HighlighterCore, settings: Settings): MarkdownIt;
 export function renderMarkdown(md: MarkdownIt, src: string): { html: string; warnings: RenderWarning[] };
 export const SLUGIFY: (s: string) => string;
+
+// src/render/sanitize.ts
+export interface SanitizedHtml { html: string; removedCount: number; }
+export function sanitizeRenderedHtml(html: string): SanitizedHtml;
 
 // src/render/mermaid.ts
 export type MermaidTheme = 'default' | 'dark' | 'neutral' | 'forest' | 'base';

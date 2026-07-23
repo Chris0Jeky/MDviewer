@@ -98,7 +98,7 @@ $$
 > A blockquote is atomic too: it should not be split awkwardly across pages when
 > it can reasonably fit on the next one.
 
-![A small inline figure that should not straddle a page edge](data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='120'><rect width='200' height='120' fill='%23dddddd'/><text x='100' y='65' font-size='14' text-anchor='middle'>figure</text></svg>)
+![A small inline figure that should not straddle a page edge](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAB4CAYAAAC3kr3rAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJ9SURBVHhe7dnbcYJAAIbRFEY1tEIjFEIdlGELZIQYXcDfxNWJZs7DeQDWlYf9httH3/cTsHU4HKaP9U5gUQRy3AAOAoFEIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIJWGrpmaZtENw9Q1zdT242Yc70kgNcZ+aucwdo7xLwikhkD+PYHca+i+b61mbT+Nh/1brMvbsKbppmH+bTcN8/H932z3L9tdd/7fU5hj3xbnItjHEUiNzRVkvahPcZxiuAzrvkCKub7jaKd+LM9pOx/3EEiNW4Fsji/KaNYhXJnrFEg3hDGLJZoyJO4jkBqbAMoFe3WhVtxiFePmeS6uHsV57ezn1wRS4yUCuXy+uSSQRxBIjZcIRAjPJJAaNwK5dqvzo2eQzcP2zrjN//NoAqmxWaDbRXz7LdbOmK95juNiIHtvsXbn414CqfGDQI7yd5Cjcerb9fPDeq719tn6O8jyTWbnfPk1gfyBeUFbxG9BIM/0dTtVPiNcvxLwegTybDuvYj1Uvw+BQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCHYDAUoCgWAOZH15Ac4+AYK7Ok2uPClJAAAAAElFTkSuQmCC)
 
 ## 7. A deliberately tall code block
 

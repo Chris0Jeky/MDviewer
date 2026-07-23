@@ -31,9 +31,10 @@ import type { Settings } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import { CODE_THEME_PAIRS } from "./highlight";
 import { registerKatex } from "./math";
+import { sanitizeRenderedHtml } from "./sanitize";
 
 export interface RenderWarning {
-  kind: "math" | "diagram" | "lang";
+  kind: "math" | "diagram" | "lang" | "security";
   message: string;
 }
 
@@ -190,8 +191,18 @@ export function renderMarkdown(
   md: MarkdownIt,
   src: string,
 ): { html: string; warnings: RenderWarning[] } {
-  const html = md.render(src);
+  const rawHtml = md.render(src);
+  const sanitized = sanitizeRenderedHtml(rawHtml);
   const warnings: RenderWarning[] = [];
+
+  if (sanitized.removedCount > 0) {
+    warnings.push({
+      kind: "security",
+      message: `Blocked ${sanitized.removedCount} unsafe HTML ${
+        sanitized.removedCount === 1 ? "item" : "items"
+      } or remote-resource ${sanitized.removedCount === 1 ? "reference" : "references"}.`,
+    });
+  }
 
   // Unknown fenced-code languages: Shiki silently falls back to plain text. Scan the raw
   // source for ``` / ~~~ fences with an info string whose first token we do not ship.
@@ -211,12 +222,12 @@ export function renderMarkdown(
 
   // KaTeX errors: with throwOnError:false the plugin emits a span coloured with errorColor
   // and titled with the message. Detect either the class or the error colour as a marker.
-  if (/class="katex-error"|#cc0000/.test(html)) {
+  if (/class="katex-error"|#cc0000/.test(sanitized.html)) {
     warnings.push({
       kind: "math",
       message: "One or more math expressions could not be parsed and are shown in red.",
     });
   }
 
-  return { html, warnings };
+  return { html: sanitized.html, warnings };
 }

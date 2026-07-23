@@ -84,6 +84,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Nothing leaves the device. No fetch/XHR/WebSocket at runtime; bundle Shiki themes/langs, KaTeX
   fonts, and Mermaid locally so the tool works offline.
-- `markdown-it` runs with `html: true` (the user's own local files). If remote/pasted untrusted
-  Markdown is ever accepted, sanitize (DOMPurify) before inserting into the DOM.
+- `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
+  before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
+  image data URLs are allowed. Mermaid SVG output is sanitized again after rendering.
 - Document content is never written to storage; only the small `Settings` object persists.
