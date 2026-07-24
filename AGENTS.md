@@ -75,6 +75,11 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Git: branch off `main`; `merge` not `rebase`; no force-push or history rewrite on protected
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
+- Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
+  draft PRs after relevant local checks. Do not merge immediately. First require independent
+  adversarial review, exact-head green CI, and every review thread or bot comment addressed with
+  finding → commit evidence; any head change resets that evidence. Preserve commits with a merge
+  commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
 - Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
 - Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
