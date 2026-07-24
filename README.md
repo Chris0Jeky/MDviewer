@@ -67,7 +67,8 @@ docs/              product vision, architecture, roadmap, and the design specs
 
 ## For contributors and agents
 
-Start with the design docs, which are the source of truth:
+For current operational state, begin with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) and the resumable
+[`ORCHESTRATOR.md`](ORCHESTRATOR.md). Then use the design docs as the implementation source of truth:
 
 - [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md) — file tree, pinned module signatures, the load-bearing render order, CSS/DOM names, no-slice tiers, and testing strategy.
 - [`docs/design/LIBRARY_NOTES.md`](docs/design/LIBRARY_NOTES.md) — verified, version-correct integration snippets for every library.

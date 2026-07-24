@@ -15,16 +15,17 @@ TypeScript + Vite. Canonical build contract: `docs/design/IMPLEMENTATION_SPEC.md
 
 1. User prompt for the current turn.
 2. `AGENTS.md` (this file) — repo-wide rules.
-3. `docs/Project_Roadmap.md` — phase status, priorities, gates.
-4. `docs/design/IMPLEMENTATION_SPEC.md` — pinned signatures, render order, CSS names.
-5. `autodoc/AGENT_INDEX.md` — code-seam map.
-6. The relevant skill (`.claude/skills/*/SKILL.md` describes the workflow intent).
+3. `ORCHESTRATOR.md` — resumable live state, queue, evidence, and next work.
+4. `docs/Project_Roadmap.md` — phase status, priorities, gates.
+5. `docs/design/IMPLEMENTATION_SPEC.md` — pinned signatures, render order, CSS names.
+6. `autodoc/AGENT_INDEX.md` — code-seam map.
+7. The relevant skill (`.claude/skills/*/SKILL.md` describes the workflow intent).
 
 When sources conflict, follow the higher source and report the conflict.
 
 ## First 5 Minutes
 
-`ACTION_ITEMS.md` → `AGENTS.md` → `docs/Project_Roadmap.md` →
+`ACTION_ITEMS.md` → `AGENTS.md` → `ORCHESTRATOR.md` → `docs/Project_Roadmap.md` →
 `docs/design/IMPLEMENTATION_SPEC.md` → `autodoc/AGENT_INDEX.md`. Then pick the smallest
 safe, reviewable slice and state blockers, assumptions, verification target, and docs-sync
 target before editing.

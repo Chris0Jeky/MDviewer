@@ -8,13 +8,15 @@
 
 ## Start here
 
-1. [`../docs/design/IMPLEMENTATION_SPEC.md`](../docs/design/IMPLEMENTATION_SPEC.md) — the source of truth.
-2. [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) — pipeline, modules, CSS architecture.
-3. [`../docs/Project_Roadmap.md`](../docs/Project_Roadmap.md) — phase status and the active gate.
-4. [`../src/app/dom.ts`](../src/app/dom.ts) — canonical DOM ids/classes (`IDS`, `CLASSES`, `ATTRS`, `PAGEDJS`); import these, never hardcode.
-5. [`../src/app/settings.ts`](../src/app/settings.ts) — `Settings`, `DEFAULT_SETTINGS`, `MARGIN_MM`, migrate.
-6. [`../src/app/state.ts`](../src/app/state.ts) — `DocStore` and `createRenderScheduler`.
-7. [`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) — human-only tasks; read first, flag OPEN items.
+1. [`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) — human-only tasks; read first, flag every OPEN item.
+2. [`../AGENTS.md`](../AGENTS.md) — authority order, safety floor, worktree and review rules.
+3. [`../ORCHESTRATOR.md`](../ORCHESTRATOR.md) — resumable live state, exact evidence, queue, and next work.
+4. [`../docs/Project_Roadmap.md`](../docs/Project_Roadmap.md) — phase status and the active gate.
+5. [`../docs/design/IMPLEMENTATION_SPEC.md`](../docs/design/IMPLEMENTATION_SPEC.md) — source of truth for signatures and render order.
+6. [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) — pipeline, modules, CSS architecture.
+7. [`../src/app/dom.ts`](../src/app/dom.ts) — canonical DOM ids/classes (`IDS`, `CLASSES`, `ATTRS`, `PAGEDJS`); import these, never hardcode.
+8. [`../src/app/settings.ts`](../src/app/settings.ts) — `Settings`, `DEFAULT_SETTINGS`, `MARGIN_MM`, migrate.
+9. [`../src/app/state.ts`](../src/app/state.ts) — `DocStore` and `createRenderScheduler`.
 
 ## Do not bulk-read
 

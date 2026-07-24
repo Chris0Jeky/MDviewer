@@ -24,6 +24,9 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
+- Immutable deployment URL: **https://e3bd9770.mdviewer-c9r.pages.dev/**
+- Last operator verification: 2026-07-24 — stable/immutable URLs, entry title, hashed asset,
+  immutable asset caching, and committed security headers passed smoke checks
 
 The current project uses Wrangler direct upload. To publish a new verified `main` build from an
 authenticated maintainer machine:
@@ -35,6 +38,15 @@ npm exec --yes wrangler@latest -- pages deploy dist --project-name mdviewer --br
 
 Direct upload does not automatically deploy later Git pushes. Connect the Pages project to GitHub in
 the Cloudflare dashboard if automatic production and pull-request preview deployments become useful.
+Confirm what is actually live rather than inferring it from GitHub:
+
+```powershell
+npm exec --yes wrangler@latest -- pages deployment list --project-name mdviewer --json
+```
+
+After a deployment, smoke both the stable and immutable URLs, inspect the entry title and hashed
+asset response, and confirm the `_headers` policy. Do not record Wrangler tokens or Cloudflare account
+identifiers in the repository.
 
 ## One command or one click on this PC
 
@@ -58,10 +70,11 @@ npm run serve
 Options are available after `--`, for example `npm run serve -- --port 8080 --open`. Stop the server
 with Ctrl+C or by closing its terminal.
 
-## Permanent public URL: Cloudflare Pages
+## Permanent public URL: Cloudflare Pages with optional Git integration
 
 Cloudflare's Vite guide uses exactly this repository's build contract: `npm run build` and output
-directory `dist`. Cloudflare Pages creates a `pages.dev` URL and rebuilds after pushes.
+directory `dist`. A Git-connected Pages project can rebuild after pushes. The current `mdviewer`
+project was created by Wrangler direct upload and does not yet have that automatic behavior.
 
 1. Push the branch you want to publish to GitHub.
 2. In Cloudflare: **Workers & Pages → Create application → Pages → Import an existing Git repository**.

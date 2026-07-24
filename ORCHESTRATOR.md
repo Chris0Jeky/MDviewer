@@ -3,29 +3,106 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-07-24:** Product hardening PR **#28** merged as `7f4eedf` after
-> exact-head CI, zero comment debt, and independent adversarial re-review. Cloudflare Pages production
-> deployment `e3bd9770` is live at **https://mdviewer-c9r.pages.dev/** and passed HTTP, header, and
-> hashed-asset smoke checks. The user explicitly closed AI-1 and AI-5 and selected/authorized
-> Cloudflare Pages for AI-4; `ACTION_ITEMS.md` now has no OPEN items. This deployment-record branch is
-> the only remaining documentation slice.
+> **▶ CURRENT CHECKPOINT — 2026-07-24:** Public launch and its durable record are complete. Product
+> hardening PR **#28** merged as `7f4eedf`; deployment-record PR **#29** merged as `43af438`, whose
+> exact `main` CI run `30060892316` passed. Cloudflare Pages production deployment `e3bd9770` remains
+> live at **https://mdviewer-c9r.pages.dev/** and passed HTTP, header, and hashed-asset smoke checks.
+> The user explicitly closed AI-1 and AI-5 and selected/authorized Cloudflare Pages for AI-4;
+> `ACTION_ITEMS.md` has no OPEN items. The next session should reconcile the six dependency PRs or
+> choose a remaining product slice below; there is no launch blocker.
+
+## NEXT SESSION START HERE
+
+### 1. Re-establish live truth before changing anything
+
+Follow the first-five-minutes order in `AGENTS.md`, then run this state reconciliation from the
+primary checkout. GitHub mergeability, check results, review state, and deployment state are snapshots;
+never carry them forward after a head change.
+
+```powershell
+git fetch --prune
+git status --short --branch
+git rev-parse HEAD
+git rev-parse origin/main
+gh pr list --state open --json number,title,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,url
+gh run list --branch main --limit 5 --json databaseId,headSha,status,conclusion,url
+gh api repos/Chris0Jeky/MDviewer/branches/main/protection
+npm exec --yes wrangler@latest -- pages deployment list --project-name mdviewer --json
+```
+
+Use a project-local isolated worktree created with `git worktree add --detach <path> origin/main`,
+then create a branch inside it. Keep the primary checkout clean. Any changed PR head invalidates its
+older CI and independent-review evidence.
+
+### 2. Durable launch snapshot
+
+- **Repository anchor:** `main` was `43af438a47df08030cf0e6eafcc7b6ec7c580ea1` after PR #29; CI run
+  `30060892316` passed Node 20, Node 22, and production Chromium.
+- **Production:** Cloudflare Pages project `mdviewer`, stable URL
+  **https://mdviewer-c9r.pages.dev/**, immutable deployment
+  **https://e3bd9770.mdviewer-c9r.pages.dev/**, deployment id
+  `e3bd9770-750c-4abe-b758-d7191dc7e841`, source `7f4eedf`, branch `main`.
+- **Deployment mode:** Wrangler direct upload. A Git push does **not** deploy automatically. From an
+  authenticated maintainer machine, build and deploy with the commands in `docs/DEPLOYMENT.md`.
+- **Privacy/product boundary:** the public product is still entirely client-side. Documents and PDFs
+  remain in the browser; there is no conversion API, storage service, telemetry, or runtime fetch.
+- **Human queue:** none. `ACTION_ITEMS.md` is authoritative and only the maintainer may close items.
+- **Branch protection:** relaxed solo-owner profile — PR required; conversation resolution and the
+  three CI jobs required; zero approvals; admins may bypass; force-push and deletion blocked; merge
+  commits enabled, squash disabled; strict/up-to-date checks disabled.
+- **Release evidence:** the PR #28 exact head passed 175 unit tests, 4 server tests, build, audit,
+  hook smoke, 14 skill validations, and 19 Chromium tests in both dev and production-preview lanes.
+  Installed Chrome produced both 7-page PDF paths; all 14 rendered pages were visually inspected.
+  Local PDF evidence was retained at
+  `C:\Users\Public\codex-shell-home\mdviewer-pdf-evidence-20260724` on the maintainer machine.
+
+### 3. Live queue snapshot and recommended order
+
+As observed on 2026-07-24, all six PRs below reported `MERGEABLE`/`CLEAN` with their three CI jobs
+green. Most checks are from 2026-06-29 and predate the product-hardening merge; #26 was refreshed on
+2026-07-24. Refresh every PR individually before acting and review dependency overlap before choosing
+an order.
+
+| PR | Exact observed head | Change | First concern to review |
+| --- | --- | --- | --- |
+| #22 | `857d4c8` | jsdom 25 → 29 | Major test-runtime behavior and Node compatibility |
+| #23 | `af39e2b` | `@types/markdown-it-container` 2 → 4 | Type/API drift against the runtime package |
+| #24 | `a547204` | `markdown-it-attrs` 4 → 5 | Runtime Markdown parsing and sanitization behavior |
+| #25 | `15bbd19` | `@types/node` 22 → 26 | Declared Node floor and accidental newer-API use |
+| #26 | `7948a07` | four grouped development-dependency updates | Overlap with the individual major PRs |
+| #27 | `b8a157d` | `actions/setup-node` 6 → 7 | Workflow behavior and supported runner/Node matrix |
+
+Recommended approach: reconcile dependency overlap first, then take one independent PR at a time,
+oldest first where there is no superseding overlap. For each slice: exact-head diff review, local
+relevant gates, independent adversarial review, all bot/human comments triaged, hosted CI green, then
+merge-commit only. Never treat these snapshot results as current proof.
+
+If dependency maintenance is intentionally deferred, the highest-value product choices are:
+
+1. Profile very large documents and establish render-time, main-thread, and memory budgets (the only
+   remaining P3 roadmap item).
+2. Pick one narrow P2 UX/accessibility slice and preserve the no-slice/render-order invariants.
+3. Optionally connect the existing Pages project to GitHub for automatic production and preview
+   deployments, or add a deliberate deployment workflow. Direct upload is already stable and cheap.
+4. Consider installable PWA packaging only as optional product polish. A remote `POST /convert` API
+   is a separate security/privacy product and must not be slipped into this client-only app.
 
 ## Run header
 
 - **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; deployment-record PR #29 is the active slice.
+- **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; next work is dependency reconciliation or a
+  deliberately selected P2/P3 product slice.
 - **Last updated:** 2026-07-24
 - **Cycle-2 base (historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
-- **Live GitHub queue (2026-07-24):** deployment-record PR #29 plus Dependabot PRs #22–#27 are
-  OPEN, MERGEABLE, and green. Keep each dependency update as its own reviewable slice.
-- **Local and remote `main` HEAD:** `7f4eedf2883c1b555971ecc6f9cf5f103f94e3b6` (PR #28 merge).
-- **PRs merged through public launch:** 13, including housekeeping PR #20 and
-  product-hardening/deployment PR #28. Earlier dependency/CI work remains recorded in C1–C9 below.
-- **Current main verification (`7f4eedf`):** hosted Node 20/22 and production Chromium CI green;
-  175 unit tests, 4 server tests, build, zero-vulnerability audit, hook smoke, 14 skill validations,
-  and 19/19 Chromium E2E against both dev and production-preview were green on the exact PR head.
-  Production Pages smoke is recorded in C16.
+- **Live GitHub queue snapshot (2026-07-24):** Dependabot PRs #22–#27 reported clean/mergeable with
+  green CI at the exact heads listed above. Refresh before use; several checks predate current `main`.
+- **Verified `main` anchor:** `43af438a47df08030cf0e6eafcc7b6ec7c580ea1` (PR #29 merge).
+- **PRs merged through the launch record:** 14, including housekeeping PR #20,
+  product-hardening/deployment PR #28, and deployment-record PR #29.
+- **Current main verification (`43af438`):** hosted Node 20/22 and production Chromium CI run
+  `30060892316` green. The fuller product/release gate evidence belongs to PR #28 / `7f4eedf` and is
+  summarized above; production Pages smoke is recorded in C16.
 
 ## Environment / verification commands
 
@@ -71,7 +148,7 @@ _None._
 | T-9c | eslint 9→10 (#11) + `@eslint/js`→^10 + lint-fix + engines floor | **MERGED** | P3 | — | PR #17 → `2ebc8b7`; closed #11 | full gates + CI Node 20+22 | lint clean (no new findings); engines tightened |
 | T-10 | Expose `window.__mdviewer` hook + make the settings e2e honest | **MERGED** | P4 | — | PR #19 → `68bf164` | self + independent review (ship-able); nit applied | was false-confidence no-op test; now drives real re-pagination; +typed prod hook |
 | T-13 | Fix misleading Canvas "Fit the page to the canvas" tooltip (Canvas.ts:26) — actual behavior is natural mm sizing (`transform: none`) | **COMMITTED** | P5 | — | `982c6c0` | unit + E2E | Control copy now describes natural-size rendering |
-| T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | IN-PROGRESS | P3 | — | branch `chore/session-wrap` | — | makes state durable + tracked for next session |
+| T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | **MERGED** | P3 | — | PR #20 → `1b9fe30` | hosted CI | made cycle-2 state durable for the next session |
 | T-11 | dead `ensureLang` loader | FOLDED → T-4 | P4 | — | — | F-18 | user chose build-out (Q-2): keep `ensureLang`, make it work as part of T-4 (don't delete). |
 | T-12 | Docs version-sync after the major dep bumps | **MERGED** | P3 (docs gate) | T-1,T-8,T-9a/b/c | PR #18 → `82ac4bc` | skills validate + CI | spec/notes/roadmap/3 skills now match installed versions |
 | T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9`, `5be6243` | independent adversarial review; literal and obfuscated bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
@@ -199,3 +276,8 @@ _None._
   production id `e3bd9770` from `main`. Stable URL **https://mdviewer-c9r.pages.dev/** and immutable
   deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
   headers verified. No human action items remain open.
+- **C17 (2026-07-24) — LAUNCH RECORD MERGED:** PR #29 corrected the durable launch documentation,
+  passed exact-head CI and independent adversarial review with all comments triaged, and merged as
+  `43af438`. Main CI run `30060892316` then passed all three required jobs. The relaxed solo-owner
+  protection profile was read back from GitHub, the Pages deployment was read back from Wrangler,
+  and open work is now only Dependabot #22–#27 plus the explicit P2/P3 roadmap choices above.
