@@ -60,8 +60,8 @@ older CI and independent-review evidence.
 
 As observed on 2026-07-24, all six PRs below reported `MERGEABLE`/`CLEAN` with their three CI jobs
 green. Most checks are from 2026-06-29 and predate the product-hardening merge; #26 was refreshed on
-2026-07-24. Refresh every PR individually before acting and review dependency overlap before choosing
-an order.
+2026-07-24. Refresh every PR individually before acting and review interactions before choosing an
+order.
 
 | PR | Exact observed head | Change | First concern to review |
 | --- | --- | --- | --- |
@@ -69,13 +69,13 @@ an order.
 | #23 | `af39e2b` | `@types/markdown-it-container` 2 → 4 | Type/API drift against the runtime package |
 | #24 | `a547204` | `markdown-it-attrs` 4 → 5 | Runtime Markdown parsing and sanitization behavior |
 | #25 | `15bbd19` | `@types/node` 22 → 26 | Declared Node floor and accidental newer-API use |
-| #26 | `7948a07` | four grouped development-dependency updates | Overlap with the individual major PRs |
+| #26 | `7948a07` | ESLint, typescript-eslint, Vite, and Vitest updates | Grouped lockfile/toolchain interactions |
 | #27 | `b8a157d` | `actions/setup-node` 6 → 7 | Workflow behavior and supported runner/Node matrix |
 
-Recommended approach: reconcile dependency overlap first, then take one independent PR at a time,
-oldest first where there is no superseding overlap. For each slice: exact-head diff review, local
-relevant gates, independent adversarial review, all bot/human comments triaged, hosted CI green, then
-merge-commit only. Never treat these snapshot results as current proof.
+Recommended approach: take one independent PR at a time, oldest first unless live review reveals a
+dependency or superseding relationship. For each slice: exact-head diff review, local relevant gates,
+independent adversarial review, all bot/human comments triaged, hosted CI green, then merge-commit
+only. Never treat these snapshot results as current proof.
 
 If dependency maintenance is intentionally deferred, the highest-value product choices are:
 
