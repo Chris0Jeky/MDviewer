@@ -53,8 +53,9 @@ so pagination MUST run last, exactly once, after all async content settles.
 2  createMarkdown(hl, settings).render(src)   // SYNC: Shiki (fromHighlighter) + KaTeX inline
 3  buildPaginationSource(html, settings)      // inject TOC nav; transform end-of-doc footnotes -> inline float spans
 4  await renderAllMermaid(source, theme)      // async -> fixed-size SVG (useMaxWidth:false)
+4b stampAtomicBlocks(source)                  // stable identities copied into Paged.js fragments
 5  await awaitFontsAndImages(source)          // document.fonts.ready + img.decode -> heights final
-6  capture pristine clone of source           // enables re-paginate without re-render
+6  retain the fully prepared source           // a later render rebuilds a fresh fragment
 7  registerHandlersOnce(); await paginate(source, css, #paged-output)   // PAGINATION LAST
        // inside: afterParsed -> shrinkToFit ; afterRendered -> fillTocPageNumbers
 ```
@@ -219,6 +220,7 @@ export const SLUGIFY: (s: string) => string;
 // src/render/sanitize.ts
 export interface SanitizedHtml { html: string; removedCount: number; }
 export function sanitizeRenderedHtml(html: string): SanitizedHtml;
+export function sanitizeMermaidSvg(svg: string): SanitizedHtml;
 
 // src/render/mermaid.ts
 export type MermaidTheme = 'default' | 'dark' | 'neutral' | 'forest' | 'base';
@@ -226,6 +228,8 @@ export function renderAllMermaid(root: ParentNode, theme?: MermaidTheme): Promis
 
 // src/render/buildSource.ts
 export function buildPaginationSource(html: string, settings: Settings): DocumentFragment;
+export const ATOMIC_BLOCK_SELECTOR: string;
+export function stampAtomicBlocks(root: ParentNode): number;
 export function transformFootnotesToInline(root: ParentNode): void;
 export function injectToc(root: ParentNode, settings: Settings): void;
 export async function awaitFontsAndImages(root: ParentNode): Promise<void>;
@@ -268,6 +272,7 @@ export class App {
   static init(root: HTMLElement): App;
   scheduleRender(reason: RenderReason): void;
   updateSettings(patch: Partial<Settings>): void;   // persists + scheduleRender('settings')
+  onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void;
 }
 ```
 

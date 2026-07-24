@@ -16,6 +16,14 @@
 
 ## Current State (snapshot)
 
+- **2026-07-24 (product hardening + packaging)** — Security-sensitive Markdown and Mermaid output is
+  sanitized; dependency audit is clean; Paged.js and curated Shiki grammars load on demand; a tested
+  production server, one-command/one-click local launch, and deployment guide are present on branch
+  `feat/product-hardening-deployment`. Automated verification includes 170 unit tests, 3 server tests,
+  and 18 browser tests against both Vite dev and the production bundle on isolated ports. The
+  no-slice test now tracks stable source-block identities across Paged.js fragments rather than
+  trusting already-split output geometry alone.
+
 - **2026-06-25 (session 2)** — Dependency-currency + CI foundation landed. **11 PRs merged**, `main` green.
   - **Deps fully current, 0 vulnerabilities:** jspdf 2→4 (security advisories), vite 6→8, vitest 2→4,
     TypeScript 5.9→6.0, ESLint 9→10, Shiki 3→4 (all 6 pkgs in lockstep), katex 0.16→0.17, mermaid
@@ -67,6 +75,20 @@ Report: pass/fail per export path, and any block that got sliced (with the doc t
 
 ---
 
+### AI-4 — Choose and authorize the permanent remote-access path — OPEN (2026-07-24)
+
+The code and instructions support all options, but an agent cannot create or link hosting/network
+accounts without the maintainer choosing the audience and authorizing the external change.
+
+1. Choose **Cloudflare Pages** for a permanent public URL (recommended default), **Tailscale Serve**
+   for private access through this PC, or **Cloudflare Tunnel + Access** for a stable authenticated
+   URL hosted by this PC.
+2. Follow [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), or ask an agent to walk through the chosen setup.
+3. For Cloudflare Pages, decide whether to use the free `pages.dev` address or a custom domain.
+4. After deployment, report the URL and desired visibility so it can be recorded and smoke-tested.
+
+---
+
 ## Completed log
 
 - **AI-3 — Decide license and author** — DONE 2026-06-25. User confirmed: **keep the MIT placeholder.**
@@ -81,6 +103,5 @@ Report: pass/fail per export path, and any block that got sliced (with the doc t
 
 ## Known dev follow-ups (agent-doable, tracked in the roadmap)
 
-- **Bundle size:** the initial chunk is ~1.9 MB (KaTeX + markdown-it + Paged.js + Shiki core). It
-  builds and runs fine for a local-first tool, but `paginate.ts`/`download.ts` could lazy-load
-  Paged.js and the PDF libs to shrink first paint. See `docs/Project_Roadmap.md` P3.
+- **Bundle size:** Paged.js and curated extra Shiki grammars now load on demand, reducing the entry
+  chunk from ~1.97 MB to ~1.46 MB. Further main-thread and Mermaid/Shiki splitting remains possible.

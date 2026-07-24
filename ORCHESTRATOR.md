@@ -3,19 +3,22 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ NEXT SESSION — START HERE:** Status = PAUSED (user requested), `main` green (exact HEAD in the
-> Run header), no open PRs, working tree clean. All deferred questions answered. Pick up
-> the **greenlit backlog** below: **T-3 (bundle lazy-load)** and **T-4 (on-demand Shiki languages)** —
-> both user-approved. Read the "Backlog (greenlit)" section for the exact files + constraints. Re-run
-> `npm run agent:check` + `npm run test:e2e` first to confirm the baseline. Only OPEN human item is
-> **AI-1** (manual real-Chrome PDF visual check).
+> **▶ CURRENT CHECKPOINT — 2026-07-24:** Work continues on isolated branch
+> `feat/product-hardening-deployment` from exact `origin/main` `a0647549`. T-3 and T-4 are complete,
+> along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
+> Independent review findings are fixed; final exact-head gates remain before handoff. OPEN human items: **AI-1**
+> (manual real-Chrome PDF visual check) and **AI-4** (choose/authorize the permanent hosting path).
 
 ## Run header
 
 - **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 1 — **PAUSED** at user request (clean wrap; resume from greenlit backlog).
-- **Last updated:** 2026-06-25
+- **Current cycle:** 2 — **IN PROGRESS** on isolated worktree; primary checkout remains untouched.
+- **Last updated:** 2026-07-24
+- **Cycle-2 base:** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
+- **Live GitHub queue (2026-07-24):** Dependabot PRs #22–#27 are OPEN, CLEAN, and have all checks
+  green. They were inspected but not merged or folded into this product branch; handle each as its
+  own reviewable dependency slice after this branch lands.
 - **Local main HEAD:** `68bf164` (after T-10 merge) → updated to the T-14 housekeeping merge on wrap, tracking `origin/main`.
 - **PRs merged this session:** 11 (T-1 jspdf+vite+vitest security; T-2 CI; T-5 dependabot cfg; T-6 prod-build e2e; T-7 action majors; T-8 katex/mermaid; T-9b TS6; T-9a shiki4; T-9c eslint10; T-12 docs version-sync; T-10 window.__mdviewer hook + honest settings test). All Dependabot PRs #1,#4-#12 merged or superseded+closed.
 - **Final main verification (2ebc8b7):** typecheck ✓ · lint ✓ (eslint 10) · 157 unit ✓ · build ✓ · e2e 15/15 on production bundle ✓ · agent:hooks:smoke ✓ · agent:skills:validate ✓ (14 skills). 0 npm vulnerabilities.
@@ -66,6 +69,12 @@
 | T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | IN-PROGRESS | P3 | — | branch `chore/session-wrap` | — | makes state durable + tracked for next session |
 | T-11 | dead `ensureLang` loader | FOLDED → T-4 | P4 | — | — | F-18 | user chose build-out (Q-2): keep `ensureLang`, make it work as part of T-4 (don't delete). |
 | T-12 | Docs version-sync after the major dep bumps | **MERGED** | P3 (docs gate) | T-1,T-8,T-9a/b/c | PR #18 → `82ac4bc` | skills validate + CI | spec/notes/roadmap/3 skills now match installed versions |
+| T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9` | independent adversarial review; bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
+| T-16 | Resolve transitive npm advisories | **COMMITTED** | P1 security | — | `d54892c` | `npm audit` | 3 advisories → 0 |
+| T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 16/16 | stale primary-checkout listener can no longer contaminate targeted runs |
+| T-18 | Product packaging and deployment paths | **IN PROGRESS** | P2 distribution | T-3,T-4 | current branch | full gates pending | built-in server, one-command/click launcher, static-host headers, deployment runbook |
+| T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources |
+| T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
 
 ### Backlog (greenlit — NEXT SESSION STARTS HERE)
 
@@ -138,3 +147,14 @@
 - **C7 (2026-06-25) MILESTONE:** All Dependabot PRs resolved (9 PRs merged this session); deps fully current; first CI established + hardened + testing the production bundle. Final main `2ebc8b7` fully green (all gates + agent tooling). No open PRs. Remaining backlog is product/quality work: T-3 (bundle lazy-load), T-4/T-11 (Shiki language handling), T-10.
 - **C8 (2026-06-25):** **T-12** (#18 docs version-sync) → `82ac4bc`. **T-10** (#19 expose `window.__mdviewer` hook + make the false-confidence settings e2e honest; +typed global; independent review ship-able) → `68bf164`. **Live demo** run against the production bundle: sample loads via the new hook → 7 pages, 5 Shiki blocks, 4 KaTeX, 4 callouts, 9 TOC links, 1 Mermaid SVG; **no-slice geometry check: 12 atomic blocks, 0 straddling a page boundary**; screenshots + a PDF saved to the session scratchpad. 11 PRs merged total. Clean wrap point — remaining backlog (T-3, T-4/T-11, T-13) is design-heavy / needs direction (see Q-2, Q-3). No open PRs; main green.
 - **C9 (2026-06-25) — PAUSE / WRAP:** User paused the loop and answered all deferred questions: Q-1 keep MIT (AI-3 closed), Q-2 build out on-demand Shiki languages (T-4), Q-3 do bundle lazy-load (T-3). Tidy-up: ORCHESTRATOR.md committed to the repo (was untracked), ACTION_ITEMS.md snapshot + AI-3 resolution recorded, greenlit backlog + "NEXT SESSION START HERE" pointer written. Final housekeeping PR = **T-14**. Working tree clean, no open PRs, `main` green. Next session: start the greenlit T-3 / T-4.
+- **C10 (2026-07-24) — HARDENING / PACKAGING:** Started from exact `origin/main` `a0647549` in a
+  detached-origin isolated worktree, then created `feat/product-hardening-deployment`; primary main
+  stayed unchanged. Cleared 3 npm advisories; sanitized Markdown/Mermaid output; lazy-loaded Paged.js;
+  implemented curated on-demand Shiki languages; added isolated E2E ports after detecting a stale
+  primary-checkout Vite listener; added tested production serving, one-command/click Windows launch,
+  static-host headers, source-map opt-in, and a deployment decision guide. T-18 awaits final full gates.
+  Independent review then exposed four high findings: Mermaid was plain Shiki text; generic
+  sanitization removed its styles/labels; SVG presentation attributes could retain remote URLs; and
+  no-slice E2E could miss a short logical block split into separate fragments. Commits `993e926` and
+  `3a12930` fix all four with real Chromium and stable source identity coverage; `8db5072` fixes the
+  review's IPv6 launcher finding. Final exact-head gates remain.
