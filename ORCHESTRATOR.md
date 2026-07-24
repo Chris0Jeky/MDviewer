@@ -7,8 +7,9 @@
 > `feat/product-hardening-deployment`. Installed-Chrome PDF inspection found and fixed a primary
 > print regression; an additional independent adversarial review found atomic-coverage, Windows
 > launcher, and policy-definition gaps, all now fixed in small commits. Relaxed solo-owner branch
-> protection is active. Re-run exact-head local/hosted gates and independent review after this docs
-> checkpoint before changing PR readiness. No external deployment was authorized. OPEN human items:
+> protection is active. Final local gates are green; push this documentation checkpoint, then require
+> exact-head hosted CI and independent re-review before changing PR readiness. No external deployment
+> was authorized. OPEN human items:
 > **AI-1** (accept agent PDF evidence or repeat native-dialog check), **AI-4** (choose/authorize the
 > permanent hosting path), and **AI-5** (confirm the applied relaxed protection profile).
 
@@ -189,3 +190,7 @@
   shell and final-page break, with a real 7-sheet PDF regression test. Both export paths then produced
   7 A4 pages; all 14 rendered pages were visually inspected with no sliced normal atomics. A fresh
   independent review found three gaps; commits `f072846`, `4e1e771`, and `48196ba` address all three.
+- **C15 (2026-07-24) — FINAL LOCAL GATES:** Exact local head passed typecheck, lint, 172 unit tests,
+  4 production-server tests, production build, zero-vulnerability audit, hook smoke, all 14 skill
+  validations, and all 19 Chromium E2E tests against both production-preview and dev servers on
+  isolated ports. Final documentation commit requires a short exact-head rerun before publication.
