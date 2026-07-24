@@ -18,6 +18,24 @@ The best default is **Cloudflare Pages**. MDviewer does not need a server proces
 is cheaper, more available, and simpler than keeping this PC online. Use **Tailscale Serve** when the
 URL should remain private or when you specifically want this machine to be the host.
 
+## Live production deployment
+
+- Stable URL: **https://mdviewer-c9r.pages.dev/**
+- Cloudflare Pages project: `mdviewer`
+- Production branch: `main`
+- First production deployment: `e3bd9770` from merge commit `7f4eedf`
+
+The current project uses Wrangler direct upload. To publish a new verified `main` build from an
+authenticated maintainer machine:
+
+```powershell
+npm run build
+npm exec --yes wrangler@latest -- pages deploy dist --project-name mdviewer --branch main
+```
+
+Direct upload does not automatically deploy later Git pushes. Connect the Pages project to GitHub in
+the Cloudflare dashboard if automatic production and pull-request preview deployments become useful.
+
 ## One command or one click on this PC
 
 Install Node.js once, clone the repository, then run:

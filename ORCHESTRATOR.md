@@ -3,29 +3,29 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-07-24:** Draft PR **#28** remains open on
-> `feat/product-hardening-deployment`. Installed-Chrome PDF inspection found and fixed a primary
-> print regression; an additional independent adversarial review found atomic-coverage, Windows
-> launcher, and policy-definition gaps, all now fixed in small commits. Relaxed solo-owner branch
-> protection is active. Final local gates are green; push this documentation checkpoint, then require
-> exact-head hosted CI and independent re-review before changing PR readiness. No external deployment
-> was authorized. OPEN human items:
-> **AI-1** (accept agent PDF evidence or repeat native-dialog check), **AI-4** (choose/authorize the
-> permanent hosting path), and **AI-5** (confirm the applied relaxed protection profile).
+> **▶ CURRENT CHECKPOINT — 2026-07-24:** Product hardening PR **#28** merged as `7f4eedf` after
+> exact-head CI, zero comment debt, and independent adversarial re-review. Cloudflare Pages production
+> deployment `e3bd9770` is live at **https://mdviewer-c9r.pages.dev/** and passed HTTP, header, and
+> hashed-asset smoke checks. The user explicitly closed AI-1 and AI-5 and selected/authorized
+> Cloudflare Pages for AI-4; `ACTION_ITEMS.md` now has no OPEN items. This deployment-record branch is
+> the only remaining documentation slice.
 
 ## Run header
 
 - **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 2 — **LOCAL ENGINEERING COMPLETE** on isolated worktree; primary checkout remains untouched.
+- **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; deployment-record PR #29 is the active slice.
 - **Last updated:** 2026-07-24
-- **Cycle-2 base:** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
-- **Live GitHub queue (2026-07-24):** Dependabot PRs #22–#27 are OPEN, CLEAN, and have all checks
-  green. They were inspected but not merged or folded into this product branch; handle each as its
-  own reviewable dependency slice after this branch lands.
-- **Local main HEAD:** `68bf164` (after T-10 merge) → updated to the T-14 housekeeping merge on wrap, tracking `origin/main`.
-- **PRs merged this session:** 11 (T-1 jspdf+vite+vitest security; T-2 CI; T-5 dependabot cfg; T-6 prod-build e2e; T-7 action majors; T-8 katex/mermaid; T-9b TS6; T-9a shiki4; T-9c eslint10; T-12 docs version-sync; T-10 window.__mdviewer hook + honest settings test). All Dependabot PRs #1,#4-#12 merged or superseded+closed.
-- **Final main verification (2ebc8b7):** typecheck ✓ · lint ✓ (eslint 10) · 157 unit ✓ · build ✓ · e2e 15/15 on production bundle ✓ · agent:hooks:smoke ✓ · agent:skills:validate ✓ (14 skills). 0 npm vulnerabilities.
+- **Cycle-2 base (historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
+- **Live GitHub queue (2026-07-24):** deployment-record PR #29 plus Dependabot PRs #22–#27 are
+  OPEN, MERGEABLE, and green. Keep each dependency update as its own reviewable slice.
+- **Local and remote `main` HEAD:** `7f4eedf2883c1b555971ecc6f9cf5f103f94e3b6` (PR #28 merge).
+- **PRs merged through public launch:** 13, including housekeeping PR #20 and
+  product-hardening/deployment PR #28. Earlier dependency/CI work remains recorded in C1–C9 below.
+- **Current main verification (`7f4eedf`):** hosted Node 20/22 and production Chromium CI green;
+  175 unit tests, 4 server tests, build, zero-vulnerability audit, hook smoke, 14 skill validations,
+  and 19/19 Chromium E2E against both dev and production-preview were green on the exact PR head.
+  Production Pages smoke is recorded in C16.
 
 ## Environment / verification commands
 
@@ -52,9 +52,7 @@
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
-- **AI-1** — Accept the agent-run installed-Chrome PDF inspection or repeat native-dialog check. OPEN.
-- **AI-4** — Choose and authorize the permanent remote-access path. OPEN.
-- **AI-5** — Confirm the applied relaxed solo-owner `main` protection profile. OPEN.
+_None._
 
 ## Task board
 
@@ -79,7 +77,7 @@
 | T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9`, `5be6243` | independent adversarial review; literal and obfuscated bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
 | T-16 | Resolve transitive npm advisories | **COMMITTED** | P1 security | — | `d54892c` | `npm audit` | 3 advisories → 0 |
 | T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 18/18 | stale primary-checkout listener can no longer contaminate targeted runs |
-| T-18 | Product packaging and deployment paths | **COMMITTED** | P2 distribution | T-3,T-4 | `0362a45` + follow-ups | full local gates + independent review | built-in server, one-command/click launcher, static-host headers, deployment runbook; external host awaits AI-4 |
+| T-18 | Product packaging and deployment paths | **MERGED + DEPLOYED** | P2 distribution | T-3,T-4 | PR #28 → `7f4eedf`; Pages `e3bd9770` | exact-head CI + independent re-review + production smoke | local launchers and deployment runbook landed; public app live at `mdviewer-c9r.pages.dev` |
 | T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926`, `ff07d38` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
 | T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
 | T-21 | Fix primary print pagination and inspect both PDFs | **COMMITTED** | P1 correctness | T-18 | `af006ff` | installed Chrome + rendered 14 PDF pages + regression E2E | primary vector export now prints all 7 sheets without a trailing blank; fallback remains 7 pages |
@@ -194,3 +192,10 @@
   4 production-server tests, production build, zero-vulnerability audit, hook smoke, all 14 skill
   validations, and all 19 Chromium E2E tests against both production-preview and dev servers on
   isolated ports. Final documentation commit requires a short exact-head rerun before publication.
+- **C16 (2026-07-24) — MERGED + PUBLICLY DEPLOYED:** PR #28 passed exact-head Node 20/22/production
+  Chromium CI, final independent re-review with no actionable findings, and zero review-thread debt;
+  merged with merge commit `7f4eedf` without deleting the branch. User explicitly accepted AI-1 and
+  AI-5 and selected Cloudflare Pages for AI-4. Wrangler OAuth created project `mdviewer` and deployed
+  production id `e3bd9770` from `main`. Stable URL **https://mdviewer-c9r.pages.dev/** and immutable
+  deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
+  headers verified. No human action items remain open.
