@@ -27,7 +27,7 @@ git rev-parse origin/main
 gh pr list --state open --json number,title,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,url
 gh run list --branch main --limit 5 --json databaseId,headSha,status,conclusion,url
 gh api repos/Chris0Jeky/MDviewer/branches/main/protection
-npm exec --yes wrangler@latest -- pages deployment list --project-name mdviewer --json
+npm exec --yes wrangler@4.114.0 -- pages deployment list --project-name mdviewer --json
 ```
 
 Use a project-local isolated worktree created with `git worktree add --detach <path> origin/main`,
@@ -45,7 +45,8 @@ older CI and independent-review evidence.
 - **Deployment mode:** Wrangler direct upload. A Git push does **not** deploy automatically. From an
   authenticated maintainer machine, build and deploy with the commands in `docs/DEPLOYMENT.md`.
 - **Privacy/product boundary:** the public product is still entirely client-side. Documents and PDFs
-  remain in the browser; there is no conversion API, storage service, telemetry, or runtime fetch.
+  remain in the browser; there is no conversion API, document storage, telemetry, or third-party
+  document/resource request. Same-origin application chunks and fonts can load lazily as features run.
 - **Human queue:** none. `ACTION_ITEMS.md` is authoritative and only the maintainer may close items.
 - **Branch protection:** relaxed solo-owner profile — PR required; conversation resolution and the
   three CI jobs required; zero approvals; admins may bypass; force-push and deletion blocked; merge
@@ -82,8 +83,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 1. Profile very large documents and establish render-time, main-thread, and memory budgets (the only
    remaining P3 roadmap item).
 2. Pick one narrow P2 UX/accessibility slice and preserve the no-slice/render-order invariants.
-3. Optionally connect the existing Pages project to GitHub for automatic production and preview
-   deployments, or add a deliberate deployment workflow. Direct upload is already stable and cheap.
+3. Optionally automate the existing Pages project with a GitHub Actions workflow using pinned
+   Wrangler plus scoped Cloudflare secrets. A Direct Upload project cannot later switch to Pages Git
+   integration; that alternative requires a new Pages project and an explicit URL/domain migration.
 4. Consider installable PWA packaging only as optional product polish. A remote `POST /convert` API
    is a separate security/privacy product and must not be slipped into this client-only app.
 
@@ -137,8 +139,8 @@ _None._
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | T-1 | Evaluate & land Dependabot PR #1 (jspdf 2→4 security + vite 6→8, vitest 2→4) | **MERGED** | P2 (security) | — | PR #1 → `8839177` | 2 adversarial lenses, all gates green incl. prod-build e2e | Security bump landed; jspdf advisories closed; deps current. 0 vulns. |
 | T-2 | Add GitHub Actions CI (typecheck/lint/unit/build + e2e on Chromium) | **MERGED** | P1 (unblock) | — | PR #2 → `cf5042c` | 2 adversarial reviews resolved | CI green on its own PR (verify Node 20+22, E2E Chromium incl. no-slice). Gate now enforceable. |
-| T-3 | Lazy-load Paged.js | **COMMITTED** | P3 performance | — | `27544c1` | unit + dev/preview E2E | Empty state no longer pays the Paged.js cost; pagination remains last |
-| T-4 | Load curated Shiki languages on demand | **COMMITTED** | P3 performance | — | `8a494ee` | unit + real Chromium C# fixture | Pre-scan resolves curated grammar chunks before synchronous Markdown render |
+| T-3 | Lazy-load Paged.js | **MERGED** | P3 performance | — | `27544c1`; PR #28 → `7f4eedf` | unit + dev/preview E2E + PR CI | Empty state no longer pays the Paged.js cost; pagination remains last |
+| T-4 | Load curated Shiki languages on demand | **MERGED** | P3 performance | — | `8a494ee`; PR #28 → `7f4eedf` | unit + real Chromium C# fixture + PR CI | Pre-scan resolves curated grammar chunks before synchronous Markdown render |
 | T-5 | Add `.github/dependabot.yml` (github-actions + npm auto-updates) | **MERGED** | P3 | — | PR #3 → `be68c1d` | self + 1 independent review; F-12 fixed | Config-valid (Dependabot check passed). Auto-patches deps+actions; closes F-11. |
 | T-6 | CI e2e tests the production bundle (`vite preview`), not just dev server | **MERGED** | P2 (closes F-10) | — | PR #13 → `33ca290` | self + independent review; F-13 fixed | CI e2e now runs on the shipped rolldown bundle |
 | T-7 | GitHub Actions majors consolidated (checkout 4→7, upload-artifact 4→7, setup-node 4→6, cache 4→6) | **MERGED** | P4 | — | PR #14 → `63dd258`; closed #4-#7 | CI ran the bumped actions green | consolidated 4 PRs into 1 |
@@ -147,18 +149,18 @@ _None._
 | T-9b | typescript 5.9→6.0 (#12) | **MERGED** | P3 | — | PR #15 → `fb505aa`; closed #12 | local gates + CI (npm ci on linux validated) | proved own-branch approach; W-2 libc churn is benign |
 | T-9c | eslint 9→10 (#11) + `@eslint/js`→^10 + lint-fix + engines floor | **MERGED** | P3 | — | PR #17 → `2ebc8b7`; closed #11 | full gates + CI Node 20+22 | lint clean (no new findings); engines tightened |
 | T-10 | Expose `window.__mdviewer` hook + make the settings e2e honest | **MERGED** | P4 | — | PR #19 → `68bf164` | self + independent review (ship-able); nit applied | was false-confidence no-op test; now drives real re-pagination; +typed prod hook |
-| T-13 | Fix misleading Canvas "Fit the page to the canvas" tooltip (Canvas.ts:26) — actual behavior is natural mm sizing (`transform: none`) | **COMMITTED** | P5 | — | `982c6c0` | unit + E2E | Control copy now describes natural-size rendering |
+| T-13 | Fix misleading Canvas "Fit the page to the canvas" tooltip (Canvas.ts:26) — actual behavior is natural mm sizing (`transform: none`) | **MERGED** | P5 | — | `982c6c0`; PR #28 → `7f4eedf` | unit + E2E + PR CI | Control copy now describes natural-size rendering |
 | T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | **MERGED** | P3 | — | PR #20 → `1b9fe30` | hosted CI | made cycle-2 state durable for the next session |
 | T-11 | dead `ensureLang` loader | FOLDED → T-4 | P4 | — | — | F-18 | user chose build-out (Q-2): keep `ensureLang`, make it work as part of T-4 (don't delete). |
 | T-12 | Docs version-sync after the major dep bumps | **MERGED** | P3 (docs gate) | T-1,T-8,T-9a/b/c | PR #18 → `82ac4bc` | skills validate + CI | spec/notes/roadmap/3 skills now match installed versions |
-| T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9`, `5be6243` | independent adversarial review; literal and obfuscated bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
-| T-16 | Resolve transitive npm advisories | **COMMITTED** | P1 security | — | `d54892c` | `npm audit` | 3 advisories → 0 |
-| T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 18/18 | stale primary-checkout listener can no longer contaminate targeted runs |
+| T-15 | Sanitize untrusted Markdown and Mermaid output | **MERGED** | P1 security | — | `d2fc3c9`, `5be6243`; PR #28 → `7f4eedf` | independent adversarial review; literal and obfuscated bypasses fixed; PR CI | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
+| T-16 | Resolve transitive npm advisories | **MERGED** | P1 security | — | `d54892c`; PR #28 → `7f4eedf` | `npm audit` + PR CI | 3 advisories → 0 |
+| T-17 | Isolate E2E server ports | **MERGED** | P2 test honesty | — | `7fdd9cb`; PR #28 → `7f4eedf` | dev + preview 18/18 + PR CI | stale primary-checkout listener can no longer contaminate targeted runs |
 | T-18 | Product packaging and deployment paths | **MERGED + DEPLOYED** | P2 distribution | T-3,T-4 | PR #28 → `7f4eedf`; Pages `e3bd9770` | exact-head CI + independent re-review + production smoke | local launchers and deployment runbook landed; public app live at `mdviewer-c9r.pages.dev` |
-| T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926`, `ff07d38` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
-| T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
-| T-21 | Fix primary print pagination and inspect both PDFs | **COMMITTED** | P1 correctness | T-18 | `af006ff` | installed Chrome + rendered 14 PDF pages + regression E2E | primary vector export now prints all 7 sheets without a trailing blank; fallback remains 7 pages |
-| T-22 | Close second adversarial-review findings | **COMMITTED** | P1/P2 | T-20,T-18 | `f072846`, `4e1e771`, `48196ba` | targeted unit/server/production E2E; final re-review pending | canonical atomic selector complete; Windows launcher returns to error handler; relaxed aging criterion operational |
+| T-19 | Restore Mermaid rendering and sanitize real SVG safely | **MERGED** | P1 correctness/security | T-15 | `993e926`, `ff07d38`; PR #28 → `7f4eedf` | independent finding + real Chromium + PR CI | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
+| T-20 | Close no-slice E2E identity gap | **MERGED** | P1 test honesty | — | `3a12930`; PR #28 → `7f4eedf` | independent finding + production E2E + PR CI | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
+| T-21 | Fix primary print pagination and inspect both PDFs | **MERGED** | P1 correctness | T-18 | `af006ff`; PR #28 → `7f4eedf` | installed Chrome + rendered 14 PDF pages + regression E2E + PR CI | primary vector export now prints all 7 sheets without a trailing blank; fallback remains 7 pages |
+| T-22 | Close second adversarial-review findings | **MERGED** | P1/P2 | T-20,T-18 | `f072846`, `4e1e771`, `48196ba`; PR #28 → `7f4eedf` | targeted gates + final independent re-review + exact-head PR CI | canonical atomic selector complete; Windows launcher returns to error handler; relaxed aging criterion operational |
 
 ### Completed cycle-2 product tasks
 

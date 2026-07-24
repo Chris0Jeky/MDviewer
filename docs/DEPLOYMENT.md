@@ -33,15 +33,19 @@ authenticated maintainer machine:
 
 ```powershell
 npm run build
-npm exec --yes wrangler@latest -- pages deploy dist --project-name mdviewer --branch main
+npm exec --yes wrangler@4.114.0 -- pages deploy dist --project-name mdviewer --branch main
 ```
 
-Direct upload does not automatically deploy later Git pushes. Connect the Pages project to GitHub in
-the Cloudflare dashboard if automatic production and pull-request preview deployments become useful.
+`4.114.0` is the exact Wrangler version used and reviewed for the first deployment; upgrade it as a
+separate reviewed change. Direct upload does not automatically deploy later Git pushes, and Cloudflare
+does not allow an existing Direct Upload project to switch to Git integration. To preserve the current
+project and stable URL while automating deployments, use a GitHub Actions workflow with this pinned
+Wrangler version and scoped Cloudflare API-token/account-id secrets. Alternatively, create a new
+Git-integrated Pages project and plan the URL or custom-domain migration explicitly.
 Confirm what is actually live rather than inferring it from GitHub:
 
 ```powershell
-npm exec --yes wrangler@latest -- pages deployment list --project-name mdviewer --json
+npm exec --yes wrangler@4.114.0 -- pages deployment list --project-name mdviewer --json
 ```
 
 After a deployment, smoke both the stable and immutable URLs, inspect the entry title and hashed
@@ -70,11 +74,11 @@ npm run serve
 Options are available after `--`, for example `npm run serve -- --port 8080 --open`. Stop the server
 with Ctrl+C or by closing its terminal.
 
-## Permanent public URL: Cloudflare Pages with optional Git integration
+## Permanent public URL: Cloudflare Pages and automation choices
 
 Cloudflare's Vite guide uses exactly this repository's build contract: `npm run build` and output
-directory `dist`. A Git-connected Pages project can rebuild after pushes. The current `mdviewer`
-project was created by Wrangler direct upload and does not yet have that automatic behavior.
+directory `dist`. A newly created Git-connected Pages project can rebuild after pushes. The current
+`mdviewer` project was created by Wrangler direct upload and cannot be converted in place.
 
 1. Push the branch you want to publish to GitHub.
 2. In Cloudflare: **Workers & Pages → Create application → Pages → Import an existing Git repository**.
@@ -90,7 +94,8 @@ MDviewer build is comfortably below those file-count and per-file limits. The co
 file supplies baseline browser security and long-lived caching for hashed assets. Production source
 maps are disabled; set `SOURCE_MAPS=true` only for a deliberate debugging build.
 
-Official references: [Cloudflare Pages Vite deployment](https://developers.cloudflare.com/pages/framework-guides/deploy-a-vite3-project/)
+Official references: [Cloudflare Pages Vite deployment](https://developers.cloudflare.com/pages/framework-guides/deploy-a-vite3-project/),
+[Direct Upload limitations](https://developers.cloudflare.com/pages/get-started/direct-upload/),
 and [Cloudflare Pages limits](https://developers.cloudflare.com/pages/platform/limits/).
 
 ## Private access from anywhere: Tailscale Serve
