@@ -3,18 +3,18 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-07-24:** Work continues on isolated branch
+> **▶ CURRENT CHECKPOINT — 2026-07-24:** Local engineering is complete on isolated branch
 > `feat/product-hardening-deployment` from exact `origin/main` `a0647549`. T-3 and T-4 are complete,
 > along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
-> Independent review findings are fixed and the follow-up re-review found no release blocker; final
-> exact-head gates remain before handoff. OPEN human items: **AI-1**
+> Independent review findings are fixed, the follow-up re-review found no release blocker, and all
+> local gates pass. No external deployment was authorized. OPEN human items: **AI-1**
 > (manual real-Chrome PDF visual check) and **AI-4** (choose/authorize the permanent hosting path).
 
 ## Run header
 
 - **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 2 — **IN PROGRESS** on isolated worktree; primary checkout remains untouched.
+- **Current cycle:** 2 — **LOCAL ENGINEERING COMPLETE** on isolated worktree; primary checkout remains untouched.
 - **Last updated:** 2026-07-24
 - **Cycle-2 base:** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
 - **Live GitHub queue (2026-07-24):** Dependabot PRs #22–#27 are OPEN, CLEAN, and have all checks
@@ -26,7 +26,7 @@
 
 ## Environment / verification commands
 
-- Stack: Vanilla TypeScript + Vite 6, Vitest 2, Playwright (Chromium), ESLint 9. Node v24.13.1, npm 11.8.0.
+- Stack: Vanilla TypeScript + Vite 8, Vitest 4, Playwright (Chromium), ESLint 10. Node v24.13.1, npm 11.8.0.
 - Package manager: npm. Default branch: `main` (protected: no force-push/rebase/amend/reset per CLAUDE.md).
 - VCS host: GitHub (`Chris0Jeky/MDviewer`), `gh` CLI authed as Chris0Jeky.
 - Verification commands (the merge gate):
@@ -37,7 +37,7 @@
   - `npm run build` — tsc + vite build
   - `npm run agent:check` — typecheck + lint + unit in one shot
   - `npm run agent:hooks:smoke` / `npm run agent:skills:validate` — agentic tooling, before handoff
-- **No `.github/workflows` exist** — there is no CI. "CI green" gate is currently satisfied by local equivalents only. (Candidate task T-2.)
+- `.github/workflows/ci.yml` runs verification on Node 20/22 plus production-bundle Chromium E2E.
 
 ## Baseline (cycle 1 start, commit fe085b0)
 
@@ -50,7 +50,7 @@
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
 - **AI-1** — Manual real-Chrome visual check of exported PDFs (Gate 3 no-slice sign-off). OPEN.
-- **AI-3** — Decide license + author for `package.json` (currently MIT placeholder). OPEN. → see Q-1.
+- **AI-4** — Choose and authorize the permanent remote-access path. OPEN.
 
 ## Task board
 
@@ -58,6 +58,8 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | T-1 | Evaluate & land Dependabot PR #1 (jspdf 2→4 security + vite 6→8, vitest 2→4) | **MERGED** | P2 (security) | — | PR #1 → `8839177` | 2 adversarial lenses, all gates green incl. prod-build e2e | Security bump landed; jspdf advisories closed; deps current. 0 vulns. |
 | T-2 | Add GitHub Actions CI (typecheck/lint/unit/build + e2e on Chromium) | **MERGED** | P1 (unblock) | — | PR #2 → `cf5042c` | 2 adversarial reviews resolved | CI green on its own PR (verify Node 20+22, E2E Chromium incl. no-slice). Gate now enforceable. |
+| T-3 | Lazy-load Paged.js | **COMMITTED** | P3 performance | — | `27544c1` | unit + dev/preview E2E | Empty state no longer pays the Paged.js cost; pagination remains last |
+| T-4 | Load curated Shiki languages on demand | **COMMITTED** | P3 performance | — | `8a494ee` | unit + real Chromium C# fixture | Pre-scan resolves curated grammar chunks before synchronous Markdown render |
 | T-5 | Add `.github/dependabot.yml` (github-actions + npm auto-updates) | **MERGED** | P3 | — | PR #3 → `be68c1d` | self + 1 independent review; F-12 fixed | Config-valid (Dependabot check passed). Auto-patches deps+actions; closes F-11. |
 | T-6 | CI e2e tests the production bundle (`vite preview`), not just dev server | **MERGED** | P2 (closes F-10) | — | PR #13 → `33ca290` | self + independent review; F-13 fixed | CI e2e now runs on the shipped rolldown bundle |
 | T-7 | GitHub Actions majors consolidated (checkout 4→7, upload-artifact 4→7, setup-node 4→6, cache 4→6) | **MERGED** | P4 | — | PR #14 → `63dd258`; closed #4-#7 | CI ran the bumped actions green | consolidated 4 PRs into 1 |
@@ -66,31 +68,30 @@
 | T-9b | typescript 5.9→6.0 (#12) | **MERGED** | P3 | — | PR #15 → `fb505aa`; closed #12 | local gates + CI (npm ci on linux validated) | proved own-branch approach; W-2 libc churn is benign |
 | T-9c | eslint 9→10 (#11) + `@eslint/js`→^10 + lint-fix + engines floor | **MERGED** | P3 | — | PR #17 → `2ebc8b7`; closed #11 | full gates + CI Node 20+22 | lint clean (no new findings); engines tightened |
 | T-10 | Expose `window.__mdviewer` hook + make the settings e2e honest | **MERGED** | P4 | — | PR #19 → `68bf164` | self + independent review (ship-able); nit applied | was false-confidence no-op test; now drives real re-pagination; +typed prod hook |
-| T-13 | Fix misleading Canvas "Fit the page to the canvas" tooltip (Canvas.ts:26) — actual behavior is natural mm sizing (`transform: none`) | BACKLOG | P5 | — | — | T-10 review | pre-existing nit |
+| T-13 | Fix misleading Canvas "Fit the page to the canvas" tooltip (Canvas.ts:26) — actual behavior is natural mm sizing (`transform: none`) | **COMMITTED** | P5 | — | `982c6c0` | unit + E2E | Control copy now describes natural-size rendering |
 | T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | IN-PROGRESS | P3 | — | branch `chore/session-wrap` | — | makes state durable + tracked for next session |
 | T-11 | dead `ensureLang` loader | FOLDED → T-4 | P4 | — | — | F-18 | user chose build-out (Q-2): keep `ensureLang`, make it work as part of T-4 (don't delete). |
 | T-12 | Docs version-sync after the major dep bumps | **MERGED** | P3 (docs gate) | T-1,T-8,T-9a/b/c | PR #18 → `82ac4bc` | skills validate + CI | spec/notes/roadmap/3 skills now match installed versions |
 | T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9`, `5be6243` | independent adversarial review; literal and obfuscated bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
 | T-16 | Resolve transitive npm advisories | **COMMITTED** | P1 security | — | `d54892c` | `npm audit` | 3 advisories → 0 |
-| T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 16/16 | stale primary-checkout listener can no longer contaminate targeted runs |
-| T-18 | Product packaging and deployment paths | **IN PROGRESS** | P2 distribution | T-3,T-4 | current branch | full gates pending | built-in server, one-command/click launcher, static-host headers, deployment runbook |
+| T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 18/18 | stale primary-checkout listener can no longer contaminate targeted runs |
+| T-18 | Product packaging and deployment paths | **COMMITTED** | P2 distribution | T-3,T-4 | `0362a45` + follow-ups | full local gates + independent review | built-in server, one-command/click launcher, static-host headers, deployment runbook; external host awaits AI-4 |
 | T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926`, `ff07d38` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
 | T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
 
-### Backlog (greenlit — NEXT SESSION STARTS HERE)
+### Completed cycle-2 product tasks
 
-> Both T-3 and T-4 are user-approved (Q-2, Q-3). Either can go first; T-3 is the more self-contained.
-> Each is a careful change near the pagination/render core — gate every step on the no-cutoff e2e
-> (`tests/e2e/nocutoff.spec.ts`) and run e2e against BOTH dev and the production bundle (`E2E_TARGET=preview`).
+> T-3 and T-4 were user-approved in Q-2/Q-3 and completed in this cycle. Their original acceptance
+> constraints are retained below as durable design context.
 
-- **T-3 — Bundle lazy-load (GREENLIT, P3).** Lazy-load Paged.js so the empty state paints without it.
+- **T-3 — Bundle lazy-load (DONE, P3).** Lazy-load Paged.js so the empty state paints without it.
   Files: `paginate.ts` (static `import { Previewer } from "pagedjs"` → dynamic `await import("pagedjs")`
   inside `paginate()`), and `handler.ts` (the `MDViewerHandler extends Handler` class must be defined
   AFTER a dynamic import of `Handler`/`registerHandlers`, so `registerHandlersOnce` becomes async) +
   its one call site in `App.ts`. PDF libs in `download.ts` are already dynamic-imported on user action.
   Preserve render order (paginate still runs last, once). Verify: full e2e incl. no-cutoff + measure the
   entry-chunk reduction in the build output.
-- **T-4 — On-demand Shiki language loading (GREENLIT, P3).** Build it properly (supersedes the
+- **T-4 — On-demand Shiki language loading (DONE, P3).** Build it properly (supersedes the
   remove-it option). Constraints from the F-18 analysis: (1) `ensureLang` must load via the per-lang
   subpath, but a fully-dynamic `import(\`@shikijs/langs/${lang}\`)` makes Vite glob-bundle ~200 lang
   chunks — pick a bundle strategy (e.g. a curated allow-list of extra langs, or accept lazy glob chunks
@@ -99,10 +100,10 @@
   render — a careful addition to the load-bearing render order in `App.ts` (do NOT paginate before langs
   settle). Also fix the matching broken recipe in `LIBRARY_NOTES.md:125` and add a real test that loads
   an unbundled-but-known language (folds in T-11; keep `ensureLang`, don't delete it).
-- **T-13 — (P5)** Fix the misleading `Canvas.ts:26` "Fit the page to the canvas" tooltip (actual
-  behavior is natural mm sizing, `transform: none`).
-- **T-5** — Add `.github/dependabot.yml` for `github-actions` + `npm` (auto-patch action versions, make dep cadence explicit; addresses tag-vs-SHA pinning concern from T-2 review B). Currently runs from repo settings, no committed config.
-- **T-6** — Production-build e2e smoke: run the e2e suite against `vite preview` (the bundled output), not just `vite dev`, so bundle-only runtime regressions (e.g. a broken dynamic import) are caught in CI. From T-2 review A. `verify` job's `build` catches build-time failures only.
+### Remaining backlog
+
+- Profile very large documents and set a render-time/main-thread budget.
+- Evaluate additional Mermaid/Shiki code-splitting after real-user performance measurements.
 
 ## Deferred questions — ALL ANSWERED 2026-06-25
 
@@ -160,4 +161,9 @@
   `3a12930` fix all four with real Chromium and stable source identity coverage; `8db5072` fixes the
   review's IPv6 launcher finding. Follow-up review then found and closed an obfuscated-CSS URL bypass
   (`5be6243`) and dark-preview/print Mermaid theme drift (`ff07d38`). The independent re-review passed
-  at `ff07d38` with no release-blocking finding. Final exact-head gates remain.
+  at `ff07d38` with no release-blocking finding.
+- **C11 (2026-07-24) — FINAL LOCAL GATES:** `npm run agent:check` passed (171 unit + 3 server),
+  production build passed with zero source maps, `npm audit` reported zero vulnerabilities, agent hook
+  smoke and all 14 repo skills passed, and all 18 Chromium E2E tests passed independently against both
+  the production bundle and Vite dev on fresh ports. The complete gate set was rerun after this final
+  documentation checkpoint so the handoff evidence applies to the resulting exact branch head.
