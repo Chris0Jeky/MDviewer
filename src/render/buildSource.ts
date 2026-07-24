@@ -34,10 +34,20 @@ export const ATOMIC_BLOCK_SELECTOR = [
   "figure.code-figure",
   "figure.mermaid-figure",
   "figure",
+  "img",
+  "svg",
   "table",
+  "tr",
+  "td",
+  "th",
   ".callout",
+  ".callout-note",
+  ".callout-tip",
+  ".callout-warning",
+  ".callout-danger",
   ".katex-display",
   "blockquote",
+  "li",
 ].join(",");
 
 /**

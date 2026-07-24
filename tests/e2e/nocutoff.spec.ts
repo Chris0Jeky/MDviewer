@@ -38,6 +38,16 @@ test.describe("no atomic block straddles a page boundary", () => {
     await expect
       .poll(() => embeddedFigure.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
       .toBe(true);
+    const embeddedFigureId =
+      (await embeddedFigure.getAttribute("data-mdv-atomic-id")) ??
+      (await embeddedFigure.getAttribute("data-ref"));
+    expect(embeddedFigureId, "fixture image should carry a stable atomic identity").toBeTruthy();
+    expect(
+      snapshot.blocks.some(
+        (block) => block.tag === "img" && block.atomicId === embeddedFigureId,
+      ),
+      "fixture image should participate in boundary and split checks",
+    ).toBe(true);
 
     const pageByIndex = new Map<number, PageRect>(snapshot.pages.map((p) => [p.index, p]));
 

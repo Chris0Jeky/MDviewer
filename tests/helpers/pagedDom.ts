@@ -171,12 +171,14 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
     for (const sel of atomic) {
       for (const el of Array.from(host?.querySelectorAll<HTMLElement>(sel) ?? [])) {
         if (seen.has(el)) continue;
-        // Skip atomic elements nested inside another atomic element we already record;
-        // the outermost frame is the unit the guarantee protects.
+        // Skip atomic elements nested inside any other atomic element. Selector iteration
+        // order is not a safe proxy here: Paged.js can emit an inner SVG before its owning
+        // figure appears in an earlier selector result, while the outermost frame remains
+        // the unit the guarantee protects.
         let ancestorRecorded = false;
         let p: Element | null = el.parentElement;
         while (p && host && host.contains(p)) {
-          if (seen.has(p)) {
+          if (atomic.some((selector) => p?.matches(selector))) {
             ancestorRecorded = true;
             break;
           }
@@ -192,7 +194,9 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
           tag,
           rect,
           pageIndex: pageForCenter(centerOf(rect)),
-          atomicId: el.dataset.mdvAtomicId ?? null,
+          // Paged.js rebuilds replaced content such as <img> nodes and may drop custom
+          // data attributes, but its own data-ref remains stable across fragments.
+          atomicId: el.dataset.mdvAtomicId ?? el.dataset.ref ?? null,
         });
       }
     }

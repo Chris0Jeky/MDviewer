@@ -177,4 +177,17 @@ describe("stampAtomicBlocks", () => {
     expect(root.querySelector("pre")?.dataset.mdvAtomicId).toBe("atomic-1");
     expect(root.querySelector("code")?.hasAttribute("data-mdv-atomic-id")).toBe(false);
   });
+
+  it("covers every standalone atomic selector family from the no-slice contract", () => {
+    const root = rootOf(
+      '<img alt="fixture"><svg></svg><ul><li>one</li><li>two</li></ul><aside class="callout-warning">careful</aside>',
+    );
+
+    expect(stampAtomicBlocks(root)).toBe(5);
+    for (const selector of ["img", "svg", "li", ".callout-warning"]) {
+      const elements = Array.from(root.querySelectorAll<HTMLElement>(selector));
+      expect(elements.length).toBeGreaterThan(0);
+      expect(elements.every((element) => Boolean(element.dataset.mdvAtomicId))).toBe(true);
+    }
+  });
 });
