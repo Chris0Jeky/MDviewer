@@ -18,7 +18,6 @@ import { ensureMarkdownLanguages, getHighlighter } from "../render/highlight";
 import { createMarkdown, renderMarkdown } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
-import type { MermaidTheme } from "../render/mermaid";
 import {
   buildPaginationSource,
   awaitFontsAndImages,
@@ -55,12 +54,6 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
   "runningHeader",
   "showLineNumbers",
 ];
-
-/** Screen theme → Mermaid theme. The exported PDF is always light, but on-screen diagrams
- * should match the chrome; pagination uses the screen-derived theme since the SVG is fixed. */
-function mermaidThemeFor(screen: Settings["screenTheme"]): MermaidTheme {
-  return screen === "dark" ? "dark" : "default";
-}
 
 type Pane = "empty" | "loaded" | "error";
 
@@ -289,10 +282,8 @@ export class App {
       const source = buildPaginationSource(html, this.settings);
 
       // 4 — async Mermaid → fixed-size SVG figures
-      const mermaidResult = await renderAllMermaid(
-        source,
-        mermaidThemeFor(this.settings.screenTheme),
-      );
+      // SVG is shared by preview and print, so keep it light/theme-independent.
+      const mermaidResult = await renderAllMermaid(source, "default");
       if (stale()) return;
 
       // Stable source identities make cross-page clone/split verification honest.

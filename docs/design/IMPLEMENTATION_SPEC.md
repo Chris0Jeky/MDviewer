@@ -52,7 +52,7 @@ so pagination MUST run last, exactly once, after all async content settles.
 1b await ensureMarkdownLanguages(hl, src)     // curated fenced grammars load before sync render
 2  createMarkdown(hl, settings).render(src)   // SYNC: Shiki (fromHighlighter) + KaTeX inline
 3  buildPaginationSource(html, settings)      // inject TOC nav; transform end-of-doc footnotes -> inline float spans
-4  await renderAllMermaid(source, theme)      // async -> fixed-size SVG (useMaxWidth:false)
+4  await renderAllMermaid(source, 'default')  // async fixed SVG; light for preview + print
 4b stampAtomicBlocks(source)                  // stable identities copied into Paged.js fragments
 5  await awaitFontsAndImages(source)          // document.fonts.ready + img.decode -> heights final
 6  retain the fully prepared source           // a later render rebuilds a fresh fragment
