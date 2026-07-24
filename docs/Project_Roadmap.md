@@ -13,11 +13,11 @@ started · `DEFERRED` — explicitly out of scope for now.
 
 ## Active gate
 
-**Manual browser verification (Gate 3).** The no-slice guarantee and both export paths are
-layout-dependent and cannot be fully cleared from an agent sandbox. They must be verified in a real
-Chrome with the app running. Tracked as human action items in [`../ACTION_ITEMS.md`](../ACTION_ITEMS.md)
-(AI-1). AI-2 (automated Chromium installation and E2E) is complete. No phase that depends on
-human inspection of exported files is `DONE` until AI-1 is cleared.
+**Browser/PDF verification (Gate 3).** An installed-Chrome production run generated both export
+paths and rendered all 14 PDF pages for visual inspection. That check found and fixed a primary
+print regression that emitted only page 1; both paths now produce 7 clean A4 pages, backed by a real
+Chrome PDF page-count regression test. Formal sign-off remains tracked in
+[`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) (AI-1) because only the maintainer closes human items.
 
 ## Phases
 
@@ -69,7 +69,7 @@ export paths.
 - **Done:** lazy-load Paged.js and PDF libraries; entry chunk reduced from ~1.97 MB to ~1.46 MB.
 - **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
   static-host headers, no public source maps, and deployment/runbook documentation.
-- **Remaining:** real-Chrome PDF visual sign-off (AI-1), select/authorize a permanent host (AI-4),
+- **Remaining:** maintainer acceptance of the installed-Chrome PDF evidence (AI-1), select/authorize a permanent host (AI-4),
   and profile very large documents before setting a production performance budget.
 
 ### P4 — Stretch — `DEFERRED`

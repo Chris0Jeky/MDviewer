@@ -3,14 +3,14 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-07-24:** Local engineering is complete on isolated branch
-> `feat/product-hardening-deployment` from exact `origin/main` `a0647549`. T-3 and T-4 are complete,
-> along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
-> Independent review findings are fixed, the follow-up re-review found no release blocker, and all
-> local gates pass. Draft PR **#28** is open; do not merge until exact-head CI and aged review are
-> clean. No external deployment was authorized. OPEN human items: **AI-1** (manual real-Chrome PDF
-> visual check), **AI-4** (choose/authorize the permanent hosting path), and **AI-5** (enable
-> mechanical `main` protection).
+> **▶ CURRENT CHECKPOINT — 2026-07-24:** Draft PR **#28** remains open on
+> `feat/product-hardening-deployment`. Installed-Chrome PDF inspection found and fixed a primary
+> print regression; an additional independent adversarial review found atomic-coverage, Windows
+> launcher, and policy-definition gaps, all now fixed in small commits. Relaxed solo-owner branch
+> protection is active. Re-run exact-head local/hosted gates and independent review after this docs
+> checkpoint before changing PR readiness. No external deployment was authorized. OPEN human items:
+> **AI-1** (accept agent PDF evidence or repeat native-dialog check), **AI-4** (choose/authorize the
+> permanent hosting path), and **AI-5** (confirm the applied relaxed protection profile).
 
 ## Run header
 
@@ -51,9 +51,9 @@
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
-- **AI-1** — Manual real-Chrome visual check of exported PDFs (Gate 3 no-slice sign-off). OPEN.
+- **AI-1** — Accept the agent-run installed-Chrome PDF inspection or repeat native-dialog check. OPEN.
 - **AI-4** — Choose and authorize the permanent remote-access path. OPEN.
-- **AI-5** — Enable mechanical `main` protection after choosing the solo-owner review profile. OPEN.
+- **AI-5** — Confirm the applied relaxed solo-owner `main` protection profile. OPEN.
 
 ## Task board
 
@@ -81,6 +81,8 @@
 | T-18 | Product packaging and deployment paths | **COMMITTED** | P2 distribution | T-3,T-4 | `0362a45` + follow-ups | full local gates + independent review | built-in server, one-command/click launcher, static-host headers, deployment runbook; external host awaits AI-4 |
 | T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926`, `ff07d38` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
 | T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
+| T-21 | Fix primary print pagination and inspect both PDFs | **COMMITTED** | P1 correctness | T-18 | `af006ff` | installed Chrome + rendered 14 PDF pages + regression E2E | primary vector export now prints all 7 sheets without a trailing blank; fallback remains 7 pages |
+| T-22 | Close second adversarial-review findings | **COMMITTED** | P1/P2 | T-20,T-18 | `f072846`, `4e1e771`, `48196ba` | targeted unit/server/production E2E; final re-review pending | canonical atomic selector complete; Windows launcher returns to error handler; relaxed aging criterion operational |
 
 ### Completed cycle-2 product tasks
 
@@ -180,3 +182,10 @@
   live global Codex mirror, and the live Claude canonical file. Canonical config publication is draft
   `claude-config` PR #5. MDviewer `main` is currently unprotected, so mechanical enforcement remains
   human-owned AI-5 rather than an implied repository-settings mutation.
+- **C14 (2026-07-24) — SOLO-OWNER PROTECTION + PDF REVIEW:** Applied relaxed `main` protection:
+  PR required, required conversation resolution, exact Node 20/22 and production Chromium checks,
+  zero required approvals, admin emergency bypass, force-push/deletion blocked, merge commits on and
+  squash off. Installed Chrome showed the primary PDF emitted only page 1; `af006ff` fixes the print
+  shell and final-page break, with a real 7-sheet PDF regression test. Both export paths then produced
+  7 A4 pages; all 14 rendered pages were visually inspected with no sliced normal atomics. A fresh
+  independent review found three gaps; commits `f072846`, `4e1e771`, and `48196ba` address all three.

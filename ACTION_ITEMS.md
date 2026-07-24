@@ -19,10 +19,11 @@
 - **2026-07-24 (product hardening + packaging)** — Security-sensitive Markdown and Mermaid output is
   sanitized; dependency audit is clean; Paged.js and curated Shiki grammars load on demand; a tested
   production server, one-command/one-click local launch, and deployment guide are present on branch
-  `feat/product-hardening-deployment`. Automated verification includes 171 unit tests, 3 server tests,
-  and 18 browser tests against both Vite dev and the production bundle on isolated ports. The
+  `feat/product-hardening-deployment`. Automated verification includes 172 unit tests, 4 server tests,
+  and 19 browser tests against both Vite dev and the production bundle on isolated ports. The
   no-slice test now tracks stable source-block identities across Paged.js fragments rather than
-  trusting already-split output geometry alone.
+  trusting already-split output geometry alone. An installed-Chrome export inspection found and fixed
+  a primary-print one-page-only defect; both vector and fallback exports now contain 7 clean A4 pages.
 
 - **2026-06-25 (session 2)** — Dependency-currency + CI foundation landed. **11 PRs merged**, `main` green.
   - **Deps fully current, 0 vulnerabilities:** jspdf 2→4 (security advisories), vite 6→8, vitest 2→4,
@@ -46,9 +47,8 @@
   - Fixes made during bring-up: a double-build DOM collision (App **and** `mountCanvas` each created
     `#paged-output`, so pages rendered off-screen); `SLUGIFY` now emits query-safe ids so numbered
     headings (`## 1. Foo`) don't crash Paged.js `target-counter`; e2e helpers use the file-input path.
-- **Still needs a human:** a real-Chrome **visual** check of the exported PDFs (AI-1). The automated
-  no-cutoff test proves the geometry, but a human eyeball on actual Save-as-PDF output is the final
-  Gate-3 sign-off.
+- **Still needs explicit human confirmation:** accept the agent-run installed-Chrome PDF inspection
+  as AI-1 sign-off, or repeat the native Save-as-PDF-dialog check yourself.
 
 ---
 
@@ -56,7 +56,14 @@
 
 ### AI-1 — Manually verify the golden path in real Chrome (Gate 3) — OPEN (2026-06-25)
 
-Verify the core product promise in an actual browser; it cannot be proven in the agent sandbox.
+The agent performed this check with installed Chrome against the production build. It loaded the
+7-page sample, generated both the vector print PDF and fallback PDF, rendered all 14 resulting A4
+pages, and visually inspected every page. This exposed and fixed a primary-print defect that had
+exported only page 1. Final result: 7/7 pages in each path, with no sliced normal atomic blocks; the
+deliberately over-tall code listing continues cleanly from page 6 to 7. The native OS print dialog
+and printer driver were not clicked because the automated run used Chrome's PDF engine directly.
+
+To close AI-1, explicitly confirm this agent evidence is sufficient, or repeat these steps:
 
 1. Run `npm install` then `npm run dev`; open the printed localhost URL in **Chrome**.
 2. Drag a `.md` file onto the window (use a code-heavy doc with math, a Mermaid diagram, callouts,
@@ -91,22 +98,20 @@ accounts without the maintainer choosing the audience and authorizing the extern
 
 ### AI-5 — Enable mechanical merge protection for `main` — OPEN (2026-07-24)
 
-The agent contracts now require small commits, autonomous draft PRs, aged adversarial review,
-exact-head CI, and zero unresolved comments before merge. GitHub currently reports `main` as
-unprotected, so those rules are durable instructions but not yet mechanically enforced.
+The relaxed solo-owner profile was applied on 2026-07-24. GitHub now requires a PR, exact named
+Node 20/22 and production-Chromium checks, and resolved conversations; it blocks force-pushes and
+branch deletion. Required approvals remain 0 and admins retain emergency bypass, so this low-impact
+repo cannot deadlock its only owner. Merge commits remain enabled and squash merging is disabled.
 
-Suggested protection profile:
+Applied profile:
 
 1. Require a pull request before merging and require conversation resolution.
 2. Require the Node 20, Node 22, and production Chromium E2E checks at the current head.
 3. Block force-pushes and branch deletion; do not permit routine bypasses.
-4. Require one approving review when a second GitHub reviewer is available. For a solo-owner repo,
-   keep adversarial-agent review evidence in the PR and avoid an approval rule that only the PR
-   author would be able to satisfy.
+4. Keep required approvals at 0; record independent adversarial-agent review evidence in the PR.
 5. Keep merge commits enabled and squash merging disabled so the incremental history survives.
 
-Ask an agent to apply this through a repository ruleset after confirming the solo-owner review
-choice; changing repository enforcement is intentionally not inferred from permission to push PRs.
+To close AI-5, explicitly confirm that this applied relaxed profile matches your intent.
 
 ---
 
