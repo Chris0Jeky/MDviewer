@@ -9,7 +9,9 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     target: "es2022",
-    sourcemap: true,
+    // Public deployments should not publish the full source tree. Opt in when a
+    // debugging build specifically needs source maps.
+    sourcemap: process.env.SOURCE_MAPS === "true",
   },
   server: {
     port: 5180,

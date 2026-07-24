@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "start": "node scripts/start.mjs",
+    "serve": "node scripts/serve.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
@@ -22,7 +24,8 @@
     "agent:hooks:smoke": "python scripts/agent_hooks/smoke_test.py",
     "agent:skills:validate": "python scripts/agent_hooks/validate_skills.py",
     "agent:ledger:render": "python scripts/agent_hooks/render_failure_ledger.py",
-    "agent:check": "npm run typecheck && npm run lint && npm run test"
+    "test:serve": "node --test scripts/serve.test.mjs",
+    "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve"
   },
   "dependencies": {
     "@shikijs/core": "^4.3.0",

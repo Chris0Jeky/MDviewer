@@ -24,6 +24,10 @@ npm run build    # produce a production bundle in dist/
 
 Then drag a `.md` / `.markdown` file onto the window (or paste Markdown, or use the file picker), and the paginated preview renders on the right.
 
+For a production-style local launch, run `npm start` (builds, serves, and opens the app) or
+double-click `Start MDviewer.cmd` on Windows. For permanent public hosting, private access through
+this PC, and temporary share links, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## How export works
 
 MDviewer paginates once with [Paged.js](https://pagedjs.org/) and feeds that single, already-broken page layout to **two** export paths:
@@ -73,4 +77,4 @@ Start with the design docs, which are the source of truth:
 
 ## License
 
-MIT (placeholder — author/license to be confirmed; see `ACTION_ITEMS.md` item AI-3).
+MIT. The author/copyright holder remains intentionally unspecified until a public release.
