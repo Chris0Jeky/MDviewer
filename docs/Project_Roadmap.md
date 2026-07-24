@@ -13,11 +13,11 @@ started · `DEFERRED` — explicitly out of scope for now.
 
 ## Active gate
 
-**Browser/PDF verification (Gate 3).** An installed-Chrome production run generated both export
+**Gate 3 — `DONE`.** An installed-Chrome production run generated both export
 paths and rendered all 14 PDF pages for visual inspection. That check found and fixed a primary
 print regression that emitted only page 1; both paths now produce 7 clean A4 pages, backed by a real
-Chrome PDF page-count regression test. Formal sign-off remains tracked in
-[`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) (AI-1) because only the maintainer closes human items.
+Chrome PDF page-count regression test. The maintainer accepted this evidence and closed AI-1 in
+[`../ACTION_ITEMS.md`](../ACTION_ITEMS.md).
 
 ## Phases
 
@@ -29,7 +29,7 @@ Chrome PDF page-count regression test. Formal sign-off remains tracked in
 - Canonical seams committed: `src/app/dom.ts`, `src/app/settings.ts`, `src/app/state.ts`, the
   ambient type shims, `index.html`, and toolchain config.
 
-### P1 — Core pipeline — `IN PROGRESS` (as of 2026-06-25)
+### P1 — Core pipeline — `DONE` (as of 2026-07-24)
 
 The end-to-end path: **render → paginate → export**, delivering the **no-slice guarantee**.
 
@@ -69,8 +69,8 @@ export paths.
 - **Done:** lazy-load Paged.js and PDF libraries; entry chunk reduced from ~1.97 MB to ~1.46 MB.
 - **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
   static-host headers, no public source maps, and deployment/runbook documentation.
-- **Remaining:** maintainer acceptance of the installed-Chrome PDF evidence (AI-1), select/authorize a permanent host (AI-4),
-  and profile very large documents before setting a production performance budget.
+- **Done:** public Cloudflare Pages deployment at **https://mdviewer-c9r.pages.dev/** (AI-4).
+- **Remaining:** profile very large documents before setting a production performance budget.
 
 ### P4 — Stretch — `DEFERRED`
 
