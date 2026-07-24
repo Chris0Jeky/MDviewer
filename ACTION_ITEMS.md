@@ -89,6 +89,27 @@ accounts without the maintainer choosing the audience and authorizing the extern
 
 ---
 
+### AI-5 — Enable mechanical merge protection for `main` — OPEN (2026-07-24)
+
+The agent contracts now require small commits, autonomous draft PRs, aged adversarial review,
+exact-head CI, and zero unresolved comments before merge. GitHub currently reports `main` as
+unprotected, so those rules are durable instructions but not yet mechanically enforced.
+
+Suggested protection profile:
+
+1. Require a pull request before merging and require conversation resolution.
+2. Require the Node 20, Node 22, and production Chromium E2E checks at the current head.
+3. Block force-pushes and branch deletion; do not permit routine bypasses.
+4. Require one approving review when a second GitHub reviewer is available. For a solo-owner repo,
+   keep adversarial-agent review evidence in the PR and avoid an approval rule that only the PR
+   author would be able to satisfy.
+5. Keep merge commits enabled and squash merging disabled so the incremental history survives.
+
+Ask an agent to apply this through a repository ruleset after confirming the solo-owner review
+choice; changing repository enforcement is intentionally not inferred from permission to push PRs.
+
+---
+
 ## Completed log
 
 - **AI-3 — Decide license and author** — DONE 2026-06-25. User confirmed: **keep the MIT placeholder.**

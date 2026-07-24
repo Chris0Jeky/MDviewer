@@ -8,8 +8,9 @@
 > along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
 > Independent review findings are fixed, the follow-up re-review found no release blocker, and all
 > local gates pass. Draft PR **#28** is open; do not merge until exact-head CI and aged review are
-> clean. No external deployment was authorized. OPEN human items: **AI-1**
-> (manual real-Chrome PDF visual check) and **AI-4** (choose/authorize the permanent hosting path).
+> clean. No external deployment was authorized. OPEN human items: **AI-1** (manual real-Chrome PDF
+> visual check), **AI-4** (choose/authorize the permanent hosting path), and **AI-5** (enable
+> mechanical `main` protection).
 
 ## Run header
 
@@ -52,6 +53,7 @@
 
 - **AI-1** — Manual real-Chrome visual check of exported PDFs (Gate 3 no-slice sign-off). OPEN.
 - **AI-4** — Choose and authorize the permanent remote-access path. OPEN.
+- **AI-5** — Enable mechanical `main` protection after choosing the solo-owner review profile. OPEN.
 
 ## Task board
 
@@ -173,3 +175,8 @@
   the PR mergeable. GitHub still reports one high Dependabot advisory on the default branch; this
   branch reports zero via `npm audit`. Re-read exact-head CI, review threads, and bot comments before
   any future ready-for-review or merge transition.
+- **C13 (2026-07-24) — POLICY PROMOTION:** Added the standing small-commit, autonomous draft-PR,
+  aged-review, exact-head-CI, zero-comment-debt, merge-commit-only policy to repo `AGENTS.md`, the
+  live global Codex mirror, and the live Claude canonical file. Canonical config publication is draft
+  `claude-config` PR #5. MDviewer `main` is currently unprotected, so mechanical enforcement remains
+  human-owned AI-5 rather than an implied repository-settings mutation.
