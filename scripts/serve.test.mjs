@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -38,6 +38,12 @@ test("parses safe local defaults and explicit exposure options", () => {
   assert.throws(() => parseArgs(["--port", "not-a-port"]), /--port must be/);
   assert.equal(formatBrowserHost("::1"), "[::1]");
   assert.equal(formatBrowserHost("localhost"), "localhost");
+});
+
+test("Windows launcher returns from npm so failures remain visible", async () => {
+  const launcher = await readFile(join(import.meta.dirname, "..", "Start MDviewer.cmd"), "utf8");
+  assert.match(launcher, /^call npm start$/m);
+  assert.match(launcher, /^if errorlevel 1 pause$/m);
 });
 
 test("serves the app with security and cache headers", async () => {
