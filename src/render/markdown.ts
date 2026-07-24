@@ -142,6 +142,22 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
     }),
   );
 
+  // Shiki owns the fence rule, but Mermaid fences are diagram source rather than
+  // highlighted code. Override after installing Shiki and delegate every other
+  // language back to its renderer so renderAllMermaid can find the canonical class.
+  const shikiFence = md.renderer.rules.fence;
+  if (!shikiFence) throw new Error("Shiki did not register a Markdown fence renderer");
+  md.renderer.rules.fence = (tokens, idx, options, env, self): string => {
+    const token = tokens[idx];
+    const language = (token?.info.trim().split(/\s+/, 1)[0] ?? "")
+      .toLowerCase()
+      .replace(/^language-/, "");
+    if (language === "mermaid") {
+      return `<pre><code class="language-mermaid">${md.utils.escapeHtml(token?.content ?? "")}</code></pre>\n`;
+    }
+    return shikiFence(tokens, idx, options, env, self);
+  };
+
   return md;
 }
 

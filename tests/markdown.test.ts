@@ -3,6 +3,7 @@ import type { HighlighterCore } from "shiki/core";
 import { createMarkdown, renderMarkdown, SLUGIFY } from "../src/render/markdown";
 import { getHighlighter } from "../src/render/highlight";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
+import { sanitizeMermaidSvg } from "../src/render/sanitize";
 
 let hl: HighlighterCore;
 
@@ -150,6 +151,16 @@ describe("markdown: untrusted HTML", () => {
     expect(root.querySelector("#svg")?.hasAttribute("src")).toBe(false);
   });
 
+  it("blocks remote URLs in SVG presentation attributes but keeps local fragments", () => {
+    const { html } = render(
+      '<svg><rect id="remote" fill="url(https://example.test/fill.svg#x)" filter="url(https://example.test/filter.svg#f)"/><rect id="local" fill="url(#gradient)"/></svg>',
+    );
+    const root = frag(html);
+    expect(root.querySelector("#remote")?.hasAttribute("fill")).toBe(false);
+    expect(root.querySelector("#remote")?.hasAttribute("filter")).toBe(false);
+    expect(root.querySelector("#local")?.getAttribute("fill")).toBe("url(#gradient)");
+  });
+
   it("preserves safe raw HTML and user-initiated links", () => {
     const { html } = render(
       '<details open><summary>More</summary><p><a href="https://example.test">Open</a></p></details>',
@@ -157,6 +168,27 @@ describe("markdown: untrusted HTML", () => {
     const root = frag(html);
     expect(root.querySelector("details[open] summary")?.textContent).toBe("More");
     expect(root.querySelector("a")?.getAttribute("href")).toBe("https://example.test");
+  });
+});
+
+describe("Mermaid SVG sanitization", () => {
+  it("keeps safe generated styles and labels while stripping remote resources", () => {
+    const { html } = sanitizeMermaidSvg(
+      '<svg><style>.node{fill:#fff}</style><text>Node label</text><image href="https://example.test/x.svg" /></svg>',
+    );
+    const root = frag(html);
+    expect(root.querySelector("style")?.textContent).toContain(".node");
+    expect(root.querySelector("text")?.textContent).toBe("Node label");
+    expect(root.querySelector("image")?.hasAttribute("href")).toBe(false);
+  });
+
+  it("removes generated styles that contain a resource fetch", () => {
+    const { html } = sanitizeMermaidSvg(
+      '<svg><style>.node{fill:url(https://example.test/x.svg)}</style><text>Safe label</text></svg>',
+    );
+    const root = frag(html);
+    expect(root.querySelector("style")).toBeNull();
+    expect(root.querySelector("text")?.textContent).toBe("Safe label");
   });
 });
 
@@ -169,6 +201,14 @@ describe("markdown: code highlighting integration", () => {
 
   it("falls back without throwing for an unknown language fence", () => {
     expect(() => render("```not-a-real-lang\nplain text\n```")).not.toThrow();
+  });
+
+  it("preserves Mermaid fences for the asynchronous diagram renderer", () => {
+    const root = frag(render("```mermaid\nflowchart LR\n  A --> B\n```").html);
+    const source = root.querySelector("pre > code.language-mermaid");
+    expect(source).not.toBeNull();
+    expect(source?.textContent).toContain("flowchart LR");
+    expect(source?.closest("pre")?.classList.contains("shiki")).toBe(false);
   });
 
   it("does not warn for a curated lazy language", () => {

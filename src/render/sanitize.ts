@@ -38,8 +38,9 @@ const FORBID_TAGS = [
 
 const FORBID_ATTR = ["srcdoc", "ping", "formaction", "action", "autofocus"] as const;
 const AUTOLOAD_ATTRS = ["srcset", "poster", "background", "data"] as const;
-const UNSAFE_CSS =
-  /(?:url\s*\(|@import|expression\s*\(|(?:-webkit-)?image-set\s*\(|cross-fade\s*\(|element\s*\(|paint\s*\()/i;
+const UNSAFE_CSS_FUNCTION =
+  /(?:@import|expression\s*\(|(?:-webkit-)?image-set\s*\(|cross-fade\s*\(|element\s*\(|paint\s*\()/i;
+const CSS_URL = /url\s*\(\s*(["']?)(.*?)\1\s*\)/gi;
 const SAFE_EMBEDDED_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
 
 function serialize(fragment: DocumentFragment): string {
@@ -48,21 +49,39 @@ function serialize(fragment: DocumentFragment): string {
   return template.innerHTML;
 }
 
+/** Allow SVG-local fragment references such as url(#marker), never network URLs. */
+function hasUnsafeCssResource(value: string): boolean {
+  if (UNSAFE_CSS_FUNCTION.test(value)) return true;
+  CSS_URL.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = CSS_URL.exec(value)) !== null) {
+    if (!(match[2] ?? "").trim().startsWith("#")) return true;
+  }
+  return false;
+}
+
 /**
  * Return safe HTML plus the number of removed elements/attributes/resources.
  * The count is only used to tell the user that content was blocked; it is not a
  * security decision (the sanitized output itself is the security boundary).
  */
-export function sanitizeRenderedHtml(html: string): SanitizedHtml {
+function sanitizeHtml(html: string, allowSvgStyles: boolean): SanitizedHtml {
   const fragment = DOMPurify.sanitize(html, {
     RETURN_DOM_FRAGMENT: true,
-    FORBID_TAGS: [...FORBID_TAGS],
+    FORBID_TAGS: FORBID_TAGS.filter((tag) => !allowSvgStyles || tag !== "style"),
     FORBID_ATTR: [...FORBID_ATTR],
+    ...(allowSvgStyles ? { ADD_TAGS: ["style"] } : {}),
   }) as DocumentFragment;
 
   let removedCount = DOMPurify.removed.length;
 
   for (const element of Array.from(fragment.querySelectorAll("*"))) {
+    if (element.localName === "style" && hasUnsafeCssResource(element.textContent ?? "")) {
+      element.remove();
+      removedCount += 1;
+      continue;
+    }
+
     for (const attr of AUTOLOAD_ATTRS) {
       if (element.hasAttribute(attr)) {
         element.removeAttribute(attr);
@@ -71,7 +90,7 @@ export function sanitizeRenderedHtml(html: string): SanitizedHtml {
     }
 
     const style = element.getAttribute("style");
-    if (style && UNSAFE_CSS.test(style)) {
+    if (style && hasUnsafeCssResource(style)) {
       element.removeAttribute("style");
       removedCount += 1;
     }
@@ -108,6 +127,12 @@ export function sanitizeRenderedHtml(html: string): SanitizedHtml {
           removedCount += 1;
         }
       }
+      for (const attribute of Array.from(element.attributes)) {
+        if (attribute.name !== "style" && hasUnsafeCssResource(attribute.value)) {
+          element.removeAttribute(attribute.name);
+          removedCount += 1;
+        }
+      }
     }
 
     if (element.localName === "a" && element.getAttribute("target") === "_blank") {
@@ -116,4 +141,17 @@ export function sanitizeRenderedHtml(html: string): SanitizedHtml {
   }
 
   return { html: serialize(fragment), removedCount };
+}
+
+export function sanitizeRenderedHtml(html: string): SanitizedHtml {
+  return sanitizeHtml(html, false);
+}
+
+/**
+ * Mermaid output needs its generated SVG stylesheet for readable nodes and edges.
+ * This narrower policy keeps safe SVG <style> blocks while applying the same
+ * remote-resource, attribute, and CSS fetch restrictions as raw Markdown HTML.
+ */
+export function sanitizeMermaidSvg(svg: string): SanitizedHtml {
+  return sanitizeHtml(svg, true);
 }
