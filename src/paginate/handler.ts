@@ -14,7 +14,7 @@
  */
 
 import type { PageArea } from "./measure";
-import { shrinkToFit } from "./shrinkToFit";
+import { recordSplittableSourceHeights, shrinkToFit } from "./shrinkToFit";
 import { PAGEDJS, CLASSES } from "../app/dom";
 
 /** Set by registerHandlersOnce: how the handler reads the current printable area. */
@@ -57,7 +57,11 @@ export async function registerHandlersOnce(area: () => PageArea): Promise<void> 
       class MDViewerHandler extends Handler {
         /** Pre-layout: shrink modestly-oversized atomic blocks to fit one page (Tier 3). */
         afterParsed(parsed: ParentNode): void {
-          if (areaProvider) shrinkToFit(parsed, areaProvider());
+          if (areaProvider) {
+            const area = areaProvider();
+            recordSplittableSourceHeights(parsed, area);
+            shrinkToFit(parsed, area);
+          }
         }
 
         /** Stamp a stable 1-based page number on each laid-out page. */

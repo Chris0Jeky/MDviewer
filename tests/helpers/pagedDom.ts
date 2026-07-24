@@ -41,6 +41,8 @@ export interface BlockRect {
   pageIndex: number;
   /** Stable source identity copied into every Paged.js fragment. */
   atomicId: string | null;
+  /** Natural source height recorded before Paged.js can split or duplicate the block. */
+  sourceHeight: number | null;
 }
 
 /** Full snapshot returned to a spec after pagination settles. */
@@ -167,7 +169,13 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
     };
 
     const seen = new Set<Element>();
-    const blocks: Array<{ tag: string; rect: Rect; pageIndex: number; atomicId: string | null }> = [];
+    const blocks: Array<{
+      tag: string;
+      rect: Rect;
+      pageIndex: number;
+      atomicId: string | null;
+      sourceHeight: number | null;
+    }> = [];
     for (const sel of atomic) {
       for (const el of Array.from(host?.querySelectorAll<HTMLElement>(sel) ?? [])) {
         if (seen.has(el)) continue;
@@ -197,6 +205,9 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
           // Paged.js rebuilds replaced content such as <img> nodes and may drop custom
           // data attributes, but its own data-ref remains stable across fragments.
           atomicId: el.dataset.mdvAtomicId ?? el.dataset.ref ?? null,
+          sourceHeight: Number.isFinite(Number(el.dataset.mdvSourceHeight))
+            ? Number(el.dataset.mdvSourceHeight)
+            : null,
         });
       }
     }
@@ -256,11 +267,21 @@ export function splitAtomicOffenders(snapshot: PagedSnapshot, tolerancePx = 2): 
     if (pages.length <= 1) continue;
 
     const tag = fragments[0]?.tag ?? "atomic";
-    const totalHeight = fragments.reduce((sum, fragment) => sum + fragment.rect.height, 0);
     const maySplitWhenOverTall = tag.startsWith("pre") || tag.startsWith("table");
-    if (!maySplitWhenOverTall || totalHeight <= pageHeight + tolerancePx) {
+    const sourceHeight = fragments.find((fragment) => fragment.sourceHeight !== null)?.sourceHeight;
+    if (!maySplitWhenOverTall) {
       offenders.push(
-        `${id} (${tag}) was split across pages ${pages.join(",")} despite combined height ${totalHeight.toFixed(1)}px fitting a ${pageHeight.toFixed(1)}px page`,
+        `${id} (${tag}) was split across pages ${pages.join(",")} but this block family may not split`,
+      );
+      continue;
+    }
+    if (sourceHeight === undefined || sourceHeight === null) {
+      offenders.push(`${id} (${tag}) split across pages ${pages.join(",")} without pristine source-height evidence`);
+      continue;
+    }
+    if (sourceHeight <= pageHeight + tolerancePx) {
+      offenders.push(
+        `${id} (${tag}) was split across pages ${pages.join(",")} despite its ${sourceHeight.toFixed(1)}px source height fitting a ${pageHeight.toFixed(1)}px page`,
       );
       continue;
     }
