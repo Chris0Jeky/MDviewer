@@ -15,8 +15,10 @@
 
 ## Current State (snapshot)
 
-- **2026-07-24 (public launch)** — Product hardening and packaging merged through PR #28. MDviewer is
-  live at **https://mdviewer-c9r.pages.dev/** on Cloudflare Pages from merge commit `7f4eedf`.
+- **2026-07-24 (public launch)** — Product hardening and packaging merged through PR #28; the durable
+  deployment record then merged through PR #29 as repository `main` `43af438`, with its exact main CI
+  run green. MDviewer remains live at **https://mdviewer-c9r.pages.dev/** on Cloudflare Pages from the
+  deployed application merge commit `7f4eedf`.
   The stable URL, immutable deployment URL, entry HTML, and hashed JavaScript asset returned HTTP 200;
   the asset has immutable caching and the configured security headers are active. Automated
   verification includes 175 unit tests, 4 server tests, and 19 browser tests against both Vite dev

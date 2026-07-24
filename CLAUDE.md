@@ -15,11 +15,12 @@ TypeScript + Vite. Full design: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/desi
 
 1. User prompt for the current turn.
 2. `AGENTS.md` — repo-wide operating rules (Claude + Codex share intent).
-3. `docs/Project_Roadmap.md` — active phase, priorities, gates.
-4. `docs/design/IMPLEMENTATION_SPEC.md` — the canonical build contract (signatures, render order, CSS names).
-5. `autodoc/AGENT_INDEX.md` — fast code-seam orientation.
-6. Relevant skill under `.claude/skills/*/SKILL.md`.
-7. Deeper docs and generated artifacts only when the task needs them.
+3. `ORCHESTRATOR.md` — resumable live state, queue, evidence, and next work.
+4. `docs/Project_Roadmap.md` — active phase, priorities, gates.
+5. `docs/design/IMPLEMENTATION_SPEC.md` — the canonical build contract (signatures, render order, CSS names).
+6. `autodoc/AGENT_INDEX.md` — fast code-seam orientation.
+7. Relevant skill under `.claude/skills/*/SKILL.md`.
+8. Deeper docs and generated artifacts only when the task needs them.
 
 When sources conflict, follow the higher source and report the conflict.
 
@@ -27,11 +28,12 @@ When sources conflict, follow the higher source and report the conflict.
 
 1. Read `ACTION_ITEMS.md` (human-owned tasks + current-state snapshot).
 2. Read `AGENTS.md`.
-3. Read `docs/Project_Roadmap.md`.
-4. Read `docs/design/IMPLEMENTATION_SPEC.md` and `autodoc/AGENT_INDEX.md`.
-5. Pick one primary skill and at most one support skill.
-6. Identify the smallest safe, reviewable change.
-7. State blockers, assumptions, the verification target, and the docs-sync target before editing.
+3. Read `ORCHESTRATOR.md` (resumable live state and next work).
+4. Read `docs/Project_Roadmap.md`.
+5. Read `docs/design/IMPLEMENTATION_SPEC.md` and `autodoc/AGENT_INDEX.md`.
+6. Pick one primary skill and at most one support skill.
+7. Identify the smallest safe, reviewable change.
+8. State blockers, assumptions, the verification target, and the docs-sync target before editing.
 
 Do not bulk-read `node_modules`, `dist`, build output, or generated artifacts unless the task requires it.
 

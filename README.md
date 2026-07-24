@@ -4,7 +4,7 @@
 
 **Drag a Markdown file in, get a beautiful PDF out — with no code block, figure, table, or callout ever sliced across a page boundary.**
 
-MDviewer is a browser-based, drag-and-drop Markdown → PDF tool built for **research papers and code-heavy technical docs**. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and there are no runtime network calls. The only thing it persists is a small settings object in `localStorage`.
+MDviewer is a browser-based, drag-and-drop Markdown → PDF tool built for **research papers and code-heavy technical docs**. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and it makes no document/API or third-party runtime requests. Same-origin application assets may load lazily as features run. The only thing it persists is a small settings object in `localStorage`.
 
 ![MDviewer rendering its bundled sample as a seven-page, print-ready document.](docs/assets/mdviewer-preview.png)
 
@@ -67,7 +67,8 @@ docs/              product vision, architecture, roadmap, and the design specs
 
 ## For contributors and agents
 
-Start with the design docs, which are the source of truth:
+For current operational state, begin with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) and the resumable
+[`ORCHESTRATOR.md`](ORCHESTRATOR.md). Then use the design docs as the implementation source of truth:
 
 - [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md) — file tree, pinned module signatures, the load-bearing render order, CSS/DOM names, no-slice tiers, and testing strategy.
 - [`docs/design/LIBRARY_NOTES.md`](docs/design/LIBRARY_NOTES.md) — verified, version-correct integration snippets for every library.
