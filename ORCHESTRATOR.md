@@ -14,15 +14,18 @@
 
 - **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 2 — **LOCAL ENGINEERING COMPLETE** on isolated worktree; primary checkout remains untouched.
+- **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; deployment-record PR #29 is the active slice.
 - **Last updated:** 2026-07-24
-- **Cycle-2 base:** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
-- **Live GitHub queue (2026-07-24):** Dependabot PRs #22–#27 are OPEN, CLEAN, and have all checks
-  green. They were inspected but not merged or folded into this product branch; handle each as its
-  own reviewable dependency slice after this branch lands.
-- **Local main HEAD:** `68bf164` (after T-10 merge) → updated to the T-14 housekeeping merge on wrap, tracking `origin/main`.
-- **PRs merged this session:** 11 (T-1 jspdf+vite+vitest security; T-2 CI; T-5 dependabot cfg; T-6 prod-build e2e; T-7 action majors; T-8 katex/mermaid; T-9b TS6; T-9a shiki4; T-9c eslint10; T-12 docs version-sync; T-10 window.__mdviewer hook + honest settings test). All Dependabot PRs #1,#4-#12 merged or superseded+closed.
-- **Final main verification (2ebc8b7):** typecheck ✓ · lint ✓ (eslint 10) · 157 unit ✓ · build ✓ · e2e 15/15 on production bundle ✓ · agent:hooks:smoke ✓ · agent:skills:validate ✓ (14 skills). 0 npm vulnerabilities.
+- **Cycle-2 base (historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
+- **Live GitHub queue (2026-07-24):** deployment-record PR #29 plus Dependabot PRs #22–#27 are
+  OPEN, MERGEABLE, and green. Keep each dependency update as its own reviewable slice.
+- **Local and remote `main` HEAD:** `7f4eedf2883c1b555971ecc6f9cf5f103f94e3b6` (PR #28 merge).
+- **PRs merged through public launch:** 12, including product-hardening/deployment PR #28. Earlier
+  dependency/CI work remains recorded in C1–C9 below.
+- **Current main verification (`7f4eedf`):** hosted Node 20/22 and production Chromium CI green;
+  175 unit tests, 4 server tests, build, zero-vulnerability audit, hook smoke, 14 skill validations,
+  and 19/19 Chromium E2E against both dev and production-preview were green on the exact PR head.
+  Production Pages smoke is recorded in C16.
 
 ## Environment / verification commands
 
