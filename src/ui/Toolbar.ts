@@ -423,10 +423,12 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     syncDocSwitcher();
     syncFromSettings();
   });
+  const unsubscribeSettings = app.onSettingsChange(syncFromSettings);
 
   return {
     destroy(): void {
       unsubscribe();
+      unsubscribeSettings();
       bar.remove();
     },
   };

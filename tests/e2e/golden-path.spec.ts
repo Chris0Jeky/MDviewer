@@ -16,6 +16,21 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await expect(empty).toBeVisible();
   });
 
+  test("theme controls keep their accessible pressed state in sync", async ({ page }) => {
+    await page.goto("/");
+    const light = page.getByRole("button", { name: "Light" });
+    const dark = page.getByRole("button", { name: "Dark" });
+
+    await dark.click();
+    await expect(page.locator("html")).toHaveAttribute("data-app-theme", "dark");
+    await expect(dark).toHaveAttribute("aria-pressed", "true");
+    await expect(light).toHaveAttribute("aria-pressed", "false");
+
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ screenTheme: "light" }));
+    await expect(light).toHaveAttribute("aria-pressed", "true");
+    await expect(dark).toHaveAttribute("aria-pressed", "false");
+  });
+
   test("loading the sample produces .pagedjs_page sheets", async ({ page }) => {
     await page.goto("/");
     await loadMarkdownIntoApp(page, SAMPLE_MD);

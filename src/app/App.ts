@@ -79,6 +79,7 @@ export class App {
 
   private scheduleRenderImpl!: (reason: RenderReason) => void;
   private detachInput: (() => void) | null = null;
+  private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
 
   /** Monotonic token so a slow render can't overwrite a newer one (last-write-wins). */
   private renderToken = 0;
@@ -187,6 +188,7 @@ export class App {
     const next: Settings = { ...prev, ...patch };
     this.settings = next;
     saveSettings(next);
+    for (const listener of this.settingsListeners) listener(next);
 
     // Always reflect theme attributes immediately (cheap, no reflow).
     if (patch.screenTheme !== undefined) {
@@ -205,6 +207,12 @@ export class App {
       (k) => patch[k] !== undefined && patch[k] !== prev[k],
     );
     if (needsReflow) this.scheduleRender("settings");
+  }
+
+  /** Subscribe UI surfaces to settings changes, including programmatic updates. */
+  onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void {
+    this.settingsListeners.add(listener);
+    return () => this.settingsListeners.delete(listener);
   }
 
   /** Open the hidden file input dialog. */
@@ -362,6 +370,7 @@ export class App {
     this.detachInput = null;
     this.toolbar.destroy();
     this.emptyState.destroy();
+    this.settingsListeners.clear();
   }
 
   get pane(): Pane {
