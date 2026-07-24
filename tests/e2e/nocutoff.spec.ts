@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import {
   paginateFixture,
   blockStraddles,
+  splitAtomicOffenders,
   type PageRect,
 } from "../helpers/pagedDom";
 
@@ -59,6 +60,12 @@ test.describe("no atomic block straddles a page boundary", () => {
     expect(offenders, `atomic blocks straddling a page boundary:\n${offenders.join("\n")}`).toEqual(
       [],
     );
+
+    const splitOffenders = splitAtomicOffenders(snapshot);
+    expect(
+      splitOffenders,
+      `logical atomic blocks incorrectly split across pages:\n${splitOffenders.join("\n")}`,
+    ).toEqual([]);
   });
 
   test("every code block stays inside a single page's content box", async ({ page }) => {

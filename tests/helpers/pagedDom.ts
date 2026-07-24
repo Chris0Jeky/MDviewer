@@ -11,6 +11,7 @@
  * elements that must never straddle a `.pagedjs_page` boundary.
  */
 import type { Page } from "@playwright/test";
+import { ATOMIC_BLOCK_SELECTOR } from "../../src/render/buildSource";
 
 /** A DOMRect flattened to the fields the assertions use (DOMRect is not serializable). */
 export interface Rect {
@@ -38,6 +39,8 @@ export interface BlockRect {
   rect: Rect;
   /** Index of the page whose content box best contains this block (-1 if none). */
   pageIndex: number;
+  /** Stable source identity copied into every Paged.js fragment. */
+  atomicId: string | null;
 }
 
 /** Full snapshot returned to a spec after pagination settles. */
@@ -48,17 +51,7 @@ export interface PagedSnapshot {
 }
 
 /** Atomic selectors — must match the break-inside:avoid set in print.css. */
-const ATOMIC_SELECTORS = [
-  "pre",
-  ".shiki",
-  "figure.code-figure",
-  "figure.mermaid-figure",
-  "figure",
-  "table",
-  ".callout",
-  ".katex-display",
-  "blockquote",
-] as const;
+const ATOMIC_SELECTORS = ATOMIC_BLOCK_SELECTOR.split(",");
 
 /**
  * Wait until the canvas host contains at least one `.pagedjs_page` and the app is
@@ -174,7 +167,7 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
     };
 
     const seen = new Set<Element>();
-    const blocks: Array<{ tag: string; rect: Rect; pageIndex: number }> = [];
+    const blocks: Array<{ tag: string; rect: Rect; pageIndex: number; atomicId: string | null }> = [];
     for (const sel of atomic) {
       for (const el of Array.from(host?.querySelectorAll<HTMLElement>(sel) ?? [])) {
         if (seen.has(el)) continue;
@@ -195,7 +188,12 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
         if (rect.height < 1 && rect.width < 1) continue; // skip collapsed/hidden
         const cls = (el.className || "").toString().trim().split(/\s+/)[0] ?? "";
         const tag = cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
-        blocks.push({ tag, rect, pageIndex: pageForCenter(centerOf(rect)) });
+        blocks.push({
+          tag,
+          rect,
+          pageIndex: pageForCenter(centerOf(rect)),
+          atomicId: el.dataset.mdvAtomicId ?? null,
+        });
       }
     }
 
@@ -223,4 +221,53 @@ export function blockStraddles(block: BlockRect, page: PageRect, tolerancePx = 2
   const above = rect.top < page.content.top - tolerancePx;
   const below = rect.bottom > page.content.bottom + tolerancePx;
   return above || below;
+}
+
+/**
+ * Detect one logical source block appearing on multiple pages. Only genuinely
+ * over-tall pre/table blocks may split, and their fragments must occupy
+ * consecutive pages. A short block split into individually well-fitting clones
+ * is the false-positive gap this identity check closes.
+ */
+export function splitAtomicOffenders(snapshot: PagedSnapshot, tolerancePx = 2): string[] {
+  const offenders: string[] = [];
+  const pageHeight = Math.max(
+    0,
+    ...snapshot.pages.map((page) => page.content.bottom - page.content.top),
+  );
+  const byId = new Map<string, BlockRect[]>();
+
+  for (const block of snapshot.blocks) {
+    if (!block.atomicId) {
+      offenders.push(`${block.tag}: missing stable source identity`);
+      continue;
+    }
+    const group = byId.get(block.atomicId) ?? [];
+    group.push(block);
+    byId.set(block.atomicId, group);
+  }
+
+  for (const [id, fragments] of byId) {
+    const pages = [...new Set(fragments.map((fragment) => fragment.pageIndex))].sort((a, b) => a - b);
+    if (pages.length <= 1) continue;
+
+    const tag = fragments[0]?.tag ?? "atomic";
+    const totalHeight = fragments.reduce((sum, fragment) => sum + fragment.rect.height, 0);
+    const maySplitWhenOverTall = tag.startsWith("pre") || tag.startsWith("table");
+    if (!maySplitWhenOverTall || totalHeight <= pageHeight + tolerancePx) {
+      offenders.push(
+        `${id} (${tag}) was split across pages ${pages.join(",")} despite combined height ${totalHeight.toFixed(1)}px fitting a ${pageHeight.toFixed(1)}px page`,
+      );
+      continue;
+    }
+
+    for (let index = 1; index < pages.length; index += 1) {
+      if (pages[index] !== pages[index - 1]! + 1) {
+        offenders.push(`${id} (${tag}) has non-consecutive split pages ${pages.join(",")}`);
+        break;
+      }
+    }
+  }
+
+  return offenders;
 }

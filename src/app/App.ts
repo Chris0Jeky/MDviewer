@@ -19,7 +19,11 @@ import { createMarkdown, renderMarkdown } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
 import type { MermaidTheme } from "../render/mermaid";
-import { buildPaginationSource, awaitFontsAndImages } from "../render/buildSource";
+import {
+  buildPaginationSource,
+  awaitFontsAndImages,
+  stampAtomicBlocks,
+} from "../render/buildSource";
 import { buildStylesheet } from "../paginate/cssBuilder";
 import { paginate } from "../paginate/paginate";
 import { registerHandlersOnce } from "../paginate/handler";
@@ -291,13 +295,15 @@ export class App {
       );
       if (stale()) return;
 
+      // Stable source identities make cross-page clone/split verification honest.
+      stampAtomicBlocks(source);
+
       // 5 — fonts + images settle so heights are final
       await awaitFontsAndImages(source);
       if (stale()) return;
 
-      // 6 — pristine clone for re-pagination without re-render (kept by paginate path)
-      //     We pass `source` directly to paginate; Paged.js consumes a fresh fragment each
-      //     run, and the next render rebuilds from scratch, so no baked transforms persist.
+      // 6 — fully prepared source. We pass it directly to paginate; the next
+      //     render rebuilds a fresh fragment, so no baked transforms persist.
 
       // 7 — PAGINATION LAST
       await registerHandlersOnce(() => measurePageArea(this.settings));

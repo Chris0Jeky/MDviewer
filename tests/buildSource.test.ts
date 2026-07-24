@@ -4,6 +4,7 @@ import {
   transformFootnotesToInline,
   injectToc,
   awaitFontsAndImages,
+  stampAtomicBlocks,
 } from "../src/render/buildSource";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
 
@@ -158,5 +159,22 @@ describe("awaitFontsAndImages", () => {
     const pending = awaitFontsAndImages(root);
     queueMicrotask(() => img.dispatchEvent(new Event("error")));
     await expect(pending).resolves.toBeUndefined();
+  });
+});
+
+describe("stampAtomicBlocks", () => {
+  it("stamps stable ids on outermost atomic blocks only", () => {
+    const root = rootOf(
+      '<pre class="shiki"><code>x</code></pre><figure class="mermaid-figure"><svg></svg></figure><blockquote>q</blockquote>',
+    );
+    expect(stampAtomicBlocks(root)).toBe(3);
+    const stamped = Array.from(root.querySelectorAll<HTMLElement>("[data-mdv-atomic-id]"));
+    expect(stamped.map((element) => element.dataset.mdvAtomicId)).toEqual([
+      "atomic-1",
+      "atomic-2",
+      "atomic-3",
+    ]);
+    expect(root.querySelector("pre")?.dataset.mdvAtomicId).toBe("atomic-1");
+    expect(root.querySelector("code")?.hasAttribute("data-mdv-atomic-id")).toBe(false);
   });
 });
