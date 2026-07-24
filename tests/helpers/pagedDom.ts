@@ -43,6 +43,8 @@ export interface BlockRect {
   atomicId: string | null;
   /** Natural source height recorded before Paged.js can split or duplicate the block. */
   sourceHeight: number | null;
+  /** True when Tier 3 already scaled this block to fit one page. */
+  shrunk: boolean;
 }
 
 /** Full snapshot returned to a spec after pagination settles. */
@@ -175,6 +177,7 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
       pageIndex: number;
       atomicId: string | null;
       sourceHeight: number | null;
+      shrunk: boolean;
     }> = [];
     for (const sel of atomic) {
       for (const el of Array.from(host?.querySelectorAll<HTMLElement>(sel) ?? [])) {
@@ -208,6 +211,7 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
           sourceHeight: Number.isFinite(Number(el.dataset.mdvSourceHeight))
             ? Number(el.dataset.mdvSourceHeight)
             : null,
+          shrunk: el.hasAttribute("data-shrunk"),
         });
       }
     }
@@ -273,6 +277,10 @@ export function splitAtomicOffenders(snapshot: PagedSnapshot, tolerancePx = 2): 
       offenders.push(
         `${id} (${tag}) was split across pages ${pages.join(",")} but this block family may not split`,
       );
+      continue;
+    }
+    if (fragments.some((fragment) => fragment.shrunk)) {
+      offenders.push(`${id} (${tag}) was split across pages ${pages.join(",")} after being shrunk to fit one page`);
       continue;
     }
     if (sourceHeight === undefined || sourceHeight === null) {

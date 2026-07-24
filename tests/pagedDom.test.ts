@@ -11,12 +11,13 @@ const rect = (top: number, bottom: number): Rect => ({
   height: bottom - top,
 });
 
-const block = (pageIndex: number, sourceHeight: number): BlockRect => ({
+const block = (pageIndex: number, sourceHeight: number, shrunk = false): BlockRect => ({
   tag: "pre.shiki",
   rect: rect(0, 60),
   pageIndex,
   atomicId: "atomic-1",
   sourceHeight,
+  shrunk,
 });
 
 const snapshot = (blocks: BlockRect[]): PagedSnapshot => ({
@@ -34,5 +35,11 @@ describe("splitAtomicOffenders", () => {
 
   it("allows a genuinely over-tall splittable block on consecutive pages", () => {
     expect(splitAtomicOffenders(snapshot([block(0, 120), block(1, 120)]))).toEqual([]);
+  });
+
+  it("rejects a multi-page block that Tier 3 already shrunk to one-page height", () => {
+    const offenders = splitAtomicOffenders(snapshot([block(0, 110, true), block(1, 110, true)]));
+    expect(offenders).toHaveLength(1);
+    expect(offenders[0]).toContain("after being shrunk to fit one page");
   });
 });
