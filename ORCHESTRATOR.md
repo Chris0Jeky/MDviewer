@@ -6,7 +6,8 @@
 > **▶ CURRENT CHECKPOINT — 2026-07-24:** Work continues on isolated branch
 > `feat/product-hardening-deployment` from exact `origin/main` `a0647549`. T-3 and T-4 are complete,
 > along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
-> Independent review findings are fixed; final exact-head gates remain before handoff. OPEN human items: **AI-1**
+> Independent review findings are fixed and the follow-up re-review found no release blocker; final
+> exact-head gates remain before handoff. OPEN human items: **AI-1**
 > (manual real-Chrome PDF visual check) and **AI-4** (choose/authorize the permanent hosting path).
 
 ## Run header
@@ -69,11 +70,11 @@
 | T-14 | Wrap-up housekeeping: commit ORCHESTRATOR.md, record Q-answers, ACTION_ITEMS snapshot | IN-PROGRESS | P3 | — | branch `chore/session-wrap` | — | makes state durable + tracked for next session |
 | T-11 | dead `ensureLang` loader | FOLDED → T-4 | P4 | — | — | F-18 | user chose build-out (Q-2): keep `ensureLang`, make it work as part of T-4 (don't delete). |
 | T-12 | Docs version-sync after the major dep bumps | **MERGED** | P3 (docs gate) | T-1,T-8,T-9a/b/c | PR #18 → `82ac4bc` | skills validate + CI | spec/notes/roadmap/3 skills now match installed versions |
-| T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9` | independent adversarial review; bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
+| T-15 | Sanitize untrusted Markdown and Mermaid output | **COMMITTED** | P1 security | — | `d2fc3c9`, `5be6243` | independent adversarial review; literal and obfuscated bypasses fixed | Local-first renderer no longer executes/auto-loads hostile HTML/SVG/resource URLs |
 | T-16 | Resolve transitive npm advisories | **COMMITTED** | P1 security | — | `d54892c` | `npm audit` | 3 advisories → 0 |
 | T-17 | Isolate E2E server ports | **COMMITTED** | P2 test honesty | — | `7fdd9cb` | dev + preview 16/16 | stale primary-checkout listener can no longer contaminate targeted runs |
 | T-18 | Product packaging and deployment paths | **IN PROGRESS** | P2 distribution | T-3,T-4 | current branch | full gates pending | built-in server, one-command/click launcher, static-host headers, deployment runbook |
-| T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources |
+| T-19 | Restore Mermaid rendering and sanitize real SVG safely | **COMMITTED** | P1 correctness/security | T-15 | `993e926`, `ff07d38` | independent finding + real Chromium | Mermaid bypasses Shiki, retains safe SVG styles/text, strips remote SVG/CSS resources, and stays print-light |
 | T-20 | Close no-slice E2E identity gap | **COMMITTED** | P1 test honesty | — | `3a12930` | independent finding + production E2E | stable source atomic IDs detect short logical blocks cloned across pages; over-tall pre/table splits constrained |
 
 ### Backlog (greenlit — NEXT SESSION STARTS HERE)
@@ -157,4 +158,6 @@
   sanitization removed its styles/labels; SVG presentation attributes could retain remote URLs; and
   no-slice E2E could miss a short logical block split into separate fragments. Commits `993e926` and
   `3a12930` fix all four with real Chromium and stable source identity coverage; `8db5072` fixes the
-  review's IPv6 launcher finding. Final exact-head gates remain.
+  review's IPv6 launcher finding. Follow-up review then found and closed an obfuscated-CSS URL bypass
+  (`5be6243`) and dark-preview/print Mermaid theme drift (`ff07d38`). The independent re-review passed
+  at `ff07d38` with no release-blocking finding. Final exact-head gates remain.

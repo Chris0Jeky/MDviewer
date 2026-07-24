@@ -56,9 +56,11 @@ export paths.
 
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.
-- **Done:** sanitize untrusted raw HTML, CSS resource URLs, embedded images, and Mermaid SVG output.
+- **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
+  embedded images, and Mermaid SVG output.
 - **Done:** Mermaid fences bypass Shiki and render to sanitized, styled SVG text across flowchart and
-  non-flowchart diagrams; remote URLs in SVG presentation attributes are removed.
+  non-flowchart diagrams; remote URLs in SVG presentation attributes are removed and diagram output
+  remains light so screen-theme changes cannot degrade printed PDFs.
 - **Done:** broader Shiki language coverage via pre-scan + on-demand curated grammar chunks, with
   graceful unknown-language fallback.
 - **Done:** E2E suite in CI on real Chromium (no-cutoff, golden-path, export, empty/error), plus

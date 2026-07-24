@@ -19,7 +19,7 @@
 - **2026-07-24 (product hardening + packaging)** — Security-sensitive Markdown and Mermaid output is
   sanitized; dependency audit is clean; Paged.js and curated Shiki grammars load on demand; a tested
   production server, one-command/one-click local launch, and deployment guide are present on branch
-  `feat/product-hardening-deployment`. Automated verification includes 170 unit tests, 3 server tests,
+  `feat/product-hardening-deployment`. Automated verification includes 171 unit tests, 3 server tests,
   and 18 browser tests against both Vite dev and the production bundle on isolated ports. The
   no-slice test now tracks stable source-block identities across Paged.js fragments rather than
   trusting already-split output geometry alone.
