@@ -132,6 +132,7 @@ describe("markdown: untrusted HTML", () => {
         '<img id="embedded" src="data:image/png;base64,AA==">',
         '<span id="styled" style="color:red;background:url(https://example.test/x)">x</span>',
         '<span id="image-set" style="background-image:image-set(&quot;https://example.test/x&quot; 1x)">y</span>',
+        '<span id="escaped-url" style="background:u\\72l(https://example.test/x)">z</span>',
       ].join(""),
     );
     const root = frag(html);
@@ -141,6 +142,7 @@ describe("markdown: untrusted HTML", () => {
     );
     expect(root.querySelector("#styled")?.hasAttribute("style")).toBe(false);
     expect(root.querySelector("#image-set")?.hasAttribute("style")).toBe(false);
+    expect(root.querySelector("#escaped-url")?.hasAttribute("style")).toBe(false);
   });
 
   it("rejects SVG data images", () => {
@@ -153,11 +155,12 @@ describe("markdown: untrusted HTML", () => {
 
   it("blocks remote URLs in SVG presentation attributes but keeps local fragments", () => {
     const { html } = render(
-      '<svg><rect id="remote" fill="url(https://example.test/fill.svg#x)" filter="url(https://example.test/filter.svg#f)"/><rect id="local" fill="url(#gradient)"/></svg>',
+      '<svg><rect id="remote" fill="url(https://example.test/fill.svg#x)" filter="url(https://example.test/filter.svg#f)"/><rect id="escaped" stroke="u\\72l(https://example.test/stroke.svg#x)"/><rect id="local" fill="url(#gradient)"/></svg>',
     );
     const root = frag(html);
     expect(root.querySelector("#remote")?.hasAttribute("fill")).toBe(false);
     expect(root.querySelector("#remote")?.hasAttribute("filter")).toBe(false);
+    expect(root.querySelector("#escaped")?.hasAttribute("stroke")).toBe(false);
     expect(root.querySelector("#local")?.getAttribute("fill")).toBe("url(#gradient)");
   });
 
@@ -185,6 +188,15 @@ describe("Mermaid SVG sanitization", () => {
   it("removes generated styles that contain a resource fetch", () => {
     const { html } = sanitizeMermaidSvg(
       '<svg><style>.node{fill:url(https://example.test/x.svg)}</style><text>Safe label</text></svg>',
+    );
+    const root = frag(html);
+    expect(root.querySelector("style")).toBeNull();
+    expect(root.querySelector("text")?.textContent).toBe("Safe label");
+  });
+
+  it("removes generated styles with escaped resource functions", () => {
+    const { html } = sanitizeMermaidSvg(
+      '<svg><style>.node{fill:u\\72l(https://example.test/x.svg)}</style><text>Safe label</text></svg>',
     );
     const root = frag(html);
     expect(root.querySelector("style")).toBeNull();

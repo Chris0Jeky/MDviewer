@@ -41,6 +41,20 @@ const AUTOLOAD_ATTRS = ["srcset", "poster", "background", "data"] as const;
 const UNSAFE_CSS_FUNCTION =
   /(?:@import|expression\s*\(|(?:-webkit-)?image-set\s*\(|cross-fade\s*\(|element\s*\(|paint\s*\()/i;
 const CSS_URL = /url\s*\(\s*(["']?)(.*?)\1\s*\)/gi;
+const CSS_OBFUSCATION = /\\|\/\*/;
+const SVG_RESOURCE_ATTRS = new Set([
+  "fill",
+  "stroke",
+  "filter",
+  "clip-path",
+  "mask",
+  "marker",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+  "cursor",
+  "color-profile",
+]);
 const SAFE_EMBEDDED_IMAGE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
 
 function serialize(fragment: DocumentFragment): string {
@@ -51,6 +65,9 @@ function serialize(fragment: DocumentFragment): string {
 
 /** Allow SVG-local fragment references such as url(#marker), never network URLs. */
 function hasUnsafeCssResource(value: string): boolean {
+  // CSS escapes/comments can synthesize tokens such as u\72l or u/**/rl.
+  // Generated Mermaid CSS does not need either construct, so fail closed.
+  if (CSS_OBFUSCATION.test(value)) return true;
   if (UNSAFE_CSS_FUNCTION.test(value)) return true;
   CSS_URL.lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -128,7 +145,7 @@ function sanitizeHtml(html: string, allowSvgStyles: boolean): SanitizedHtml {
         }
       }
       for (const attribute of Array.from(element.attributes)) {
-        if (attribute.name !== "style" && hasUnsafeCssResource(attribute.value)) {
+        if (SVG_RESOURCE_ATTRS.has(attribute.name) && hasUnsafeCssResource(attribute.value)) {
           element.removeAttribute(attribute.name);
           removedCount += 1;
         }
