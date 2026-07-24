@@ -20,8 +20,8 @@
 - **Live GitHub queue (2026-07-24):** deployment-record PR #29 plus Dependabot PRs #22–#27 are
   OPEN, MERGEABLE, and green. Keep each dependency update as its own reviewable slice.
 - **Local and remote `main` HEAD:** `7f4eedf2883c1b555971ecc6f9cf5f103f94e3b6` (PR #28 merge).
-- **PRs merged through public launch:** 12, including product-hardening/deployment PR #28. Earlier
-  dependency/CI work remains recorded in C1–C9 below.
+- **PRs merged through public launch:** 13, including housekeeping PR #20 and
+  product-hardening/deployment PR #28. Earlier dependency/CI work remains recorded in C1–C9 below.
 - **Current main verification (`7f4eedf`):** hosted Node 20/22 and production Chromium CI green;
   175 unit tests, 4 server tests, build, zero-vulnerability audit, hook smoke, 14 skill validations,
   and 19/19 Chromium E2E against both dev and production-preview were green on the exact PR head.
