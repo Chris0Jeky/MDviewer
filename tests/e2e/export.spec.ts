@@ -40,6 +40,17 @@ test.describe("export paths over one paginated DOM", () => {
     expect(calls).toBeGreaterThanOrEqual(1);
   });
 
+  test("primary print media exports every paginated sheet", async ({ page }) => {
+    const sheetCount = await page.locator("#paged-output .pagedjs_page").count();
+    expect(sheetCount).toBeGreaterThan(1);
+
+    const pdf = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+    const pageObjects = pdf.toString("latin1").match(/\/Type\s*\/Page\b/g) ?? [];
+    expect(pageObjects, "Chrome PDF page objects should match Paged.js sheets").toHaveLength(
+      sheetCount,
+    );
+  });
+
   test("fallback export produces a downloadable PDF (rasterized path)", async ({ page }) => {
     const downloadBtn = page.locator(".export-secondary").first();
     test.skip(
