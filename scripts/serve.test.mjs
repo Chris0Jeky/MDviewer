@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createStaticServer, parseArgs } from "./serve.mjs";
+import { createStaticServer, formatBrowserHost, parseArgs } from "./serve.mjs";
 
 let root;
 let server;
@@ -36,6 +36,8 @@ test("parses safe local defaults and explicit exposure options", () => {
     open: true,
   });
   assert.throws(() => parseArgs(["--port", "not-a-port"]), /--port must be/);
+  assert.equal(formatBrowserHost("::1"), "[::1]");
+  assert.equal(formatBrowserHost("localhost"), "localhost");
 });
 
 test("serves the app with security and cache headers", async () => {

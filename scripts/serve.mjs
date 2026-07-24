@@ -56,6 +56,10 @@ export function parseArgs(args) {
   return options;
 }
 
+export function formatBrowserHost(host) {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+}
+
 function send(res, statusCode, body, headers = {}) {
   res.writeHead(statusCode, {
     ...SECURITY_HEADERS,
@@ -176,7 +180,8 @@ export async function main(args = process.argv.slice(2)) {
   server.listen(options.port, options.host, () => {
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : options.port;
-    const browserHost = options.host === "0.0.0.0" || options.host === "::" ? "localhost" : options.host;
+    const displayHost = options.host === "0.0.0.0" || options.host === "::" ? "localhost" : options.host;
+    const browserHost = formatBrowserHost(displayHost);
     const url = `http://${browserHost}:${port}`;
     console.log(`MDviewer is running at ${url}`);
     if (options.host !== "127.0.0.1" && options.host !== "::1" && options.host !== "localhost") {
