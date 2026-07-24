@@ -9,9 +9,16 @@ import { defineConfig, devices } from "@playwright/test";
 // pagination/export path can't pass while dev mode works. CI runs the preview target after
 // `npm run build`. The preview command requires an existing `dist/` (run build first).
 const usePreview = process.env.E2E_TARGET === "preview";
+const e2ePort = Number(process.env.E2E_PORT ?? "5180");
+
+if (!Number.isInteger(e2ePort) || e2ePort < 1 || e2ePort > 65_535) {
+  throw new Error(`E2E_PORT must be an integer between 1 and 65535; received ${process.env.E2E_PORT}`);
+}
+
+const baseURL = `http://localhost:${e2ePort}`;
 const webServerCommand = usePreview
-  ? "npm run preview -- --port 5180 --strictPort"
-  : "npm run dev -- --port 5180 --strictPort";
+  ? `npm run preview -- --port ${e2ePort} --strictPort`
+  : `npm run dev -- --port ${e2ePort} --strictPort`;
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -23,13 +30,13 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:5180",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
   webServer: {
     command: webServerCommand,
-    url: "http://localhost:5180",
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

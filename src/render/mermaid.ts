@@ -10,6 +10,7 @@
  */
 
 import { CLASSES } from "../app/dom";
+import { sanitizeMermaidSvg } from "./sanitize";
 
 export type MermaidTheme = "default" | "dark" | "neutral" | "forest" | "base";
 
@@ -46,6 +47,11 @@ export async function renderAllMermaid(
       startOnLoad: false,
       theme,
       securityLevel: "strict",
+      // Root-level option covers every diagram type; diagram-specific htmlLabels
+      // is deprecated in Mermaid 11. SVG text sanitizes and prints reliably.
+      htmlLabels: false,
+      // SVG-native labels survive sanitization and print reliably. Mermaid's
+      // default HTML labels use <foreignObject>, which DOMPurify removes.
       flowchart: { useMaxWidth: false },
     });
     initialized = true;
@@ -62,7 +68,7 @@ export async function renderAllMermaid(
       const { svg } = await mermaid.render(`mmd-${i}`, code);
       const figure = document.createElement("figure");
       figure.className = CLASSES.mermaidFigure;
-      figure.innerHTML = svg;
+      figure.innerHTML = sanitizeMermaidSvg(svg).html;
       host.replaceWith(figure);
       rendered++;
     } catch {

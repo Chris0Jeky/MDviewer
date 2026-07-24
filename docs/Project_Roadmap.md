@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-06-25.
+> Last updated: 2026-07-24.
 
 ## Status legend
 
@@ -13,10 +13,11 @@ started · `DEFERRED` — explicitly out of scope for now.
 
 ## Active gate
 
-**Manual browser verification (Gate 3).** The no-slice guarantee and both export paths are
-layout-dependent and cannot be fully cleared from an agent sandbox. They must be verified in a real
-Chrome with the app running. Tracked as human action items in [`../ACTION_ITEMS.md`](../ACTION_ITEMS.md)
-(AI-1, AI-2). No phase that depends on real-browser layout is `DONE` until those items are cleared.
+**Browser/PDF verification (Gate 3).** An installed-Chrome production run generated both export
+paths and rendered all 14 PDF pages for visual inspection. That check found and fixed a primary
+print regression that emitted only page 1; both paths now produce 7 clean A4 pages, backed by a real
+Chrome PDF page-count regression test. Formal sign-off remains tracked in
+[`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) (AI-1) because only the maintainer closes human items.
 
 ## Phases
 
@@ -51,15 +52,25 @@ export paths.
 - Empty-state, error, and recovery flows (aggregated warning banner, fatal error card).
 - Accessibility: `aria-live` status, focus management, reduced-motion, contrast.
 
-### P3 — Hardening — `PLANNED`
+### P3 — Hardening and distribution — `IN PROGRESS`
 
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.
-- Broader Shiki language coverage and graceful unknown-language fallback.
-- E2E suite running in CI on real Chromium (no-cutoff, golden-path, export, empty/error).
-- Bundle size: initial chunk ~1.9 MB (KaTeX + markdown-it + Paged.js + Shiki core). Lazy-load
-  Paged.js (`paginate.ts`) and the PDF libs (`download.ts`), and consider `manualChunks`, to cut
-  first paint. Builds and runs fine today — an optimization, not a blocker.
+- **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
+  embedded images, and Mermaid SVG output.
+- **Done:** Mermaid fences bypass Shiki and render to sanitized, styled SVG text across flowchart and
+  non-flowchart diagrams; remote URLs in SVG presentation attributes are removed and diagram output
+  remains light so screen-theme changes cannot degrade printed PDFs.
+- **Done:** broader Shiki language coverage via pre-scan + on-demand curated grammar chunks, with
+  graceful unknown-language fallback.
+- **Done:** E2E suite in CI on real Chromium (no-cutoff, golden-path, export, empty/error), plus
+  configurable isolated ports to prevent stale-server false positives. Stable source atomic IDs now
+  detect short logical blocks incorrectly split into individually well-fitting page fragments.
+- **Done:** lazy-load Paged.js and PDF libraries; entry chunk reduced from ~1.97 MB to ~1.46 MB.
+- **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
+  static-host headers, no public source maps, and deployment/runbook documentation.
+- **Remaining:** maintainer acceptance of the installed-Chrome PDF evidence (AI-1), select/authorize a permanent host (AI-4),
+  and profile very large documents before setting a production performance budget.
 
 ### P4 — Stretch — `DEFERRED`
 

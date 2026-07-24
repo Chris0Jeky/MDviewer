@@ -55,6 +55,7 @@ export const ATTRS = {
   appTheme: "data-app-theme", // on <html>: light | dark | sepia
   codeTheme: "data-code-theme", // on .doc: active Shiki theme family
   shrunk: "data-shrunk", // on a shrink-to-fit block: the applied scale
+  atomicSourceHeight: "data-mdv-source-height", // pristine pre/table height before Paged.js splits it
 } as const;
 
 /** Paged.js emits these — never rename them. */

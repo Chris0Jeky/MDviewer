@@ -16,6 +16,21 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await expect(empty).toBeVisible();
   });
 
+  test("theme controls keep their accessible pressed state in sync", async ({ page }) => {
+    await page.goto("/");
+    const light = page.getByRole("button", { name: "Light" });
+    const dark = page.getByRole("button", { name: "Dark" });
+
+    await dark.click();
+    await expect(page.locator("html")).toHaveAttribute("data-app-theme", "dark");
+    await expect(dark).toHaveAttribute("aria-pressed", "true");
+    await expect(light).toHaveAttribute("aria-pressed", "false");
+
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ screenTheme: "light" }));
+    await expect(light).toHaveAttribute("aria-pressed", "true");
+    await expect(dark).toHaveAttribute("aria-pressed", "false");
+  });
+
   test("loading the sample produces .pagedjs_page sheets", async ({ page }) => {
     await page.goto("/");
     await loadMarkdownIntoApp(page, SAMPLE_MD);
@@ -24,7 +39,7 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await expect(page.locator("#paged-output .pagedjs_page").first()).toBeVisible();
   });
 
-  test("rendered document contains highlighted code, math, callouts and a TOC", async ({
+  test("rendered document contains code, math, a Mermaid SVG, callouts and a TOC", async ({
     page,
   }) => {
     await page.goto("/");
@@ -36,10 +51,40 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await expect(host.locator(".shiki").first()).toBeVisible();
     // KaTeX math (inline or display)
     await expect(host.locator(".katex").first()).toBeVisible();
+    // Mermaid must survive the Shiki fence rule and render asynchronously to SVG.
+    const diagram = host.locator("figure.mermaid-figure").first();
+    await expect(diagram.locator("svg")).toBeVisible();
+    await expect(diagram).toContainText("Markdown source");
+    await expect(diagram.locator("svg style")).toHaveCount(1);
     // Callouts (sample.md has note/tip/warning/danger)
     await expect(host.locator(".callout").first()).toBeVisible();
     // TOC nav from [[toc]]
     expect(await host.locator(".toc").count()).toBeGreaterThan(0);
+  });
+
+  test("loads a curated code language before synchronous rendering", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(
+      page,
+      "# C# example\n\n```csharp\npublic record Person(string Name);\n```",
+    );
+    await waitForPagination(page);
+    await expect(page.locator("#paged-output pre.shiki").first()).toBeVisible();
+    await expect(page.locator("#warning-banner")).toBeHidden();
+  });
+
+  test("renders non-flowchart Mermaid labels as sanitized SVG text", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(
+      page,
+      "# Sequence\n\n```mermaid\nsequenceDiagram\n  Alice->>Bob: Private local render\n```",
+    );
+    await waitForPagination(page);
+    const diagram = page.locator("#paged-output figure.mermaid-figure").first();
+    await expect(diagram.locator("svg")).toBeVisible();
+    await expect(diagram).toContainText("Alice");
+    await expect(diagram).toContainText("Bob");
+    await expect(diagram.locator("foreignObject")).toHaveCount(0);
   });
 
   test("the page chip reflects a positive page count", async ({ page }) => {

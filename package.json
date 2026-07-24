@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "start": "node scripts/start.mjs",
+    "serve": "node scripts/serve.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
@@ -19,10 +21,11 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "agent:hooks:smoke": "python scripts/agent_hooks/smoke_test.py",
-    "agent:skills:validate": "python scripts/agent_hooks/validate_skills.py",
-    "agent:ledger:render": "python scripts/agent_hooks/render_failure_ledger.py",
-    "agent:check": "npm run typecheck && npm run lint && npm run test"
+    "agent:hooks:smoke": "node scripts/run-python.mjs scripts/agent_hooks/smoke_test.py",
+    "agent:skills:validate": "node scripts/run-python.mjs scripts/agent_hooks/validate_skills.py",
+    "agent:ledger:render": "node scripts/run-python.mjs scripts/agent_hooks/render_failure_ledger.py",
+    "test:serve": "node --test scripts/serve.test.mjs",
+    "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve"
   },
   "dependencies": {
     "@shikijs/core": "^4.3.0",
@@ -31,6 +34,7 @@
     "@shikijs/themes": "^4.3.0",
     "@shikijs/transformers": "^4.3.0",
     "@vscode/markdown-it-katex": "^1.1.0",
+    "dompurify": "^3.4.12",
     "html2canvas-pro": "^1.5.8",
     "jspdf": "^4.2.1",
     "katex": "^0.17.0",

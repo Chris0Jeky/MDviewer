@@ -27,6 +27,53 @@ const DOC_FONT_STACKS: Record<DocFont, string> = {
   slab: `"Roboto Slab", "Rockwell", "Source Serif 4", "Georgia", "Times New Roman", serif`,
 };
 
+/** Outermost blocks whose identity must survive Paged.js cloning/splitting. */
+export const ATOMIC_BLOCK_SELECTOR = [
+  "pre",
+  ".shiki",
+  "figure.code-figure",
+  "figure.mermaid-figure",
+  "figure",
+  "img",
+  "svg",
+  "table",
+  "tr",
+  "td",
+  "th",
+  ".callout",
+  ".callout-note",
+  ".callout-tip",
+  ".callout-warning",
+  ".callout-danger",
+  ".katex-display",
+  "blockquote",
+  "li",
+].join(",");
+
+/**
+ * Give each source atomic block a stable identity before pagination. Paged.js
+ * copies data attributes into page fragments, letting E2E detect one logical
+ * short block incorrectly cloned across multiple pages.
+ */
+export function stampAtomicBlocks(root: ParentNode): number {
+  const candidates = Array.from(root.querySelectorAll<HTMLElement>(ATOMIC_BLOCK_SELECTOR));
+  let count = 0;
+  for (const element of candidates) {
+    let ancestor = element.parentElement;
+    let nested = false;
+    while (ancestor) {
+      if (ancestor.matches(ATOMIC_BLOCK_SELECTOR)) {
+        nested = true;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    if (nested) continue;
+    element.dataset.mdvAtomicId = `atomic-${++count}`;
+  }
+  return count;
+}
+
 /**
  * Parse `html` into a `.doc` root inside a DocumentFragment and apply the TOC + footnote
  * transforms. The returned fragment is the pristine, layout-free source Paged.js paginates.

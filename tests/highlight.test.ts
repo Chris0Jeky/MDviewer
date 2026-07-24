@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   CODE_THEME_PAIRS,
+  findFenceLanguages,
   getHighlighter,
   ensureLang,
+  ensureMarkdownLanguages,
 } from "../src/render/highlight";
 import type { CodeThemeId } from "../src/app/settings";
 
@@ -85,5 +87,38 @@ describe("highlight: ensureLang", () => {
   it("does not throw for an unknown language id", async () => {
     const hl = await getHighlighter();
     await expect(ensureLang(hl, "totally-not-a-language")).resolves.toBeUndefined();
+  }, 30_000);
+
+  it("loads a curated language and its alias on demand", async () => {
+    const hl = await getHighlighter();
+    await ensureLang(hl, "cs");
+    expect(hl.getLoadedLanguages()).toContain("csharp");
+    expect(
+      hl.codeToHtml("public record Person(string Name);", {
+        lang: "csharp",
+        themes: { light: "github-light", dark: "github-dark" },
+      }),
+    ).toContain('class="shiki');
+  }, 30_000);
+
+  it("pre-scans distinct fenced languages in source order", async () => {
+    const src = [
+      "```cs",
+      "record A;",
+      "```",
+      "~~~terraform",
+      "resource {}",
+      "~~~",
+      "```cs",
+      "record B;",
+      "```",
+    ].join("\n");
+    expect(findFenceLanguages(src)).toEqual(["csharp", "terraform"]);
+
+    const hl = await getHighlighter();
+    await ensureMarkdownLanguages(hl, src);
+    expect(hl.getLoadedLanguages()).toEqual(
+      expect.arrayContaining(["csharp", "terraform"]),
+    );
   }, 30_000);
 });

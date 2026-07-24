@@ -56,8 +56,9 @@ clone** captured at step 6, so it never re-runs the render pipeline or bakes sta
   `EmptyState` is the full-window dropzone; `Banner` aggregates warnings and fatal errors.
 - **`src/render/`** — turn Markdown into a print-ready DOM. `markdown.ts` builds the markdown-it
   instance (callouts, footnotes, anchors, TOC, task lists, attrs) with Shiki and KaTeX wired in;
+  `sanitize.ts` removes executable HTML and automatic remote-resource loads before DOM insertion;
   `highlight.ts` is the Shiki singleton and theme pairs; `math.ts` is the KaTeX plugin config;
-  `mermaid.ts` renders diagrams to fixed-size SVG; `buildSource.ts` injects the TOC, moves
+  `mermaid.ts` renders diagrams to fixed-size, re-sanitized SVG; `buildSource.ts` injects the TOC, moves
   footnotes inline as page-bottom floats, and awaits fonts/images.
 - **`src/paginate/`** — the single pagination engine (Paged.js 0.4.3). `cssBuilder.ts` produces the
   full stylesheet string; `measure.ts` computes the printable page area; `handler.ts` runs the

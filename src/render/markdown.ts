@@ -29,11 +29,12 @@ import type { ShikiTransformer, BundledLanguage } from "shiki";
 import type { HighlighterCore } from "shiki/core";
 import type { Settings } from "../app/settings";
 import { CLASSES } from "../app/dom";
-import { CODE_THEME_PAIRS } from "./highlight";
+import { CODE_THEME_PAIRS, isSupportedLanguage } from "./highlight";
 import { registerKatex } from "./math";
+import { sanitizeRenderedHtml } from "./sanitize";
 
 export interface RenderWarning {
-  kind: "math" | "diagram" | "lang";
+  kind: "math" | "diagram" | "lang" | "security";
   message: string;
 }
 
@@ -141,42 +142,24 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
     }),
   );
 
+  // Shiki owns the fence rule, but Mermaid fences are diagram source rather than
+  // highlighted code. Override after installing Shiki and delegate every other
+  // language back to its renderer so renderAllMermaid can find the canonical class.
+  const shikiFence = md.renderer.rules.fence;
+  if (!shikiFence) throw new Error("Shiki did not register a Markdown fence renderer");
+  md.renderer.rules.fence = (tokens, idx, options, env, self): string => {
+    const token = tokens[idx];
+    const language = (token?.info.trim().split(/\s+/, 1)[0] ?? "")
+      .toLowerCase()
+      .replace(/^language-/, "");
+    if (language === "mermaid") {
+      return `<pre><code class="language-mermaid">${md.utils.escapeHtml(token?.content ?? "")}</code></pre>\n`;
+    }
+    return shikiFence(tokens, idx, options, env, self);
+  };
+
   return md;
 }
-
-/** Fenced languages we ship a Shiki grammar for (mirrors highlight.ts `langs`). */
-const KNOWN_LANGS = new Set<string>([
-  "typescript",
-  "ts",
-  "javascript",
-  "js",
-  "python",
-  "py",
-  "bash",
-  "sh",
-  "shell",
-  "json",
-  "markdown",
-  "md",
-  "html",
-  "css",
-  "rust",
-  "rs",
-  "go",
-  "java",
-  "c",
-  "cpp",
-  "c++",
-  "sql",
-  "yaml",
-  "yml",
-  "diff",
-  "mermaid", // handled later by renderAllMermaid, not a Shiki failure
-  "text",
-  "plaintext",
-  "txt",
-  "", // bare fence (no language) is fine
-]);
 
 /**
  * Render markdown to HTML and collect best-effort warnings.
@@ -190,8 +173,18 @@ export function renderMarkdown(
   md: MarkdownIt,
   src: string,
 ): { html: string; warnings: RenderWarning[] } {
-  const html = md.render(src);
+  const rawHtml = md.render(src);
+  const sanitized = sanitizeRenderedHtml(rawHtml);
   const warnings: RenderWarning[] = [];
+
+  if (sanitized.removedCount > 0) {
+    warnings.push({
+      kind: "security",
+      message: `Blocked ${sanitized.removedCount} unsafe HTML ${
+        sanitized.removedCount === 1 ? "item" : "items"
+      } or remote-resource ${sanitized.removedCount === 1 ? "reference" : "references"}.`,
+    });
+  }
 
   // Unknown fenced-code languages: Shiki silently falls back to plain text. Scan the raw
   // source for ``` / ~~~ fences with an info string whose first token we do not ship.
@@ -200,7 +193,7 @@ export function renderMarkdown(
   let m: RegExpExecArray | null;
   while ((m = fenceRe.exec(src)) !== null) {
     const lang = (m[1] ?? "").toLowerCase().replace(/^language-/, "");
-    if (lang && !KNOWN_LANGS.has(lang) && !seenLangs.has(lang)) {
+    if (lang && !isSupportedLanguage(lang) && !seenLangs.has(lang)) {
       seenLangs.add(lang);
       warnings.push({
         kind: "lang",
@@ -211,12 +204,12 @@ export function renderMarkdown(
 
   // KaTeX errors: with throwOnError:false the plugin emits a span coloured with errorColor
   // and titled with the message. Detect either the class or the error colour as a marker.
-  if (/class="katex-error"|#cc0000/.test(html)) {
+  if (/class="katex-error"|#cc0000/.test(sanitized.html)) {
     warnings.push({
       kind: "math",
       message: "One or more math expressions could not be parsed and are shown in red.",
     });
   }
 
-  return { html, warnings };
+  return { html: sanitized.html, warnings };
 }

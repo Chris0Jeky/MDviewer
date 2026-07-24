@@ -23,7 +23,7 @@ export interface CanvasController {
 }
 
 const ZOOM_OPTIONS: ReadonlyArray<[value: string, label: string, title: string]> = [
-  ["fit", "Fit", "Fit the page to the canvas"],
+  ["fit", "Fit", "Show the page at its natural paper size"],
   ["1", "100%", "Actual size"],
   ["0.5", "50%", "Half size"],
 ];

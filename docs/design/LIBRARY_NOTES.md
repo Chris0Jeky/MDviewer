@@ -124,9 +124,15 @@ async function create(): Promise<HighlighterCore> {
 }
 export async function ensureLang(hl: HighlighterCore, lang: string): Promise<void> {
   if (hl.getLoadedLanguages().includes(lang)) return;
-  const langs = await import("@shikijs/langs");
-  const loader = (langs as Record<string, unknown>)[lang];
-  if (loader) await hl.loadLanguage(await (loader as () => Promise<never>)());
+  // Keep this map explicit: a template-string import makes Vite bundle the whole
+  // language catalogue. Add curated subpaths as product support expands.
+  const loaders = {
+    csharp: () => import("@shikijs/langs/csharp"),
+    powershell: () => import("@shikijs/langs/powershell"),
+    terraform: () => import("@shikijs/langs/terraform"),
+  } as const;
+  const loader = loaders[lang as keyof typeof loaders];
+  if (loader) await hl.loadLanguage(loader());
 }
 
 export const CODE_THEME_PAIRS = {
@@ -176,7 +182,7 @@ export async function renderAllMermaid(root: ParentNode, theme: MermaidTheme = "
   const blocks = Array.from(root.querySelectorAll<HTMLElement>("pre > code.language-mermaid, code.language-mermaid, .mermaid"));
   if (blocks.length === 0) return { rendered: 0, failed: 0 };
   const mermaid = (await import("mermaid")).default;
-  if (!initialized) { mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict", flowchart: { useMaxWidth: false } }); initialized = true; }
+  if (!initialized) { mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict", htmlLabels: false, flowchart: { useMaxWidth: false } }); initialized = true; }
   let rendered = 0, failed = 0;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]!;

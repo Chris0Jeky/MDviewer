@@ -75,6 +75,12 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Git: branch off `main`; `merge` not `rebase`; no force-push or history rewrite on protected
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
+- Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
+  draft PRs after relevant local checks. A PR is aged once an independent adversarial review has
+  examined its latest head, exact-head CI has completed green, and every comment is triaged; no
+  time-based wait is required in this relaxed T1 repo. Actionable findings require finding → commit
+  evidence, while informational/bot notices require an explicit non-finding triage. Any head change
+  resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
 - Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
 - Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
@@ -84,6 +90,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Nothing leaves the device. No fetch/XHR/WebSocket at runtime; bundle Shiki themes/langs, KaTeX
   fonts, and Mermaid locally so the tool works offline.
-- `markdown-it` runs with `html: true` (the user's own local files). If remote/pasted untrusted
-  Markdown is ever accepted, sanitize (DOMPurify) before inserting into the DOM.
+- `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
+  before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
+  image data URLs are allowed. Mermaid SVG output is sanitized again after rendering.
 - Document content is never written to storage; only the small `Settings` object persists.

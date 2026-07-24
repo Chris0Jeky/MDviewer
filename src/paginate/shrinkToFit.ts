@@ -17,24 +17,28 @@ import { ATTRS } from "../app/dom";
 
 /** Selector for blocks eligible for shrink-to-fit (never tables — they reflow). */
 const SHRINK_SELECTOR = "pre, figure.code-figure, figure.mermaid-figure";
+const SPLITTABLE_SELECTOR = "pre[data-mdv-atomic-id], table[data-mdv-atomic-id]";
+
+/**
+ * Preserve trustworthy pre-pagination heights for the only block families allowed to
+ * split when genuinely taller than a page. Paged.js copies the attribute to every
+ * fragment, so E2E can distinguish a real over-tall split from a duplicated short block.
+ */
+export function recordSplittableSourceHeights(content: ParentNode, area: PageArea): void {
+  for (const el of content.querySelectorAll<HTMLElement>(SPLITTABLE_SELECTOR)) {
+    const naturalHeight = measureNaturalHeight(el, area.widthPx);
+    el.setAttribute(ATTRS.atomicSourceHeight, naturalHeight.toFixed(3));
+  }
+}
 
 export function shrinkToFit(content: ParentNode, area: PageArea): void {
   const candidates = content.querySelectorAll<HTMLElement>(SHRINK_SELECTOR);
   for (const el of candidates) {
-    // Off-DOM probe: clone, render hidden at the element's intended width, measure.
-    const probe = el.cloneNode(true) as HTMLElement;
-    Object.assign(probe.style, {
-      position: "absolute",
-      visibility: "hidden",
-      left: "-9999px",
-      top: "0",
-      width: `${el.clientWidth || area.widthPx}px`,
-      transform: "none",
-      height: "auto",
-    });
-    document.body.appendChild(probe);
-    const naturalHeight = probe.getBoundingClientRect().height;
-    probe.remove();
+    const recordedHeight = Number(el.getAttribute(ATTRS.atomicSourceHeight));
+    const naturalHeight =
+      Number.isFinite(recordedHeight) && recordedHeight > 0
+        ? recordedHeight
+        : measureNaturalHeight(el, area.widthPx);
 
     // Only shrink blocks that overflow one page but stay within the ceiling.
     if (naturalHeight > area.heightPx && naturalHeight <= area.heightPx * SHRINK_LIMIT) {
@@ -49,6 +53,24 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void {
       el.dataset[camel(ATTRS.shrunk)] = scale.toFixed(3);
     }
   }
+}
+
+/** Measure an element's natural height at its intended printable width. */
+function measureNaturalHeight(el: HTMLElement, fallbackWidthPx: number): number {
+  const probe = el.cloneNode(true) as HTMLElement;
+  Object.assign(probe.style, {
+    position: "absolute",
+    visibility: "hidden",
+    left: "-9999px",
+    top: "0",
+    width: `${el.clientWidth || fallbackWidthPx}px`,
+    transform: "none",
+    height: "auto",
+  });
+  document.body.appendChild(probe);
+  const naturalHeight = probe.getBoundingClientRect().height;
+  probe.remove();
+  return naturalHeight;
 }
 
 /** `data-shrunk` -> `shrunk` (dataset key form), derived from the canonical attr name. */

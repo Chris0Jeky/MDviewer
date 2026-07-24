@@ -14,12 +14,15 @@
  * through localStorage.
  */
 
-import { getHighlighter } from "../render/highlight";
+import { ensureMarkdownLanguages, getHighlighter } from "../render/highlight";
 import { createMarkdown, renderMarkdown } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
-import type { MermaidTheme } from "../render/mermaid";
-import { buildPaginationSource, awaitFontsAndImages } from "../render/buildSource";
+import {
+  buildPaginationSource,
+  awaitFontsAndImages,
+  stampAtomicBlocks,
+} from "../render/buildSource";
 import { buildStylesheet } from "../paginate/cssBuilder";
 import { paginate } from "../paginate/paginate";
 import { registerHandlersOnce } from "../paginate/handler";
@@ -52,12 +55,6 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
   "showLineNumbers",
 ];
 
-/** Screen theme → Mermaid theme. The exported PDF is always light, but on-screen diagrams
- * should match the chrome; pagination uses the screen-derived theme since the SVG is fixed. */
-function mermaidThemeFor(screen: Settings["screenTheme"]): MermaidTheme {
-  return screen === "dark" ? "dark" : "default";
-}
-
 type Pane = "empty" | "loaded" | "error";
 
 export class App {
@@ -79,6 +76,7 @@ export class App {
 
   private scheduleRenderImpl!: (reason: RenderReason) => void;
   private detachInput: (() => void) | null = null;
+  private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
 
   /** Monotonic token so a slow render can't overwrite a newer one (last-write-wins). */
   private renderToken = 0;
@@ -96,9 +94,6 @@ export class App {
     const app = new App(root);
     app.buildShell();
     app.applyThemeAttributes();
-
-    // Register Paged.js handlers exactly once; they read the live page area each run.
-    registerHandlersOnce(() => measurePageArea(app.settings));
 
     // Ingestion → store. The store's "change" event triggers a content render.
     app.detachInput = installInputHandlers(app.store, {
@@ -190,6 +185,7 @@ export class App {
     const next: Settings = { ...prev, ...patch };
     this.settings = next;
     saveSettings(next);
+    for (const listener of this.settingsListeners) listener(next);
 
     // Always reflect theme attributes immediately (cheap, no reflow).
     if (patch.screenTheme !== undefined) {
@@ -208,6 +204,12 @@ export class App {
       (k) => patch[k] !== undefined && patch[k] !== prev[k],
     );
     if (needsReflow) this.scheduleRender("settings");
+  }
+
+  /** Subscribe UI surfaces to settings changes, including programmatic updates. */
+  onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void {
+    this.settingsListeners.add(listener);
+    return () => this.settingsListeners.delete(listener);
   }
 
   /** Open the hidden file input dialog. */
@@ -268,6 +270,10 @@ export class App {
       const hl = await getHighlighter();
       if (stale()) return;
 
+      // Pre-load curated fenced-code grammars before markdown-it's synchronous render.
+      await ensureMarkdownLanguages(hl, src);
+      if (stale()) return;
+
       // 2 — markdown → html (SYNC: Shiki via fromHighlighter + KaTeX inline)
       const md = createMarkdown(hl, this.settings);
       const { html, warnings } = renderMarkdown(md, src);
@@ -276,21 +282,23 @@ export class App {
       const source = buildPaginationSource(html, this.settings);
 
       // 4 — async Mermaid → fixed-size SVG figures
-      const mermaidResult = await renderAllMermaid(
-        source,
-        mermaidThemeFor(this.settings.screenTheme),
-      );
+      // SVG is shared by preview and print, so keep it light/theme-independent.
+      const mermaidResult = await renderAllMermaid(source, "default");
       if (stale()) return;
+
+      // Stable source identities make cross-page clone/split verification honest.
+      stampAtomicBlocks(source);
 
       // 5 — fonts + images settle so heights are final
       await awaitFontsAndImages(source);
       if (stale()) return;
 
-      // 6 — pristine clone for re-pagination without re-render (kept by paginate path)
-      //     We pass `source` directly to paginate; Paged.js consumes a fresh fragment each
-      //     run, and the next render rebuilds from scratch, so no baked transforms persist.
+      // 6 — fully prepared source. We pass it directly to paginate; the next
+      //     render rebuilds a fresh fragment, so no baked transforms persist.
 
       // 7 — PAGINATION LAST
+      await registerHandlersOnce(() => measurePageArea(this.settings));
+      if (stale()) return;
       const css = buildStylesheet(this.settings);
       const flow = await paginate(source, css, this.canvas.host);
       if (stale()) return;
@@ -359,6 +367,7 @@ export class App {
     this.detachInput = null;
     this.toolbar.destroy();
     this.emptyState.destroy();
+    this.settingsListeners.clear();
   }
 
   get pane(): Pane {

@@ -4,9 +4,7 @@
 
 MDviewer is a browser-based, drag-and-drop Markdown → PDF tool built for **research papers and code-heavy technical docs**. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and there are no runtime network calls. The only thing it persists is a small settings object in `localStorage`.
 
-> ![MDviewer preview — drag a file onto the dropzone; the paginated PDF preview renders on the right.](docs/assets/screenshot-placeholder.png)
->
-> _Screenshot placeholder — replace `docs/assets/screenshot-placeholder.png` once the UI is verified in a real browser._
+![MDviewer rendering its bundled sample as a seven-page, print-ready document.](docs/assets/mdviewer-preview.png)
 
 ## Why MDviewer exists
 
@@ -23,6 +21,10 @@ npm run build    # produce a production bundle in dist/
 ```
 
 Then drag a `.md` / `.markdown` file onto the window (or paste Markdown, or use the file picker), and the paginated preview renders on the right.
+
+For a production-style local launch, run `npm start` (builds, serves, and opens the app) or
+double-click `Start MDviewer.cmd` on Windows. For permanent public hosting, private access through
+this PC, and temporary share links, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## How export works
 
@@ -73,4 +75,4 @@ Start with the design docs, which are the source of truth:
 
 ## License
 
-MIT (placeholder — author/license to be confirmed; see `ACTION_ITEMS.md` item AI-3).
+MIT. The author/copyright holder remains intentionally unspecified until a public release.

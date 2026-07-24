@@ -10,7 +10,9 @@ import { CLASSES } from "../src/app/dom";
 const { renderMock, initializeMock } = vi.hoisted(() => ({
   renderMock: vi.fn(async (id: string, code: string) => {
     if (code.includes("FAIL")) throw new Error("mermaid parse error");
-    return { svg: `<svg data-id="${id}"><g></g></svg>` };
+    return {
+      svg: `<svg data-id="${id}"><style>.node{fill:#fff}</style><text>${code}</text></svg>`,
+    };
   }),
   initializeMock: vi.fn(),
 }));
@@ -38,7 +40,14 @@ beforeEach(() => {
   // test — re-establish renderMock's behavior (and clear history) every time.
   renderMock.mockReset().mockImplementation(async (id: string, code: string) => {
     if (code.includes("FAIL")) throw new Error("mermaid parse error");
-    return { svg: `<svg data-id="${id}"><g></g></svg>` };
+    if (code.includes("EXTERNAL")) {
+      return {
+        svg: `<svg data-id="${id}"><image href="https://example.test/tracker.svg" /></svg>`,
+      };
+    }
+    return {
+      svg: `<svg data-id="${id}"><style>.node{fill:#fff}</style><text>${code}</text></svg>`,
+    };
   });
   initializeMock.mockReset();
 });
@@ -63,6 +72,8 @@ describe("renderAllMermaid: successful diagram", () => {
     const figure = r.querySelector(`figure.${CLASSES.mermaidFigure}`);
     expect(figure).not.toBeNull();
     expect(figure?.querySelector("svg")).not.toBeNull();
+    expect(figure?.querySelector("svg style")?.textContent).toContain(".node");
+    expect(figure?.textContent).toContain("graph TD");
     // the original <pre> host is gone (replaced)
     expect(r.querySelector("pre")).toBeNull();
   });
@@ -82,6 +93,15 @@ describe("renderAllMermaid: successful diagram", () => {
     const result = await renderAllMermaid(r);
     expect(result.rendered).toBe(2);
     expect(r.querySelectorAll(`figure.${CLASSES.mermaidFigure}`).length).toBe(2);
+  });
+
+  it("strips external resources from generated SVG", async () => {
+    const r = root('<pre><code class="language-mermaid">EXTERNAL</code></pre>');
+    await renderAllMermaid(r);
+    const image = r.querySelector("svg image");
+    expect(image).not.toBeNull();
+    expect(image?.hasAttribute("href")).toBe(false);
+    expect(image?.hasAttribute("xlink:href")).toBe(false);
   });
 });
 
@@ -130,6 +150,7 @@ describe("renderAllMermaid: initialization", () => {
       expect(cfg?.startOnLoad).toBe(false);
       const flowchart = cfg?.flowchart as { useMaxWidth?: boolean } | undefined;
       expect(flowchart?.useMaxWidth).toBe(false);
+      expect(cfg?.htmlLabels).toBe(false);
     }
     // Regardless, this run must have produced a rendered figure.
     expect(r.querySelector(`figure.${CLASSES.mermaidFigure} svg`)).not.toBeNull();
