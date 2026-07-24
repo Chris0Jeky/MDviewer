@@ -7,7 +7,8 @@
 > `feat/product-hardening-deployment` from exact `origin/main` `a0647549`. T-3 and T-4 are complete,
 > along with sanitization, audit remediation, isolated E2E ports, and local/deployment packaging.
 > Independent review findings are fixed, the follow-up re-review found no release blocker, and all
-> local gates pass. No external deployment was authorized. OPEN human items: **AI-1**
+> local gates pass. Draft PR **#28** is open; do not merge until exact-head CI and aged review are
+> clean. No external deployment was authorized. OPEN human items: **AI-1**
 > (manual real-Chrome PDF visual check) and **AI-4** (choose/authorize the permanent hosting path).
 
 ## Run header
@@ -167,3 +168,8 @@
   smoke and all 14 repo skills passed, and all 18 Chromium E2E tests passed independently against both
   the production bundle and Vite dev on fresh ports. The complete gate set was rerun after this final
   documentation checkpoint so the handoff evidence applies to the resulting exact branch head.
+- **C12 (2026-07-24) — PUBLISHED FOR REVIEW:** Pushed `feat/product-hardening-deployment` and opened
+  draft PR **#28** against `main`. The first remote observation showed all three CI jobs running and
+  the PR mergeable. GitHub still reports one high Dependabot advisory on the default branch; this
+  branch reports zero via `npm audit`. Re-read exact-head CI, review threads, and bot comments before
+  any future ready-for-review or merge transition.
