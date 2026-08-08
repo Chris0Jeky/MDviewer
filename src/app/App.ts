@@ -2,8 +2,11 @@
  * App controller — owns Settings + DocStore and drives the load-bearing render pipeline.
  *
  * Responsibilities:
- *  - Build the application shell DOM (toolbar / canvas / empty-state / overlays / banner).
- *  - Coalesce render requests through the debounced scheduler (settings 120ms, content 250ms).
+ *  - Build the application shell DOM (toolbar / workspace / editor / splitter / canvas /
+ *    empty-state / overlays / banner).
+ *  - Coalesce render requests through the debounced scheduler (settings 120ms, content 250ms),
+ *    which also serializes them: pagination owns one shared host, so runs must never overlap.
+ *    Exports call `flushRender()` first so they can never emit stale pages.
  *  - Run `runPipeline` in the EXACT order mandated by IMPLEMENTATION_SPEC §3. Pagination is
  *    always last, exactly once, after every async height-affecting step settles.
  *  - Swap empty / loaded / error panes, surface render warnings, and keep the last good
@@ -31,14 +34,18 @@ import { exportViaPrint } from "../export/print";
 import { exportPaginatedToPdf } from "../export/download";
 import { mountToolbar } from "../ui/Toolbar";
 import { mountCanvas } from "../ui/Canvas";
+import { mountEditor } from "../ui/Editor";
+import type { EditorController } from "../ui/Editor";
+import { mountSplitter } from "../ui/Splitter";
+import type { SplitterController } from "../ui/Splitter";
 import { mountEmptyState } from "../ui/EmptyState";
 import { mountBanner } from "../ui/Banner";
 import { DocStore } from "./state";
-import type { RenderReason } from "./state";
+import type { RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
 import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
-import { IDS, ATTRS, el } from "./dom";
+import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
 import { installInputHandlers } from "./input";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
 
@@ -69,12 +76,15 @@ export class App {
     setPageCount(n: number): void;
     setZoom(z: Settings["zoom"]): void;
   };
+  private editor!: EditorController;
+  private splitter!: SplitterController;
   private emptyState!: { destroy(): void };
   private banner!: { warn(w: RenderWarning[]): void; fatal(msg: string): void; clear(): void };
 
+  private workspaceEl!: HTMLElement;
   private emptyEl!: HTMLElement;
 
-  private scheduleRenderImpl!: (reason: RenderReason) => void;
+  private scheduler!: RenderScheduler;
   private detachInput: (() => void) | null = null;
   private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
 
@@ -94,6 +104,7 @@ export class App {
     const app = new App(root);
     app.buildShell();
     app.applyThemeAttributes();
+    app.applyViewMode();
 
     // Ingestion → store. The store's "change" event triggers a content render.
     app.detachInput = installInputHandlers(app.store, {
@@ -101,32 +112,63 @@ export class App {
       onLargeFile: (bytes) => app.confirmLargeFile(bytes),
     });
 
-    app.store.on("change", () => app.scheduleRender("content"));
+    // "change" = a different document is active → re-seed the editor and re-render.
+    app.store.on("change", () => {
+      app.editor.setDocument(app.store.active);
+      app.scheduleRender("content");
+    });
+    // "text" = the active document was edited in the editor. The editor is already
+    // showing that text, so only the pipeline needs waking.
+    app.store.on("text", () => app.scheduleRender("content"));
 
-    // Debounced scheduler wraps the async pipeline.
-    app.scheduleRenderImpl = createRenderScheduler((reason) => app.runPipeline(reason));
+    // Debounced + serialized scheduler wraps the async pipeline. Serialization is the
+    // load-bearing half: two overlapping runPipeline calls would share one Paged.js
+    // host and page counter (see createRenderScheduler).
+    app.scheduler = createRenderScheduler((reason) => app.runPipeline(reason));
 
     return app;
   }
 
   /**
    * Build the shell. Each `mount*` helper creates its own canonically-id'd root
-   * element (#toolbar, #canvas, #empty-state, #warning-banner, #error-card), so App
-   * only decides WHERE those roots attach — it never re-creates those ids itself.
+   * element (#toolbar, #editor-pane, #split-handle, #canvas, #empty-state,
+   * #warning-banner, #error-card), so App only decides WHERE those roots attach —
+   * it never re-creates those ids itself.
    *
-   * Layout (matches the CSS grid in app.css / overlays in preview.css):
+   * Layout (matches the CSS grids in app.css / editor.css, overlays in preview.css):
    *   #app  (grid: auto 1fr)
    *     #toolbar                     row 1
-   *     #canvas                      row 2 (scroll container, position: relative)
-   *       #paged-output, page chip, zoom, paginating overlay, #status-live  (mountCanvas)
-   *       #empty-state               absolute overlay (mountEmptyState)
-   *       #warning-banner, #error-card  overlays (mountBanner)
-   *       #drag-overlay              fixed overlay
+   *     #workspace                   row 2 (grid: editor | handle | preview)
+   *       #editor-pane               Markdown source (mountEditor)
+   *       #split-handle              draggable divider (mountSplitter)
+   *       #canvas                    scroll container, position: relative
+   *         #paged-output, page chip, zoom, paginating overlay, #status-live  (mountCanvas)
+   *         #empty-state             absolute overlay (mountEmptyState)
+   *         #warning-banner, #error-card  overlays (mountBanner)
+   *         #drag-overlay            fixed overlay
+   *
+   * `data-view-mode` on #workspace decides which of the three columns are shown; the
+   * panes are always mounted so switching modes never rebuilds or re-renders anything.
    */
   private buildShell(): void {
     // Row 1 then row 2 — append order defines the grid rows.
     this.toolbar = mountToolbar(this.root, this);
-    this.canvas = mountCanvas(this.root);
+
+    this.workspaceEl = el("div", { id: IDS.workspace, class: "workspace" });
+    this.root.append(this.workspaceEl);
+
+    // Column order inside the workspace: source, divider, preview.
+    this.editor = mountEditor(this.workspaceEl, {
+      codeTheme: this.settings.codeTheme,
+      onInput: (text) => this.onEditorInput(text),
+    });
+    this.splitter = mountSplitter(this.workspaceEl, {
+      track: this.workspaceEl,
+      initialRatio: this.settings.splitRatio,
+      onPreview: (ratio) => this.applySplitRatio(ratio),
+      onCommit: (ratio) => this.updateSettings({ splitRatio: ratio }),
+    });
+    this.canvas = mountCanvas(this.workspaceEl);
 
     const canvasEl = document.getElementById(IDS.canvas);
     if (!canvasEl) throw new Error("MDviewer: canvas failed to mount");
@@ -170,9 +212,49 @@ export class App {
     if (out) out.setAttribute(ATTRS.codeTheme, this.settings.codeTheme);
   }
 
+  /**
+   * Reflect the current view mode + split ratio on the workspace. Both are pure CSS
+   * state: no pane is unmounted and no re-pagination is needed, because the paginated
+   * sheets are sized in millimetres from the @page rules, not from the canvas width.
+   */
+  private applyViewMode(): void {
+    this.workspaceEl.setAttribute(ATTRS.viewMode, this.settings.viewMode);
+    this.applySplitRatio(this.settings.splitRatio);
+  }
+
+  private applySplitRatio(ratio: number): void {
+    this.workspaceEl.style.setProperty(SPLIT_RATIO_VAR, String(ratio));
+  }
+
+  /**
+   * The editor's write path. Editing an open document mutates it in place; typing into
+   * an empty app creates an untitled document so the first keystroke already produces a
+   * live preview. Text never leaves memory — nothing is written to storage.
+   */
+  private onEditorInput(text: string): void {
+    const active = this.store.active;
+    if (active) {
+      this.store.updateText(active.id, text);
+      return;
+    }
+    if (!text) return;
+    this.store.add("Untitled.md", text);
+  }
+
   /** Public: request a render. Reason picks the debounce window. */
   scheduleRender(reason: RenderReason): void {
-    this.scheduleRenderImpl(reason);
+    this.scheduler.schedule(reason);
+  }
+
+  /**
+   * Public: settle the preview against the current text — run any debounced render
+   * now and wait for the in-flight one. Both exports read the paginated host directly,
+   * so without this an export fired within the 250ms content debounce (or while a long
+   * pagination is still running) would hand out the *previous* pages: the newest edits
+   * silently missing, or an empty PDF for a document that has only just been typed.
+   */
+  async flushRender(): Promise<void> {
+    await this.scheduler.flush();
   }
 
   /**
@@ -194,9 +276,18 @@ export class App {
     if (patch.codeTheme !== undefined) {
       const out = document.getElementById(IDS.pagedOutput);
       if (out) out.setAttribute(ATTRS.codeTheme, next.codeTheme);
+      this.editor.setCodeTheme(next.codeTheme);
     }
     if (patch.zoom !== undefined) {
       this.canvas.setZoom(next.zoom);
+    }
+    // Layout-only state: pure CSS, never a reflow (see applyViewMode).
+    if (patch.viewMode !== undefined) {
+      this.workspaceEl.setAttribute(ATTRS.viewMode, next.viewMode);
+    }
+    if (patch.splitRatio !== undefined) {
+      this.applySplitRatio(next.splitRatio);
+      this.splitter.sync(next.splitRatio);
     }
 
     // Does this patch touch anything that changes laid-out heights?
@@ -225,11 +316,14 @@ export class App {
 
   /** Trigger the primary (vector) print export. */
   async exportPrint(): Promise<void> {
+    // Export what the user can see, not what the host happens to still hold.
+    await this.flushRender();
     await exportViaPrint(this.canvas.host);
   }
 
   /** Trigger the fallback (rasterized) PDF export. */
   async exportPdf(): Promise<void> {
+    await this.flushRender();
     const name = this.store.active?.name ?? "document";
     const base = name.replace(/\.(md|markdown)$/i, "") || "document";
     try {
@@ -361,11 +455,18 @@ export class App {
     if (live) live.textContent = message;
   }
 
+  /** Move keyboard focus into the Markdown source pane. */
+  focusEditor(): void {
+    this.editor.focus();
+  }
+
   /** Detach global listeners — used by tests/teardown. */
   destroy(): void {
     this.detachInput?.();
     this.detachInput = null;
     this.toolbar.destroy();
+    this.splitter.destroy();
+    this.editor.destroy();
     this.emptyState.destroy();
     this.settingsListeners.clear();
   }

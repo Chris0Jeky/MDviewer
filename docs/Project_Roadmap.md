@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-07-24.
+> Last updated: 2026-08-08.
 
 ## Status legend
 
@@ -45,8 +45,16 @@ The end-to-end path: **render → paginate → export**, delivering the **no-sli
 code-heavy, math-and-diagram document exports with no block sliced across a page boundary, via both
 export paths.
 
-### P2 — UX polish — `PLANNED`
+### P2 — UX polish — `IN PROGRESS`
 
+- **Done (2026-08-08): the split workspace.** A Markdown source pane with Shiki syntax colors
+  beside the paginated preview, three view modes (`Markdown` / `Split` / `Preview`), and a
+  draggable, keyboard-operable divider. Typing paginates live through the unchanged render
+  order; a dropped file is editable in place. Layout state is pure CSS — switching modes never
+  re-renders — and `@media print` keeps the editing surface off the exported PDF. This
+  **promotes the P4 "optional split editor" item on explicit owner request** and reverses the
+  former "no editor pane" non-goal in [`PRODUCT_VISION.md`](./PRODUCT_VISION.md).
+  Spec: `design/IMPLEMENTATION_SPEC.md` §12.
 - Theme system refinement (light / dark / sepia screen themes; the six code-theme families).
 - Toolbar grouping, control affordances, and keyboard operation.
 - Empty-state, error, and recovery flows (aggregated warning banner, fatal error card).
@@ -66,7 +74,9 @@ export paths.
 - **Done:** E2E suite in CI on real Chromium (no-cutoff, golden-path, export, empty/error), plus
   configurable isolated ports to prevent stale-server false positives. Stable source atomic IDs now
   detect short logical blocks incorrectly split into individually well-fitting page fragments.
-- **Done:** lazy-load Paged.js and PDF libraries; entry chunk reduced from ~1.97 MB to ~1.46 MB.
+- **Done:** lazy-load Paged.js and PDF libraries. Entry chunk measured 1,595.86 kB on `main`
+  at `0dbd8a2` and 1,602.49 kB with the split workspace (+6.6 kB / +0.4%). The earlier
+  "~1.46 MB" figure predates later dependency updates and is superseded by these measurements.
 - **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
   static-host headers, no public source maps, and deployment/runbook documentation.
 - **Done:** public Cloudflare Pages deployment at **https://mdviewer-c9r.pages.dev/** (AI-4).
@@ -76,13 +86,15 @@ export paths.
 
 Explicitly out of scope for now; revisit only after P1–P3 land.
 
-- Optional split editor / live-edit pane.
+- ~~Optional split editor / live-edit pane.~~ **Promoted to P2 and shipped 2026-08-08** on
+  explicit owner request.
 - Additional paper sizes and orientations.
 - Custom user themes.
 
 ## Priorities
 
-1. Land P1 and clear its exit gate — the no-slice guarantee is the product.
-2. P2 UX polish once the core path is trustworthy.
+1. Land P1 and clear its exit gate — the no-slice guarantee is the product. **Done.**
+2. P2 UX polish once the core path is trustworthy. **In progress** — the split workspace landed
+   first because authoring in-app was an explicit owner request.
 3. P3 hardening before claiming production readiness.
 4. P4 stays deferred until explicitly reprioritized.

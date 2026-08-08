@@ -15,6 +15,7 @@ import type {
   PaperSize,
   ScreenTheme,
   Settings,
+  ViewMode,
 } from "../app/settings";
 import type { App } from "../app/App";
 
@@ -24,6 +25,12 @@ export interface ToolbarController {
 
 /** Option list helpers: [value, label, optional tooltip]. */
 type Opt<V extends string> = readonly [value: V, label: string, title?: string];
+
+const VIEW_MODE_OPTIONS: ReadonlyArray<Opt<ViewMode>> = [
+  ["editor", "Markdown", "Show only the Markdown source"],
+  ["split", "Split", "Show the Markdown source and the PDF preview side by side"],
+  ["preview", "Preview", "Show only the paginated PDF preview"],
+];
 
 const SCREEN_THEMES: ReadonlyArray<Opt<ScreenTheme>> = [
   ["light", "Light", "Light preview theme"],
@@ -229,6 +236,19 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
   docSelect.id = "doc-switcher-select";
 
+  // ---- Group A2: which panes are visible (screen layout only) ----
+  const viewMode = segControl(
+    "View",
+    VIEW_MODE_OPTIONS,
+    s.viewMode,
+    (value) => app.updateSettings({ viewMode: value }),
+  );
+  const viewGroup = group(
+    "View",
+    el("span", { class: "toolbar-label" }, "View"),
+    viewMode.group,
+  );
+
   // ---- Group B: screen theme (preview only — never affects the PDF) ----
   const screenTheme = segControl(
     "Preview theme",
@@ -375,6 +395,8 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   bar.append(
     docGroup,
     divider(),
+    viewGroup,
+    divider(),
     themeGroup,
     divider(),
     typeGroup,
@@ -402,6 +424,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   function syncFromSettings(): void {
     const cur = app.settings;
+    viewMode.sync(cur.viewMode);
     screenTheme.sync(cur.screenTheme);
     paperSize.sync(cur.paperSize);
     margins.sync(cur.margins);

@@ -37,8 +37,8 @@ src/app/        controller, state, settings, dom constants, input, sample doc
 src/render/     markdown-it + Shiki + KaTeX + Mermaid + source builder
 src/paginate/   Paged.js engine wiring, @page/break CSS builder, shrink-to-fit, handlers
 src/export/     window.print path + programmatic html2canvas/jsPDF path
-src/ui/         toolbar, canvas, empty state, banner
-src/styles/     app / preview / document / print / shiki CSS
+src/ui/         toolbar, source editor, splitter, canvas, empty state, banner
+src/styles/     app / editor / preview / document / print / shiki CSS
 tests/          Vitest unit tests + tests/e2e Playwright + fixtures + helpers
 scripts/agent_hooks/   Python safety + validation hooks (Claude) / shared discipline (Codex)
 docs/           product vision, roadmap, architecture, design, agentic protocols

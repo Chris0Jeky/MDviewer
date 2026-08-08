@@ -7,6 +7,7 @@
  *
  * CSS order is load-bearing (IMPLEMENTATION_SPEC §"CSS ARCHITECTURE"):
  *   app.css      → grid shell / toolbar / chrome / data-app-theme tokens
+ *   editor.css   → screen-only split workspace: source pane, divider, view modes
  *   preview.css  → screen-only .pagedjs_page sheets, drag overlay, spinner, empty state
  *   document.css → rendered-document typography / callouts / toc / footnotes
  *   print.css    → static @page base + no-slice break rules (also ?raw-imported by cssBuilder)
@@ -14,6 +15,7 @@
  */
 
 import "./styles/app.css";
+import "./styles/editor.css";
 import "./styles/preview.css";
 import "./styles/document.css";
 import "./styles/print.css";

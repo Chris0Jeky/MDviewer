@@ -14,6 +14,10 @@ across a page boundary** — the failure of typical online md-to-pdf converters.
 Optimized for **research papers and code-heavy technical docs**. 100% client-side,
 local-first (no runtime network calls, nothing uploaded). Vanilla TypeScript + Vite.
 
+Documents arrive by drop, paste, or file picker, **or are written directly in the app**:
+the workspace pairs a Markdown source editor with the paginated preview, and every edit
+re-runs the same pipeline that produces the PDF. See §12.
+
 ## 2. Resolved dependency versions (verified installed)
 
 Runtime: `markdown-it@14.2.0` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.0`
@@ -108,13 +112,15 @@ src/
   main.ts                       Vite entry; App.init(#app); wire global drag/drop/paste; import CSS
   app/
     App.ts                      controller; owns DocStore + Settings; runPipeline (render order); pane swap
-    state.ts                    DocStore (openDocs/activeId, events) + createRenderScheduler (debounce)
+    state.ts                    DocStore (openDocs/activeId, events) + createRenderScheduler (debounce + serialize)
     settings.ts                 Settings type, DEFAULT_SETTINGS, load/save/migrate (localStorage)
     dom.ts                      canonical DOM ID + class-name constants (single source) + el() helper
     input.ts                    openMarkdown(); drag/drop/paste/picker; ext+MIME validation; size guards
     sampleDoc.ts                bundled demo markdown (code+KaTeX+Mermaid+callouts+footnotes+tall code block)
   ui/
     Toolbar.ts                  toolbar groups A–F, bind controls -> Settings, export buttons
+    Editor.ts                   Markdown source pane: textarea + Shiki syntax backdrop (§12)
+    Splitter.ts                 draggable/keyboard role="separator" between source and preview (§12)
     Canvas.ts                   preview pane: #paged-output host, page chip, zoom, paginating overlay, aria
     EmptyState.ts               full-window dropzone card (recovery state too)
     Banner.ts                   aggregated warning banner + fatal error card (aria-live)
@@ -139,6 +145,7 @@ src/
     markdown-it-task-lists.d.ts ambient shim (no @types)
   styles/
     app.css                     grid shell, toolbar, canvas backdrop, data-app-theme tokens, focus, reduced-motion
+    editor.css                  screen-only split workspace: view modes, source pane, overlay metrics, divider
     preview.css                 screen-only .pagedjs_page sheets, drag overlay, paginating spinner, empty state
     document.css                rendered-doc typography, callouts, toc, footnotes, task-list, anchors, katex-display
     print.css                   static @page base + no-slice break rules (settings-independent parts)
@@ -146,9 +153,10 @@ src/
 index.html                      host page; #app, hidden #file-input, theme bootstrap
 tests/
   settings.test.ts  markdown.test.ts  highlight.test.ts  math.test.ts  mermaid.test.ts
-  cssBuilder.test.ts  measure.test.ts  buildSource.test.ts  input.test.ts
-  export-download.test.ts  dom-contract.test.ts
+  cssBuilder.test.ts  measure.test.ts  buildSource.test.ts  input.test.ts  state.test.ts
+  export-download.test.ts  dom-contract.test.ts  editor.test.ts  splitter.test.ts
   e2e/nocutoff.spec.ts  e2e/golden-path.spec.ts  e2e/export.spec.ts  e2e/empty-error.spec.ts
+  e2e/editor.spec.ts
   fixtures/nocutoff.md  fixtures/sample.md
   helpers/pagedDom.ts
 ```
@@ -186,7 +194,15 @@ export class DocStore {
   remove(id: string): void;
   on(ev: 'change', cb: () => void): () => void;   // returns unsubscribe
 }
-export function createRenderScheduler(run: (r: RenderReason) => Promise<void>): (r: RenderReason) => void;
+export interface RenderScheduler {
+  schedule(reason: RenderReason): void;   // debounced: content 250 ms, settings 120 ms
+  flush(): Promise<void>;                 // run any pending render NOW; resolve when it settles
+  readonly isPending: boolean;
+}
+// Debounced AND serialized: runs are chained so two `run` calls never overlap, because
+// pagination tears down and rewrites one shared host through Paged.js's global handler and
+// page counter. A queued run superseded by a newer request is dropped rather than executed.
+export function createRenderScheduler(run: (r: RenderReason) => Promise<void>): RenderScheduler;
 
 // src/app/input.ts
 export const MD_EXTENSIONS: readonly string[];    // ['.md','.markdown']
@@ -271,6 +287,7 @@ export class App {
   settings: Settings; store: DocStore;
   static init(root: HTMLElement): App;
   scheduleRender(reason: RenderReason): void;
+  flushRender(): Promise<void>;                     // settle the preview; awaited by both exports
   updateSettings(patch: Partial<Settings>): void;   // persists + scheduleRender('settings')
   onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void;
 }
@@ -278,7 +295,8 @@ export class App {
 
 ## 8. DOM IDs and CSS class names (single source: `src/app/dom.ts`)
 
-DOM IDs: `#app #toolbar #canvas #paged-output #empty-state #drag-overlay #warning-banner
+DOM IDs: `#app #toolbar #workspace #editor-pane #editor-input #editor-highlight
+#split-handle #canvas #paged-output #empty-state #drag-overlay #warning-banner
 #error-card #page-chip #zoom-control #status-live #file-input`.
 
 Paged.js-owned (never rename): `.pagedjs_pages` `.pagedjs_page`
@@ -286,7 +304,8 @@ Paged.js-owned (never rename): `.pagedjs_pages` `.pagedjs_page`
 
 App-authored: chrome — `.toolbar-group .toolbar-divider .seg-control .seg-option
 .toggle-btn[aria-pressed] .export-primary .export-secondary .is-paginating
-[data-app-theme]`; doc root — `.doc` (carries `--doc-font-family`/`--doc-font-size`,
+[data-app-theme]`; workspace — `.editor-head .editor-scroll .editor-line
+[data-view-mode] [data-highlight] --split-ratio`; doc root — `.doc` (carries `--doc-font-family`/`--doc-font-size`,
 `data-code-theme`); code — `.shiki .shiki .line .line.highlighted .with-line-numbers
 figure.code-figure`; callouts — `.callout .callout-note .callout-tip .callout-warning
 .callout-danger .callout-title`; toc — `nav.toc .toc ol a.toc-link a.xref`; footnotes —
@@ -297,8 +316,17 @@ figure.code-figure`; callouts — `.callout .callout-note .callout-tip .callout-
 ## 9. Settings persistence
 
 Only `Settings` persists (localStorage key `mdviewer.settings.v1`). **Document bytes are
-never persisted** (privacy + size). `loadSettings()` merges parsed over `DEFAULT_SETTINGS`
-inside try/catch (tolerates corrupt JSON and private-mode throwing storage).
+never persisted** (privacy + size) — text typed into the editor is no exception: it lives in
+the in-memory `DocStore` and is gone on reload. `loadSettings()` merges parsed over
+`DEFAULT_SETTINGS` inside try/catch (tolerates corrupt JSON and private-mode throwing
+storage).
+
+`viewMode` and `splitRatio` are the two layout fields. Unlike the rest of the merge they are
+**validated, not merely spread**: they drive CSS geometry directly, so a corrupt persisted
+value would strand a pane with no way back. `migrateSettings` falls back to the default view
+mode for an unrecognised string and runs the ratio through `clampSplitRatio`
+(`SPLIT_RATIO_MIN` 0.2 … `SPLIT_RATIO_MAX` 0.8; a non-number returns the default rather than
+coercing, because `Number(null) === 0` would silently collapse the pane).
 
 ## 10. Testing strategy
 
@@ -308,7 +336,10 @@ inside try/catch (tolerates corrupt JSON and private-mode throwing storage).
   figure + failure placeholder, `buildStylesheet` per setting, `measurePageArea` math,
   footnote-inline transform, input validation, fallback PDF page-count, DOM-contract drift guard.
 - **E2E (Playwright, real Chromium)**: anything layout-dependent. `nocutoff.spec.ts` is the
-  crown-jewel test (no atomic block straddles a page boundary). Plus golden-path, export, empty/error.
+  crown-jewel test (no atomic block straddles a page boundary). Plus golden-path, export,
+  empty/error, and `editor.spec.ts` (view modes, live typing → pagination, backdrop/textarea
+  box alignment, divider drag + keyboard, and the print-media check that keeps the editing
+  surface off paper).
 - Layout (`getBoundingClientRect`) is meaningless in jsdom → such assertions belong in E2E only.
 
 ## 11. Known risks / mitigations
@@ -324,3 +355,114 @@ inside try/catch (tolerates corrupt JSON and private-mode throwing storage).
    `src` ESM entry and chokes, alias to `pagedjs/dist/paged.esm.js` (`dist/paged.js` exists).
 6. **Large docs** freeze the main thread during layout → paginate once, lazy-run the fallback,
    surface incremental page count from the Paged.js `page` event.
+7. **Live typing re-runs the whole pipeline** → the 250 ms content debounce coalesces bursts,
+   and the editor's own syntax pass is capped at `HIGHLIGHT_MAX_CHARS` (§12). A document large
+   enough to make pagination slow will make *editing* it feel slow; that is the same
+   main-thread budget as risk 6 and is tracked with it.
+
+## 12. The split workspace (source editor + preview)
+
+The window below the toolbar is `#workspace`, a CSS grid of three columns: the Markdown
+source pane, a draggable divider, and the preview canvas. `data-view-mode` on `#workspace`
+selects which columns are shown — `editor`, `split` (default), or `preview` — and
+`--split-ratio` carries the source pane's share of the width.
+
+**All three panes are always mounted.** Switching view mode is a pure attribute write: no
+pane is torn down, nothing re-renders, no pagination runs, and neither the editor's text nor
+the preview's scroll position is lost. `viewMode` and `splitRatio` are therefore deliberately
+**not** in `App.REFLOW_KEYS`: the paginated sheets are sized in millimetres by the `@page`
+rules (`measurePageArea` reads Settings, never the DOM), so a narrower canvas cannot move a
+page break — the no-slice guarantee is independent of the workspace layout.
+
+**Hiding a pane is not the same for `#canvas`.** `#editor-pane` and `#split-handle` are hidden
+with `display: none`; `#canvas` must never be. Markdown mode hides the preview but keeps
+feeding it — every keystroke still runs the full pipeline into that host — and Paged.js places
+breaks by measuring real element heights, which are all zero under a `display: none` ancestor.
+So in `editor` mode the canvas is *parked* instead: `position: absolute; inset: 0;
+visibility: hidden`, lifted out of the grid onto `#workspace`'s own box at full size. It stays
+laid out and measurable; only its paint is suppressed. `@media print` then un-parks it
+explicitly, because the toolbar's Print action is live in every view mode and would otherwise
+emit a blank PDF from Markdown mode.
+
+### The editing loop
+
+```
+textarea input  →  App.onEditorInput  →  DocStore.updateText (in place)
+                →  store "text" event  →  scheduleRender("content")  [250 ms debounce]
+                →  the SAME runPipeline as a dropped file (§3, unchanged)
+```
+
+Renders are **serialized as well as debounced** (`createRenderScheduler`, §7). A pagination
+that outlives its debounce window — routine once a document is large and the user keeps
+typing — must not have the next one start underneath it: `runPipeline` tears down and rewrites
+one shared host through Paged.js's global handler and page counter, so two overlapping runs
+interleave two layouts into the same pages. The monotonic `renderToken` is not sufficient on
+its own; it only suppresses the older run's final UI write, it cannot cancel Paged.js.
+
+Both exports call `App.flushRender()` first, which runs any debounced render immediately and
+awaits the in-flight one. Without it, Print or Download fired inside the 250 ms window — a
+user clicking straight after typing — reads a host still holding the *previous* pages: the
+newest edits silently missing from the PDF, or no sheets at all for a freshly typed document.
+
+Typing into an empty app calls `DocStore.add("Untitled.md", …)` on the first keystroke, so a
+preview exists immediately. Editing an open document mutates it in place — a file opened by
+drop, paste, or picker is editable exactly like typed text, and editing never opens a second
+document.
+
+`DocStore` has **two** events so this loop cannot thrash unrelated UI:
+
+| Event | Fired by | Who listens |
+| --- | --- | --- |
+| `change` | `add` / `setActive` / `remove` — the document *set* or active doc changed | App (re-seed the editor, then render), Toolbar (document switcher) |
+| `text` | `updateText` — the active document's text was edited, once per keystroke | App (render only) |
+
+`Editor.setDocument` is a no-op when the text already matches, so the `change` that follows
+`add` can never write over a live caret.
+
+### The two-layer editor
+
+`#editor-highlight` (a non-interactive `<pre>`) sits underneath `#editor-input` (a
+`<textarea>` whose glyphs are transparent). The backdrop paints Shiki's `markdown` grammar;
+the textarea supplies native undo/redo, IME, selection and accessibility.
+
+Three invariants, all enforced by `editor.css` / `Editor.ts` and asserted in
+`e2e/editor.spec.ts` and `editor.test.ts`:
+
+1. **Identical box metrics.** Font family/size, line-height, padding, `tab-size`, wrapping and
+   `scrollbar-gutter` are declared once for both selectors. Change one, change both, or the
+   colors drift off the characters. The gutter belongs in that set: where scrollbars take
+   layout width, a source long enough to overflow would otherwise narrow only the
+   `overflow: auto` textarea, and the two layers would soft-wrap at different characters.
+2. **Glued scrolling.** The textarea is the scroller; its `scroll` handler copies
+   `scrollTop`/`scrollLeft` onto the `overflow:hidden` backdrop. Every repaint re-runs that
+   copy, because replacing the backdrop's content resets its scroll height and the browser has
+   already clamped its `scrollTop` against the previous, shorter content.
+3. **The backdrop always shows the current text.** With the backdrop on, the textarea's glyphs
+   are transparent, so the backdrop is the *only* visible copy of the source. Every input
+   therefore repaints it synchronously in plain text; the debounced Shiki pass only recolors
+   it. Deferring the whole paint to the debounce leaves freshly typed characters invisible and
+   deleted ones still painted for as long as the user keeps typing.
+
+The backdrop is built from `HighlighterCore.codeToTokens` and inserted with `textContent`
+plus `CSSStyleDeclaration.setProperty` — **never `innerHTML`**. Document text is therefore
+never parsed as markup on this path at all, which is stronger than sanitizing generated HTML
+and costs no DOMPurify pass per keystroke. Tokenizing is debounced 90 ms and guarded by a
+monotonic token so a slow pass cannot repaint over newer text.
+
+Two costs are deliberately kept off the keystroke path: the word count (`countWords` is O(n)
+and allocates per word — it rides the same 90 ms debounce, while the O(1) size stays live),
+and tokenizing (capped at `HIGHLIGHT_MAX_CHARS`, above which the textarea paints its own
+text). Tab inserts via `execCommand("insertText")`, the only insertion path browsers record in
+the textarea's native undo stack, falling back to a manual splice where it is unavailable.
+
+`data-highlight` on `#editor-pane` switches the backdrop off — for an empty document (so an
+untouched app never pays the Shiki/WASM startup cost), past `Editor.HIGHLIGHT_MAX_CHARS`
+(120 000), or after a tokenizer failure. When off, the textarea paints its own plain text at
+the same metrics; the user's content is never at risk.
+
+### Print
+
+The primary export is `window.print()` over this same live document, so `editor.css`'s
+`@media print` block — which hides `#editor-pane` and `#split-handle` and makes `#workspace`
+`display:block` — is the only thing keeping a textarea off the exported PDF. `dom-contract`
+asserts those rules exist and `e2e/editor.spec.ts` verifies them under `emulateMedia`.

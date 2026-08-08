@@ -52,8 +52,11 @@ clone** captured at step 6, so it never re-runs the render pipeline or bakes sta
   `dom.ts` is the single source of truth for DOM ids and class names (`IDS`, `CLASSES`, `ATTRS`,
   `PAGEDJS`, plus the `el()` helper). `input.ts` validates and ingests dropped/pasted/picked files.
 - **`src/ui/`** — DOM builders, each returning a small handle. `Toolbar` binds controls to
-  settings and the export buttons; `Canvas` hosts `#paged-output` and the paginating overlay;
-  `EmptyState` is the full-window dropzone; `Banner` aggregates warnings and fatal errors.
+  settings and the export buttons; `Editor` is the Markdown source pane (a `<textarea>` over a
+  Shiki syntax backdrop); `Splitter` is the `role="separator"` divider; `Canvas` hosts
+  `#paged-output` and the paginating overlay; `EmptyState` is the full-window dropzone; `Banner`
+  aggregates warnings and fatal errors. `Editor` and `Canvas` are the two columns of the
+  `#workspace` grid — see the split workspace below.
 - **`src/render/`** — turn Markdown into a print-ready DOM. `markdown.ts` builds the markdown-it
   instance (callouts, footnotes, anchors, TOC, task lists, attrs) with Shiki and KaTeX wired in;
   `sanitize.ts` removes executable HTML and automatic remote-resource loads before DOM insertion;
@@ -74,9 +77,11 @@ clone** captured at step 6, so it never re-runs the render pipeline or bakes sta
 
 CSS is split by **where it applies** and **whether it is static or settings-dependent**:
 
-- **`app.css` + `preview.css`** — app chrome (grid shell, toolbar, canvas backdrop, theme tokens)
-  and screen-only page-sheet styling, drag overlay, and paginating spinner. Imported by `main.ts`.
-  **Not** part of the stylesheet handed to Paged.js.
+- **`app.css` + `editor.css` + `preview.css`** — app chrome (grid shell, toolbar, theme tokens),
+  the split workspace (view-mode grid, source-pane metrics, divider), and screen-only page-sheet
+  styling, drag overlay, and paginating spinner. Imported by `main.ts`. **Not** part of the
+  stylesheet handed to Paged.js. Each carries an `@media print` block that removes its chrome,
+  because the primary export prints this same live document.
 - **`document.css` + `shiki.css`** — the rendered document's typography, callouts, TOC, footnotes,
   task lists, and code colors. Imported by `main.ts`; these cascade normally onto the paginated
   page content. `shiki.css` has an `@media print` rule that forces the Shiki **light** side and a
@@ -93,6 +98,28 @@ CSS is split by **where it applies** and **whether it is static or settings-depe
   rule only if `settings.showToc`, and line-number CSS only if `settings.showLineNumbers`, plus the
   `@footnote` area rule and the `h1/h2` `string-set`. **This combined string is what `paginate()`
   passes to Paged.js** (as a blob URL).
+
+## The split workspace
+
+Below the toolbar sits `#workspace`, a CSS grid of three columns: the Markdown source pane, the
+divider, and the preview canvas. `data-view-mode` (`editor` / `split` / `preview`) selects which
+columns show; `--split-ratio` carries the source pane's width share.
+
+Two properties keep this cheap and safe:
+
+- **All three panes stay mounted.** A view-mode change is a single attribute write — nothing is
+  torn down, nothing re-renders, and no pagination runs. `viewMode` and `splitRatio` are therefore
+  not reflow keys: `measurePageArea` derives page geometry from `Settings` in millimetres and never
+  reads the DOM, so canvas width cannot influence a page break. The no-slice guarantee is
+  independent of the layout you happen to be viewing in.
+- **Editing feeds the unchanged pipeline.** `Editor` reports each keystroke to
+  `App.onEditorInput`, which calls `DocStore.updateText`; the store emits `"text"` (distinct from
+  the `"change"` that identity operations emit, so per-keystroke edits do not churn the document
+  switcher or re-seed the editor), and the App schedules the ordinary 250 ms content render. A
+  typed document and a dropped file take exactly the same path from there.
+
+Full detail — the two-layer editor's alignment contract, the no-`innerHTML` rule for the syntax
+backdrop, and the print guard — is section 12 of the implementation spec.
 
 ## Single pagination engine
 

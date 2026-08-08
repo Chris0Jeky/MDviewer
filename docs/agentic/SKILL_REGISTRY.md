@@ -14,7 +14,7 @@
 | `mdv-render-pipeline` | Working on markdown-it, Shiki, KaTeX, Mermaid, or the pagination-source builder (steps 1–5 of the render order). |
 | `mdv-pagination` | Touching Paged.js wiring, the `@page`/break stylesheet, page-area math, shrink-to-fit, or lifecycle handlers. |
 | `mdv-export` | Working on the print (vector) or download (rasterized) export path, or the dark-on-white print guarantee. |
-| `mdv-ui-ux` | Toolbar, canvas/preview, empty state, banners, risk/error copy, or accessibility work. |
+| `mdv-ui-ux` | Toolbar, the Markdown source pane and splitter, canvas/preview, empty state, banners, risk/error copy, or accessibility work. |
 | `mdv-test-harness` | Choosing or adding unit (Vitest/jsdom) vs E2E (Playwright/Chromium) coverage — including the no-cutoff test. |
 | `mdv-question-batch` | Deciding whether to ask the user or proceed with a stated assumption (minimize context churn). |
 | `mdv-failure-capture` | Classifying and recording a tool/test/dependency/browser/workaround failure so nothing fails silently. |
