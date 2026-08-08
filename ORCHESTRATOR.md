@@ -3,7 +3,16 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-07-24:** Public launch and its durable record are complete. Product
+> **▶ CURRENT CHECKPOINT — 2026-08-08:** The split-view Markdown editor is built, pushed, and open
+> as **PR #36** (`feat/split-view-markdown-editor`, head `1fec906`, ready-for-review, MERGEABLE).
+> **Not merged.** The owner asked to see it running before merge, which was done in installed
+> Chrome. `ACTION_ITEMS.md` now has **one OPEN item, AI-6** — the manual Print/Save-as-PDF
+> acceptance, which only the maintainer may close. Before merging, PR #36 still needs the standard
+> gate: exact-head CI green plus one fresh-context adversarial review (this session did not run
+> one, on the operator's standing "no subagents unless requested" instruction). The six Dependabot
+> PRs #22–#27 remain untouched below.
+
+> **▶ PREVIOUS CHECKPOINT — 2026-07-24:** Public launch and its durable record are complete. Product
 > hardening PR **#28** merged as `7f4eedf`; deployment-record PR **#29** merged as `43af438`, whose
 > exact `main` CI run `30060892316` passed. Cloudflare Pages production deployment `e3bd9770` remains
 > live at **https://mdviewer-c9r.pages.dev/** and passed HTTP, header, and hashed-asset smoke checks.
@@ -131,7 +140,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
-_None._
+- **AI-6 — Accept the split workspace in a real browser (manual UI gate).** Opened 2026-08-08 with
+  PR #36. Automated coverage cannot judge how typing feels or confirm the Print/Save-as-PDF output
+  by eye. Step-by-step instructions are in `ACTION_ITEMS.md`; only the maintainer may close it.
 
 ## Task board
 
@@ -278,6 +289,29 @@ _None._
   production id `e3bd9770` from `main`. Stable URL **https://mdviewer-c9r.pages.dev/** and immutable
   deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
   headers verified. No human action items remain open.
+- **C18 (2026-08-08) — SPLIT-VIEW EDITOR PUBLISHED (PR #36, NOT MERGED):** Built on a branch in the
+  primary checkout rather than a worktree — a single sequential session with no parallel agents, so
+  worktree isolation bought nothing against a full `npm install` plus the recorded W-1 Windows
+  removal hazard. Four commits: foundations (`viewMode`/`splitRatio` with *validating* migration,
+  `DocStore.updateText` + a new `"text"` event, `ui/Editor.ts`, `ui/Splitter.ts`, `editor.css`),
+  wiring (`#workspace`, the toolbar View group, the typing→preview loop), docs, and two
+  browser-found fixes. Deliberate design points: the workspace is pure CSS state so a mode switch
+  never re-renders, `viewMode`/`splitRatio` are **not** reflow keys because page geometry is mm-based
+  (`measurePageArea` reads Settings, never the DOM), and the syntax backdrop is built from
+  `codeToTokens` + `textContent` so document text is never parsed as markup — no per-keystroke
+  DOMPurify pass. Three pre-existing bugs surfaced and were fixed: `.toolbar-group{display:flex}`
+  defeated the `hidden` attribute so the single-document switcher never disappeared; `EmptyState.ts`
+  emitted class names `preview.css` does not style, so the dropzone card was never styled; and the
+  dark editor rule lost to Shiki's inline style for want of `!important`. Evidence at `1fec906`:
+  typecheck, lint, **236 unit** (was 183), 4 server, **30 Chromium E2E** (was 19), build, hook smoke,
+  14 skills — all green locally; hosted CI verify jobs green on Node 20 and 22. Entry chunk measured
+  1,595.86 kB on `main` `0dbd8a2` vs 1,602.49 kB here (**+6.6 kB, +0.4%**), which also retires the
+  stale "~1.46 MB" roadmap claim. Live installed-Chrome run: typed a document from scratch, edited
+  the 8-page bundled sample in place, exercised all three view modes and the divider (ratio
+  round-tripped through localStorage), and measured **15 atomic blocks with 0 straddling a page
+  boundary**. `PRODUCT_VISION.md`'s "no editor pane" non-goal and the roadmap's P4 deferral were
+  reversed in-place with the date and the reason, per the authority order. **Remaining before
+  merge:** exact-head E2E CI and one fresh-context adversarial review; AI-6 is the human gate.
 - **C17 (2026-07-24) — LAUNCH RECORD MERGED:** PR #29 corrected the durable launch documentation,
   passed exact-head CI and independent adversarial review with all comments triaged, and merged as
   `43af438`. Main CI run `30060892316` then passed all three required jobs. The relaxed solo-owner
