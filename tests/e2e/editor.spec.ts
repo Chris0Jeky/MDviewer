@@ -204,7 +204,114 @@ test.describe("split workspace: the divider", () => {
   });
 });
 
+/**
+ * Markdown mode hides the preview but does NOT stop feeding it: every keystroke still
+ * runs the full pipeline into #canvas. Paged.js places breaks by measuring real
+ * element heights, so the pane has to stay laid out even while invisible — under a
+ * `display: none` ancestor every box measures zero and the run paginates wrongly.
+ */
+test.describe("split workspace: the hidden preview stays measurable", () => {
+  test("the canvas keeps its real box in Markdown mode", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Markdown" }).click();
+    await expect(page.locator(WORKSPACE)).toHaveAttribute("data-view-mode", "editor");
+    await expect(page.locator("#canvas")).toBeHidden();
+
+    const box = await page.locator("#canvas").evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { w: r.width, h: r.height, display: getComputedStyle(el).display };
+    });
+    // Invisible, but still a laid-out box Paged.js can measure against.
+    expect(box.display).not.toBe("none");
+    expect(box.w).toBeGreaterThan(0);
+    expect(box.h).toBeGreaterThan(0);
+  });
+
+  test("typing in Markdown mode paginates correctly, and Preview shows that result", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Markdown" }).click();
+
+    await page
+      .locator(INPUT)
+      .fill("# Written blind\n\nParagraph one.\n\n```ts\nconst x: number = 1;\n```\n");
+    const count = await waitForPagination(page);
+    expect(count).toBeGreaterThan(0);
+
+    // Sheets must have real height — the symptom of measuring under display:none.
+    const heights = await page
+      .locator("#paged-output .pagedjs_page")
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+    expect(heights.length).toBeGreaterThan(0);
+    for (const h of heights) expect(h).toBeGreaterThan(100);
+
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    expect(await firstPageText(page)).toContain("Written blind");
+    expect(await firstPageText(page)).toContain("const x");
+  });
+});
+
+/**
+ * Once the source overflows, a platform with layout-consuming scrollbars would narrow
+ * only the `overflow: auto` textarea's content box; the two layers would then soft-wrap
+ * at different characters and the colors would slide sideways off the caret.
+ */
+test.describe("split workspace: the two layers wrap identically", () => {
+  test("the backdrop and the textarea keep one content width when scrolling", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const long = Array.from(
+      { length: 200 },
+      (_, i) => `- item ${i} with enough words on the line to be worth wrapping in a narrow pane`,
+    ).join("\n");
+    await page.locator(INPUT).fill(long);
+    await expect(page.locator(EDITOR)).toHaveAttribute("data-highlight", "on", {
+      timeout: 10_000,
+    });
+
+    const widths = await page.evaluate(() => {
+      const input = document.querySelector<HTMLTextAreaElement>("#editor-input")!;
+      const highlight = document.querySelector<HTMLElement>("#editor-highlight")!;
+      return {
+        overflowing: input.scrollHeight > input.clientHeight,
+        inputClient: input.clientWidth,
+        highlightClient: highlight.clientWidth,
+      };
+    });
+
+    expect(widths.overflowing).toBe(true);
+    expect(widths.highlightClient).toBe(widths.inputClient);
+  });
+});
+
 test.describe("split workspace: the editing surface never reaches paper", () => {
+  /**
+   * The toolbar — and its Print action — is available in every view mode. Printing
+   * from Markdown mode must still emit the sheets: the rule that hides the preview on
+   * screen has to be undone for print, or the export is a blank PDF.
+   */
+  test("printing from Markdown mode still emits the page sheets", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, "# Printed blind\n\nThis must reach paper.");
+    await waitForPagination(page);
+
+    await page.getByRole("button", { name: "Markdown" }).click();
+    await expect(page.locator("#canvas")).toBeHidden();
+
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator("#canvas")).toBeVisible();
+    const sheet = page.locator("#paged-output .pagedjs_page").first();
+    await expect(sheet).toBeVisible();
+    expect(await sheet.innerText()).toContain("Printed blind");
+    // ...and the editing surface still does not.
+    await expect(page.locator(EDITOR)).toBeHidden();
+    await expect(page.locator(HANDLE)).toBeHidden();
+
+    await page.emulateMedia({ media: "screen" });
+  });
+
   test("print media hides the source pane and the divider, keeping the sheets", async ({
     page,
   }) => {

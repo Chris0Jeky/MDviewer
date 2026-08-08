@@ -32,6 +32,8 @@
  * written by App from settings.splitRatio and live-updated during a drag.
  * -------------------------------------------------------------------------- */
 #workspace {
+  /* Positioned so the parked-but-measurable #canvas below can anchor to it. */
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -48,9 +50,23 @@
 
 /* Solo modes: the hidden panes are removed from the grid, never unmounted, so
    switching modes costs no re-render and never loses editor state or scroll. */
-#workspace[data-view-mode="editor"] #split-handle,
-#workspace[data-view-mode="editor"] #canvas {
+#workspace[data-view-mode="editor"] #split-handle {
   display: none;
+}
+
+/* #canvas is the one pane that must NOT be display:none when hidden. Typing in
+   Markdown mode still runs the full pipeline, and Paged.js places breaks by
+   measuring real element heights — under a `display: none` ancestor every box
+   measures zero, so the run would paginate wrongly (or emptily) and that wrong
+   layout is what Preview would then show. So the canvas is *parked* instead:
+   lifted out of the grid onto the workspace's own box, at full size and fully
+   laid out, with `visibility: hidden` making it invisible and inert. Layout and
+   getBoundingClientRect keep working; only the paint is suppressed. */
+#workspace[data-view-mode="editor"] #canvas {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 #workspace[data-view-mode="preview"] #editor-pane,
@@ -128,6 +144,13 @@
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: break-word;
+  /* Both layers reserve the same scrollbar gutter, always. Where scrollbars take
+     layout width (Windows/Linux classic scrollbars), a source long enough to
+     overflow would otherwise narrow only the `overflow: auto` textarea's content
+     box, so the two layers would soft-wrap at different characters and the
+     colors would drift sideways from the caret. `stable` reserves the gutter on
+     both from the start, so the wrap width never changes and never differs. */
+  scrollbar-gutter: stable;
 }
 
 /* The painted backdrop. Never interactive; scrolled programmatically from the
@@ -291,5 +314,15 @@ body.is-splitting #editor-input {
   #editor-pane,
   #split-handle {
     display: none !important;
+  }
+
+  /* The toolbar's Print action is available in every view mode, so an export can
+     be fired while the canvas is parked (the editor-mode rule above). Restoring
+     it here is what stops Print from Markdown mode emitting a blank PDF —
+     un-park it explicitly rather than relying on the parking rule not matching. */
+  #canvas {
+    position: static !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
   }
 }
