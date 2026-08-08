@@ -89,11 +89,11 @@ describe("createRenderScheduler", () => {
     vi.useFakeTimers();
     try {
       const run = vi.fn(async () => {});
-      const schedule = createRenderScheduler(run);
+      const scheduler = createRenderScheduler(run);
 
-      schedule("content");
-      schedule("settings");
-      schedule("settings");
+      scheduler.schedule("content");
+      scheduler.schedule("settings");
+      scheduler.schedule("settings");
       await vi.advanceTimersByTimeAsync(300);
 
       expect(run).toHaveBeenCalledTimes(1);
@@ -101,5 +101,144 @@ describe("createRenderScheduler", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /**
+   * The pagination host and Paged.js's handler/page counter are global, so a render
+   * that outlives its debounce window must not have the next one start underneath it.
+   */
+  it("never runs two renders concurrently", async () => {
+    vi.useFakeTimers();
+    try {
+      let active = 0;
+      let maxActive = 0;
+      const release: Array<() => void> = [];
+      const run = vi.fn(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => release.push(resolve));
+        active -= 1;
+      });
+      const scheduler = createRenderScheduler(run);
+
+      // First render starts and stays in flight (a slow pagination).
+      scheduler.schedule("content");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(active).toBe(1);
+
+      // The user keeps typing; a second render comes due while the first is running.
+      scheduler.schedule("content");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(run).toHaveBeenCalledTimes(1); // queued behind, not started
+
+      release[0]?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(run).toHaveBeenCalledTimes(2);
+
+      release[1]?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(maxActive).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a queued render that a newer one has already superseded", async () => {
+    vi.useFakeTimers();
+    try {
+      const release: Array<() => void> = [];
+      const run = vi.fn(async () => {
+        await new Promise<void>((resolve) => release.push(resolve));
+      });
+      const scheduler = createRenderScheduler(run);
+
+      scheduler.schedule("content");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(run).toHaveBeenCalledTimes(1);
+
+      // Two more renders come due while the first is still in flight. They paginate
+      // the same latest text, so only the newest needs to run.
+      scheduler.schedule("content");
+      await vi.advanceTimersByTimeAsync(300);
+      scheduler.schedule("content");
+      await vi.advanceTimersByTimeAsync(300);
+
+      release[0]?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(run).toHaveBeenCalledTimes(2);
+
+      release[1]?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(run).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flush() runs a debounced render immediately and resolves after it settles", async () => {
+    let settled = false;
+    const run = vi.fn(async () => {
+      await Promise.resolve();
+      settled = true;
+    });
+    const scheduler = createRenderScheduler(run);
+
+    scheduler.schedule("content");
+    expect(scheduler.isPending).toBe(true);
+
+    // No timer advance: flush must not wait out the 250ms debounce.
+    await scheduler.flush();
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith("content");
+    expect(settled).toBe(true);
+    expect(scheduler.isPending).toBe(false);
+  });
+
+  it("flush() awaits an in-flight render even with nothing debounced", async () => {
+    let release!: () => void;
+    let finished = false;
+    const run = vi.fn(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      finished = true;
+    });
+    const scheduler = createRenderScheduler(run);
+
+    await scheduler.flush().then(() => {
+      // nothing pending yet — resolves immediately
+    });
+    expect(run).not.toHaveBeenCalled();
+
+    scheduler.schedule("content");
+    const flushed = scheduler.flush();
+    // Runs are chained, so the run starts a microtask after flush() is called.
+    await Promise.resolve();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(finished).toBe(false);
+
+    // A second flush with no timer pending must still wait for the running render.
+    const second = scheduler.flush();
+    release();
+    await Promise.all([flushed, second]);
+    expect(finished).toBe(true);
+  });
+
+  it("keeps running later renders after one throws, and surfaces the rejection", async () => {
+    const run = vi
+      .fn<(reason: "content" | "settings") => Promise<void>>()
+      .mockRejectedValueOnce(new Error("pagination exploded"))
+      .mockResolvedValue(undefined);
+    const scheduler = createRenderScheduler(run);
+
+    scheduler.schedule("content");
+    await expect(scheduler.flush()).rejects.toThrow("pagination exploded");
+
+    // The chain is not poisoned: the next render still happens.
+    scheduler.schedule("content");
+    await scheduler.flush();
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });

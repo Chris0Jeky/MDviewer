@@ -4,7 +4,9 @@
  * Responsibilities:
  *  - Build the application shell DOM (toolbar / workspace / editor / splitter / canvas /
  *    empty-state / overlays / banner).
- *  - Coalesce render requests through the debounced scheduler (settings 120ms, content 250ms).
+ *  - Coalesce render requests through the debounced scheduler (settings 120ms, content 250ms),
+ *    which also serializes them: pagination owns one shared host, so runs must never overlap.
+ *    Exports call `flushRender()` first so they can never emit stale pages.
  *  - Run `runPipeline` in the EXACT order mandated by IMPLEMENTATION_SPEC §3. Pagination is
  *    always last, exactly once, after every async height-affecting step settles.
  *  - Swap empty / loaded / error panes, surface render warnings, and keep the last good
@@ -39,7 +41,7 @@ import type { SplitterController } from "../ui/Splitter";
 import { mountEmptyState } from "../ui/EmptyState";
 import { mountBanner } from "../ui/Banner";
 import { DocStore } from "./state";
-import type { RenderReason } from "./state";
+import type { RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
 import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
@@ -82,7 +84,7 @@ export class App {
   private workspaceEl!: HTMLElement;
   private emptyEl!: HTMLElement;
 
-  private scheduleRenderImpl!: (reason: RenderReason) => void;
+  private scheduler!: RenderScheduler;
   private detachInput: (() => void) | null = null;
   private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
 
@@ -119,8 +121,10 @@ export class App {
     // showing that text, so only the pipeline needs waking.
     app.store.on("text", () => app.scheduleRender("content"));
 
-    // Debounced scheduler wraps the async pipeline.
-    app.scheduleRenderImpl = createRenderScheduler((reason) => app.runPipeline(reason));
+    // Debounced + serialized scheduler wraps the async pipeline. Serialization is the
+    // load-bearing half: two overlapping runPipeline calls would share one Paged.js
+    // host and page counter (see createRenderScheduler).
+    app.scheduler = createRenderScheduler((reason) => app.runPipeline(reason));
 
     return app;
   }
@@ -239,7 +243,18 @@ export class App {
 
   /** Public: request a render. Reason picks the debounce window. */
   scheduleRender(reason: RenderReason): void {
-    this.scheduleRenderImpl(reason);
+    this.scheduler.schedule(reason);
+  }
+
+  /**
+   * Public: settle the preview against the current text — run any debounced render
+   * now and wait for the in-flight one. Both exports read the paginated host directly,
+   * so without this an export fired within the 250ms content debounce (or while a long
+   * pagination is still running) would hand out the *previous* pages: the newest edits
+   * silently missing, or an empty PDF for a document that has only just been typed.
+   */
+  async flushRender(): Promise<void> {
+    await this.scheduler.flush();
   }
 
   /**
@@ -301,11 +316,14 @@ export class App {
 
   /** Trigger the primary (vector) print export. */
   async exportPrint(): Promise<void> {
+    // Export what the user can see, not what the host happens to still hold.
+    await this.flushRender();
     await exportViaPrint(this.canvas.host);
   }
 
   /** Trigger the fallback (rasterized) PDF export. */
   async exportPdf(): Promise<void> {
+    await this.flushRender();
     const name = this.store.active?.name ?? "document";
     const base = name.replace(/\.(md|markdown)$/i, "") || "document";
     try {
