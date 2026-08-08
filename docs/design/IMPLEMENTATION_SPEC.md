@@ -20,15 +20,18 @@ re-runs the same pipeline that produces the PDF. See §12.
 
 ## 2. Resolved dependency versions (verified installed)
 
-Runtime: `markdown-it@14.2.0` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.0`
-· `markdown-it-toc-done-right@4.2.0` · `markdown-it-container@4.0.0` · `markdown-it-attrs@4.5.0`
-· `markdown-it-task-lists@2.1.1` · `shiki@4.3.0` (+ `@shikijs/core`, `@shikijs/langs`,
-`@shikijs/themes`, `@shikijs/markdown-it`, `@shikijs/transformers` all `4.3.0`)
-· `@vscode/markdown-it-katex@1.1.2` · `katex@0.17.0` · `mermaid@11.16.0` · `pagedjs@0.4.3`
-· `jspdf@4.2.1` · `html2canvas-pro@1.6.7`.
+Read back from `npm ls --depth=0` on 2026-08-08, after the dependency sweep that cleared the
+Dependabot backlog and every open advisory.
 
-Toolchain: `vite@8` · `vitest@4` · `typescript@6.0` · `eslint@10` + `typescript-eslint@8`
-· `jsdom@25` · `@playwright/test@1.49+`.
+Runtime: `markdown-it@14.3.0` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.1`
+· `markdown-it-toc-done-right@4.2.0` · `markdown-it-container@4.0.0` · `markdown-it-attrs@5.0.1`
+· `markdown-it-task-lists@2.1.1` · `shiki@4.3.1` (+ `@shikijs/core`, `@shikijs/langs`,
+`@shikijs/themes`, `@shikijs/markdown-it`, `@shikijs/transformers` all `4.3.1`)
+· `@vscode/markdown-it-katex@1.1.2` · `katex@0.18.1` · `mermaid@11.16.1` · `pagedjs@0.4.3`
+· `jspdf@4.2.1` · `html2canvas-pro@1.6.7` · `dompurify@3.4.13`.
+
+Toolchain: `vite@8.1.5` · `vitest@4.1.10` · `typescript@6.0.3` · `eslint@10.8.0` +
+`typescript-eslint@8.65.0` · `jsdom@29.1.1` · `@playwright/test@1.62.0` · `@types/node@26.1.1`.
 
 Notes that bite if ignored:
 - **Shiki is 4.x** (bumped from 3.x; the fine-grained API is unchanged across the major).

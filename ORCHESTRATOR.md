@@ -11,8 +11,12 @@
 > workspace, which only the maintainer may close; PR **#39** sharpens its checklist to cover the six
 > behaviours this review round fixed. The two stale worktrees from 2026-07-24
 > (`codex-deployment-record-20260724`, `codex-improvements-20260724`) were torn down; both removed
-> without `--force` and their branches are merged into `main`, so nothing was lost. The six
-> Dependabot PRs #22–#27 remain untouched below.
+> without `--force` and their branches are merged into `main`, so nothing was lost.
+> **The Dependabot backlog is cleared:** all eight open PRs (#23, #25, #27, #32, #33, #34, #37,
+> #38) are superseded by one consolidated sweep, which also fixed two advisories Dependabot never
+> raised (`dompurify` XSS, `brace-expansion` DoS). `npm audit` reports **0 vulnerabilities** and
+> all 11 GitHub alerts are resolved. The stale queue table below is retained only as the
+> 2026-07-24 historical record — see the note on it.
 
 > **▶ PREVIOUS CHECKPOINT — 2026-07-24:** Public launch and its durable record are complete. Product
 > hardening PR **#28** merged as `7f4eedf`; deployment-record PR **#29** merged as `43af438`, whose
@@ -68,12 +72,20 @@ older CI and independent-review evidence.
   Local PDF evidence was retained at
   `C:\Users\Public\codex-shell-home\mdviewer-pdf-evidence-20260724` on the maintainer machine.
 
-### 3. Live queue snapshot and recommended order
+### 3. Dependabot queue — RESOLVED 2026-08-08 (historical snapshot below)
+
+> **⚠ This section is history, not work.** Every dependency listed here is now at or beyond the
+> proposed version, applied in one consolidated sweep and verified together rather than PR by PR.
+> `npm audit` reports 0 vulnerabilities. Do **not** act on the table below; it is kept only to
+> show what the queue looked like and what was decided.
+>
+> Of the six PRs recorded on 2026-07-24, #22 (jsdom 25→29), #24 (`markdown-it-attrs` 4→5) and #26
+> (toolchain group) were resolved before this sweep; #23, #25 and #27 were carried into it along
+> with the later #32, #33, #34, #37 and #38.
 
 As observed on 2026-07-24, all six PRs below reported `MERGEABLE`/`CLEAN` with their three CI jobs
 green. Most checks are from 2026-06-29 and predate the product-hardening merge; #26 was refreshed on
-2026-07-24. Refresh every PR individually before acting and review interactions before choosing an
-order.
+2026-07-24.
 
 | PR | Exact observed head | Change | First concern to review |
 | --- | --- | --- | --- |
@@ -84,7 +96,15 @@ order.
 | #26 | `7948a07` | ESLint, typescript-eslint, Vite, and Vitest updates | Grouped lockfile/toolchain interactions |
 | #27 | `b8a157d` | `actions/setup-node` 6 → 7 | Workflow behavior and supported runner/Node matrix |
 
-Recommended approach: take one independent PR at a time, oldest first unless live review reveals a
+Recommended approach *as written on 2026-07-24* — **superseded on 2026-08-08**, recorded because the
+reasoning behind departing from it is worth keeping. One-PR-at-a-time was the wrong shape here: every
+one of these except #27 rewrites `package-lock.json`, so serial merging costs a forced rebase and a
+CI cycle per PR and still never verifies the combined result — each PR only ever proves its own bump
+against a base that has since moved. The sweep instead applied all of them at their proposed
+versions in separate commits on one branch and verified the end state, which is the state that
+ships. Prefer that shape next time the queue is more than two deep and they all touch the lockfile.
+
+Original text: take one independent PR at a time, oldest first unless live review reveals a
 dependency or superseding relationship. For each slice: exact-head diff review, local relevant gates,
 independent adversarial review, all bot/human comments triaged, hosted CI green, then merge-commit
 only. Never treat these snapshot results as current proof.

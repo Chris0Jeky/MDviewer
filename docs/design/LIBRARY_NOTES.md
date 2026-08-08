@@ -1,9 +1,9 @@
 # Library Integration Notes (verified against installed versions)
 
 Copy-pasteable, version-correct integration recipes for MDviewer's stack. Verified
-against: `markdown-it@14.2.0`, `shiki@4.3.0` (+ `@shikijs/*@4.3.0`),
-`@vscode/markdown-it-katex@1.1.2`, `katex@0.17.0`, `mermaid@11.16.0`, `pagedjs@0.4.3`,
-`jspdf@4.2.1`, `html2canvas-pro@1.6.7`. Read alongside
+against (read back 2026-08-08): `markdown-it@14.3.0`, `shiki@4.3.1` (+ `@shikijs/*@4.3.1`),
+`@vscode/markdown-it-katex@1.1.2`, `katex@0.18.1`, `mermaid@11.16.1`, `pagedjs@0.4.3`,
+`jspdf@4.2.1`, `html2canvas-pro@1.6.7`, `dompurify@3.4.13`. Read alongside
 [`IMPLEMENTATION_SPEC.md`](./IMPLEMENTATION_SPEC.md).
 
 ## TypeScript constraints (the build is strict)
