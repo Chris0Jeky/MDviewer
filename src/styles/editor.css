@@ -195,10 +195,18 @@
 
 /* Dark chrome: swap each token's inline light color for its --shiki-dark
    counterpart, exactly as shiki.css does for rendered code blocks. The editor is
-   chrome, so it follows the chosen app theme rather than the OS preference. */
-:root[data-app-theme="dark"] #editor-highlight,
+   chrome, so it follows the chosen app theme rather than the OS preference.
+
+   `!important` is required, not stylistic: Editor.ts writes the light color as an
+   inline style (Shiki's `defaultColor: "light"`), and an inline declaration beats
+   any selector without it. Without this the pane would paint light-theme token
+   colors onto a dark surface. shiki.css does the same for rendered code. */
 :root[data-app-theme="dark"] #editor-highlight span {
-  color: var(--shiki-dark, inherit);
+  color: var(--shiki-dark, inherit) !important;
+}
+
+:root[data-app-theme="dark"] #editor-pane {
+  background: var(--bg-sunken);
 }
 
 /* -----------------------------------------------------------------------------
