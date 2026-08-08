@@ -39,7 +39,7 @@ export function mountEmptyState(
   const heading = el(
     "h1",
     { id: headingId, class: "empty-state-headline" },
-    "Drop a Markdown file to begin",
+    "Drop a Markdown file, or start typing",
   );
 
   const chooseBtn = el(
@@ -75,7 +75,8 @@ export function mountEmptyState(
   const helper = el(
     "p",
     { class: "empty-state-helper" },
-    ".md and .markdown · Everything runs in your browser — nothing is uploaded.",
+    ".md and .markdown · Write in the source pane and this preview updates live · " +
+      "Everything runs in your browser — nothing is uploaded.",
   );
 
   card.append(icon, heading, subline, helper);

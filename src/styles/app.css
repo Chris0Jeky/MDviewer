@@ -205,6 +205,13 @@ body {
   gap: 6px;
 }
 
+/* An author `display` always beats the UA's `[hidden] { display: none }`, so a group
+   toggled off in JS (Toolbar.syncDocSwitcher hides the switcher below two documents)
+   needs this rule to actually disappear. */
+.toolbar-group[hidden] {
+  display: none;
+}
+
 .toolbar-group > label,
 .toolbar-group .group-label {
   color: var(--fg-muted);
