@@ -3,14 +3,16 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-08-08:** The split-view Markdown editor is built, pushed, and open
-> as **PR #36** (`feat/split-view-markdown-editor`, head `1fec906`, ready-for-review, MERGEABLE).
-> **Not merged.** The owner asked to see it running before merge, which was done in installed
-> Chrome. `ACTION_ITEMS.md` now has **one OPEN item, AI-6** — the manual Print/Save-as-PDF
-> acceptance, which only the maintainer may close. Before merging, PR #36 still needs the standard
-> gate: exact-head CI green plus one fresh-context adversarial review (this session did not run
-> one, on the operator's standing "no subagents unless requested" instruction). The six Dependabot
-> PRs #22–#27 remain untouched below.
+> **▶ CURRENT CHECKPOINT — 2026-08-08:** The split-view Markdown editor is **MERGED**. PR **#36**
+> closed its review round — all 11 Codex findings addressed across four fix commits — and merged to
+> `main` as merge commit **`87249e0`**, with the post-merge `main` CI run green on all three required
+> jobs. Head at merge was `0867399`.
+> `ACTION_ITEMS.md` still has **one OPEN item, AI-6** — the manual browser acceptance of the split
+> workspace, which only the maintainer may close; PR **#39** sharpens its checklist to cover the six
+> behaviours this review round fixed. The two stale worktrees from 2026-07-24
+> (`codex-deployment-record-20260724`, `codex-improvements-20260724`) were torn down; both removed
+> without `--force` and their branches are merged into `main`, so nothing was lost. The six
+> Dependabot PRs #22–#27 remain untouched below.
 
 > **▶ PREVIOUS CHECKPOINT — 2026-07-24:** Public launch and its durable record are complete. Product
 > hardening PR **#28** merged as `7f4eedf`; deployment-record PR **#29** merged as `43af438`, whose
@@ -289,7 +291,33 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   production id `e3bd9770` from `main`. Stable URL **https://mdviewer-c9r.pages.dev/** and immutable
   deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
   headers verified. No human action items remain open.
-- **C18 (2026-08-08) — SPLIT-VIEW EDITOR PUBLISHED (PR #36, NOT MERGED):** Built on a branch in the
+- **C19 (2026-08-08) — SPLIT-VIEW EDITOR MERGED after its review round:** PR #36's two Codex passes
+  raised **11 findings** (5×P1, 6×P2); all are addressed and every thread is resolved. Ten needed a
+  change, in four commits; the eleventh (dark-mode inline token colours) was already fixed in
+  `1fec906` before that pass ran, verified at the head rather than taken on trust. Two changed a
+  contract rather than a line, and both are now in `IMPLEMENTATION_SPEC.md` §7/§12 +
+  `AGENT_INDEX.md`: (1) **`#canvas` is the one pane never hidden with `display: none`** — Markdown
+  mode still paginates into it and Paged.js measures real heights, all zero under a `display:none`
+  ancestor, so it is parked `position:absolute; visibility:hidden` and un-parked under
+  `@media print`, which also cures the blank-PDF-from-Markdown-mode defect; (2) **renders are
+  serialized, not just debounced** — `createRenderScheduler` returns
+  `RenderScheduler {schedule, flush, isPending}` and chains runs, because two overlapping
+  `runPipeline` calls shared one Paged.js host, handler and page counter, and `renderToken` only
+  ever suppressed the older run's final UI write. Both exports now `await App.flushRender()`.
+  The other eight: typed glyphs invisible until the 90 ms debounce (the backdrop now repaints plain
+  synchronously and Shiki only recolours), backdrop scroll not re-synced after a repaint, word count
+  rescanning the document per keystroke, Tab discarding native undo history (now
+  `execCommand("insertText")` with a guarded fallback), a divider drag that could strand `dragging`
+  state (pointer capture + `lostpointercapture` + blur), and the scrollbar-gutter width mismatch
+  between the two layers. Evidence at `0867399`: typecheck, lint, **252 unit** (was 236), 4 server,
+  **36 Chromium E2E** (was 30) including both no-cutoff tests, build, hook smoke, 14 skills — all
+  green locally, then all three CI jobs green at that exact head and again on `main` after the merge.
+  Entry chunk 1,602.49 → **1,603.59 kB** (+1.1 kB). Merged with a merge commit, branch not deleted.
+  **Not verified:** non-Chromium behaviour of `scrollbar-gutter: stable` and `execCommand`, and the
+  real-browser *feel* of the changed typing path — both belong to AI-6. No fresh-context adversarial
+  subagent review was run, again on the operator's standing "no subagents unless requested"
+  instruction; the Codex connector pass plus exact-head CI carried the gate.
+- **C18 (2026-08-08) — SPLIT-VIEW EDITOR PUBLISHED (PR #36, merged at C19):** Built on a branch in the
   primary checkout rather than a worktree — a single sequential session with no parallel agents, so
   worktree isolation bought nothing against a full `npm install` plus the recorded W-1 Windows
   removal hazard. Four commits: foundations (`viewMode`/`splitRatio` with *validating* migration,
@@ -310,8 +338,8 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   the 8-page bundled sample in place, exercised all three view modes and the divider (ratio
   round-tripped through localStorage), and measured **15 atomic blocks with 0 straddling a page
   boundary**. `PRODUCT_VISION.md`'s "no editor pane" non-goal and the roadmap's P4 deferral were
-  reversed in-place with the date and the reason, per the authority order. **Remaining before
-  merge:** exact-head E2E CI and one fresh-context adversarial review; AI-6 is the human gate.
+  reversed in-place with the date and the reason, per the authority order. The gate outstanding at
+  this checkpoint (exact-head CI plus a review pass) was met at **C19**, where the PR merged.
 - **C17 (2026-07-24) — LAUNCH RECORD MERGED:** PR #29 corrected the durable launch documentation,
   passed exact-head CI and independent adversarial review with all comments triaged, and merged as
   `43af438`. Main CI run `30060892316` then passed all three required jobs. The relaxed solo-owner

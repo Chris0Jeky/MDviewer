@@ -32,8 +32,10 @@
   - Automated verification at the merged head: 252 unit tests, 4 server tests, **36 Chromium E2E**
     tests including both no-cutoff tests — the core guarantee re-proved, not assumed, since the
     canvas-parking change touches exactly what Paged.js measures against.
-  - **Not automated:** how typing *feels*, and non-Chromium behaviour of `scrollbar-gutter: stable`
-    and `execCommand("insertText")`. That is what **AI-6** below exists to close.
+  - **Not automated:** how typing *feels* (**AI-6** steps 1–11), and non-Chromium behaviour of
+    `scrollbar-gutter: stable` and `execCommand("insertText")` — the whole suite is Chromium-only,
+    so that gap is closed **only** by AI-6 step 12, the second-engine pass. Completing steps 1–11
+    in Chrome leaves it untested.
 
 - **2026-07-24 (public launch)** — Product hardening and packaging merged through PR #28; the durable
   deployment record then merged through PR #29 as repository `main` `43af438`, with its exact main CI
@@ -95,18 +97,25 @@
      dragging, and the page must remain fully interactive.
   7. Press **Print / Save as PDF** and confirm the PDF contains only the page sheets — no
      source pane, no toolbar, no divider — and still no sliced code block.
-  8. **Type an edit, then click Print / Save as PDF immediately, without pausing.** The PDF must
-     contain that edit. Repeat from an empty app (type a heading, print at once) — it must not
-     be blank.
+  8. **Type an edit, then export immediately, without pausing.** The PDF must contain that edit.
+     Do this **twice — once with Print / Save as PDF and once with Download PDF** — because the
+     fix covers both export paths but only the Print path has an automated immediate-edit test.
+     Then repeat from an empty app (type a heading, export at once) — it must not be blank.
   9. **Switch to Markdown mode and press Print / Save as PDF from there.** The PDF must still
      contain the page sheets — not a blank document.
   10. Press Tab in the source pane, then Ctrl+Z. The undo should step back sensibly rather than
       wiping out more than the tab.
   11. Try the **dark** preview theme and confirm the source pane's colours follow.
+  12. **Repeat steps 2, 4 and 10 in a non-Chromium browser — Firefox or Safari.** Steps 1–11 in
+      Chrome do *not* close the compatibility gap: the whole automated suite is Chromium-only, and
+      two of the fixes lean on engine-variable APIs — `scrollbar-gutter: stable` on the
+      `overflow: hidden` backdrop (step 4) and `execCommand("insertText")`, which is deprecated and
+      has a weaker fallback path (step 10). If a second engine is not available to you, say so when
+      you close this item and it will be recorded as still untested rather than silently assumed.
 
   Steps 2, 4, 6 (the release-outside-the-window case), 8, 9 and 10 are the ones the PR #36 review
   round fixed; they are the highest-value checks here because each covers a defect that shipped
-  once already.
+  once already. Step 12 is the only one that touches the non-Chromium gap.
 
   Reply "AI-6 is done" (or report what looked wrong) and it moves to the Completed log.
 
