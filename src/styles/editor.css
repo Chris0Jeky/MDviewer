@@ -1,0 +1,287 @@
+/* =============================================================================
+ * editor.css — the split workspace: the Markdown source pane, the draggable
+ * divider, and the three view modes (Markdown / Split / Preview).
+ *
+ * SCREEN-ONLY chrome. Like app.css and preview.css this is imported by main.ts
+ * and is NOT part of the paged stylesheet handed to Paged.js. The @media print
+ * block at the bottom removes the whole editing surface, so the primary
+ * (window.print) export sees exactly the same page sheets it always did.
+ *
+ * The overlay technique in .editor-scroll is load-bearing: #editor-highlight
+ * (a non-interactive syntax backdrop) and #editor-input (a transparent-glyph
+ * textarea) are stacked in the same box and MUST keep identical font, size,
+ * line-height, padding, tab-size and wrapping, or the painted colors drift away
+ * from the characters the user is typing. Change one, change both.
+ *
+ * Tokens come from app.css. Ids/classes match dom.ts (IDS / CLASSES / ATTRS).
+ * ========================================================================== */
+
+:root {
+  /* Editor metrics — shared by the backdrop and the textarea (see above). */
+  --editor-font: "JetBrains Mono", "SF Mono", "Cascadia Mono", "Consolas",
+    ui-monospace, monospace;
+  --editor-font-size: 13px;
+  --editor-line-height: 1.65;
+  --editor-pad-y: 14px;
+  --editor-pad-x: 16px;
+}
+
+/* -----------------------------------------------------------------------------
+ * #workspace — row 2 of the #app grid. Three columns in split mode; a single
+ * column in the two solo modes. `--split-ratio` (dom.ts SPLIT_RATIO_VAR) is
+ * written by App from settings.splitRatio and live-updated during a drag.
+ * -------------------------------------------------------------------------- */
+#workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+#workspace[data-view-mode="split"] {
+  grid-template-columns:
+    minmax(0, calc(var(--split-ratio, 0.42) * 100%))
+    auto
+    minmax(0, 1fr);
+}
+
+/* Solo modes: the hidden panes are removed from the grid, never unmounted, so
+   switching modes costs no re-render and never loses editor state or scroll. */
+#workspace[data-view-mode="editor"] #split-handle,
+#workspace[data-view-mode="editor"] #canvas {
+  display: none;
+}
+
+#workspace[data-view-mode="preview"] #editor-pane,
+#workspace[data-view-mode="preview"] #split-handle {
+  display: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * #editor-pane — the Markdown source column: a compact header over the
+ * scrolling text surface.
+ * -------------------------------------------------------------------------- */
+#editor-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+}
+
+.editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  height: var(--ctl-h);
+  padding: 0 var(--editor-pad-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-toolbar);
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+
+.editor-head .editor-name {
+  color: var(--fg-strong);
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.editor-head .editor-stat {
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* -----------------------------------------------------------------------------
+ * .editor-scroll — the stacking context holding the two glued layers.
+ * -------------------------------------------------------------------------- */
+.editor-scroll {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The shared box metrics. Both layers get exactly these values. */
+#editor-highlight,
+#editor-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: var(--editor-pad-y) var(--editor-pad-x);
+  border: 0;
+  font-family: var(--editor-font);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  font-variant-ligatures: none;
+  letter-spacing: normal;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+/* The painted backdrop. Never interactive; scrolled programmatically from the
+   textarea's scroll event so the two layers cannot drift apart. */
+#editor-highlight {
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: transparent;
+  color: var(--fg);
+  user-select: none;
+}
+
+.editor-highlight-code {
+  display: block;
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.editor-line {
+  display: inline;
+}
+
+/* The real input. Glyphs are transparent so the backdrop shows through; the
+   caret and the selection band stay visible. */
+#editor-input {
+  z-index: 1;
+  overflow: auto;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--accent);
+  -webkit-text-fill-color: transparent;
+}
+
+#editor-input::selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+#editor-input::placeholder {
+  color: var(--fg-faint);
+  -webkit-text-fill-color: var(--fg-faint);
+  opacity: 1;
+}
+
+#editor-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* Highlighting off (empty document, an oversized document past
+   Editor.HIGHLIGHT_MAX_CHARS, or a tokenizer failure): hide the empty backdrop
+   and let the textarea paint its own plain text. The metrics are unchanged, so
+   the switch is invisible apart from the colors. */
+#editor-pane[data-highlight="off"] #editor-highlight {
+  visibility: hidden;
+}
+
+#editor-pane[data-highlight="off"] #editor-input {
+  color: var(--fg);
+  -webkit-text-fill-color: var(--fg);
+}
+
+/* Dark chrome: swap each token's inline light color for its --shiki-dark
+   counterpart, exactly as shiki.css does for rendered code blocks. The editor is
+   chrome, so it follows the chosen app theme rather than the OS preference. */
+:root[data-app-theme="dark"] #editor-highlight,
+:root[data-app-theme="dark"] #editor-highlight span {
+  color: var(--shiki-dark, inherit);
+}
+
+/* -----------------------------------------------------------------------------
+ * #split-handle — the draggable divider. A real role="separator" with keyboard
+ * resizing (Splitter.ts), so the split is operable without a pointer.
+ * -------------------------------------------------------------------------- */
+#split-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  background: var(--bg-app);
+  border-right: 1px solid var(--border);
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+#split-handle .split-handle-grip {
+  width: 2px;
+  height: 30px;
+  border-radius: 1px;
+  background: var(--border-strong);
+  transition: background-color 120ms ease;
+}
+
+#split-handle:hover .split-handle-grip,
+#split-handle.is-dragging .split-handle-grip,
+#split-handle:focus-visible .split-handle-grip {
+  background: var(--accent);
+}
+
+#split-handle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* While dragging, suppress selection and keep the resize cursor everywhere so
+   the gesture cannot select the textarea's contents mid-drag. */
+body.is-splitting {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-splitting #editor-input {
+  pointer-events: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * Narrow viewports: a side-by-side split is unusable below roughly a tablet, so
+ * split mode stacks the source above the preview and the divider steps aside
+ * (dragging a row divider is not wired — the view-mode buttons remain the way
+ * to give either surface the full window).
+ * -------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  #workspace[data-view-mode="split"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  #workspace[data-view-mode="split"] #split-handle {
+    display: none;
+  }
+
+  #editor-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Print: the editing surface must never reach paper. The primary export is
+ * window.print() over this same live document, so this block is what keeps the
+ * exported PDF identical to the preview-only output.
+ * -------------------------------------------------------------------------- */
+@media print {
+  #workspace {
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  #editor-pane,
+  #split-handle {
+    display: none !important;
+  }
+}

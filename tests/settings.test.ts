@@ -3,6 +3,10 @@ import {
   DEFAULT_SETTINGS,
   MARGIN_MM,
   SETTINGS_KEY,
+  SPLIT_RATIO_MAX,
+  SPLIT_RATIO_MIN,
+  VIEW_MODES,
+  clampSplitRatio,
   loadSettings,
   migrateSettings,
   saveSettings,
@@ -22,6 +26,15 @@ describe("settings: defaults and constants", () => {
     expect(DEFAULT_SETTINGS.runningHeader).toBe("");
     expect(DEFAULT_SETTINGS.showLineNumbers).toBe(false);
     expect(DEFAULT_SETTINGS.zoom).toBe("fit");
+    // The workspace opens with both panes visible: editing is a first-class path,
+    // not a mode the user has to discover.
+    expect(DEFAULT_SETTINGS.viewMode).toBe("split");
+    expect(DEFAULT_SETTINGS.splitRatio).toBeGreaterThanOrEqual(SPLIT_RATIO_MIN);
+    expect(DEFAULT_SETTINGS.splitRatio).toBeLessThanOrEqual(SPLIT_RATIO_MAX);
+  });
+
+  it("VIEW_MODES lists exactly the three workspace layouts", () => {
+    expect([...VIEW_MODES]).toEqual(["editor", "split", "preview"]);
   });
 
   it("MARGIN_MM maps the three presets to millimetres", () => {
@@ -73,6 +86,48 @@ describe("settings: migrateSettings", () => {
   it("always pins schemaVersion to 1 even if the stored value is wrong", () => {
     const out = migrateSettings({ schemaVersion: 99 } as unknown);
     expect(out.schemaVersion).toBe(1);
+  });
+
+  it("upgrades a pre-editor settings blob to the split workspace", () => {
+    // A store written before the editor existed has neither field; the user should
+    // land in the new default layout rather than an undefined one.
+    const out = migrateSettings({ schemaVersion: 1, codeTheme: "nord", zoom: "fit" });
+    expect(out.viewMode).toBe("split");
+    expect(out.splitRatio).toBe(DEFAULT_SETTINGS.splitRatio);
+  });
+
+  it("keeps a valid persisted layout", () => {
+    const out = migrateSettings({ viewMode: "editor", splitRatio: 0.66 });
+    expect(out.viewMode).toBe("editor");
+    expect(out.splitRatio).toBe(0.66);
+  });
+
+  it("rejects an unknown view mode instead of writing it into the DOM", () => {
+    for (const bad of ["", "both", "EDITOR", 3, null, {}] as unknown[]) {
+      expect(migrateSettings({ viewMode: bad }).viewMode).toBe(DEFAULT_SETTINGS.viewMode);
+    }
+  });
+
+  it("clamps a corrupt split ratio so a pane can never be stranded off-screen", () => {
+    expect(migrateSettings({ splitRatio: 0 }).splitRatio).toBe(SPLIT_RATIO_MIN);
+    expect(migrateSettings({ splitRatio: 1 }).splitRatio).toBe(SPLIT_RATIO_MAX);
+    expect(migrateSettings({ splitRatio: -12 }).splitRatio).toBe(SPLIT_RATIO_MIN);
+    for (const bad of [NaN, Infinity, "wide", null, {}] as unknown[]) {
+      expect(migrateSettings({ splitRatio: bad }).splitRatio).toBe(DEFAULT_SETTINGS.splitRatio);
+    }
+  });
+});
+
+describe("settings: clampSplitRatio", () => {
+  it("passes through values inside the range", () => {
+    expect(clampSplitRatio(0.5)).toBe(0.5);
+    expect(clampSplitRatio(SPLIT_RATIO_MIN)).toBe(SPLIT_RATIO_MIN);
+    expect(clampSplitRatio(SPLIT_RATIO_MAX)).toBe(SPLIT_RATIO_MAX);
+  });
+
+  it("falls back to the default for anything non-numeric", () => {
+    expect(clampSplitRatio(undefined)).toBe(DEFAULT_SETTINGS.splitRatio);
+    expect(clampSplitRatio("x")).toBe(DEFAULT_SETTINGS.splitRatio);
   });
 });
 

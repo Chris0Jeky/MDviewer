@@ -7,6 +7,11 @@
 export const IDS = {
   app: "app",
   toolbar: "toolbar",
+  workspace: "workspace",
+  editorPane: "editor-pane",
+  editorInput: "editor-input",
+  editorHighlight: "editor-highlight",
+  splitHandle: "split-handle",
   canvas: "canvas",
   pagedOutput: "paged-output",
   emptyState: "empty-state",
@@ -30,6 +35,10 @@ export const CLASSES = {
   exportPrimary: "export-primary",
   exportSecondary: "export-secondary",
   isPaginating: "is-paginating",
+  // editor pane
+  editorHead: "editor-head",
+  editorScroll: "editor-scroll",
+  editorLine: "editor-line",
   // rendered document
   doc: "doc",
   codeFigure: "code-figure",
@@ -56,7 +65,12 @@ export const ATTRS = {
   codeTheme: "data-code-theme", // on .doc: active Shiki theme family
   shrunk: "data-shrunk", // on a shrink-to-fit block: the applied scale
   atomicSourceHeight: "data-mdv-source-height", // pristine pre/table height before Paged.js splits it
+  viewMode: "data-view-mode", // on #workspace: editor | split | preview
+  highlightState: "data-highlight", // on #editor-pane: on | off (syntax backdrop active?)
 } as const;
+
+/** CSS custom property carrying the editor pane's share of the workspace width. */
+export const SPLIT_RATIO_VAR = "--split-ratio";
 
 /** Paged.js emits these — never rename them. */
 export const PAGEDJS = {

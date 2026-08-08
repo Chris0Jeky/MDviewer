@@ -2,8 +2,14 @@
  * Document store and the debounced render scheduler.
  *
  * The store holds the in-memory open documents (one active at a time). It is a tiny
- * event emitter — UI subscribes to "change" and re-reads. The scheduler coalesces
- * rapid render requests: settings tweaks are the hot path (120ms), content swaps 250ms.
+ * event emitter — UI subscribes and re-reads. The scheduler coalesces rapid render
+ * requests: settings tweaks are the hot path (120ms), content swaps 250ms.
+ *
+ * Two events, deliberately separate:
+ *  - `"change"` — the document *set* or the active document changed (open, close,
+ *    switch). Listeners rebuild document-identity UI (switcher, editor contents).
+ *  - `"text"`   — the active document's text was edited in place. Fires once per
+ *    keystroke, so only the render pipeline listens; identity UI must not churn.
  */
 
 export interface Doc {
@@ -14,6 +20,9 @@ export interface Doc {
 
 export type RenderReason = "content" | "settings";
 
+/** Store event names. See the module comment for who should listen to which. */
+export type DocEvent = "change" | "text";
+
 let idCounter = 0;
 function nextId(): string {
   idCounter += 1;
@@ -23,7 +32,10 @@ function nextId(): string {
 export class DocStore {
   openDocs: Doc[] = [];
   activeId: string | null = null;
-  private listeners = new Set<() => void>();
+  private listeners: Record<DocEvent, Set<() => void>> = {
+    change: new Set(),
+    text: new Set(),
+  };
 
   get active(): Doc | null {
     return this.openDocs.find((d) => d.id === this.activeId) ?? null;
@@ -33,15 +45,29 @@ export class DocStore {
     const doc: Doc = { id: nextId(), name, text };
     this.openDocs.push(doc);
     this.activeId = doc.id;
-    this.emit();
+    this.emit("change");
     return doc;
   }
 
   setActive(id: string): void {
     if (this.openDocs.some((d) => d.id === id)) {
       this.activeId = id;
-      this.emit();
+      this.emit("change");
     }
+  }
+
+  /**
+   * Replace an open document's text in place — the editor's write path. Emits "text"
+   * (not "change") because the document's identity is untouched: only the render
+   * pipeline needs to react, and the editor itself must not be re-seeded mid-keystroke.
+   * Returns false when the id is unknown or the text is already identical (no event).
+   */
+  updateText(id: string, text: string): boolean {
+    const doc = this.openDocs.find((d) => d.id === id);
+    if (!doc || doc.text === text) return false;
+    doc.text = text;
+    this.emit("text");
+    return true;
   }
 
   remove(id: string): void {
@@ -51,16 +77,17 @@ export class DocStore {
     if (this.activeId === id) {
       this.activeId = this.openDocs[Math.max(0, idx - 1)]?.id ?? null;
     }
-    this.emit();
+    this.emit("change");
   }
 
-  on(_ev: "change", cb: () => void): () => void {
-    this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
+  on(ev: DocEvent, cb: () => void): () => void {
+    const set = this.listeners[ev];
+    set.add(cb);
+    return () => set.delete(cb);
   }
 
-  private emit(): void {
-    for (const cb of this.listeners) cb();
+  private emit(ev: DocEvent): void {
+    for (const cb of this.listeners[ev]) cb();
   }
 }
 
