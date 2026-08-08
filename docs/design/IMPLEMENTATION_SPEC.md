@@ -112,7 +112,7 @@ src/
   main.ts                       Vite entry; App.init(#app); wire global drag/drop/paste; import CSS
   app/
     App.ts                      controller; owns DocStore + Settings; runPipeline (render order); pane swap
-    state.ts                    DocStore (openDocs/activeId, events) + createRenderScheduler (debounce)
+    state.ts                    DocStore (openDocs/activeId, events) + createRenderScheduler (debounce + serialize)
     settings.ts                 Settings type, DEFAULT_SETTINGS, load/save/migrate (localStorage)
     dom.ts                      canonical DOM ID + class-name constants (single source) + el() helper
     input.ts                    openMarkdown(); drag/drop/paste/picker; ext+MIME validation; size guards
@@ -194,7 +194,15 @@ export class DocStore {
   remove(id: string): void;
   on(ev: 'change', cb: () => void): () => void;   // returns unsubscribe
 }
-export function createRenderScheduler(run: (r: RenderReason) => Promise<void>): (r: RenderReason) => void;
+export interface RenderScheduler {
+  schedule(reason: RenderReason): void;   // debounced: content 250 ms, settings 120 ms
+  flush(): Promise<void>;                 // run any pending render NOW; resolve when it settles
+  readonly isPending: boolean;
+}
+// Debounced AND serialized: runs are chained so two `run` calls never overlap, because
+// pagination tears down and rewrites one shared host through Paged.js's global handler and
+// page counter. A queued run superseded by a newer request is dropped rather than executed.
+export function createRenderScheduler(run: (r: RenderReason) => Promise<void>): RenderScheduler;
 
 // src/app/input.ts
 export const MD_EXTENSIONS: readonly string[];    // ['.md','.markdown']
@@ -279,6 +287,7 @@ export class App {
   settings: Settings; store: DocStore;
   static init(root: HTMLElement): App;
   scheduleRender(reason: RenderReason): void;
+  flushRender(): Promise<void>;                     // settle the preview; awaited by both exports
   updateSettings(patch: Partial<Settings>): void;   // persists + scheduleRender('settings')
   onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void;
 }
@@ -365,6 +374,16 @@ the preview's scroll position is lost. `viewMode` and `splitRatio` are therefore
 rules (`measurePageArea` reads Settings, never the DOM), so a narrower canvas cannot move a
 page break — the no-slice guarantee is independent of the workspace layout.
 
+**Hiding a pane is not the same for `#canvas`.** `#editor-pane` and `#split-handle` are hidden
+with `display: none`; `#canvas` must never be. Markdown mode hides the preview but keeps
+feeding it — every keystroke still runs the full pipeline into that host — and Paged.js places
+breaks by measuring real element heights, which are all zero under a `display: none` ancestor.
+So in `editor` mode the canvas is *parked* instead: `position: absolute; inset: 0;
+visibility: hidden`, lifted out of the grid onto `#workspace`'s own box at full size. It stays
+laid out and measurable; only its paint is suppressed. `@media print` then un-parks it
+explicitly, because the toolbar's Print action is live in every view mode and would otherwise
+emit a blank PDF from Markdown mode.
+
 ### The editing loop
 
 ```
@@ -372,6 +391,18 @@ textarea input  →  App.onEditorInput  →  DocStore.updateText (in place)
                 →  store "text" event  →  scheduleRender("content")  [250 ms debounce]
                 →  the SAME runPipeline as a dropped file (§3, unchanged)
 ```
+
+Renders are **serialized as well as debounced** (`createRenderScheduler`, §7). A pagination
+that outlives its debounce window — routine once a document is large and the user keeps
+typing — must not have the next one start underneath it: `runPipeline` tears down and rewrites
+one shared host through Paged.js's global handler and page counter, so two overlapping runs
+interleave two layouts into the same pages. The monotonic `renderToken` is not sufficient on
+its own; it only suppresses the older run's final UI write, it cannot cancel Paged.js.
+
+Both exports call `App.flushRender()` first, which runs any debounced render immediately and
+awaits the in-flight one. Without it, Print or Download fired inside the 250 ms window — a
+user clicking straight after typing — reads a host still holding the *previous* pages: the
+newest edits silently missing from the PDF, or no sheets at all for a freshly typed document.
 
 Typing into an empty app calls `DocStore.add("Untitled.md", …)` on the first keystroke, so a
 preview exists immediately. Editing an open document mutates it in place — a file opened by
@@ -394,19 +425,35 @@ document.
 `<textarea>` whose glyphs are transparent). The backdrop paints Shiki's `markdown` grammar;
 the textarea supplies native undo/redo, IME, selection and accessibility.
 
-Two invariants, both enforced by `editor.css` and asserted in `e2e/editor.spec.ts`:
+Three invariants, all enforced by `editor.css` / `Editor.ts` and asserted in
+`e2e/editor.spec.ts` and `editor.test.ts`:
 
-1. **Identical box metrics.** Font family/size, line-height, padding, `tab-size` and wrapping
-   are declared once for both selectors. Change one, change both, or the colors drift off the
-   characters.
+1. **Identical box metrics.** Font family/size, line-height, padding, `tab-size`, wrapping and
+   `scrollbar-gutter` are declared once for both selectors. Change one, change both, or the
+   colors drift off the characters. The gutter belongs in that set: where scrollbars take
+   layout width, a source long enough to overflow would otherwise narrow only the
+   `overflow: auto` textarea, and the two layers would soft-wrap at different characters.
 2. **Glued scrolling.** The textarea is the scroller; its `scroll` handler copies
-   `scrollTop`/`scrollLeft` onto the `overflow:hidden` backdrop.
+   `scrollTop`/`scrollLeft` onto the `overflow:hidden` backdrop. Every repaint re-runs that
+   copy, because replacing the backdrop's content resets its scroll height and the browser has
+   already clamped its `scrollTop` against the previous, shorter content.
+3. **The backdrop always shows the current text.** With the backdrop on, the textarea's glyphs
+   are transparent, so the backdrop is the *only* visible copy of the source. Every input
+   therefore repaints it synchronously in plain text; the debounced Shiki pass only recolors
+   it. Deferring the whole paint to the debounce leaves freshly typed characters invisible and
+   deleted ones still painted for as long as the user keeps typing.
 
 The backdrop is built from `HighlighterCore.codeToTokens` and inserted with `textContent`
 plus `CSSStyleDeclaration.setProperty` — **never `innerHTML`**. Document text is therefore
 never parsed as markup on this path at all, which is stronger than sanitizing generated HTML
 and costs no DOMPurify pass per keystroke. Tokenizing is debounced 90 ms and guarded by a
 monotonic token so a slow pass cannot repaint over newer text.
+
+Two costs are deliberately kept off the keystroke path: the word count (`countWords` is O(n)
+and allocates per word — it rides the same 90 ms debounce, while the O(1) size stays live),
+and tokenizing (capped at `HIGHLIGHT_MAX_CHARS`, above which the textarea paints its own
+text). Tab inserts via `execCommand("insertText")`, the only insertion path browsers record in
+the textarea's native undo stack, falling back to a manual splice where it is unavailable.
 
 `data-highlight` on `#editor-pane` switches the backdrop off — for an empty document (so an
 untouched app never pays the Shiki/WASM startup cost), past `Editor.HIGHLIGHT_MAX_CHARS`
