@@ -26,13 +26,20 @@ These two audiences share the same hard requirement: **structure must be preserv
 ## Design principles
 
 1. **Local-first and private.** Everything happens in your browser. No upload, no server round-trip, no telemetry, and no runtime network calls. Document bytes are never persisted — only a small settings object lives in `localStorage`. Your draft never leaves your machine.
-2. **A focused tool, not an IDE.** MDviewer does one thing well: Markdown in, page-perfect PDF out. It is not a code editor, not a knowledge base, and not a document manager. The interface is a dropzone and a paginated preview with a small toolbar — nothing more.
+2. **A focused tool, not an IDE.** MDviewer does one thing well: Markdown in, page-perfect PDF out. It is not a knowledge base and not a document manager. The interface is a source pane, a paginated preview, and a small toolbar — nothing more. The source pane is a plain text surface with syntax colors, not a code editor: no file tree, no projects, no autocomplete, no plugins.
 3. **Vector-first export.** The primary export path is the browser's own print pipeline, producing vector PDFs with selectable text and crisp code. A rasterized fallback exists for convenience, but quality output is always the default.
 4. **The no-slice guarantee is the product.** Every architectural decision — a single pagination engine, the strict render order, the pristine-clone re-pagination model, the tiered break strategy — serves keeping blocks whole. If a change would weaken the guarantee, it does not ship.
 
+## Writing in the app
+
+> **Reversed 2026-08-08 (owner decision).** This was previously a non-goal ("no editor pane"). It is now a shipped capability.
+
+Dropping a file is still the fastest path, but you can also **write Markdown directly in MDviewer** and watch the paginated preview rebuild as you type — and a file you dropped is editable the same way, so a last-minute fix does not mean a round trip through another editor. The workspace toggles between three layouts: source only, preview only, or both side by side.
+
+This does not soften the focus. The source pane feeds the *same* pipeline that produces the PDF, so what you are editing against is the real page geometry, not an approximation. And the local-first promise is unchanged: typed text lives in memory only, is never persisted, and never leaves the machine.
+
 ## Non-goals
 
-- **No editor pane.** MDviewer renders and paginates; it does not let you author or edit Markdown in-app. Edit in your own editor, drop the file in.
 - **No cloud.** No accounts, no sync, no server-side rendering, no document storage. The absence of a backend is a feature.
 - **No multi-format zoo.** The output is PDF. We are not chasing DOCX, EPUB, or slide exports.
 - **Not a general HTML printer.** The break strategy is tuned for the documents above, not arbitrary web pages.

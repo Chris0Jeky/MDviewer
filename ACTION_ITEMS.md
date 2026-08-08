@@ -50,7 +50,26 @@
 
 ## OPEN items
 
-_None._
+- **AI-6 — Accept the split workspace in a real browser (manual UI gate).** The split editor
+  landed on `feat/split-view-markdown-editor` with 30/30 Chromium E2E tests green, including
+  layer alignment, live typing → pagination, divider drag, and a print-media check. Automated
+  coverage cannot judge how the *typing* feels, and only you can close this item.
+
+  **Steps** (the app is served at http://localhost:5180 via `npm run dev`):
+  1. The app opens in **Split** mode: the source pane on the left, the preview on the right.
+  2. Type `# Hello` then a paragraph, a `:::note` callout, and a fenced ```ts code block. The
+     preview should repaginate about a quarter-second after you stop typing, and the source
+     text should be syntax-coloured with the caret sitting exactly on its character.
+  3. Drop one of your own `.md` files. Its source should appear on the left, editable. Change
+     a heading and confirm the preview follows without the document reopening.
+  4. Click **Markdown**, **Preview**, **Split** in the View group. Each shows exactly the panes
+     it names; nothing is lost switching between them.
+  5. Drag the divider, then reload — the size should persist. Tab to it and press ←/→.
+  6. Press **Print / Save as PDF** and confirm the PDF contains only the page sheets — no
+     source pane, no toolbar, no divider — and still no sliced code block.
+  7. Try the **dark** preview theme and confirm the source pane's colours follow.
+
+  Reply "AI-6 is done" (or report what looked wrong) and it moves to the Completed log.
 
 ## Completed log
 

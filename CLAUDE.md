@@ -132,6 +132,10 @@ in the current environment.
 - Export: `src/export/print.ts`, `download.ts`.
 - App core: `src/app/App.ts` (render order), `state.ts`, `settings.ts`, `dom.ts`, `input.ts`.
 - UI: `src/ui/Toolbar.ts`, `Canvas.ts`, `EmptyState.ts`, `Banner.ts`. Styles: `src/styles/*`.
+- Split workspace: `src/ui/Editor.ts`, `Splitter.ts`, `src/styles/editor.css`
+  (`IMPLEMENTATION_SPEC.md` §12). The source backdrop and the textarea must keep identical box
+  metrics, token text goes in via `textContent` (never `innerHTML`), and `@media print` must
+  keep the editing surface off the exported PDF.
 - The guarantee test: `tests/e2e/nocutoff.spec.ts` (+ fixture `tests/fixtures/nocutoff.md`).
 
 ## Local Settings
