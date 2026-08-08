@@ -40,6 +40,8 @@ function toPercent(ratio: number): number {
 export function mountSplitter(root: HTMLElement, opts: SplitterOptions): SplitterController {
   let ratio = clampSplitRatio(opts.initialRatio);
   let dragging = false;
+  /** The pointer currently captured by the handle, or null (capture unavailable). */
+  let capturedPointerId: number | null = null;
 
   const handle = el("div", {
     id: IDS.splitHandle,
@@ -88,9 +90,20 @@ export function mountSplitter(root: HTMLElement, opts: SplitterOptions): Splitte
     dragging = false;
     handle.classList.remove("is-dragging");
     document.body.classList.remove("is-splitting");
+    if (capturedPointerId !== null) {
+      // releasePointerCapture throws if the capture already ended (the usual case when
+      // endDrag arrives *from* lostpointercapture). Releasing is best-effort cleanup.
+      try {
+        handle.releasePointerCapture(capturedPointerId);
+      } catch {
+        /* capture already gone */
+      }
+      capturedPointerId = null;
+    }
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", endDrag);
     window.removeEventListener("pointercancel", endDrag);
+    window.removeEventListener("blur", endDrag);
     opts.onCommit(ratio);
   };
 
@@ -103,9 +116,24 @@ export function mountSplitter(root: HTMLElement, opts: SplitterOptions): Splitte
     // dragging over the textarea selects its content.
     document.body.classList.add("is-splitting");
     handle.focus();
+    // Capture the pointer so the gesture is guaranteed to be terminated. Without it a
+    // drag released outside the browser viewport never delivers pointerup/pointercancel
+    // to `window`, stranding `dragging` with body.is-splitting still set — text
+    // interaction dead and the last ratio unpersisted until a reload. With capture, the
+    // browser retargets the remaining events to the handle and always ends with
+    // lostpointercapture. Guarded: jsdom does not implement the capture API.
+    try {
+      handle.setPointerCapture(event.pointerId);
+      capturedPointerId = event.pointerId;
+    } catch {
+      capturedPointerId = null;
+    }
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", endDrag);
     window.addEventListener("pointercancel", endDrag);
+    // Belt and braces for the no-capture fallback path, and for a drag interrupted by
+    // an OS-level focus steal (alt-tab, a native dialog) that ends no pointer sequence.
+    window.addEventListener("blur", endDrag);
   };
 
   /** Double-click resets to a even split — the usual escape hatch from a bad drag. */
@@ -124,6 +152,10 @@ export function mountSplitter(root: HTMLElement, opts: SplitterOptions): Splitte
   };
 
   handle.addEventListener("pointerdown", onPointerDown);
+  // With the pointer captured, the browser retargets pointerup here rather than to
+  // window; lostpointercapture is the one event guaranteed to fire however the gesture
+  // ends, including a release outside the viewport.
+  handle.addEventListener("lostpointercapture", endDrag);
   handle.addEventListener("dblclick", onDoubleClick);
   handle.addEventListener("keydown", onKeyDown);
   applyAria();
@@ -136,6 +168,7 @@ export function mountSplitter(root: HTMLElement, opts: SplitterOptions): Splitte
     destroy(): void {
       endDrag();
       handle.removeEventListener("pointerdown", onPointerDown);
+      handle.removeEventListener("lostpointercapture", endDrag);
       handle.removeEventListener("dblclick", onDoubleClick);
       handle.removeEventListener("keydown", onKeyDown);
       handle.remove();

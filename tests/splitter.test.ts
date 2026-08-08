@@ -142,6 +142,93 @@ describe("Splitter: pointer drag", () => {
   });
 });
 
+/**
+ * A drag released outside the browser viewport is not guaranteed to deliver
+ * pointerup/pointercancel to `window`. Without a capture, the divider would stay in
+ * `dragging` with body.is-splitting set — text interaction dead and the ratio
+ * unpersisted — until a reload. jsdom implements none of the capture API, so these
+ * stub it and assert the wiring.
+ */
+describe("Splitter: the gesture always terminates", () => {
+  function stubCapture(): { captured: number[]; released: number[] } {
+    const captured: number[] = [];
+    const released: number[] = [];
+    const el = handle() as HTMLElement & {
+      setPointerCapture(id: number): void;
+      releasePointerCapture(id: number): void;
+    };
+    el.setPointerCapture = (id: number): void => {
+      captured.push(id);
+    };
+    el.releasePointerCapture = (id: number): void => {
+      released.push(id);
+    };
+    return { captured, released };
+  }
+
+  function pointerDown(pointerId = 7): void {
+    const event = new MouseEvent("pointerdown", {
+      button: 0,
+      bubbles: true,
+      cancelable: true,
+    }) as MouseEvent & { pointerId: number };
+    Object.defineProperty(event, "pointerId", { value: pointerId });
+    handle().dispatchEvent(event);
+  }
+
+  it("captures the initiating pointer for the whole drag", () => {
+    const { captured } = stubCapture();
+    pointerDown(7);
+    expect(captured).toEqual([7]);
+  });
+
+  it("ends the drag on lostpointercapture — the release-outside-the-window case", () => {
+    stubCapture();
+    pointerDown();
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 600, bubbles: true }));
+    expect(document.body.classList.contains("is-splitting")).toBe(true);
+
+    // No pointerup ever arrives; only the capture is lost.
+    handle().dispatchEvent(new Event("lostpointercapture", { bubbles: true }));
+
+    expect(document.body.classList.contains("is-splitting")).toBe(false);
+    expect(handle().classList.contains("is-dragging")).toBe(false);
+    expect(onCommit).toHaveBeenLastCalledWith(0.6);
+
+    // And the gesture is truly over: further moves must not resize.
+    onPreview.mockClear();
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 900, bubbles: true }));
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it("ends the drag when the window loses focus", () => {
+    stubCapture();
+    pointerDown();
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 550, bubbles: true }));
+    window.dispatchEvent(new Event("blur"));
+
+    expect(document.body.classList.contains("is-splitting")).toBe(false);
+    expect(onCommit).toHaveBeenLastCalledWith(0.55);
+  });
+
+  it("commits exactly once however many terminators arrive", () => {
+    stubCapture();
+    pointerDown();
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 500, bubbles: true }));
+    window.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
+    handle().dispatchEvent(new Event("lostpointercapture", { bubbles: true }));
+    window.dispatchEvent(new Event("blur"));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("still works where the capture API is unavailable (the jsdom default)", () => {
+    // No stub at all: setPointerCapture is undefined and must not break the drag.
+    drag(300, 500);
+    expect(onCommit).toHaveBeenLastCalledWith(0.5);
+    expect(document.body.classList.contains("is-splitting")).toBe(false);
+  });
+});
+
 describe("Splitter: external sync and teardown", () => {
   it("sync() reflects a ratio changed elsewhere without emitting", () => {
     splitter.sync(0.7);
