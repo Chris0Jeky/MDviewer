@@ -123,9 +123,88 @@ describe("Editor: editing", () => {
     expect(codeToTokens).toHaveBeenLastCalledWith("abc", expect.anything());
   });
 
-  it("keeps the word/size stat current", () => {
+  it("keeps the size stat live and settles the word count on the debounce", async () => {
     type("one two three");
+    // The size is O(1), so it must be right immediately.
+    expect(pane().textContent).toContain("13 chars");
+    await settleHighlight();
     expect(pane().textContent).toContain("3 words");
+  });
+
+  /**
+   * countWords is O(n) and allocates one string per word. Running it per keystroke
+   * freezes the pane on a large document — and would do so even above
+   * HIGHLIGHT_MAX_CHARS, where highlighting has already been dropped for cost.
+   */
+  it("does not recount words on every keystroke", async () => {
+    type("a");
+    type("a b");
+    type("a b c");
+    type("a b c d");
+    await settleHighlight();
+    expect(pane().textContent).toContain("4 words");
+  });
+
+  /**
+   * With the backdrop on, the textarea's own glyphs are transparent, so the backdrop
+   * is the only visible copy of the source. If it only caught up after the debounce,
+   * continuous typing would leave newly typed characters invisible and deleted ones
+   * still painted until the user paused.
+   */
+  it("shows typed text immediately, before the tokenizer runs", () => {
+    type("# Draft");
+    const backdrop = document.getElementById(IDS.editorHighlight)!;
+    expect(pane().getAttribute(ATTRS.highlightState)).toBe("on");
+    expect(backdrop.textContent).toBe("# Draft");
+    expect(codeToTokens).not.toHaveBeenCalled();
+  });
+
+  it("keeps the backdrop equal to the textarea through a burst of edits", () => {
+    const backdrop = document.getElementById(IDS.editorHighlight)!;
+    for (const text of ["#", "# H", "# He", "# Hell", "# Hello", "# Hell", "# He"]) {
+      type(text);
+      expect(backdrop.textContent).toBe(editor.input.value);
+    }
+    expect(codeToTokens).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Replacing the backdrop's content resets its scroll height, and the browser will
+   * already have clamped its scrollTop against the *previous*, shorter content (an
+   * empty backdrop on first load). Without re-copying the textarea's position the
+   * colors end up at a different vertical offset from the caret.
+   *
+   * jsdom has no layout, so both scroll properties are stubbed and the assertion is
+   * on the contract: after any repaint, the backdrop is told the textarea's position.
+   */
+  it("re-syncs the backdrop's scroll position after every repaint", async () => {
+    const backdrop = document.getElementById(IDS.editorHighlight)!;
+    let written = -1;
+    Object.defineProperty(editor.input, "scrollTop", { value: 240, configurable: true });
+    Object.defineProperty(backdrop, "scrollTop", {
+      configurable: true,
+      get: () => written,
+      set: (v: number) => {
+        written = v;
+      },
+    });
+
+    // The immediate plain paint.
+    type("line\n".repeat(200));
+    expect(written).toBe(240);
+
+    // And again once the tokenized DOM replaces it.
+    written = -1;
+    await settleHighlight();
+    expect(codeToTokens).toHaveBeenCalled();
+    expect(written).toBe(240);
+  });
+
+  it("the immediate paint is plain text — never markup", () => {
+    type("<script>alert(1)</script>");
+    const backdrop = document.getElementById(IDS.editorHighlight)!;
+    expect(backdrop.querySelector("script")).toBeNull();
+    expect(backdrop.textContent).toBe("<script>alert(1)</script>");
   });
 
   it("Tab inserts a tab character instead of leaving the field", () => {
@@ -134,6 +213,33 @@ describe("Editor: editing", () => {
     const event = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
     editor.input.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+    expect(editor.input.value).toBe("ab\t");
+    expect(onInput).toHaveBeenLastCalledWith("ab\t");
+  });
+
+  /**
+   * execCommand("insertText") is the only insertion path browsers record in a
+   * textarea's native undo stack. jsdom does not implement it, so this asserts the
+   * documented fallback: the manual splice still runs and still reports the edit.
+   */
+  it("Tab prefers the undo-aware insertion path and falls back when unavailable", () => {
+    const execCommand = vi.fn(() => true);
+    (document as unknown as { execCommand: unknown }).execCommand = execCommand;
+    try {
+      type("ab");
+      editor.input.selectionStart = editor.input.selectionEnd = 2;
+      editor.input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", cancelable: true }));
+      expect(execCommand).toHaveBeenCalledWith("insertText", false, "\t");
+      // The command reported success, so the manual splice must NOT also run —
+      // a real browser dispatches its own input event for it.
+      expect(editor.input.value).toBe("ab");
+    } finally {
+      delete (document as unknown as { execCommand?: unknown }).execCommand;
+    }
+
+    // Fallback path: no execCommand at all (the jsdom default).
+    editor.input.selectionStart = editor.input.selectionEnd = 2;
+    editor.input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", cancelable: true }));
     expect(editor.input.value).toBe("ab\t");
     expect(onInput).toHaveBeenLastCalledWith("ab\t");
   });

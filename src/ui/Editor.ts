@@ -6,9 +6,15 @@
  * underneath it paints Shiki's Markdown syntax colors. The textarea's own glyphs are
  * transparent, so the user appears to type directly into highlighted text.
  *
- * Two properties keep that illusion honest and are the reason for the CSS in
+ * Three properties keep that illusion honest and are the reason for the CSS in
  * editor.css: both layers must share identical box metrics (font, size, line-height,
- * padding, wrapping), and the backdrop must follow the textarea's scroll position.
+ * padding, wrapping, scrollbar gutter); the backdrop must follow the textarea's
+ * scroll position; and — because the textarea's own glyphs are transparent whenever
+ * the backdrop is on — the backdrop's text must equal the textarea's value at ALL
+ * times, not merely once tokenizing settles. Every input therefore repaints the
+ * backdrop synchronously in plain text; the debounced Shiki pass only recolors it.
+ * Skipping that immediate paint makes freshly typed characters invisible and
+ * freshly deleted ones linger until the user stops typing.
  *
  * Safety: the backdrop is built from Shiki's *token* API and inserted with
  * `textContent` + `CSSStyleDeclaration.setProperty` — never `innerHTML`. Document
@@ -57,7 +63,15 @@ export const HIGHLIGHT_MAX_CHARS = 120_000;
 /** Debounce for re-tokenizing. Shorter than the 250ms content render so colors lead. */
 const HIGHLIGHT_DEBOUNCE_MS = 90;
 
-/** Word count used by the pane header; whitespace-separated runs, cheap and good enough. */
+/**
+ * Word count used by the pane header; whitespace-separated runs, cheap and good enough.
+ *
+ * O(n) in the document and it allocates one string per word, so it is deliberately
+ * NOT called from the input handler — see `scheduleStat`. On a multi-megabyte source
+ * a per-keystroke call allocates millions of strings and freezes the pane, and it does
+ * so even above HIGHLIGHT_MAX_CHARS where highlighting has already been given up for
+ * exactly that reason.
+ */
 export function countWords(text: string): number {
   const trimmed = text.trim();
   return trimmed ? trimmed.split(/\s+/).length : 0;
@@ -81,6 +95,10 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   /** Monotonic token so a slow tokenize can never repaint over newer text. */
   let highlightToken = 0;
   let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Word counting is debounced separately from painting — see scheduleStat. */
+  let statTimer: ReturnType<typeof setTimeout> | undefined;
+  let wordCount = 0;
+  let sizeChars = 0;
   let destroyed = false;
 
   const pane = el("section", {
@@ -139,6 +157,20 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   }
 
   /**
+   * Paint the source as one uncolored text node and turn the backdrop on.
+   *
+   * This runs synchronously on every edit so the visible glyphs are never stale: the
+   * debounced tokenizer then replaces this with the same characters in color. A single
+   * `textContent` write is orders of magnitude cheaper than tokenizing, which is what
+   * makes it affordable per keystroke.
+   */
+  function paintPlain(text: string): void {
+    highlightCode.replaceChildren(document.createTextNode(text));
+    pane.setAttribute(ATTRS.highlightState, "on");
+    onScroll();
+  }
+
+  /**
    * Build one `<span class="editor-line">` per source line containing per-token spans.
    * Trailing "\n" is materialized as a final empty line so the backdrop's scroll height
    * matches a textarea whose text ends in a newline.
@@ -162,6 +194,23 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     });
     highlightCode.replaceChildren(frag);
     pane.setAttribute(ATTRS.highlightState, "on");
+    // Replacing the content resets the backdrop's scroll height, and the browser will
+    // have clamped its scrollTop against whatever it held before (an empty backdrop on
+    // first load, or the shorter previous text). Re-copy the textarea's position or the
+    // colors sit at a different vertical offset from the caret.
+    onScroll();
+  }
+
+  /**
+   * Keep the backdrop showing exactly the current text, immediately.
+   *
+   * Above HIGHLIGHT_MAX_CHARS (and while empty) we hand painting back to the textarea
+   * rather than writing a megabyte-sized text node per keystroke — the same threshold,
+   * and the same reasoning, as the tokenizer.
+   */
+  function repaintNow(text: string): void {
+    if (!text || text.length > HIGHLIGHT_MAX_CHARS) disableHighlight();
+    else paintPlain(text);
   }
 
   async function highlightNow(text: string): Promise<void> {
@@ -189,7 +238,8 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     }
   }
 
-  function scheduleHighlight(text: string): void {
+  /** Queue a tokenize pass without touching what is currently painted. */
+  function scheduleRecolor(text: string): void {
     if (highlightTimer) clearTimeout(highlightTimer);
     highlightTimer = setTimeout(() => {
       highlightTimer = undefined;
@@ -197,36 +247,82 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     }, HIGHLIGHT_DEBOUNCE_MS);
   }
 
-  function syncStat(text: string): void {
-    const words = countWords(text);
-    statEl.textContent = `${words} word${words === 1 ? "" : "s"} · ${formatSize(text.length)}`;
+  /**
+   * Repaint the backdrop now, recolor it shortly. Both halves are required: the
+   * immediate paint keeps the visible text correct, the debounce keeps tokenizing off
+   * the keystroke path. Used wherever the *text* changed.
+   */
+  function scheduleHighlight(text: string): void {
+    repaintNow(text);
+    scheduleRecolor(text);
+  }
+
+  /** The document size — O(1), so it stays on the live keystroke path. */
+  function syncSize(text: string): void {
+    sizeChars = text.length;
+    statEl.textContent = `${wordCount} word${wordCount === 1 ? "" : "s"} · ${formatSize(sizeChars)}`;
+  }
+
+  /**
+   * The word count is O(n) and allocating, so it is recomputed on the same idle
+   * debounce as the highlighting rather than per keystroke. The size beside it stays
+   * live, so the header never looks frozen while the count catches up.
+   */
+  function scheduleStat(text: string): void {
+    syncSize(text);
+    if (statTimer) clearTimeout(statTimer);
+    statTimer = setTimeout(() => {
+      statTimer = undefined;
+      wordCount = countWords(input.value);
+      syncSize(input.value);
+    }, HIGHLIGHT_DEBOUNCE_MS);
   }
 
   // ---- Events ----------------------------------------------------------------
 
   const onInputEvent = (): void => {
     const text = input.value;
-    syncStat(text);
+    scheduleStat(text);
     scheduleHighlight(text);
     opts.onInput(text);
   };
 
-  const onScroll = (): void => {
+  // Declared (not assigned to a const) so the painters above can call it: they run
+  // only from handlers and timers, but the hoist keeps that independent of ordering.
+  function onScroll(): void {
     // The backdrop is overflow:hidden; scrolling it programmatically keeps the two
     // layers glued together without a second scrollbar.
     highlight.scrollTop = input.scrollTop;
     highlight.scrollLeft = input.scrollLeft;
-  };
+  }
 
   /**
    * Tab inserts a real tab instead of leaving the field. Shift+Tab and Escape still
    * move focus out, so the pane never becomes a keyboard trap.
+   *
+   * `execCommand("insertText")` is deprecated but is the only insertion path browsers
+   * record in a textarea's native undo stack. Rewriting `input.value` instead is a
+   * programmatic write: it drops the entry, and in Chromium it discards the preceding
+   * native history too, so Ctrl+Z after a Tab loses more than the tab. We fall back to
+   * the manual splice where the command is unavailable or refused (jsdom, older
+   * engines), accepting the weaker undo only when there is no alternative.
    */
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== "Tab" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
       return;
     }
     event.preventDefault();
+    input.focus();
+    let inserted: boolean;
+    try {
+      // A successful insertText dispatches a native "input" event, so onInputEvent
+      // runs through the normal listener and must not be invoked again below.
+      inserted = document.execCommand("insertText", false, "\t");
+    } catch {
+      inserted = false;
+    }
+    if (inserted) return;
+
     const { selectionStart, selectionEnd, value } = input;
     input.value = `${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`;
     input.selectionStart = input.selectionEnd = selectionStart + 1;
@@ -237,7 +333,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   input.addEventListener("scroll", onScroll);
   input.addEventListener("keydown", onKeyDown);
 
-  syncStat("");
+  syncSize("");
 
   return {
     input,
@@ -247,14 +343,24 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       if (input.value === text) return;
       input.value = text;
       input.scrollTop = 0;
+      input.scrollLeft = 0;
       onScroll();
-      syncStat(text);
+      // An externally-seeded document is a discrete event, not a keystroke: count it
+      // straight away so the header is right before the user can look at it.
+      wordCount = countWords(text);
+      if (statTimer) {
+        clearTimeout(statTimer);
+        statTimer = undefined;
+      }
+      syncSize(text);
       scheduleHighlight(text);
     },
     setCodeTheme(next): void {
       if (next === codeTheme) return;
       codeTheme = next;
-      scheduleHighlight(input.value);
+      // Only the colors change, so recolor in place — dropping to a plain repaint
+      // first would flash the pane uncolored for no reason.
+      scheduleRecolor(input.value);
     },
     focus(): void {
       input.focus();
@@ -262,6 +368,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     destroy(): void {
       destroyed = true;
       if (highlightTimer) clearTimeout(highlightTimer);
+      if (statTimer) clearTimeout(statTimer);
       input.removeEventListener("input", onInputEvent);
       input.removeEventListener("scroll", onScroll);
       input.removeEventListener("keydown", onKeyDown);
