@@ -2,9 +2,9 @@
 
 **Live app:** https://mdviewer-c9r.pages.dev/
 
-**Drag a Markdown file in, get a beautiful PDF out — with no code block, figure, table, or callout ever sliced across a page boundary.**
+**Write Markdown, or drag a file in — get a beautiful PDF out, with no code block, figure, table, or callout ever sliced across a page boundary.**
 
-MDviewer is a browser-based, drag-and-drop Markdown → PDF tool built for **research papers and code-heavy technical docs**. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and it makes no document/API or third-party runtime requests. Same-origin application assets may load lazily as features run. The only thing it persists is a small settings object in `localStorage`.
+MDviewer is a browser-based Markdown → PDF tool built for **research papers and code-heavy technical docs**. Write in the built-in source pane and watch the paginated preview rebuild as you type, or drop a file in and edit it in place. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and it makes no document/API or third-party runtime requests. Same-origin application assets may load lazily as features run. The only thing it persists is a small settings object in `localStorage`.
 
 ![MDviewer rendering its bundled sample as a seven-page, print-ready document.](docs/assets/mdviewer-preview.png)
 
@@ -22,7 +22,14 @@ npm run dev      # start the Vite dev server, then open the printed localhost UR
 npm run build    # produce a production bundle in dist/
 ```
 
-Then drag a `.md` / `.markdown` file onto the window (or paste Markdown, or use the file picker), and the paginated preview renders on the right.
+The app opens in **Split** view: a Markdown source pane on the left, the paginated preview on the
+right. Start typing and the preview repaginates as you go. You can also drag a `.md` / `.markdown`
+file onto the window, paste Markdown, or use the file picker — a file you open appears in the source
+pane and is editable exactly like text you typed.
+
+The toolbar's **View** group switches between three layouts — **Markdown** (source only), **Split**,
+and **Preview** (the paginated pages only) — and the divider between the panes can be dragged or
+resized with the arrow keys.
 
 For a production-style local launch, run `npm start` (builds, serves, and opens the app) or
 double-click `Start MDviewer.cmd` on Windows. For permanent public hosting, private access through
@@ -45,7 +52,10 @@ The exported PDF is **always dark-on-white**, regardless of the screen theme you
 - **Callouts** — `note` / `tip` / `warning` / `danger` admonition blocks.
 - **Footnotes** that float to the bottom of the page they are referenced on.
 - **Auto table of contents** with real, Paged.js-generated page numbers.
-- **Themes** — light / dark / sepia screen themes, six code-theme families.
+- **Live source editing** — a syntax-highlighted Markdown pane beside the preview, with three view
+  modes and a resizable divider. The editing surface never appears in the exported PDF.
+- **Themes** — light / dark / sepia screen themes, six code-theme families (the source pane follows
+  the same theme).
 - **Paper sizes** — A4 and US Letter, with narrow / normal / wide margins.
 - Optional running header, page numbers, and code line numbers.
 
@@ -55,11 +65,11 @@ The exported PDF is **always dark-on-white**, regardless of the screen theme you
 src/
   main.ts          Vite entry — boots the app, wires global drag/drop/paste, imports CSS
   app/             controller, document store, settings, DOM-name constants
-  ui/              toolbar, canvas/preview, empty state, warning/error banner
+  ui/              toolbar, source editor, splitter, canvas/preview, empty state, banner
   render/          markdown-it + Shiki + KaTeX + Mermaid + pagination-source builder
   paginate/        Paged.js engine, @page stylesheet builder, measure, shrink-to-fit
   export/          print (vector) and download (rasterized) paths
-  styles/          app/preview chrome CSS + document/print/shiki document CSS
+  styles/          app/editor/preview chrome CSS + document/print/shiki document CSS
   types/           local ambient shims (no upstream @types)
 tests/             Vitest unit tests + Playwright E2E (incl. the no-cutoff guarantee)
 docs/              product vision, architecture, roadmap, and the design specs

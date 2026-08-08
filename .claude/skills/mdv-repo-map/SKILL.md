@@ -33,12 +33,16 @@ The goal is to land on the one seam, confirm its signature, and skip the rest.
   `src/paginate/handler.ts`.
 - Export (print + raster fallback): `src/export/print.ts`, `src/export/download.ts`.
 - Toolbar/canvas/empty/banner: `src/ui/*`, `src/styles/app.css`, `preview.css`.
+- Split workspace (source pane, divider, view modes): `src/ui/Editor.ts`,
+  `src/ui/Splitter.ts`, `src/styles/editor.css`, `App.onEditorInput`/`applyViewMode`.
+- The typing → preview loop: `DocStore.updateText` in `src/app/state.ts` (emits `"text"`,
+  not `"change"`).
 - Settings/state/DOM names: `src/app/settings.ts`, `state.ts`, `dom.ts`.
 
 ## What to ignore
 
 `node_modules`, build output, `*.d.ts` shims (unless types are the task), and CSS that
-is not in the paged stylesheet path (`app.css`/`preview.css` are screen-only).
+is not in the paged stylesheet path (`app.css`/`editor.css`/`preview.css` are screen-only).
 
 ## Verify
 

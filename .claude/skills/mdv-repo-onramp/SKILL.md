@@ -24,8 +24,9 @@ to pick one safe, reviewable slice — not to bulk-read the whole tree.
 
 ## What MDviewer is (one line)
 
-Browser-only, drag-and-drop Markdown → PDF; 100% client-side; the #1 guarantee is that
-no code block, figure, table, or callout is ever sliced across a page boundary.
+Browser-only Markdown → PDF; write in the built-in source pane or drop a file (both are
+editable, with a live split preview); 100% client-side; the #1 guarantee is that no code
+block, figure, table, or callout is ever sliced across a page boundary.
 
 ## Pick the slice
 
