@@ -88,4 +88,6 @@ For current operational state, begin with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) a
 
 ## License
 
-MIT. The author/copyright holder remains intentionally unspecified until a public release.
+GNU General Public License version 3 only (`GPL-3.0-only`). See `LICENSE` and
+`RELICENSING.md`. Versions published before 12 August 2026 remain available
+under their existing MIT grant.

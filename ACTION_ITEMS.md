@@ -15,6 +15,11 @@
 
 ## Current State (snapshot)
 
+- **2026-08-12 (licensing)** — Current and future owner-authored MDviewer code is
+  `GPL-3.0-only`; the historical MIT grant remains valid for earlier revisions.
+  Production builds now carry the GPL text, exact corresponding-source link,
+  project notice, and installed dependency licence texts. AI-6 remains OPEN.
+
 - **2026-08-08 (split-view editor)** — The Markdown source editor landed on `main` through PR #36
   (merge commit `87249e0`), with `main` CI green afterwards. MDviewer is no longer view-only: you
   write Markdown in the app and the paginated preview rebuilds as you type, across three view modes
@@ -133,9 +138,10 @@
   the agent-run installed-Chrome inspection: vector and fallback exports each produced 7 A4 pages;
   all 14 rendered pages were visually checked with no sliced normal atomic blocks.
 
-- **AI-3 — Decide license and author** — DONE 2026-06-25. User confirmed: **keep the MIT placeholder.**
-  `package.json` + `README.md` already carry MIT; the author/copyright holder is intentionally left as
-  a placeholder for now. No change required. (Revisit author/`LICENSE` file only before a public release.)
+- **AI-3 — Decide license and author** — DONE 2026-06-25; **SUPERSEDED 2026-08-12.**
+  The repository owner's later decision licenses current and future owner-authored MDviewer code
+  under `GPL-3.0-only`. The earlier MIT placeholder remains relevant only to revisions already
+  published under it; see `RELICENSING.md` and `LICENSES/MIT.txt`.
 
 - **AI-2 — Install Playwright browsers + run the E2E suite** — DONE 2026-06-25. Ran
   `npx playwright install chromium` + `npm run test:e2e` → **15/15 passing**, including

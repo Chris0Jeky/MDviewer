@@ -3,7 +3,14 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-08-08:** The split-view Markdown editor is **MERGED**. PR **#36**
+> **▶ CURRENT CHECKPOINT — 2026-08-12:** The repository owner selected
+> `GPL-3.0-only` for current and future owner-authored MDviewer code, superseding
+> the earlier MIT placeholder. The licensing PR also makes every production
+> `dist/` carry the GPL text, exact corresponding-source link, project notice,
+> and installed dependency licence texts. Historical MIT revisions retain their
+> grant. **AI-6 remains the one OPEN human item.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-08-08:** The split-view Markdown editor is **MERGED**. PR **#36**
 > closed its review round — all 11 Codex findings addressed across four fix commits — and merged to
 > `main` as merge commit **`87249e0`**, with the post-merge `main` CI run green on all three required
 > jobs. Head at merge was `0867399`.
@@ -223,7 +230,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## Deferred questions — ALL ANSWERED 2026-06-25
 
-- **Q-1** (AI-3 license): **ANSWERED — keep the MIT placeholder.** No change (package.json/README already MIT; author intentionally left as placeholder). AI-3 closed in ACTION_ITEMS.
+- **Q-1** (AI-3 licence): **SUPERSEDED 2026-08-12 — GPL-3.0-only.** The repository owner's later
+  decision relicenses current and future owner-authored MDviewer code under GPLv3. Historical MIT
+  releases retain their original grant; the durable record is `RELICENSING.md`.
 - **Q-2** (Shiki on-demand languages): **ANSWERED — build it out properly (T-4).** Don't remove `ensureLang`; implement real on-demand loading. See T-4 below for the design constraints.
 - **Q-3** (bundle lazy-load): **ANSWERED — yes, do it (T-3).** Greenlit. See T-3 below.
 
