@@ -223,7 +223,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## Deferred questions — ALL ANSWERED 2026-06-25
 
-- **Q-1** (AI-3 license): **ANSWERED — keep the MIT placeholder.** No change (package.json/README already MIT; author intentionally left as placeholder). AI-3 closed in ACTION_ITEMS.
+- **Q-1** (AI-3 licence): **SUPERSEDED 2026-08-12 — GPL-3.0-only.** The repository owner's later
+  decision relicenses current and future owner-authored MDviewer code under GPLv3. Historical MIT
+  releases retain their original grant; the durable record is `RELICENSING.md`.
 - **Q-2** (Shiki on-demand languages): **ANSWERED — build it out properly (T-4).** Don't remove `ensureLang`; implement real on-demand loading. See T-4 below for the design constraints.
 - **Q-3** (bundle lazy-load): **ANSWERED — yes, do it (T-3).** Greenlit. See T-3 below.
 

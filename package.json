@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Browser-based, drag-and-drop Markdown to PDF viewer with page-break-safe pagination for research and code documents.",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
