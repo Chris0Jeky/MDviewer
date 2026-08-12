@@ -3,7 +3,14 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-08-08:** The split-view Markdown editor is **MERGED**. PR **#36**
+> **▶ CURRENT CHECKPOINT — 2026-08-12:** The repository owner selected
+> `GPL-3.0-only` for current and future owner-authored MDviewer code, superseding
+> the earlier MIT placeholder. The licensing PR also makes every production
+> `dist/` carry the GPL text, exact corresponding-source link, project notice,
+> and installed dependency licence texts. Historical MIT revisions retain their
+> grant. **AI-6 remains the one OPEN human item.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-08-08:** The split-view Markdown editor is **MERGED**. PR **#36**
 > closed its review round — all 11 Codex findings addressed across four fix commits — and merged to
 > `main` as merge commit **`87249e0`**, with the post-merge `main` CI run green on all three required
 > jobs. Head at merge was `0867399`.

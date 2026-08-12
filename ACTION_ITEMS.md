@@ -15,6 +15,11 @@
 
 ## Current State (snapshot)
 
+- **2026-08-12 (licensing)** — Current and future owner-authored MDviewer code is
+  `GPL-3.0-only`; the historical MIT grant remains valid for earlier revisions.
+  Production builds now carry the GPL text, exact corresponding-source link,
+  project notice, and installed dependency licence texts. AI-6 remains OPEN.
+
 - **2026-08-08 (split-view editor)** — The Markdown source editor landed on `main` through PR #36
   (merge commit `87249e0`), with `main` CI green afterwards. MDviewer is no longer view-only: you
   write Markdown in the app and the paginated preview rebuilds as you type, across three view modes
