@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = new URL("..", import.meta.url).pathname.replace(/^\/(\w:)/, "$1");
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const lock = JSON.parse(readFileSync(join(repoRoot, "package-lock.json"), "utf8"));
 const outDir = join(repoRoot, "dist");
 
@@ -16,9 +17,20 @@ copyFileSync(
   join(outDir, "THIRD_PARTY_NOTICES.md"),
 );
 
+const deploymentRevision = process.env.CF_PAGES_COMMIT_SHA ?? process.env.GITHUB_SHA;
+if (!deploymentRevision) {
+  const dirtyPaths = execFileSync("git", ["status", "--porcelain"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim();
+  if (dirtyPaths) {
+    throw new Error(
+      "Refusing to label a dirty local build with HEAD. Commit the source or supply a trusted deployment SHA.",
+    );
+  }
+}
 const revision =
-  process.env.CF_PAGES_COMMIT_SHA ??
-  process.env.GITHUB_SHA ??
+  deploymentRevision ??
   execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
 
 writeFileSync(
@@ -49,7 +61,7 @@ for (const [packagePath, metadata] of Object.entries(lock.packages ?? {}).sort((
   const version = packageJson.version ?? metadata.version ?? "unknown";
   const declared = packageJson.license ?? metadata.license ?? "not declared";
   const noticeFiles = readdirSync(packageDir)
-    .filter((file) => /^(licen[cs]e|copying|notice)(\.|$)/i.test(file))
+    .filter((file) => /^(licen[cs]e|copying|notice)([-_.]|$)/i.test(file))
     .sort();
 
   const texts = noticeFiles.map((file) => {
