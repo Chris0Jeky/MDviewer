@@ -35,6 +35,7 @@ export interface Settings {
   margins: MarginPreset; // @page margin
   showToc: boolean; // auto TOC with target-counter page numbers
   showPageNumbers: boolean; // @bottom-center counter(page)
+  titlePage: boolean; // treat page 1 as a title page: blank its header + page number
   runningHeader: string; // '' = off; else running-header content
   showLineNumbers: boolean; // CSS-counter line numbers in code
   zoom: "fit" | 1 | 0.5; // preview canvas zoom (UI only, persisted for convenience)
@@ -54,6 +55,9 @@ export const DEFAULT_SETTINGS: Settings = {
   margins: "normal",
   showToc: true,
   showPageNumbers: true,
+  // Default true preserves the long-standing "page 1 is a title page" behavior; the
+  // toolbar toggle is what makes it explicit rather than mysterious (BUG-9).
+  titlePage: true,
   runningHeader: "",
   showLineNumbers: false,
   zoom: "fit",
@@ -109,6 +113,11 @@ export function migrateSettings(raw: unknown): Settings {
     ...r,
     // Pin known-shape fields so a malformed value can't poison the type.
     schemaVersion: 1,
+    // `titlePage` feeds a CSS branch in buildStylesheet, so a truthy non-boolean from a
+    // hand-edited store would emit an `@page :first` block on a value that never round-
+    // trips through the toggle. Validate rather than trust the spread.
+    titlePage:
+      typeof r.titlePage === "boolean" ? r.titlePage : DEFAULT_SETTINGS.titlePage,
     // Layout fields drive CSS geometry directly: a bogus persisted value would
     // collapse a pane with no way back, so coerce both onto their valid domain.
     viewMode: VIEW_MODES.includes(r.viewMode as ViewMode)

@@ -27,14 +27,49 @@ describe("cssBuilder: always-present dynamic scaffolding", () => {
     expect(css()).toMatch(/@page\b/);
   });
 
-  it("suppresses header/footer chrome on the first page (@page :first)", () => {
-    expect(squish(css())).toContain("@page :first");
-  });
-
   it("sets the doctitle named string from h1/h2 (string-set)", () => {
     const out = squish(css());
     expect(out).toContain("string-set:");
     expect(out).toContain("doctitle");
+  });
+
+  // UX-10: a bare string(doctitle) resolves to the `first` variant — the LAST assignment
+  // made anywhere on the page. When the no-slice guarantee pushes a block onto a page
+  // where a new heading also starts, that names the wrong section. The `start` variant
+  // (supported by the bundled Paged.js content parser) reads the value in effect at the
+  // page's start, which is the section the pushed content actually belongs to.
+  it("reads the running title with the `start` variant, not the default `first`", () => {
+    const out = squish(css());
+    expect(out).toContain("string(doctitle, start)");
+    expect(out).not.toMatch(/string\(doctitle\)/);
+  });
+});
+
+// BUG-9: the `@page :first` blanking used to be unconditional, so a document with no
+// title page silently lost page 1's header and page number with no control to explain
+// it. Both directions are pinned here so the gate can't regress to a constant.
+describe("cssBuilder: title-page toggle", () => {
+  it("suppresses page-1 header/footer chrome when titlePage is true", () => {
+    expect(squish(css({ titlePage: true }))).toContain("@page :first");
+  });
+
+  it("omits the @page :first block entirely when titlePage is false", () => {
+    expect(squish(css({ titlePage: false }))).not.toContain("@page :first");
+  });
+
+  it("keeps the page counter in both modes (page 1 always counts)", () => {
+    for (const titlePage of [true, false]) {
+      const out = squish(css({ titlePage, showPageNumbers: true }));
+      expect(out).toContain("counter(page)");
+      // A counter-reset would renumber the document; the toggle only blanks chrome.
+      expect(out).not.toContain("counter-reset: page");
+    }
+  });
+
+  it("still emits the ordinary @page block and running title when titlePage is false", () => {
+    const out = squish(css({ titlePage: false }));
+    expect(out).toMatch(/@page\s*\{/);
+    expect(out).toContain("string(doctitle, start)");
   });
 
   it("declares the @footnote area rule", () => {
