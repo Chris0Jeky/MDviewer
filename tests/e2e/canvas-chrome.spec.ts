@@ -231,6 +231,50 @@ test.describe("re-pagination keeps the reader's place", () => {
   });
 });
 
+test.describe("toolbar layout", () => {
+  test("labels sit beside their controls instead of wrapping above them", async ({ page }) => {
+    await page.goto("/");
+    const field = page
+      .locator(".toolbar-field")
+      .filter({ has: page.locator("#code-theme-select") })
+      .first();
+
+    const [fieldBox, labelBox, selectBox] = await Promise.all([
+      field.boundingBox(),
+      field.locator("label").boundingBox(),
+      field.locator("select").boundingBox(),
+    ]);
+    expect(fieldBox).not.toBeNull();
+    expect(labelBox).not.toBeNull();
+    expect(selectBox).not.toBeNull();
+    if (fieldBox && labelBox && selectBox) {
+      // Same row: the label's centre lines up with the control's.
+      const labelMid = labelBox.y + labelBox.height / 2;
+      const selectMid = selectBox.y + selectBox.height / 2;
+      expect(Math.abs(labelMid - selectMid)).toBeLessThan(4);
+      // The label is to the LEFT of the control, not stacked on it.
+      expect(labelBox.x + labelBox.width).toBeLessThanOrEqual(selectBox.x + 1);
+      // And the pair is one control tall, not two.
+      expect(fieldBox.height).toBeLessThan(selectBox.height + 8);
+    }
+  });
+
+  test("the export group is pushed to the right edge by the spacer", async ({ page }) => {
+    await page.goto("/");
+    const exportGroup = page.getByRole("group", { name: "Export" });
+    const [groupBox, barBox] = await Promise.all([
+      exportGroup.boundingBox(),
+      page.locator("#toolbar").boundingBox(),
+    ]);
+    expect(groupBox).not.toBeNull();
+    expect(barBox).not.toBeNull();
+    if (groupBox && barBox) {
+      // Within the toolbar's own horizontal padding of the right edge.
+      expect(barBox.x + barBox.width - (groupBox.x + groupBox.width)).toBeLessThan(20);
+    }
+  });
+});
+
 test.describe("preview accessibility and document lifecycle", () => {
   test("the preview scroller can take keyboard focus", async ({ page }) => {
     await page.goto("/");

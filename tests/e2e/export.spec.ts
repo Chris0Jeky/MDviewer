@@ -69,8 +69,23 @@ test.describe("export paths over one paginated DOM", () => {
 
     const downloadPromise = page.waitForEvent("download", { timeout: 60_000 });
     await downloadBtn.click();
+
+    // The rasterizing loop blocks for seconds. It used to give no signal at all
+    // (UX-1): the button stayed live and nothing on screen changed. It must now go
+    // inert and the canvas must show progress.
+    await expect(downloadBtn).toBeDisabled();
+    await expect(page.locator(".paginating-overlay")).toBeVisible();
+    await expect(page.locator(".paginating-label")).toContainText(/PDF|page \d+ of \d+/i);
+
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+
+    // …and the completion has to be announced and the controls handed back.
+    await expect(page.locator("#status-live")).toContainText(/pdf downloaded/i, {
+      timeout: 30_000,
+    });
+    await expect(downloadBtn).toBeEnabled();
+    await expect(page.locator(".export-primary").first()).toBeEnabled();
   });
 
   /**
