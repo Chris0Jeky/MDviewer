@@ -219,12 +219,16 @@
 /* sanitize.ts forces every surviving checkbox to `disabled` (a security decision that
  * stays). Chrome's disabled UA checkbox ignores `accent-color`, so the only styling the
  * box ever had produced pale grey on pale grey — near-invisible on screen and worse on
- * paper. Draw the control by hand instead: `appearance: none` plus a real border, and a
- * ::after tick for the checked state. `print-color-adjust: exact` keeps the filled box
- * from being dropped by the print pipeline; every colour used is a dark-on-white doc
- * token (--doc-fg-muted #555b63 = 6.9:1 and --doc-link #1a4fb8 = 7.4:1 against white;
- * the white tick on the filled box is the same 7.4:1 — all far above the 3:1 WCAG
- * 1.4.11 non-text contrast minimum). */
+ * paper. Draw the control by hand instead: `appearance: none` plus a real border, and an
+ * embedded SVG tick as the checked background. `print-color-adjust: exact` keeps the
+ * filled box from being dropped by the print pipeline; every colour used is a
+ * dark-on-white doc token (--doc-fg-muted #555b63 = 6.9:1 and --doc-link #1a4fb8 = 7.4:1
+ * against white; the white tick on the filled box is the same 7.4:1 — all far above the
+ * 3:1 WCAG 1.4.11 non-text contrast minimum).
+ *
+ * The tick MUST be a background image, not a ::after pseudo-element: html2canvas-pro
+ * (the rasterized export path) hangs indefinitely on a pseudo-element attached to an
+ * <input>, which silently kills the Download-PDF button. */
 .doc .task-list-item input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -237,30 +241,21 @@
   box-sizing: border-box;
   border: 1.5px solid var(--doc-fg-muted);
   border-radius: 3px;
-  background: #fff;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 78% 78%;
   opacity: 1; /* the UA dims disabled controls; we already draw a static box */
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
 
+/* Checked: an inked box with a white tick knocked out of it. The tick is an inline
+ * (data:) SVG, so nothing is fetched at runtime and the local-first rule holds. */
 .doc .task-list-item input[type="checkbox"]:checked {
   border-color: var(--doc-link);
-  background: var(--doc-link);
-}
-
-/* The tick: two borders of an empty box, rotated. Drawn in white on the filled
- * box, so it reads at any size and survives a monochrome print as a knockout. */
-.doc .task-list-item input[type="checkbox"]:checked::after {
-  content: "";
-  display: block;
-  position: absolute;
-  left: 0.28em;
-  top: 0.08em;
-  width: 0.22em;
-  height: 0.45em;
-  border: solid #fff;
-  border-width: 0 0.14em 0.14em 0;
-  transform: rotate(45deg);
+  background-color: var(--doc-link);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 L6.5 11.5 L12.5 5'/%3E%3C/svg%3E");
 }
 
 .doc .task-list-item label {

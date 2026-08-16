@@ -42,7 +42,6 @@ test.describe("task-list checkboxes are visible", () => {
       );
       return inputs.map((input) => {
         const style = getComputedStyle(input);
-        const tick = getComputedStyle(input, "::after");
         const rect = input.getBoundingClientRect();
         return {
           checked: input.checked,
@@ -51,11 +50,12 @@ test.describe("task-list checkboxes are visible", () => {
           borderColor: style.borderTopColor,
           borderWidth: style.borderTopWidth,
           background: style.backgroundColor,
+          tickImage: style.backgroundImage,
           printColorAdjust: style.printColorAdjust,
           opacity: style.opacity,
-          tickContent: tick.content,
-          tickWidth: parseFloat(tick.width) || 0,
-          tickHeight: parseFloat(tick.height) || 0,
+          // The tick must NOT be a pseudo-element: html2canvas-pro (the rasterized
+          // export path) hangs forever on a pseudo-element attached to an <input>.
+          afterContent: getComputedStyle(input, "::after").content,
           width: rect.width,
           height: rect.height,
         };
@@ -83,11 +83,15 @@ test.describe("task-list checkboxes are visible", () => {
         3,
       );
 
+      // No pseudo-element on the input, in any state — see the note above.
+      expect(box.afterContent === "none" || box.afterContent === "normal").toBe(true);
+
       if (box.checked) {
-        // A real tick is drawn inside the filled box.
-        expect(box.tickContent).not.toBe("none");
-        expect(box.tickWidth).toBeGreaterThan(0);
-        expect(box.tickHeight).toBeGreaterThan(0);
+        // A real tick is drawn inside the filled box, from an embedded (data:) SVG so
+        // nothing is fetched at runtime.
+        expect(box.tickImage).toMatch(/^url\("data:image\/svg\+xml/);
+      } else {
+        expect(box.tickImage).toBe("none");
       }
     }
   });
