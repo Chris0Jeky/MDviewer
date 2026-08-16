@@ -103,7 +103,14 @@
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
      reload → load the sample → Print/Save-as-PDF still produces page sheets. After the *next*
      deploy, confirm the update toast appears and Reload applies it.
-  6. Reply "AI-7 is done" (or report what looked wrong).
+  6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
+     stay light (print-accurate), and a Download PDF taken in dark theme must contain light
+     code. The theme control is now labelled "Screen" and sits at the right, before Export.
+  7. Turn the new "Title page" toggle OFF — page 1 must now show the running header and page
+     number (with it ON, current behavior: page 1 shows neither).
+  8. Reply "AI-7 is done" (or report what looked wrong).
+     Known gap, deliberately deferred (ledgered): the toolbar is still desktop-only below
+     ~720px (QA TECH-1) — phone/tablet layout is the one QA item not fixed in this sweep.
 
 - **AI-6 — Accept the split workspace in a real browser (manual UI gate).** The split editor is
   merged to `main` (PR #36, `87249e0`) with 36/36 Chromium E2E tests green, including layer

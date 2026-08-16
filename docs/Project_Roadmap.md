@@ -58,6 +58,12 @@ export paths.
   cells wrap instead of clipping; visible task-list checkboxes; empty-document hint;
   beforeunload guard; close-document button; toolbar field styling; export buttons disabled
   with no document; keyboard-focusable preview; `logging: false` on the raster export.
+  Plus: a `titlePage` setting gating the `@page :first` chrome; `string(doctitle, start)` so
+  pushed content keeps its own section's running header; and the paper made permanently
+  print-accurate — rendered code has no screen dark variant, the "Screen" theme control is
+  visibly labelled and moved beside Export.
+- **Remaining (ledgered 2026-08-16):** responsive toolbar below the shared 720px breakpoint
+  (QA TECH-1) — implementation plan recorded in `docs/agentic/failure_ledger.jsonl`.
 
 - **Done (2026-08-08): the split workspace.** A Markdown source pane with Shiki syntax colors
   beside the paginated preview, three view modes (`Markdown` / `Split` / `Preview`), and a

@@ -120,9 +120,16 @@ first `h1`, or at the top of the document when there is no `h1`.
   each (scale ~1.5–2, white bg) → `jsPDF` `addImage`/`addPage`; one canvas == one already-broken
   page, so page-break safety is inherited. Rasterized (non-selectable), best-effort.
 
-Both are dynamic-imported on user action (keeps the initial bundle light). The exported
-PDF is **always dark-on-white** regardless of screen theme (`@media print` forces the Shiki
-light side and light callout backgrounds).
+Both are dynamic-imported on user action (keeps the initial bundle light). The exported PDF
+**and the on-screen page sheets** are always dark-on-white regardless of screen theme: rendered
+code (`.shiki`) has no screen dark variant at all — the preview is WYSIWYG with the export, and
+the raster path cannot leak a dark theme by construction. The only surviving `--shiki-dark`
+swap is the source editor's backdrop (`#editor-highlight` in `editor.css`), which is chrome,
+not paper; its scope must not widen. `@media print` force-light rules remain as belt-and-braces.
+The running header uses `string(doctitle, start)` (not the default `first` variant) so content
+pushed onto a page that also starts a new heading keeps its own section's title. In the
+toolbar, `.toolbar-spacer` is a semantic divide: document settings sit left of it, the
+screen-theme ("Screen") group and Export sit right of it.
 
 Fallback-path constraints learned in production: `html2canvas` is called with
 `logging: false` (its default floods the console with per-page clone timings and truncated
@@ -203,6 +210,9 @@ export interface Settings {
   screenTheme: ScreenTheme; codeTheme: CodeThemeId; docFont: DocFont; fontSizePt: FontSizePt;
   paperSize: PaperSize; margins: MarginPreset;
   showToc: boolean; showPageNumbers: boolean; runningHeader: string; showLineNumbers: boolean;
+  titlePage: boolean;   // default true: blank the @page :first margin boxes (title-page convention).
+                        // Validated in migrateSettings (boolean check, not spread); a REFLOW_KEYS member.
+                        // counter(page) counts page 1 either way — only its margin boxes are blanked.
   zoom: 'fit' | 1 | 0.5;
 }
 export const DEFAULT_SETTINGS: Settings;
