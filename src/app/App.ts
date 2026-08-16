@@ -403,7 +403,13 @@ export class App {
       this.canvas.setPageCount(flow.total);
       this.announce(`Document paginated into ${flow.total} ${flow.total === 1 ? "page" : "pages"}.`);
 
-      const allWarnings = withMermaidWarnings(warnings, mermaidResult.failed);
+      // UX-12: an empty / whitespace-only document paginates to one blank sheet and would
+      // otherwise report plain success. Surface the hint through the banner only — putting
+      // it in the paginated output would export it into the PDF.
+      const allWarnings = withEmptyDocWarning(
+        withMermaidWarnings(warnings, mermaidResult.failed),
+        src,
+      );
       if (allWarnings.length > 0) this.banner.warn(allWarnings);
       else this.banner.clear();
     } catch (err) {
@@ -488,6 +494,22 @@ function withMermaidWarnings(warnings: RenderWarning[], failed: number): RenderW
           ? "One Mermaid diagram failed to render and was replaced with its source."
           : `${failed} Mermaid diagrams failed to render and were replaced with their source.`,
     },
+  ];
+}
+
+/**
+ * Prepend a "document is empty" hint when the source has no content at all. The pipeline
+ * still runs normally (one blank sheet), so the hint lives in the banner and never in the
+ * paginated output — anything added there would be exported into the PDF.
+ */
+export function withEmptyDocWarning(warnings: RenderWarning[], src: string): RenderWarning[] {
+  if (src.trim().length > 0) return warnings;
+  return [
+    {
+      kind: "content",
+      message: "This document is empty — add some Markdown to see a page.",
+    },
+    ...warnings,
   ];
 }
 

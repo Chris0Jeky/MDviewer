@@ -48,14 +48,39 @@ test.describe("empty and error states", () => {
     await expect(page.locator("#paged-output .pagedjs_page").first()).toBeVisible();
   });
 
-  test("an empty document does not crash the pipeline", async ({ page }) => {
+  /**
+   * UX-12: an empty document used to paginate to one blank sheet and announce plain
+   * success, leaving the user with no idea whether anything had loaded. The hint has to
+   * come through the banner: putting it in the paginated output would export it into
+   * the PDF.
+   */
+  test("an empty document renders without crashing and says so", async ({ page }) => {
     await page.goto("/");
     await loadMarkdownIntoApp(page, "   \n\n   ");
-    // Either it stays in the empty state or renders a single blank page; neither throws.
-    await page.waitForTimeout(1_000);
+
+    const banner = page.locator("#warning-banner");
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toContainText(/empty/i);
+
+    // Not an error: the pipeline completed.
     const errorCard = page.locator("#error-card");
     if (await errorCard.count()) {
       await expect(errorCard).toBeHidden();
     }
+
+    // The hint stays out of the document that gets exported.
+    const pages = page.locator("#paged-output .pagedjs_page");
+    await expect(pages).toHaveCount(1);
+    await expect(pages.first()).not.toContainText(/empty/i);
+  });
+
+  test("the empty hint clears as soon as real content arrives", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, "   \n\n   ");
+    await expect(page.locator("#warning-banner")).toContainText(/empty/i, { timeout: 10_000 });
+
+    await loadMarkdownIntoApp(page, "# Now it has content\n\nA paragraph.");
+    await waitForPagination(page);
+    await expect(page.locator("#warning-banner")).toBeHidden();
   });
 });

@@ -34,7 +34,12 @@ import { registerKatex, tagKatexErrors } from "./math";
 import { sanitizeRenderedHtml } from "./sanitize";
 
 export interface RenderWarning {
-  kind: "math" | "diagram" | "lang" | "security";
+  /**
+   * `content` covers document-level notices that are not a rendering failure — currently
+   * only "the document is empty". It exists so such notices never have to masquerade as a
+   * security/lang warning in the banner's aggregate summary.
+   */
+  kind: "math" | "diagram" | "lang" | "security" | "content";
   message: string;
 }
 
