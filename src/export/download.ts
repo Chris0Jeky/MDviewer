@@ -19,6 +19,12 @@ import { PAGEDJS } from "../app/dom";
 export interface FallbackPdfOptions {
   scale?: number;
   fileName?: string;
+  /**
+   * Called once per rasterized page with the 1-based page just finished and the
+   * total. Rasterizing is a long blocking loop, so without this the UI has no way
+   * to tell the user anything is happening (UX-1).
+   */
+  onProgress?(done: number, total: number): void;
 }
 
 /** Paper dimensions in millimetres for the supported sizes. */
@@ -53,9 +59,14 @@ export async function exportPaginatedToPdf(
       scale,
       backgroundColor: "#ffffff",
       useCORS: true,
+      // html2canvas-pro logs a block of timing/clone chatter per element by default,
+      // which floods the console on every export (TECH-2). We surface progress through
+      // onProgress instead.
+      logging: false,
     });
     if (i > 0) pdf.addPage(settings.paperSize, "portrait");
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, w, h, undefined, "FAST");
+    opts.onProgress?.(i + 1, pages.length);
   }
 
   pdf.save(opts.fileName ?? "document.pdf");
