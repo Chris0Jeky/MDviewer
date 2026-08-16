@@ -40,6 +40,27 @@ describe("cssBuilder: always-present dynamic scaffolding", () => {
   it("declares the @footnote area rule", () => {
     expect(squish(css())).toContain("@footnote");
   });
+
+  // Paged.js discovers footnotes by walking the declarations of the stylesheets passed
+  // to previewer.preview(). document.css is a global app import Paged.js never sees, so
+  // the float MUST be emitted here or every note renders inline and the @footnote area
+  // stays empty (BUG-2).
+  it("emits float: footnote for the inline footnote span so Paged.js can find it", () => {
+    const out = squish(css());
+    expect(out).toContain("float: footnote");
+    expect(out).toContain(".doc .footnote");
+  });
+
+  it("keeps the footnote float rule regardless of unrelated settings", () => {
+    for (const patch of [
+      { showToc: false },
+      { showPageNumbers: false },
+      { showLineNumbers: true },
+      { paperSize: "letter" as const },
+    ]) {
+      expect(squish(css(patch))).toContain("float: footnote");
+    }
+  });
 });
 
 describe("cssBuilder: paper size", () => {

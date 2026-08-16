@@ -53,7 +53,8 @@ export function buildStylesheet(settings: Settings): string {
     : "";
 
   // Footnote float area lives at the bottom of each page; markdown-it footnotes are
-  // transformed into inline `float: footnote` spans by buildSource.ts.
+  // transformed into inline `.footnote` spans by buildSource.ts and floated by
+  // `footnoteFloatRule` below.
   const footnoteArea =
     "  @footnote {\n" +
     "    float: bottom;\n" +
@@ -82,6 +83,25 @@ export function buildStylesheet(settings: Settings): string {
 
   // Running document title: every h1/h2 sets string(doctitle); @top-right reads it.
   const stringSet = `h1, h2 { string-set: doctitle content(text); }\n`;
+
+  // THE footnote float rule. Paged.js discovers footnotes by walking the declarations of
+  // the stylesheets handed to `previewer.preview()` — it never sees the app's globally
+  // imported document.css. So `float: footnote` MUST be emitted here or the notes stay
+  // inline and the @footnote area above renders empty. (The same holds for every other
+  // Paged.js-interpreted property: string-set, target-counter, footnote-*.)
+  //
+  // Paged.js injects its own numbered call glyph (`[data-footnote-call]::after`) next to
+  // each relocated note. markdown-it-footnote already rendered the visible `[n]` link at
+  // the call site, so suppress the duplicate; Paged.js still increments the counter and
+  // still numbers the note itself at the page foot via `[data-footnote-marker]::marker`.
+  const footnoteFloatRule =
+    `.${CLASSES.doc} .${CLASSES.footnote} {\n` +
+    `  float: footnote;\n` +
+    `  footnote-display: block;\n` +
+    `  font-size: 0.85em;\n` +
+    `  color: #4b5563;\n` +
+    `}\n` +
+    `.pagedjs_area [data-footnote-call]::after { content: none; }\n`;
 
   // --- Settings-gated content rules -----------------------------------------
   // TOC page numbers via Paged.js target-counter. Only emitted when the TOC is shown;
@@ -114,6 +134,7 @@ export function buildStylesheet(settings: Settings): string {
     pageBlock +
     firstPageBlock +
     stringSet +
+    footnoteFloatRule +
     tocRule +
     lineNumbersRule
   );

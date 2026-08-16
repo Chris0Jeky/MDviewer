@@ -535,10 +535,13 @@
   margin-left: 0.3em;
 }
 
-/* The inline float-footnote span buildSource produces (rendered at page bottom
- * by Paged.js via float:footnote in cssBuilder). */
+/* The inline footnote span buildSource produces. Paged.js moves it to the page
+ * foot via `float: footnote`, which MUST be declared in cssBuilder's generated
+ * sheet: Paged.js only scans the stylesheets handed to previewer.preview() and
+ * never sees this globally imported file, so a float here would be inert (and
+ * the browser drops the unknown value anyway). Only the shared typography lives
+ * here — it also covers the non-paginated fallback. */
 .doc .footnote {
-  float: footnote;
   font-size: 0.85em;
   color: var(--doc-fg-muted);
 }
