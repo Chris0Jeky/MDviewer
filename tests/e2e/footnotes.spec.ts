@@ -73,10 +73,50 @@ test.describe("footnotes land at the foot of the referencing page", () => {
     });
 
     expect(geometry, "a relocated footnote must exist").not.toBeNull();
+
     // Below the flowing text column, still within the sheet: that is "at the page foot".
     expect(geometry!.noteTop).toBeGreaterThanOrEqual(geometry!.contentBottom - 2);
     expect(geometry!.noteTop).toBeLessThan(geometry!.sheetBottom);
     // The note stays on the page that references it.
     expect(geometry!.callOnSamePage).toBe(true);
+  });
+
+  /**
+   * Paged.js moves the note OUT of `.doc`, so document.css's `.doc .footnote` rules and
+   * the `--doc-*` custom properties stop reaching it. cssBuilder restates the typography
+   * for `.pagedjs_footnote_area`; without that the note renders in the app chrome font at
+   * full body size.
+   */
+  test("the relocated note keeps document typography, smaller than body text", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, SAMPLE_MD);
+    await waitForPagination(page);
+
+    const type = await page.evaluate(() => {
+      const note = document.querySelector<HTMLElement>(
+        "#paged-output .pagedjs_footnote_inner_content .footnote",
+      );
+      const body = document.querySelector<HTMLElement>("#paged-output .doc p");
+      if (!note || !body) return null;
+      const noteStyle = getComputedStyle(note);
+      const bodyStyle = getComputedStyle(body);
+      return {
+        noteFontSize: parseFloat(noteStyle.fontSize),
+        bodyFontSize: parseFloat(bodyStyle.fontSize),
+        noteFamily: noteStyle.fontFamily,
+        bodyFamily: bodyStyle.fontFamily,
+        noteColor: noteStyle.color,
+      };
+    });
+
+    expect(type, "a relocated note and a body paragraph must both exist").not.toBeNull();
+    // Same typeface as the document it annotates, but visibly smaller.
+    expect(type!.noteFamily).toBe(type!.bodyFamily);
+    expect(type!.noteFontSize).toBeLessThan(type!.bodyFontSize);
+    expect(type!.noteFontSize).toBeGreaterThan(type!.bodyFontSize * 0.6);
+    // Dark ink on white paper — the export is always light.
+    expect(type!.noteColor).toMatch(/^rgb\(/);
   });
 });

@@ -15,7 +15,7 @@
  */
 
 import type { Settings } from "../app/settings";
-import { MARGIN_MM } from "../app/settings";
+import { DOC_FONT_STACKS, MARGIN_MM } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import printBase from "../styles/print.css?raw";
 
@@ -101,7 +101,18 @@ export function buildStylesheet(settings: Settings): string {
     `  font-size: 0.85em;\n` +
     `  color: #4b5563;\n` +
     `}\n` +
-    `.pagedjs_area [data-footnote-call]::after { content: none; }\n`;
+    `.pagedjs_area [data-footnote-call]::after { content: none; }\n` +
+    // Paged.js lifts each note OUT of `.doc` (into .pagedjs_footnote_area, a sibling of
+    // the page content), so neither document.css's `.doc .footnote` typography nor the
+    // `--doc-*` custom properties reach it any more. Restate what a page-foot note needs
+    // so it matches the body text it belongs to instead of falling back to the app chrome
+    // font at full size.
+    `.pagedjs_footnote_area {\n` +
+    `  font-family: ${DOC_FONT_STACKS[settings.docFont]};\n` +
+    `  font-size: ${(settings.fontSizePt * 0.85).toFixed(2)}pt;\n` +
+    `  line-height: 1.45;\n` +
+    `  color: #4b5563;\n` +
+    `}\n`;
 
   // --- Settings-gated content rules -----------------------------------------
   // TOC page numbers via Paged.js target-counter. Only emitted when the TOC is shown;

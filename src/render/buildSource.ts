@@ -12,20 +12,9 @@
  * before pagination. `awaitFontsAndImages` is the step-5 helper and lives here too.
  */
 
-import type { DocFont, Settings } from "../app/settings";
+import type { Settings } from "../app/settings";
+import { DOC_FONT_STACKS } from "../app/settings";
 import { ATTRS, CLASSES } from "../app/dom";
-
-/**
- * Font-family stacks per DocFont group. These mirror `src/styles/document.css` exactly; we
- * set both the canonical `data-doc-font` hook (which document.css keys on) and an inline
- * `--doc-font-family` custom property so the typography is correct regardless of which
- * cascade path wins (and so the fragment is self-describing for the export canvas path).
- */
-const DOC_FONT_STACKS: Record<DocFont, string> = {
-  serif: `"Source Serif 4", "Source Serif Pro", "Charter", "Georgia", "Times New Roman", serif`,
-  sans: `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`,
-  slab: `"Roboto Slab", "Rockwell", "Source Serif 4", "Georgia", "Times New Roman", serif`,
-};
 
 /** Outermost blocks whose identity must survive Paged.js cloning/splitting. */
 export const ATOMIC_BLOCK_SELECTOR = [
@@ -83,7 +72,10 @@ export function buildPaginationSource(html: string, settings: Settings): Documen
   const doc = document.createElement("div");
   doc.className = CLASSES.doc;
 
-  // Typography tokens consumed by document.css and the paged stylesheet.
+  // Typography tokens consumed by document.css and the paged stylesheet. We set both the
+  // canonical `data-doc-font` hook (which document.css keys on) and an inline
+  // `--doc-font-family` custom property so the typography is correct regardless of which
+  // cascade path wins (and so the fragment is self-describing for the export canvas path).
   doc.setAttribute("data-doc-font", settings.docFont);
   doc.style.setProperty("--doc-font-family", DOC_FONT_STACKS[settings.docFont]);
   doc.style.setProperty("--doc-font-size", `${settings.fontSizePt}pt`);
