@@ -2,7 +2,14 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { IDS, CLASSES, ATTRS, PAGEDJS, SPLIT_RATIO_VAR } from "../src/app/dom";
+import {
+  IDS,
+  CLASSES,
+  ATTRS,
+  PAGEDJS,
+  SPLIT_RATIO_VAR,
+  PREVIEW_ZOOM_VAR,
+} from "../src/app/dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const STYLES_DIR = join(here, "..", "src", "styles");
@@ -98,6 +105,16 @@ describe("dom-contract: data attributes the CSS keys off appear in the CSS", () 
 
   it("declares the split-ratio custom property the App writes", () => {
     expect(CSS.includes(SPLIT_RATIO_VAR)).toBe(true);
+  });
+
+  // Canvas writes the resolved zoom factor here; if the CSS stopped reading it the
+  // zoom control would go silently dead again (BUG-1).
+  it("declares the preview-zoom custom property the Canvas writes", () => {
+    expect(CSS.includes(PREVIEW_ZOOM_VAR)).toBe(true);
+    expect(
+      CSS.includes(`scale(var(${PREVIEW_ZOOM_VAR}`),
+      "preview zoom must stay a paint-only transform, never the `zoom` property",
+    ).toBe(true);
   });
 });
 
