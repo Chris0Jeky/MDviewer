@@ -15,6 +15,15 @@
 
 ## Current State (snapshot)
 
+- **2026-08-16 (QA sweep)** — The manual QA report (`mdviewerqareport.md`, run against the
+  outdated July deployment `7f4eedf`) drove a full fix sweep on branch `qa-sweep-20260816`:
+  all 9 functional bugs, the UX-feel items, and the tech items addressed or explicitly
+  ledgered (see `docs/agentic/failure_ledger.jsonl` 2026-08-16 entries for the four accepted
+  deferrals). The app is now an installable PWA that works fully offline. Verified locally:
+  typecheck, lint, 334+ unit tests, full Chromium E2E on dev and production-preview targets
+  including both no-cutoff tests and the new offline test. **The live site is still the old
+  deployment until a new `wrangler pages deploy` is run (AI-7).**
+
 - **2026-08-12 (licensing)** — Current and future owner-authored MDviewer code is
   `GPL-3.0-only`; the historical MIT grant remains valid for earlier revisions.
   Production builds now carry the GPL text, exact corresponding-source link,
@@ -76,6 +85,25 @@
 ---
 
 ## OPEN items
+
+- **AI-7 — Merge, deploy, and accept the QA-sweep fixes (manual gate).** The sweep lives on
+  branch `qa-sweep-20260816`. Steps:
+  1. Open/merge the PR for `qa-sweep-20260816` once its CI is green (merge commit, not squash).
+  2. From this machine: `npm run build`, then
+     `npm exec --yes wrangler@4.114.0 -- pages deploy dist --project-name mdviewer --branch main`.
+  3. Smoke the live URL: entry title, hashed asset, `_headers` policy, and the two new
+     `Cache-Control: max-age=0, must-revalidate` responses for `/sw.js` and
+     `/manifest.webmanifest`.
+  4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
+     the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
+     PDF shows progress and disables both export buttons; a settings change no longer resets
+     your scroll position; footnotes sit at the foot of the page; a doc without `[[toc]]` gets
+     its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
+     are clearly visible; an empty `.md` shows the "document is empty" notice.
+  5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. After the *next*
+     deploy, confirm the update toast appears and Reload applies it.
+  6. Reply "AI-7 is done" (or report what looked wrong).
 
 - **AI-6 — Accept the split workspace in a real browser (manual UI gate).** The split editor is
   merged to `main` (PR #36, `87249e0`) with 36/36 Chromium E2E tests green, including layer

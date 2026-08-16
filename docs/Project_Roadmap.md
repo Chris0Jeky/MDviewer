@@ -47,6 +47,18 @@ export paths.
 
 ### P2 — UX polish — `IN PROGRESS`
 
+- **Done (2026-08-16): the QA-sweep fixes.** A full manual QA pass (`mdviewerqareport.md`,
+  run against the July deployment) drove a coordinated fix sweep: working zoom controls with
+  true fit-to-width; a live, pinned page-position chip; visible warning banner / error card
+  (plus a dom-contract rule making TS-authored classes without CSS a CI failure); Download-PDF
+  progress, busy gating and completion feedback; per-page pagination progress + scroll-position
+  restore across re-pagination; footnotes actually collected at the page foot (the
+  `float: footnote` declaration must live in `buildStylesheet()` — new spec invariant);
+  synthesized-TOC titles, placement and leader dots repaired; KaTeX error affordance; table
+  cells wrap instead of clipping; visible task-list checkboxes; empty-document hint;
+  beforeunload guard; close-document button; toolbar field styling; export buttons disabled
+  with no document; keyboard-focusable preview; `logging: false` on the raster export.
+
 - **Done (2026-08-08): the split workspace.** A Markdown source pane with Shiki syntax colors
   beside the paginated preview, three view modes (`Markdown` / `Split` / `Preview`), and a
   draggable, keyboard-operable divider. Typing paginates live through the unchanged render
@@ -80,6 +92,10 @@ export paths.
 - **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
   static-host headers, no public source maps, and deployment/runbook documentation.
 - **Done:** public Cloudflare Pages deployment at **https://mdviewer-c9r.pages.dev/** (AI-4).
+- **Done (2026-08-16):** installable PWA with full offline support — Workbox precache covering
+  every lazy chunk and the KaTeX fonts, prompt-based updates, favicon/manifest icons, and
+  OG/Twitter metadata; offline behavior proven by `tests/e2e/offline.spec.ts` on the
+  production bundle.
 - **Remaining:** profile very large documents before setting a production performance budget.
 
 ### P4 — Stretch — `DEFERRED`
