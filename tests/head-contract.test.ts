@@ -88,6 +88,14 @@ describe("head-contract: social cards", () => {
     expect(metaContent("meta[property='og:description']")).toBe(description);
     expect(metaContent("meta[name='twitter:description']")).toBe(description);
   });
+
+  it("keeps the PWA manifest description identical to <meta name=description>", () => {
+    // The manifest is generated from vite.config.ts, which cannot import index.html, so the
+    // string is necessarily duplicated. This is the assertion that makes that duplication safe.
+    const declared = /const DESCRIPTION =\s*"((?:[^"\\]|\\.)*)"/.exec(VITE_CONFIG)?.[1];
+    expect(declared, "vite.config.ts no longer declares a DESCRIPTION constant").toBeDefined();
+    expect(declared).toBe(metaContent("meta[name='description']"));
+  });
 });
 
 describe("head-contract: every referenced brand asset exists in public/", () => {
@@ -103,6 +111,14 @@ describe("head-contract: every referenced brand asset exists in public/", () => 
     expect(referenced).toContain("/favicon.svg");
     expect(referenced).toContain("/og-image.png");
     expect(referenced.some((path) => path.startsWith("/icons/"))).toBe(true);
+  });
+
+  it("declares the install-icon set an installable PWA needs", () => {
+    // 192 and 512 are the sizes Chrome's installability check looks for, and a maskable
+    // variant is what keeps Android from cropping the sheet out of the mark.
+    expect(referenced).toContain("/icons/icon-192.png");
+    expect(referenced).toContain("/icons/icon-512.png");
+    expect(VITE_CONFIG).toMatch(/purpose:\s*"maskable"/);
   });
 
   for (const path of referenced) {

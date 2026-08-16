@@ -1,0 +1,113 @@
+/* =============================================================================
+ * pwa.css — the service-worker update prompt, and nothing else.
+ *
+ * Kept in its own file because it is the only chrome that is created outside the
+ * App (main.ts owns it, since main.ts owns the service-worker registration). It
+ * reuses the design tokens declared on :root in app.css, so it follows the light /
+ * dark / sepia screen themes for free and needs no tokens of its own.
+ *
+ * Like every other piece of screen chrome, it must never reach paper: the primary
+ * export is window.print() over this same live document.
+ * ========================================================================== */
+
+.pwa-toast {
+  position: fixed;
+  z-index: 100; /* above the canvas and the drag overlay; it is a system-level message */
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: min(360px, calc(100vw - 32px));
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--fg);
+  box-shadow: var(--shadow-toolbar);
+
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+
+  animation: pwa-toast-in 160ms ease-out;
+}
+
+@keyframes pwa-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pwa-toast {
+    animation: none;
+  }
+}
+
+.pwa-toast__message {
+  margin: 0;
+  color: var(--fg-strong);
+}
+
+.pwa-toast__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+}
+
+.pwa-toast__action {
+  height: var(--ctl-h);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--fg);
+  box-shadow: var(--shadow-control);
+
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pwa-toast__action:hover {
+  background: var(--bg-hover);
+}
+
+.pwa-toast__action:active {
+  background: var(--bg-active);
+}
+
+.pwa-toast__action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.pwa-toast__action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.pwa-toast__action--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.pwa-toast__action--primary:hover,
+.pwa-toast__action--primary:active {
+  background: var(--accent-strong);
+}
+
+@media print {
+  .pwa-toast {
+    display: none !important;
+  }
+}
