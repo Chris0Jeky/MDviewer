@@ -72,6 +72,7 @@ export const CLASSES = {
   calloutTitle: "callout-title",
   toc: "toc",
   tocLink: "toc-link",
+  tocText: "toc-text", // the entry title inside a.toc-link; leader dots fill the gap after it
   xref: "xref",
   footnote: "footnote",
   footnotes: "footnotes",

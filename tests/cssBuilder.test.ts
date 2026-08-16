@@ -40,6 +40,41 @@ describe("cssBuilder: always-present dynamic scaffolding", () => {
   it("declares the @footnote area rule", () => {
     expect(squish(css())).toContain("@footnote");
   });
+
+  // Paged.js discovers footnotes by walking the declarations of the stylesheets passed
+  // to previewer.preview(). document.css is a global app import Paged.js never sees, so
+  // the float MUST be emitted here or every note renders inline and the @footnote area
+  // stays empty (BUG-2).
+  it("emits float: footnote for the inline footnote span so Paged.js can find it", () => {
+    const out = squish(css());
+    expect(out).toContain("float: footnote");
+    expect(out).toContain(".doc .footnote");
+  });
+
+  // Paged.js lifts the note out of `.doc`, so document.css's typography no longer
+  // reaches it — the generated sheet has to restate it for .pagedjs_footnote_area.
+  it("restates document typography for the Paged.js footnote area", () => {
+    const out = squish(css({ docFont: "slab", fontSizePt: 12 }));
+    expect(out).toContain(".pagedjs_footnote_area");
+    expect(out).toContain("roboto slab");
+    expect(out).toMatch(/font-size:\s*10\.20pt/);
+  });
+
+  it("tracks the docFont setting in the footnote area", () => {
+    expect(squish(css({ docFont: "sans" }))).toContain("inter");
+    expect(squish(css({ docFont: "serif" }))).toContain("source serif 4");
+  });
+
+  it("keeps the footnote float rule regardless of unrelated settings", () => {
+    for (const patch of [
+      { showToc: false },
+      { showPageNumbers: false },
+      { showLineNumbers: true },
+      { paperSize: "letter" as const },
+    ]) {
+      expect(squish(css(patch))).toContain("float: footnote");
+    }
+  });
 });
 
 describe("cssBuilder: paper size", () => {

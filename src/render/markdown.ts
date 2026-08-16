@@ -30,11 +30,16 @@ import type { HighlighterCore } from "shiki/core";
 import type { Settings } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import { CODE_THEME_PAIRS, isSupportedLanguage } from "./highlight";
-import { registerKatex } from "./math";
+import { registerKatex, tagKatexErrors } from "./math";
 import { sanitizeRenderedHtml } from "./sanitize";
 
 export interface RenderWarning {
-  kind: "math" | "diagram" | "lang" | "security";
+  /**
+   * `content` covers document-level notices that are not a rendering failure — currently
+   * only "the document is empty". It exists so such notices never have to masquerade as a
+   * security/lang warning in the banner's aggregate summary.
+   */
+  kind: "math" | "diagram" | "lang" | "security" | "content";
   message: string;
 }
 
@@ -175,6 +180,9 @@ export function renderMarkdown(
 ): { html: string; warnings: RenderWarning[] } {
   const rawHtml = md.render(src);
   const sanitized = sanitizeRenderedHtml(rawHtml);
+  // Normalise KaTeX's two failure shapes into one detectable marker (class + title) before
+  // anything reads the output. Purely additive markup: no layout step is affected.
+  const math = tagKatexErrors(sanitized.html);
   const warnings: RenderWarning[] = [];
 
   if (sanitized.removedCount > 0) {
@@ -202,14 +210,18 @@ export function renderMarkdown(
     }
   }
 
-  // KaTeX errors: with throwOnError:false the plugin emits a span coloured with errorColor
-  // and titled with the message. Detect either the class or the error colour as a marker.
-  if (/class="katex-error"|#cc0000/.test(sanitized.html)) {
+  // KaTeX errors: detect the class `tagKatexErrors` just guaranteed, never a colour
+  // literal — the old hex string-match broke silently on an errorColor change and
+  // false-positived on any user HTML that happened to contain the same hex.
+  if (math.count > 0) {
     warnings.push({
       kind: "math",
-      message: "One or more math expressions could not be parsed and are shown in red.",
+      message:
+        math.count === 1
+          ? "One math expression could not be parsed and is shown in red."
+          : `${math.count} math expressions could not be parsed and are shown in red.`,
     });
   }
 
-  return { html: sanitized.html, warnings };
+  return { html: math.html, warnings };
 }

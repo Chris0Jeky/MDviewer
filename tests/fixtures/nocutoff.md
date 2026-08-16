@@ -59,6 +59,18 @@ Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium.
 | tall `pre`        | shrink-to-fit / clean split   | T3/4 |
 | `blockquote`      | break-inside: avoid           | T1   |
 
+### 3b. A table with unbreakable cell content
+
+Long URLs, hashes and identifiers have no break opportunity, so an auto-layout
+table will happily grow a column past the page edge and get clipped by
+`.pagedjs_page { overflow: hidden }` unless the cells wrap anywhere.
+
+| Field | Value |
+| ----- | ----- |
+| Source URL | https://example.com/a/very/long/path/segment/that/never/offers/a/break/opportunity/anywhere/at/all/index.html?query=alpha&more=beta&evenmore=gamma |
+| Content hash | 9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a3928 |
+| Identifier | ThisIsOneEnormousCamelCaseIdentifierWithAbsolutelyNoWhitespaceOrHyphensInItWhatsoever |
+
 ## 4. Callouts
 
 ::: note Keep me whole

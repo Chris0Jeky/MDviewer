@@ -15,7 +15,7 @@
  */
 
 import type { Settings } from "../app/settings";
-import { MARGIN_MM } from "../app/settings";
+import { DOC_FONT_STACKS, MARGIN_MM } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import printBase from "../styles/print.css?raw";
 
@@ -53,7 +53,8 @@ export function buildStylesheet(settings: Settings): string {
     : "";
 
   // Footnote float area lives at the bottom of each page; markdown-it footnotes are
-  // transformed into inline `float: footnote` spans by buildSource.ts.
+  // transformed into inline `.footnote` spans by buildSource.ts and floated by
+  // `footnoteFloatRule` below.
   const footnoteArea =
     "  @footnote {\n" +
     "    float: bottom;\n" +
@@ -82,6 +83,36 @@ export function buildStylesheet(settings: Settings): string {
 
   // Running document title: every h1/h2 sets string(doctitle); @top-right reads it.
   const stringSet = `h1, h2 { string-set: doctitle content(text); }\n`;
+
+  // THE footnote float rule. Paged.js discovers footnotes by walking the declarations of
+  // the stylesheets handed to `previewer.preview()` — it never sees the app's globally
+  // imported document.css. So `float: footnote` MUST be emitted here or the notes stay
+  // inline and the @footnote area above renders empty. (The same holds for every other
+  // Paged.js-interpreted property: string-set, target-counter, footnote-*.)
+  //
+  // Paged.js injects its own numbered call glyph (`[data-footnote-call]::after`) next to
+  // each relocated note. markdown-it-footnote already rendered the visible `[n]` link at
+  // the call site, so suppress the duplicate; Paged.js still increments the counter and
+  // still numbers the note itself at the page foot via `[data-footnote-marker]::marker`.
+  const footnoteFloatRule =
+    `.${CLASSES.doc} .${CLASSES.footnote} {\n` +
+    `  float: footnote;\n` +
+    `  footnote-display: block;\n` +
+    `  font-size: 0.85em;\n` +
+    `  color: #4b5563;\n` +
+    `}\n` +
+    `.pagedjs_area [data-footnote-call]::after { content: none; }\n` +
+    // Paged.js lifts each note OUT of `.doc` (into .pagedjs_footnote_area, a sibling of
+    // the page content), so neither document.css's `.doc .footnote` typography nor the
+    // `--doc-*` custom properties reach it any more. Restate what a page-foot note needs
+    // so it matches the body text it belongs to instead of falling back to the app chrome
+    // font at full size.
+    `.pagedjs_footnote_area {\n` +
+    `  font-family: ${DOC_FONT_STACKS[settings.docFont]};\n` +
+    `  font-size: ${(settings.fontSizePt * 0.85).toFixed(2)}pt;\n` +
+    `  line-height: 1.45;\n` +
+    `  color: #4b5563;\n` +
+    `}\n`;
 
   // --- Settings-gated content rules -----------------------------------------
   // TOC page numbers via Paged.js target-counter. Only emitted when the TOC is shown;
@@ -114,6 +145,7 @@ export function buildStylesheet(settings: Settings): string {
     pageBlock +
     firstPageBlock +
     stringSet +
+    footnoteFloatRule +
     tocRule +
     lineNumbersRule
   );

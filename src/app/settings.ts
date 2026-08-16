@@ -69,6 +69,19 @@ export const MARGIN_MM: Record<MarginPreset, number> = {
 };
 
 /**
+ * Font-family stack per DocFont group. These mirror `src/styles/document.css` exactly.
+ * They live here (not in a render/ or paginate/ module) because both sides need them:
+ * `buildPaginationSource` sets `--doc-font-family` on `.doc`, and `buildStylesheet`
+ * restates the stack for the Paged.js footnote area, which sits OUTSIDE `.doc` and so
+ * cannot inherit the custom property.
+ */
+export const DOC_FONT_STACKS: Record<DocFont, string> = {
+  serif: `"Source Serif 4", "Source Serif Pro", "Charter", "Georgia", "Times New Roman", serif`,
+  sans: `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`,
+  slab: `"Roboto Slab", "Rockwell", "Source Serif 4", "Georgia", "Times New Roman", serif`,
+};
+
+/**
  * Clamp an arbitrary value onto the usable split-ratio range.
  *
  * Only a genuine finite number is clamped; anything else falls back to the default.

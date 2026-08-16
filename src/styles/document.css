@@ -216,14 +216,46 @@
   position: relative;
 }
 
+/* sanitize.ts forces every surviving checkbox to `disabled` (a security decision that
+ * stays). Chrome's disabled UA checkbox ignores `accent-color`, so the only styling the
+ * box ever had produced pale grey on pale grey — near-invisible on screen and worse on
+ * paper. Draw the control by hand instead: `appearance: none` plus a real border, and an
+ * embedded SVG tick as the checked background. `print-color-adjust: exact` keeps the
+ * filled box from being dropped by the print pipeline; every colour used is a
+ * dark-on-white doc token (--doc-fg-muted #555b63 = 6.9:1 and --doc-link #1a4fb8 = 7.4:1
+ * against white; the white tick on the filled box is the same 7.4:1 — all far above the
+ * 3:1 WCAG 1.4.11 non-text contrast minimum).
+ *
+ * The tick MUST be a background image, not a ::after pseudo-element: html2canvas-pro
+ * (the rasterized export path) hangs indefinitely on a pseudo-element attached to an
+ * <input>, which silently kills the Download-PDF button. */
 .doc .task-list-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   position: absolute;
   left: 0;
   top: 0.3em;
   margin: 0;
   width: 0.95em;
   height: 0.95em;
-  accent-color: var(--doc-link);
+  box-sizing: border-box;
+  border: 1.5px solid var(--doc-fg-muted);
+  border-radius: 3px;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 78% 78%;
+  opacity: 1; /* the UA dims disabled controls; we already draw a static box */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Checked: an inked box with a white tick knocked out of it. The tick is an inline
+ * (data:) SVG, so nothing is fetched at runtime and the local-first rule holds. */
+.doc .task-list-item input[type="checkbox"]:checked {
+  border-color: var(--doc-link);
+  background-color: var(--doc-link);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 L6.5 11.5 L12.5 5'/%3E%3C/svg%3E");
 }
 
 .doc .task-list-item label {
@@ -278,15 +310,25 @@
 .doc table {
   border-collapse: collapse;
   width: 100%;
+  max-width: 100%;
   font-size: 0.94em;
 }
 
+/* A long unbreakable token (URL, hash, identifier) in a cell would otherwise push the
+ * column's MIN-content width past the page and get clipped by .pagedjs_page's
+ * overflow:hidden — the inherited `.doc { overflow-wrap: break-word }` does not reduce
+ * min-content width, so it cannot save an auto-layout table. `overflow-wrap: anywhere`
+ * does. Auto table layout is kept (no table-layout:fixed) so ordinary tables still size
+ * to their content, and no horizontal scroller is introduced: a reflowing table must
+ * never be shrunk (spec §4). Verified by tests/e2e/nocutoff.spec.ts. */
 .doc th,
 .doc td {
   border: 1px solid var(--doc-border);
   padding: 0.4em 0.6em;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .doc thead th {
@@ -458,35 +500,33 @@
   color: var(--doc-fg-muted);
 }
 
-/* Browsers without leader() support get a dotted baseline fill instead. */
+/* Browsers without leader() support (Chrome, i.e. every engine we actually export
+ * from) build the row out of three real flex items instead: the title, a growing
+ * dotted rule, then the page number. `order` is required because ::before is laid
+ * out ahead of the element's own content — without it the dots would lead the row.
+ * Nothing is absolutely positioned, so the rule can never run past the number. */
 @supports not (content: leader(". ")) {
-  .doc a.toc-link {
-    position: relative;
-  }
-
   .doc a.toc-link .toc-text {
-    background: #fff;
-    padding-right: 0.35em;
-    position: relative;
-    z-index: 1;
+    order: 0;
+    flex: 0 1 auto;
   }
 
   .doc a.toc-link::before {
     content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0.18em;
+    order: 1;
+    flex: 1 1 auto;
+    align-self: flex-end;
     border-bottom: 1px dotted var(--doc-border);
+    margin: 0 0.35em 0.25em;
   }
 
   .doc a.toc-link::after {
     content: attr(data-page);
+    order: 2;
     flex: 0 0 auto;
-    background: #fff;
-    padding-left: 0.35em;
-    position: relative;
-    z-index: 1;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--doc-fg-muted);
   }
 }
 
@@ -535,10 +575,13 @@
   margin-left: 0.3em;
 }
 
-/* The inline float-footnote span buildSource produces (rendered at page bottom
- * by Paged.js via float:footnote in cssBuilder). */
+/* The inline footnote span buildSource produces. Paged.js moves it to the page
+ * foot via `float: footnote`, which MUST be declared in cssBuilder's generated
+ * sheet: Paged.js only scans the stylesheets handed to previewer.preview() and
+ * never sees this globally imported file, so a float here would be inert (and
+ * the browser drops the unknown value anyway). Only the shared typography lives
+ * here — it also covers the non-paginated fallback. */
 .doc .footnote {
-  float: footnote;
   font-size: 0.85em;
   color: var(--doc-fg-muted);
 }
@@ -565,10 +608,16 @@
   }
 }
 
-/* KaTeX inline parse-error color from math.ts (errorColor) renders as a span
- * with inline color; nothing to override, but keep error text from underlining. */
+/* Failed math. `tagKatexErrors` (math.ts) guarantees this class on BOTH of KaTeX's
+ * failure shapes — the parse-error span and the silently red-coloured unknown
+ * control sequence — so the affordance is uniform and never keys off the error hex.
+ * Colour alone is not an accessible signal, so add a dotted underline. It is drawn
+ * in `currentcolor` (KaTeX's own inline error colour, ~4.9:1 on white), so it is
+ * ink on paper too and the exported PDF stays dark-on-white. */
 .doc .katex-error {
   text-decoration: none;
+  border-bottom: 1px dotted currentcolor;
+  cursor: help;
 }
 
 /* -----------------------------------------------------------------------------

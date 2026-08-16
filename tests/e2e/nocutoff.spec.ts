@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   paginateFixture,
+  loadMarkdownIntoApp,
+  waitForPagination,
   blockStraddles,
   splitAtomicOffenders,
   type PageRect,
@@ -75,6 +77,62 @@ test.describe("no atomic block straddles a page boundary", () => {
     expect(
       splitOffenders,
       `logical atomic blocks incorrectly split across pages:\n${splitOffenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * BUG-4: the vertical guarantee has a horizontal twin. A cell holding an unbreakable
+   * token (URL / hash / identifier) grows the column's MIN-content width, auto table
+   * layout honours it, and `.pagedjs_page { overflow: hidden }` silently clips whatever
+   * crosses the page edge — content lost with no warning. Every td/th must therefore stay
+   * inside its page's content box horizontally too.
+   */
+  test("no table cell is clipped at the horizontal page edge", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, NOCUTOFF_MD);
+    await waitForPagination(page);
+
+    const offenders = await page.evaluate(() => {
+      const host = document.getElementById("paged-output")!;
+      const bad: string[] = [];
+      let checked = 0;
+      let widest = 0;
+
+      for (const cell of Array.from(host.querySelectorAll<HTMLElement>("td, th"))) {
+        const sheet = cell.closest<HTMLElement>(".pagedjs_page");
+        const content =
+          sheet?.querySelector<HTMLElement>(".pagedjs_page_content") ??
+          sheet?.querySelector<HTMLElement>(".pagedjs_area") ??
+          sheet;
+        if (!content) continue;
+
+        checked += 1;
+        const cellRect = cell.getBoundingClientRect();
+        const box = content.getBoundingClientRect();
+        widest = Math.max(widest, cellRect.width);
+        // 2px tolerance absorbs sub-pixel rounding and collapsed-border overlap.
+        if (cellRect.left < box.left - 2 || cellRect.right > box.right + 2) {
+          bad.push(
+            `${cell.tagName.toLowerCase()} "${(cell.textContent ?? "").trim().slice(0, 40)}" ` +
+              `[${cellRect.left.toFixed(1)}..${cellRect.right.toFixed(1)}] escapes ` +
+              `[${box.left.toFixed(1)}..${box.right.toFixed(1)}]`,
+          );
+        }
+        // The cell must also not be scrolling its own overflow away.
+        if (cell.scrollWidth > cell.clientWidth + 2) {
+          bad.push(
+            `${cell.tagName.toLowerCase()} "${(cell.textContent ?? "").trim().slice(0, 40)}" ` +
+              `overflows its own box (${cell.scrollWidth} > ${cell.clientWidth})`,
+          );
+        }
+      }
+      return { bad, checked, widest };
+    });
+
+    expect(offenders.checked, "the fixture must contain table cells").toBeGreaterThan(10);
+    expect(
+      offenders.bad,
+      `table cells clipped at the page edge:\n${offenders.bad.join("\n")}`,
     ).toEqual([]);
   });
 
