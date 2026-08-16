@@ -1,9 +1,13 @@
 /**
  * Toolbar — the app chrome strip above the canvas. Builds groups A–F of native
- * controls (document switcher, screen theme, code theme, document font + size,
- * paper + margins, layout toggles, running-header input, export actions) and
- * binds each control straight to `app.updateSettings(...)`. No business logic
- * lives here: every change calls into the App, which persists and re-renders.
+ * controls (document switcher, view mode, code theme, document font + size,
+ * paper + margins, layout toggles, running-header input, then — past the spacer —
+ * screen theme and the export actions) and binds each control straight to
+ * `app.updateSettings(...)`. No business logic lives here: every change calls
+ * into the App, which persists and re-renders.
+ *
+ * The spacer is a semantic divide, not just alignment: document settings sit to
+ * its left, screen/export controls to its right (UX-2).
  */
 
 import { CLASSES, IDS, el } from "../app/dom";
@@ -32,11 +36,20 @@ const VIEW_MODE_OPTIONS: ReadonlyArray<Opt<ViewMode>> = [
   ["preview", "Preview", "Show only the paginated PDF preview"],
 ];
 
+/**
+ * The screen theme is APP CHROME, never a document setting: the page sheets stay
+ * white and the exported PDF stays dark-on-white in all three (UX-2). The tooltips
+ * say so, the group carries a visible "Screen" label, and it sits at the far right
+ * of the toolbar — past the spacer, away from the document controls.
+ */
 const SCREEN_THEMES: ReadonlyArray<Opt<ScreenTheme>> = [
-  ["light", "Light", "Light preview theme"],
-  ["dark", "Dark", "Dark preview theme"],
-  ["sepia", "Sepia", "Sepia preview theme"],
+  ["light", "Light", "Light app theme — does not affect the PDF"],
+  ["dark", "Dark", "Dark app theme — the page sheets and the PDF stay white"],
+  ["sepia", "Sepia", "Sepia app theme — does not affect the PDF"],
 ];
+
+/** One name for the screen-theme group: visible label, aria-label, and tooltip. */
+const SCREEN_THEME_LABEL = "Screen";
 
 const CODE_THEMES: ReadonlyArray<Opt<CodeThemeId>> = [
   ["github", "GitHub"],
@@ -265,14 +278,20 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     viewMode.group,
   );
 
-  // ---- Group B: screen theme (preview only — never affects the PDF) ----
+  // ---- Group B: screen theme (app chrome only — never affects the PDF) ----
+  // Unlabelled and wedged between View and Typography, this read as a document
+  // setting (UX-2). It now names itself and lives past the spacer, next to Export.
   const screenTheme = segControl(
-    "Preview theme",
+    SCREEN_THEME_LABEL,
     SCREEN_THEMES,
     s.screenTheme,
     (value) => app.updateSettings({ screenTheme: value }),
   );
-  const themeGroup = group("Preview theme", screenTheme.group);
+  const themeGroup = group(
+    SCREEN_THEME_LABEL,
+    el("span", { class: CLASSES.toolbarLabel }, SCREEN_THEME_LABEL),
+    screenTheme.group,
+  );
 
   // ---- Group C: typography (code theme, body font, font size) ----
   const codeTheme = selectControl(
@@ -422,12 +441,13 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   const exportGroup = group("Export", printBtn, downloadBtn);
 
+  // Order encodes meaning: everything LEFT of the spacer changes the document (and
+  // therefore the PDF); everything RIGHT of it is about this screen and this export.
+  // The screen-theme group moved across that line as part of UX-2.
   bar.append(
     docGroup,
     divider(),
     viewGroup,
-    divider(),
-    themeGroup,
     divider(),
     typeGroup,
     divider(),
@@ -436,6 +456,8 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     layoutGroup,
     // Absorb the slack so the export actions sit against the right edge (UX-11).
     el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
+    themeGroup,
+    divider(),
     exportGroup,
   );
   root.append(bar);

@@ -217,13 +217,20 @@
 }
 
 /* Dark chrome: swap each token's inline light color for its --shiki-dark
-   counterpart, exactly as shiki.css does for rendered code blocks. The editor is
-   chrome, so it follows the chosen app theme rather than the OS preference.
+   counterpart. This is the ONLY surviving dark-side swap in the app, and the
+   scope is the point (UX-3). The editor is chrome, so it follows the chosen app
+   theme. Rendered code blocks are paper: they keep the light side in every theme
+   so the preview stays WYSIWYG with the always-dark-on-white PDF — see the
+   header of shiki.css, which no longer swaps anything.
+
+   The selector must stay pinned to #editor-highlight. A rule that reached
+   `.shiki` too would put dark code back on the white sheets and could leak into
+   the raster Download-PDF path, which rasterizes the live screen DOM.
 
    `!important` is required, not stylistic: Editor.ts writes the light color as an
    inline style (Shiki's `defaultColor: "light"`), and an inline declaration beats
    any selector without it. Without this the pane would paint light-theme token
-   colors onto a dark surface. shiki.css does the same for rendered code. */
+   colors onto a dark surface. */
 :root[data-app-theme="dark"] #editor-highlight span {
   color: var(--shiki-dark, inherit) !important;
 }
