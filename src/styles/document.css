@@ -278,15 +278,25 @@
 .doc table {
   border-collapse: collapse;
   width: 100%;
+  max-width: 100%;
   font-size: 0.94em;
 }
 
+/* A long unbreakable token (URL, hash, identifier) in a cell would otherwise push the
+ * column's MIN-content width past the page and get clipped by .pagedjs_page's
+ * overflow:hidden — the inherited `.doc { overflow-wrap: break-word }` does not reduce
+ * min-content width, so it cannot save an auto-layout table. `overflow-wrap: anywhere`
+ * does. Auto table layout is kept (no table-layout:fixed) so ordinary tables still size
+ * to their content, and no horizontal scroller is introduced: a reflowing table must
+ * never be shrunk (spec §4). Verified by tests/e2e/nocutoff.spec.ts. */
 .doc th,
 .doc td {
   border: 1px solid var(--doc-border);
   padding: 0.4em 0.6em;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .doc thead th {
