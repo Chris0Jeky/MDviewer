@@ -143,7 +143,7 @@ function selectControl(
 ): { field: HTMLElement; select: HTMLSelectElement } {
   const select = el("select", {
     id,
-    class: "toolbar-select",
+    class: CLASSES.toolbarSelect,
     attrs: { "aria-label": label },
   });
   for (const [value, text, title] of options) {
@@ -153,8 +153,8 @@ function selectControl(
   }
   select.addEventListener("change", () => onPick(select.value));
 
-  const labelEl = el("label", { class: "toolbar-label", htmlFor: id }, label);
-  const field = el("div", { class: "toolbar-field" }, labelEl, select);
+  const labelEl = el("label", { class: CLASSES.toolbarLabel, htmlFor: id }, label);
+  const field = el("div", { class: CLASSES.toolbarField }, labelEl, select);
   return { field, select };
 }
 
@@ -219,22 +219,38 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   // ---- Group A: document switcher (only meaningful with more than one doc) ----
   const docSelect = el("select", {
-    class: "toolbar-select doc-switcher",
+    class: `${CLASSES.toolbarSelect} ${CLASSES.docSwitcher}`,
     attrs: { "aria-label": "Active document" },
   });
   docSelect.addEventListener("change", () => {
     app.store.setActive(docSelect.value);
   });
-  const docGroup = group(
-    "Document",
-    el(
-      "label",
-      { class: "toolbar-label", htmlFor: "doc-switcher-select" },
-      "Document",
-    ),
+  docSelect.id = "doc-switcher-select";
+
+  // The switcher itself is noise below two documents, but "close this document"
+  // is useful from the first one — so they hide independently (UX-7).
+  const docField = el(
+    "div",
+    { class: CLASSES.toolbarField },
+    el("label", { class: CLASSES.toolbarLabel, htmlFor: "doc-switcher-select" }, "Document"),
     docSelect,
   );
-  docSelect.id = "doc-switcher-select";
+
+  const docCloseBtn = el(
+    "button",
+    {
+      type: "button",
+      class: CLASSES.docClose,
+      attrs: { "aria-label": "Close document" },
+    },
+    "×",
+  );
+  docCloseBtn.addEventListener("click", () => {
+    const id = app.store.activeId;
+    if (id) app.store.remove(id);
+  });
+
+  const docGroup = group("Document", docField, docCloseBtn);
 
   // ---- Group A2: which panes are visible (screen layout only) ----
   const viewMode = segControl(
@@ -245,7 +261,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
   const viewGroup = group(
     "View",
-    el("span", { class: "toolbar-label" }, "View"),
+    el("span", { class: CLASSES.toolbarLabel }, "View"),
     viewMode.group,
   );
 
@@ -302,9 +318,9 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
   const pageGroup = group(
     "Page",
-    el("span", { class: "toolbar-label" }, "Paper"),
+    el("span", { class: CLASSES.toolbarLabel }, "Paper"),
     paperSize.group,
-    el("span", { class: "toolbar-label" }, "Margins"),
+    el("span", { class: CLASSES.toolbarLabel }, "Margins"),
     margins.group,
   );
 
@@ -330,7 +346,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   const headerInput = el("input", {
     id: "running-header-input",
-    class: "toolbar-input running-header",
+    class: `${CLASSES.toolbarInput} running-header`,
     type: "text",
     value: s.runningHeader,
     placeholder: "Running header…",
@@ -346,10 +362,10 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   });
   const headerField = el(
     "div",
-    { class: "toolbar-field" },
+    { class: CLASSES.toolbarField },
     el(
       "label",
-      { class: "toolbar-label", htmlFor: "running-header-input" },
+      { class: CLASSES.toolbarLabel, htmlFor: "running-header-input" },
       "Header",
     ),
     headerInput,
@@ -364,12 +380,17 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
 
   // ---- Group F: export actions ----
+  const PRINT_TITLE = "Open the system print dialog to save a vector PDF";
+  const DOWNLOAD_TITLE = "Download a rasterized PDF (fallback when printing is unavailable)";
+  const NO_DOC_TITLE = "Load a document first";
+  const BUSY_TITLE = "Export in progress…";
+
   const printBtn = el(
     "button",
     {
       type: "button",
       class: CLASSES.exportPrimary,
-      title: "Open the system print dialog to save a vector PDF",
+      title: PRINT_TITLE,
     },
     "Print / Save as PDF",
   );
@@ -382,7 +403,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     {
       type: "button",
       class: CLASSES.exportSecondary,
-      title: "Download a rasterized PDF (fallback when printing is unavailable)",
+      title: DOWNLOAD_TITLE,
     },
     "Download PDF",
   );
@@ -404,7 +425,8 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     pageGroup,
     divider(),
     layoutGroup,
-    divider(),
+    // Absorb the slack so the export actions sit against the right edge (UX-11).
+    el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
     exportGroup,
   );
   root.append(bar);
@@ -418,8 +440,33 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
       if (doc.id === app.store.activeId) option.selected = true;
       docSelect.append(option);
     }
-    // Only relevant with more than one document open; hide it otherwise.
-    docGroup.hidden = docs.length < 2;
+    // The switcher is only meaningful with more than one document open…
+    docField.hidden = docs.length < 2;
+    // …but closing the current one is meaningful from the first.
+    docGroup.hidden = docs.length < 1;
+    const activeName = app.store.active?.name;
+    docCloseBtn.setAttribute(
+      "aria-label",
+      activeName ? `Close ${activeName}` : "Close document",
+    );
+    docCloseBtn.title = activeName ? `Close ${activeName}` : "Close document";
+  }
+
+  /** Export controls are inert with nothing to export, and while one is running. */
+  function syncExportState(state: { busy: boolean; hasDocument: boolean }): void {
+    const disabled = state.busy || !state.hasDocument;
+    printBtn.disabled = disabled;
+    downloadBtn.disabled = disabled;
+    if (!state.hasDocument) {
+      printBtn.title = NO_DOC_TITLE;
+      downloadBtn.title = NO_DOC_TITLE;
+    } else if (state.busy) {
+      printBtn.title = BUSY_TITLE;
+      downloadBtn.title = BUSY_TITLE;
+    } else {
+      printBtn.title = PRINT_TITLE;
+      downloadBtn.title = DOWNLOAD_TITLE;
+    }
   }
 
   function syncFromSettings(): void {
@@ -447,11 +494,14 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     syncFromSettings();
   });
   const unsubscribeSettings = app.onSettingsChange(syncFromSettings);
+  // Fires immediately with the current state, so this is also the initial sync.
+  const unsubscribeExport = app.onExportStateChange(syncExportState);
 
   return {
     destroy(): void {
       unsubscribe();
       unsubscribeSettings();
+      unsubscribeExport();
       bar.remove();
     },
   };
