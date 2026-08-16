@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="MDviewer">
+  <title>MDviewer</title>
+  <!--
+    MDviewer mark: a paper sheet with the Markdown down-arrow (⇣) driven through it —
+    "Markdown in, a paged document out".
+
+    Designed for 16px legibility: one solid accent tile (--accent from src/styles/app.css,
+    light theme), one high-contrast white sheet, one bold arrow. No gradients, no hairlines,
+    no text — every element survives the 2x downscale to a browser-tab favicon.
+    Also the single source artwork for every generated PNG (scripts/generate-icons.mjs).
+  -->
+  <rect width="32" height="32" rx="7" fill="#2563eb" />
+  <path d="M7 5h12l6 6v16H7z" fill="#ffffff" />
+  <path d="M19 5l6 6h-6z" fill="#bfdbfe" />
+  <path
+    d="M16 11.5V21M11.8 16.8L16 21l4.2-4.2"
+    fill="none"
+    stroke="#2563eb"
+    stroke-width="2.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
