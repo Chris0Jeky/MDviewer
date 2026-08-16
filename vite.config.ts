@@ -67,6 +67,14 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // A single-page app: any offline navigation resolves to the shell.
         navigateFallback: "index.html",
+        // Required for the update prompt to work, not a nicety. In "prompt" mode the reload is
+        // driven by a `controlling` event, which only fires for a page the worker controls.
+        // Without clientsClaim the very first (uncontrolled) page load can show the prompt but
+        // never act on it: skipWaiting activates the new worker, nothing claims the open page,
+        // and the toast sticks on "Updating MDviewer…" forever. Claiming also means a
+        // first-time visitor is offline-ready immediately rather than after a reload.
+        // Note this is NOT skipWaiting: a waiting update still waits for the user.
+        clientsClaim: true,
         // Drop precaches from superseded deployments instead of accumulating them.
         cleanupOutdatedCaches: true,
         // NO runtimeCaching. MDviewer makes zero cross-origin requests by design, and a

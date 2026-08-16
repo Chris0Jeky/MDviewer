@@ -108,6 +108,17 @@ function showUpdatePrompt(applyUpdate: () => void): void {
     reload.disabled = true;
     dismiss.disabled = true;
     message.textContent = "Updating MDviewer…";
+
+    // Own the reload rather than leaving it to the plugin. vite-plugin-pwa reloads from
+    // workbox-window's `controlling` event, but only when it considers the registration an
+    // "update" — which is false for the session that first registered a worker, because
+    // there was no controller at register() time. In that session the prompt could appear
+    // and then never resolve, leaving this toast stuck on "Updating…" forever.
+    // `controllerchange` is the unambiguous signal that the new bundle has taken over.
+    // (Harmless if the plugin also reloads: both calls collapse into one navigation.)
+    navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), {
+      once: true,
+    });
     applyUpdate();
   });
 
