@@ -24,9 +24,11 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
-- Immutable deployment URL: **https://e3bd9770.mdviewer-c9r.pages.dev/**
-- Last operator verification: 2026-07-24 — stable/immutable URLs, entry title, hashed asset,
-  immutable asset caching, and committed security headers passed smoke checks
+- Current production deployment: `3378378d` from merge commit `8a9c942` (2026-08-16, the
+  QA-sweep + PWA release) — immutable URL **https://3378378d.mdviewer-c9r.pages.dev/**
+- Last operator verification: 2026-08-16 — stable/immutable URLs, entry title, hashed-asset
+  immutable caching, security headers, and the `max-age=0, must-revalidate` responses for
+  `/sw.js` and `/manifest.webmanifest` (with `/workbox-*.js` immutable) passed smoke checks
 
 The current project uses Wrangler direct upload. To publish a new verified `main` build from an
 authenticated maintainer machine:

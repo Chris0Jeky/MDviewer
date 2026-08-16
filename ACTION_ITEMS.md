@@ -21,8 +21,12 @@
   ledgered (see `docs/agentic/failure_ledger.jsonl` 2026-08-16 entries for the four accepted
   deferrals). The app is now an installable PWA that works fully offline. Verified locally:
   typecheck, lint, 334+ unit tests, full Chromium E2E on dev and production-preview targets
-  including both no-cutoff tests and the new offline test. **The live site is still the old
-  deployment until a new `wrangler pages deploy` is run (AI-7).**
+  including both no-cutoff tests and the new offline test. The sweep merged into `main` as
+  PR #48 (merge commit `8a9c942`, CI green after pinning a 1600×900 viewport for the two
+  single-row toolbar E2E assertions that wrapped on CI Linux's wider fonts) and **is now the
+  live deployment** — `wrangler pages deploy` ran 2026-08-16, immutable URL
+  `https://3378378d.mdviewer-c9r.pages.dev`, smoke checks green (AI-7 steps 1–3).
+  What remains of AI-7 is the in-browser manual acceptance (steps 4–8).
 
 - **2026-08-12 (licensing)** — Current and future owner-authored MDviewer code is
   `GPL-3.0-only`; the historical MIT grant remains valid for earlier revisions.
@@ -86,14 +90,12 @@
 
 ## OPEN items
 
-- **AI-7 — Merge, deploy, and accept the QA-sweep fixes (manual gate).** The sweep lives on
-  branch `qa-sweep-20260816`. Steps:
-  1. Open/merge the PR for `qa-sweep-20260816` once its CI is green (merge commit, not squash).
-  2. From this machine: `npm run build`, then
-     `npm exec --yes wrangler@4.114.0 -- pages deploy dist --project-name mdviewer --branch main`.
-  3. Smoke the live URL: entry title, hashed asset, `_headers` policy, and the two new
-     `Cache-Control: max-age=0, must-revalidate` responses for `/sw.js` and
-     `/manifest.webmanifest`.
+- **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
+  (2026-08-16): PR #48 merged as `8a9c942` with CI green; deployed via
+  `wrangler pages deploy` (immutable URL `https://3378378d.mdviewer-c9r.pages.dev`); smoke
+  checks passed — entry title, hashed-asset immutability, security headers, and
+  `Cache-Control: max-age=0, must-revalidate` on both `/sw.js` and `/manifest.webmanifest`.
+  Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
      PDF shows progress and disables both export buttons; a settings change no longer resets

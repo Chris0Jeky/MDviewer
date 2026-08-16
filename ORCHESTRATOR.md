@@ -3,7 +3,21 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-08-12:** The repository owner selected
+> **▶ CURRENT CHECKPOINT — 2026-08-16:** The QA sweep is **MERGED AND LIVE**. The manual QA
+> report `mdviewerqareport.md` (27 findings against the outdated July deployment) drove a
+> coordinated fix sweep on `qa-sweep-20260816`: 25 findings fixed, 1 already fixed on `main`,
+> 1 deferred with a written plan (TECH-1 responsive toolbar <720px — see the 2026-08-16
+> failure-ledger entries for it and the three other accepted trade-offs). The app is now an
+> installable PWA with full offline support. PR **#48** merged as **`8a9c942`** with all three
+> CI jobs green (after `52132ee` pinned a 1600×900 viewport for the two single-row toolbar E2E
+> assertions, which wrapped at 1280px on CI Linux's wider fonts). Wrangler deployed production
+> id **`3378378d-82ab-4de7-9fe7-30873b650a66`** from `8a9c942`; the stable URL serves the new
+> build and the smoke checks passed, including `max-age=0, must-revalidate` on `/sw.js` +
+> `/manifest.webmanifest` and immutable `workbox-*.js`. Evidence at the merged head: 341 unit,
+> 4 server, 65+67 Chromium E2E (dev + production incl. offline and both no-cutoff tests).
+> **Two OPEN human items: AI-7 (manual live-site acceptance, steps 4–8) and AI-6.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-08-12:** The repository owner selected
 > `GPL-3.0-only` for current and future owner-authored MDviewer code, superseding
 > the earlier MIT placeholder. The licensing PR also makes every production
 > `dist/` carry the GPL text, exact corresponding-source link, project notice,
@@ -61,15 +75,18 @@ older CI and independent-review evidence.
 - **Repository anchor:** `main` was `43af438a47df08030cf0e6eafcc7b6ec7c580ea1` after PR #29; CI run
   `30060892316` passed Node 20, Node 22, and production Chromium.
 - **Production:** Cloudflare Pages project `mdviewer`, stable URL
-  **https://mdviewer-c9r.pages.dev/**, immutable deployment
-  **https://e3bd9770.mdviewer-c9r.pages.dev/**, deployment id
-  `e3bd9770-750c-4abe-b758-d7191dc7e841`, source `7f4eedf`, branch `main`.
+  **https://mdviewer-c9r.pages.dev/**. Current deployment (2026-08-16): immutable URL
+  **https://3378378d.mdviewer-c9r.pages.dev/**, deployment id
+  `3378378d-82ab-4de7-9fe7-30873b650a66`, source `8a9c942`, branch `main`. (First
+  deployment `e3bd9770-750c-4abe-b758-d7191dc7e841` from `7f4eedf`, 2026-07-24.)
 - **Deployment mode:** Wrangler direct upload. A Git push does **not** deploy automatically. From an
   authenticated maintainer machine, build and deploy with the commands in `docs/DEPLOYMENT.md`.
 - **Privacy/product boundary:** the public product is still entirely client-side. Documents and PDFs
   remain in the browser; there is no conversion API, document storage, telemetry, or third-party
   document/resource request. Same-origin application chunks and fonts can load lazily as features run.
-- **Human queue:** none. `ACTION_ITEMS.md` is authoritative and only the maintainer may close items.
+- **Human queue (2026-08-16):** **AI-7** (manual live-site acceptance of the QA sweep, steps
+  4–8) and **AI-6** (split-workspace browser acceptance). `ACTION_ITEMS.md` is authoritative
+  and only the maintainer may close items.
 - **Branch protection:** relaxed solo-owner profile — PR required; conversation resolution and the
   three CI jobs required; zero approvals; admins may bypass; force-push and deletion blocked; merge
   commits enabled, squash disabled; strict/up-to-date checks disabled.
@@ -133,7 +150,7 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; next work is dependency reconciliation or a
   deliberately selected P2/P3 product slice.
-- **Last updated:** 2026-07-24
+- **Last updated:** 2026-08-16
 - **Cycle-2 base (historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
 - **Live GitHub queue snapshot (2026-07-24):** Dependabot PRs #22–#27 reported clean/mergeable with
   green CI at the exact heads listed above. Refresh before use; several checks predate current `main`.
@@ -169,6 +186,11 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
+- **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Opened 2026-08-16 with
+  PR #48. Merge, deploy, and smoke (steps 1–3) are done; the remaining steps 4–8 are the
+  in-browser checks on **https://mdviewer-c9r.pages.dev/** (zoom/chip/banners/export progress,
+  PWA install + offline, dark-theme print accuracy, the Title-page toggle). Instructions in
+  `ACTION_ITEMS.md`.
 - **AI-6 — Accept the split workspace in a real browser (manual UI gate).** Opened 2026-08-08 with
   PR #36. Automated coverage cannot judge how typing feels or confirm the Print/Save-as-PDF output
   by eye. Step-by-step instructions are in `ACTION_ITEMS.md`; only the maintainer may close it.
