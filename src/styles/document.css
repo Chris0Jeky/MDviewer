@@ -458,35 +458,33 @@
   color: var(--doc-fg-muted);
 }
 
-/* Browsers without leader() support get a dotted baseline fill instead. */
+/* Browsers without leader() support (Chrome, i.e. every engine we actually export
+ * from) build the row out of three real flex items instead: the title, a growing
+ * dotted rule, then the page number. `order` is required because ::before is laid
+ * out ahead of the element's own content — without it the dots would lead the row.
+ * Nothing is absolutely positioned, so the rule can never run past the number. */
 @supports not (content: leader(". ")) {
-  .doc a.toc-link {
-    position: relative;
-  }
-
   .doc a.toc-link .toc-text {
-    background: #fff;
-    padding-right: 0.35em;
-    position: relative;
-    z-index: 1;
+    order: 0;
+    flex: 0 1 auto;
   }
 
   .doc a.toc-link::before {
     content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0.18em;
+    order: 1;
+    flex: 1 1 auto;
+    align-self: flex-end;
     border-bottom: 1px dotted var(--doc-border);
+    margin: 0 0.35em 0.25em;
   }
 
   .doc a.toc-link::after {
     content: attr(data-page);
+    order: 2;
     flex: 0 0 auto;
-    background: #fff;
-    padding-left: 0.35em;
-    position: relative;
-    z-index: 1;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--doc-fg-muted);
   }
 }
 
