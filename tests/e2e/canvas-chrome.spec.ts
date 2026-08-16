@@ -232,6 +232,11 @@ test.describe("re-pagination keeps the reader's place", () => {
 });
 
 test.describe("toolbar layout", () => {
+  // These assertions describe the single-row desktop toolbar. At Playwright's
+  // 1280px default the toolbar wraps on Linux (wider system fonts) but not on
+  // Windows, so pin a width where one row is guaranteed on every platform.
+  test.use({ viewport: { width: 1600, height: 900 } });
+
   test("labels sit beside their controls instead of wrapping above them", async ({ page }) => {
     await page.goto("/");
     const field = page

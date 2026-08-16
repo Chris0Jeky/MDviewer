@@ -141,6 +141,11 @@ test.describe("paper stays print-accurate in every screen theme", () => {
 });
 
 test.describe("the screen-theme control names itself as screen-only (UX-2)", () => {
+  // The left-of/right-of assertions describe the single-row desktop toolbar.
+  // At Playwright's 1280px default the toolbar wraps on Linux (wider system
+  // fonts) but not on Windows, so pin a width where one row is guaranteed.
+  test.use({ viewport: { width: 1600, height: 900 } });
+
   test("carries a visible Screen label and sits right of the document controls", async ({
     page,
   }) => {
