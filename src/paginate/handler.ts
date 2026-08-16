@@ -33,6 +33,19 @@ let registrationPromise: Promise<void> | null = null;
 let pageCounter = 0;
 
 /**
+ * Optional per-page progress sink. Paged.js layout is not incremental and gives no
+ * progress signal of its own, so `afterPageLayout` is the only honest one available.
+ * The App sets this immediately before `paginate()` and clears it in a `finally`;
+ * renders are serialized (see createRenderScheduler), so at most one sink is ever live.
+ */
+let progressSink: ((page: number) => void) | null = null;
+
+/** Install (or clear, with `null`) the per-page pagination progress sink. */
+export function setPaginationProgress(sink: ((page: number) => void) | null): void {
+  progressSink = sink;
+}
+
+/**
  * Point the handler at the host that the active pagination run renders into.
  * Called by paginate() immediately before previewer.preview(). Resets the per-run
  * page counter so `data-page-number` stamping starts at 1 for each fresh run.
@@ -71,6 +84,14 @@ export async function registerHandlersOnce(area: () => PageArea): Promise<void> 
           pageCounter += 1;
           if (!el.getAttribute(PAGEDJS.pageNumberAttr)) {
             el.setAttribute(PAGEDJS.pageNumberAttr, String(pageCounter));
+          }
+          // Progress reporting must never be able to break layout.
+          if (progressSink) {
+            try {
+              progressSink(pageCounter);
+            } catch {
+              /* a failing progress display is not worth losing the pagination over */
+            }
           }
         }
 

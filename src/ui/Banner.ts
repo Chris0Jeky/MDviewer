@@ -8,9 +8,16 @@
  *
  * Both regions are assertive live regions so assistive tech is notified. The
  * banner only renders state — it performs no rendering work itself.
+ *
+ * Placement matters as much as the markup: `root` is `#canvas`, the scroll
+ * container, so a plain in-flow banner appended after `#paged-output`
+ * (`min-height: 100%`) lands a full canvas-height below the fold and is never
+ * seen (BUG-6). The warning banner therefore lives in a zero-height sticky
+ * wrapper (`.canvas-notices`) **prepended** to the canvas — sticky `top` can only
+ * pin an element whose flow position is at the start of the scroll content.
  */
 
-import { IDS, el } from "../app/dom";
+import { CLASSES, IDS, el } from "../app/dom";
 import type { RenderWarning } from "../render/markdown";
 
 export interface BannerController {
@@ -58,12 +65,12 @@ function summarize(warnings: RenderWarning[]): string | null {
 /** Mount the warning banner + fatal error card into `root`. */
 export function mountBanner(root: HTMLElement): BannerController {
   // ---- Warning banner (aggregated, dismissible) ----
-  const warningText = el("span", { class: "warning-text" });
+  const warningText = el("span", { class: CLASSES.warningText });
   const dismissBtn = el(
     "button",
     {
       type: "button",
-      class: "warning-dismiss",
+      class: CLASSES.warningDismiss,
       title: "Dismiss warnings",
       attrs: { "aria-label": "Dismiss warnings" },
     },
@@ -73,7 +80,7 @@ export function mountBanner(root: HTMLElement): BannerController {
     "div",
     {
       id: IDS.warningBanner,
-      class: "warning-banner",
+      class: CLASSES.warningBanner,
       attrs: {
         role: "alert",
         "aria-live": "assertive",
@@ -81,18 +88,25 @@ export function mountBanner(root: HTMLElement): BannerController {
         hidden: "",
       },
     },
-    el("span", { class: "warning-icon", attrs: { "aria-hidden": "true" } }, "⚠"),
+    el("span", { class: CLASSES.warningIcon, attrs: { "aria-hidden": "true" } }, "⚠"),
     warningText,
     dismissBtn,
   );
 
+  // Zero-height sticky rail keeping the toast in the canvas viewport (see header).
+  const notices = el(
+    "div",
+    { class: CLASSES.canvasNotices, attrs: { "aria-hidden": "false" } },
+    warningBanner,
+  );
+
   // ---- Fatal error card ----
-  const errorMessage = el("p", { class: "error-message" });
+  const errorMessage = el("p", { class: CLASSES.errorMessage });
   const reloadBtn = el(
     "button",
     {
       type: "button",
-      class: "error-reload",
+      class: CLASSES.errorReload,
       title: "Reload the application",
     },
     "Reload",
@@ -101,7 +115,7 @@ export function mountBanner(root: HTMLElement): BannerController {
     "div",
     {
       id: IDS.errorCard,
-      class: "error-card",
+      class: CLASSES.errorCard,
       attrs: {
         role: "alertdialog",
         "aria-live": "assertive",
@@ -110,8 +124,8 @@ export function mountBanner(root: HTMLElement): BannerController {
         hidden: "",
       },
     },
-    el("div", { class: "error-icon", attrs: { "aria-hidden": "true" } }, "✕"),
-    el("h2", { class: "error-title" }, "Something went wrong"),
+    el("div", { class: CLASSES.errorIcon, attrs: { "aria-hidden": "true" } }, "✕"),
+    el("h2", { class: CLASSES.errorTitle }, "Something went wrong"),
     errorMessage,
     reloadBtn,
   );
@@ -132,7 +146,10 @@ export function mountBanner(root: HTMLElement): BannerController {
     location.reload();
   });
 
-  root.append(warningBanner, errorCard);
+  // The notices rail must start the canvas's flow for sticky `top` to pin it; the
+  // error card is a full-canvas centered overlay, so its position in flow is moot.
+  root.prepend(notices);
+  root.append(errorCard);
 
   return {
     warn(warnings: RenderWarning[]): void {

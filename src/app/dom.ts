@@ -29,12 +29,37 @@ export const CLASSES = {
   // chrome
   toolbarGroup: "toolbar-group",
   toolbarDivider: "toolbar-divider",
+  toolbarSpacer: "toolbar-spacer",
+  toolbarField: "toolbar-field",
+  toolbarLabel: "toolbar-label",
+  toolbarSelect: "toolbar-select",
+  toolbarInput: "toolbar-input",
+  docSwitcher: "doc-switcher",
+  docClose: "doc-close",
   segControl: "seg-control",
   segOption: "seg-option",
   toggleBtn: "toggle-btn",
   exportPrimary: "export-primary",
   exportSecondary: "export-secondary",
   isPaginating: "is-paginating",
+  isExporting: "is-exporting",
+  // canvas chrome (floating affordances pinned over the preview scroller)
+  canvasControls: "canvas-controls",
+  canvasNotices: "canvas-notices",
+  pageChipLabel: "page-chip-label",
+  paginatingOverlay: "paginating-overlay",
+  paginatingSpinner: "paginating-spinner",
+  paginatingLabel: "paginating-label",
+  // notifications
+  warningBanner: "warning-banner",
+  warningIcon: "warning-icon",
+  warningText: "warning-text",
+  warningDismiss: "warning-dismiss",
+  errorCard: "error-card",
+  errorIcon: "error-icon",
+  errorTitle: "error-title",
+  errorMessage: "error-message",
+  errorReload: "error-reload",
   // editor pane
   editorHead: "editor-head",
   editorScroll: "editor-scroll",
@@ -71,6 +96,14 @@ export const ATTRS = {
 
 /** CSS custom property carrying the editor pane's share of the workspace width. */
 export const SPLIT_RATIO_VAR = "--split-ratio";
+
+/**
+ * CSS custom property carrying the resolved preview zoom factor (0 < z <= 1).
+ * Canvas writes it on #canvas; preview.css turns it into a paint-only
+ * `transform: scale()` on the page stack. Never a layout change: the paginated
+ * geometry the no-slice guarantee is measured against must not depend on zoom.
+ */
+export const PREVIEW_ZOOM_VAR = "--preview-zoom";
 
 /** Paged.js emits these — never rename them. */
 export const PAGEDJS = {

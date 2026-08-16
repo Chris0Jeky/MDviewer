@@ -28,19 +28,20 @@ import {
 } from "../render/buildSource";
 import { buildStylesheet } from "../paginate/cssBuilder";
 import { paginate } from "../paginate/paginate";
-import { registerHandlersOnce } from "../paginate/handler";
+import { registerHandlersOnce, setPaginationProgress } from "../paginate/handler";
 import { measurePageArea } from "../paginate/measure";
 import { exportViaPrint } from "../export/print";
 import { exportPaginatedToPdf } from "../export/download";
 import { mountToolbar } from "../ui/Toolbar";
 import { mountCanvas } from "../ui/Canvas";
+import type { CanvasController, CanvasPosition } from "../ui/Canvas";
 import { mountEditor } from "../ui/Editor";
 import type { EditorController } from "../ui/Editor";
 import { mountSplitter } from "../ui/Splitter";
 import type { SplitterController } from "../ui/Splitter";
 import { mountEmptyState } from "../ui/EmptyState";
 import { mountBanner } from "../ui/Banner";
-import { DocStore } from "./state";
+import { DocStore, hasProtectableWork } from "./state";
 import type { RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
 import { loadSettings, saveSettings } from "./settings";
@@ -64,18 +65,21 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
 
 type Pane = "empty" | "loaded" | "error";
 
+/** What the export controls need to know to render themselves correctly. */
+export interface ExportState {
+  /** An export is in flight — both buttons must be inert until it settles. */
+  busy: boolean;
+  /** At least one document is open, so there is something to export at all. */
+  hasDocument: boolean;
+}
+
 export class App {
   settings: Settings;
   store: DocStore;
 
   private root: HTMLElement;
   private toolbar!: { destroy(): void };
-  private canvas!: {
-    host: HTMLElement;
-    setPaginating(b: boolean): void;
-    setPageCount(n: number): void;
-    setZoom(z: Settings["zoom"]): void;
-  };
+  private canvas!: CanvasController;
   private editor!: EditorController;
   private splitter!: SplitterController;
   private emptyState!: { destroy(): void };
@@ -87,6 +91,10 @@ export class App {
   private scheduler!: RenderScheduler;
   private detachInput: (() => void) | null = null;
   private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
+  private exportListeners = new Set<(state: ExportState) => void>();
+  private detachBeforeUnload: (() => void) | null = null;
+  /** True between the start and the end of an export (either path). */
+  private exportBusy = false;
 
   /** Monotonic token so a slow render can't overwrite a newer one (last-write-wins). */
   private renderToken = 0;
@@ -115,6 +123,7 @@ export class App {
     // "change" = a different document is active → re-seed the editor and re-render.
     app.store.on("change", () => {
       app.editor.setDocument(app.store.active);
+      app.emitExportState();
       app.scheduleRender("content");
     });
     // "text" = the active document was edited in the editor. The editor is already
@@ -125,6 +134,18 @@ export class App {
     // load-bearing half: two overlapping runPipeline calls would share one Paged.js
     // host and page counter (see createRenderScheduler).
     app.scheduler = createRenderScheduler((reason) => app.runPipeline(reason));
+
+    // Nothing is persisted (local-first), so a reload silently destroys whatever is
+    // open. Warn — but only when there is real work to lose, never for the pristine
+    // bundled sample (UX-6).
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (!hasProtectableWork(app.store.openDocs, SAMPLE_MARKDOWN)) return;
+      event.preventDefault();
+      // Chromium still requires a truthy returnValue to arm the native dialog.
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    app.detachBeforeUnload = () => window.removeEventListener("beforeunload", onBeforeUnload);
 
     return app;
   }
@@ -168,7 +189,11 @@ export class App {
       onPreview: (ratio) => this.applySplitRatio(ratio),
       onCommit: (ratio) => this.updateSettings({ splitRatio: ratio }),
     });
-    this.canvas = mountCanvas(this.workspaceEl);
+    // Zoom is CSS-only: it routes through updateSettings (persisted, aria-pressed
+    // synced) but is absent from REFLOW_KEYS, so it can never trigger a re-paginate.
+    this.canvas = mountCanvas(this.workspaceEl, {
+      onZoom: (zoom) => this.updateSettings({ zoom }),
+    });
 
     const canvasEl = document.getElementById(IDS.canvas);
     if (!canvasEl) throw new Error("MDviewer: canvas failed to mount");
@@ -303,6 +328,32 @@ export class App {
     return () => this.settingsListeners.delete(listener);
   }
 
+  /**
+   * Subscribe the export controls to their own availability. Mirrors the
+   * onSettingsChange pattern; fires immediately with the current state so a fresh
+   * subscriber never has to duplicate the initial sync.
+   */
+  onExportStateChange(listener: (state: ExportState) => void): () => void {
+    this.exportListeners.add(listener);
+    listener(this.exportState);
+    return () => this.exportListeners.delete(listener);
+  }
+
+  get exportState(): ExportState {
+    return { busy: this.exportBusy, hasDocument: this.store.openDocs.length > 0 };
+  }
+
+  private emitExportState(): void {
+    const state = this.exportState;
+    for (const listener of this.exportListeners) listener(state);
+  }
+
+  private setExportBusy(busy: boolean): void {
+    if (this.exportBusy === busy) return;
+    this.exportBusy = busy;
+    this.emitExportState();
+  }
+
   /** Open the hidden file input dialog. */
   openFilePicker(): void {
     const input = document.getElementById(IDS.fileInput) as HTMLInputElement | null;
@@ -316,22 +367,51 @@ export class App {
 
   /** Trigger the primary (vector) print export. */
   async exportPrint(): Promise<void> {
-    // Export what the user can see, not what the host happens to still hold.
-    await this.flushRender();
-    await exportViaPrint(this.canvas.host);
+    if (this.exportBusy) return;
+    this.setExportBusy(true);
+    try {
+      // Export what the user can see, not what the host happens to still hold.
+      await this.flushRender();
+      await exportViaPrint(this.canvas.host);
+    } finally {
+      this.setExportBusy(false);
+    }
   }
 
-  /** Trigger the fallback (rasterized) PDF export. */
+  /**
+   * Trigger the fallback (rasterized) PDF export. Rasterizing is a long blocking
+   * loop, so this owns the user-facing feedback: both export buttons go inert, the
+   * canvas overlay reports the page being rendered, and #status-live carries the
+   * same story for assistive tech — sampled, not once per page, so a 60-page export
+   * does not turn into 60 announcements.
+   */
   async exportPdf(): Promise<void> {
-    await this.flushRender();
-    const name = this.store.active?.name ?? "document";
-    const base = name.replace(/\.(md|markdown)$/i, "") || "document";
+    if (this.exportBusy) return;
+    this.setExportBusy(true);
     try {
-      await exportPaginatedToPdf(this.canvas.host, this.settings, {
-        fileName: `${base}.pdf`,
-      });
-    } catch (err) {
-      this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
+      await this.flushRender();
+      const name = this.store.active?.name ?? "document";
+      const base = name.replace(/\.(md|markdown)$/i, "") || "document";
+      this.canvas.setBusy(true, "Preparing PDF…");
+      this.announce("Preparing PDF export…");
+      try {
+        await exportPaginatedToPdf(this.canvas.host, this.settings, {
+          fileName: `${base}.pdf`,
+          onProgress: (done, total) => {
+            this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
+            if (done === 1 || done === total || done % 5 === 0) {
+              this.announce(`Rendering page ${done} of ${total}.`);
+            }
+          },
+        });
+        this.announce("PDF downloaded.");
+      } catch (err) {
+        this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
+      } finally {
+        this.canvas.setBusy(false);
+      }
+    } finally {
+      this.setExportBusy(false);
     }
   }
 
@@ -353,6 +433,19 @@ export class App {
 
     const token = ++this.renderToken;
     const stale = (): boolean => token !== this.renderToken;
+
+    // Where the reader is right now. Pagination tears the host down, which collapses
+    // scrollTop to 0, so without this every tweak (and every keystroke past the
+    // debounce) throws the reader back to page 1 (UX-4 ii). Both reasons restore:
+    // a settings change and an edit are equally disorienting to lose your place in.
+    const restoreTo: CanvasPosition | null = this.hasGoodRender
+      ? this.canvas.capturePosition()
+      : null;
+
+    // The empty pane sits UNDER the 70%-alpha paginating overlay (z-10 vs z-40), so
+    // leaving it up during the first pagination shows the dropzone card ghosted
+    // through the spinner (UX-4 iii). A document exists, so it has no business here.
+    this.emptyEl.hidden = true;
 
     this.canvas.setPaginating(true);
 
@@ -394,13 +487,24 @@ export class App {
       await registerHandlersOnce(() => measurePageArea(this.settings));
       if (stale()) return;
       const css = buildStylesheet(this.settings);
-      const flow = await paginate(source, css, this.canvas.host);
+      // Paged.js gives no progress signal; its per-page handler hook is the only one.
+      setPaginationProgress((page) => {
+        if (!stale()) this.canvas.setProgress(page);
+      });
+      let flow;
+      try {
+        flow = await paginate(source, css, this.canvas.host);
+      } finally {
+        setPaginationProgress(null);
+      }
       if (stale()) return;
 
       // Success: swap to loaded pane, report page count + warnings.
       this.hasGoodRender = true;
       this.showPane("loaded");
       this.canvas.setPageCount(flow.total);
+      // Put the reader back where they were, clamped to the new page count.
+      this.canvas.restorePosition(restoreTo);
       this.announce(`Document paginated into ${flow.total} ${flow.total === 1 ? "page" : "pages"}.`);
 
       const allWarnings = withMermaidWarnings(warnings, mermaidResult.failed);
@@ -464,11 +568,15 @@ export class App {
   destroy(): void {
     this.detachInput?.();
     this.detachInput = null;
+    this.detachBeforeUnload?.();
+    this.detachBeforeUnload = null;
     this.toolbar.destroy();
     this.splitter.destroy();
     this.editor.destroy();
     this.emptyState.destroy();
+    this.canvas.destroy();
     this.settingsListeners.clear();
+    this.exportListeners.clear();
   }
 
   get pane(): Pane {

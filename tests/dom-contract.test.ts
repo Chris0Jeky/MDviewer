@@ -29,14 +29,14 @@ const CSS = readAllCss();
  * never styled BY THIS SELECTOR). Excluding these keeps the drift guard meaningful:
  * anything NOT on this list must be referenced by at least one stylesheet selector.
  *
- * The codebase convention is id = JS hook, class = visual styling: Banner.ts gives
- * #warning-banner / #error-card a matching `.warning-banner` / `.error-card` class
- * and toggles visibility via the id, so those ids are styled (if at all) by class.
+ * #warning-banner / #error-card used to sit here on the assumption that their
+ * `.warning-banner` / `.error-card` classes carried the styling. Neither class had a
+ * single rule in any stylesheet, so both surfaces rendered as unstyled text a full
+ * canvas-height below the fold and rejected files failed silently (BUG-6). The
+ * exemptions are gone: both must now be reachable from the CSS.
  */
 const JS_ONLY_IDS = new Set<string>([
   IDS.fileInput, // hidden <input>; controlled via the `hidden` attribute, not by id
-  IDS.warningBanner, // styled by its `.warning-banner` class; id is the toggle hook
-  IDS.errorCard, // styled by its `.error-card` class; id is the toggle hook
 ]);
 
 const JS_ONLY_CLASSES = new Set<string>([

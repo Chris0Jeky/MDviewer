@@ -212,8 +212,27 @@ body {
   display: none;
 }
 
-.toolbar-group > label,
-.toolbar-group .group-label {
+/* A label/control pair. Without this the wrapper is a block div, so the label
+   wraps onto its own line above the control and the whole strip goes ragged
+   (UX-11). `flex: 0 0 auto` keeps the pair from being squeezed by its neighbours. */
+.toolbar-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* An author `display` beats the UA's `[hidden] { display: none }` — same reason
+   as .toolbar-group[hidden] below (the document switcher hides below two docs). */
+.toolbar-field[hidden] {
+  display: none;
+}
+
+/* Nested labels must get the compact treatment too: the original direct-child
+   selector missed every label inside a .toolbar-field, which is most of them. */
+.toolbar-group label,
+.toolbar-group .group-label,
+.toolbar-label {
   color: var(--fg-muted);
   font-size: 11px;
   font-weight: 600;
@@ -362,6 +381,59 @@ body {
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
+}
+
+/* Keep every toolbar control on one line and stop long option text (document
+   file names, theme names) from stretching the strip (UX-11). */
+.toolbar-select,
+.toolbar-input {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.toolbar-select {
+  min-width: 96px;
+}
+
+/* File names are the longest thing in the toolbar — give the switcher room but
+   a hard ceiling, and let the native select ellipsize past it. */
+.doc-switcher {
+  max-width: 220px;
+  text-overflow: ellipsis;
+}
+
+/* Close the active document (UX-7). Shown from the first open document, unlike
+   the switcher next to it. */
+.doc-close {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.doc-close:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--fg-strong);
+}
+
+.doc-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .toolbar-group select {

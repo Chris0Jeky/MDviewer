@@ -24,6 +24,16 @@
     radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.05) 1px, transparent 0);
   background-size: 22px 22px;
   scroll-behavior: smooth;
+  /* Resolved by Canvas.ts (PREVIEW_ZOOM_VAR); 1 until the first sheet exists. */
+  --preview-zoom: 1;
+}
+
+/* The scroller is keyboard-focusable (tabIndex 0) so the skip link lands on
+   something operable and the preview can be scrolled with arrow keys alone.
+   `-2px` keeps the ring inside the pane rather than under the splitter. */
+#canvas:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -47,6 +57,8 @@
   flex-direction: column;
   align-items: center;
   gap: 26px;
+  /* The 24px horizontal padding is mirrored by STACK_GUTTER_PX in Canvas.ts —
+     "Fit" subtracts it from the pane width. Change one, change both. */
   padding: 32px 24px 56px;
   transform-origin: top center;
   transition: transform 140ms ease;
@@ -70,20 +82,20 @@
 }
 
 /* -----------------------------------------------------------------------------
- * Zoom states. The app sets data-zoom on #canvas (or a wrapper) from
- * settings.zoom: 'fit' | 1 | 0.5. 'fit' lets the natural mm sizing show; the
- * numeric states scale the page stack.
+ * Zoom. Canvas.ts resolves settings.zoom ('fit' | 1 | 0.5) to a single factor on
+ * --preview-zoom (dom.ts PREVIEW_ZOOM_VAR); 'fit' is recomputed against the pane
+ * width whenever the canvas resizes (window, splitter drag) and is capped at 1.
+ * data-zoom stays on #canvas purely as a state hook for tests and debugging.
+ *
+ * This MUST stay a transform, not the `zoom` property: `zoom` participates in
+ * layout, so text would re-wrap and Paged.js would place breaks against geometry
+ * the exported PDF never sees. A transform is paint-only — the paginated layout,
+ * and therefore the no-slice guarantee, is bit-identical at every zoom level.
+ * Scale is never > 1, so the shrunken stack cannot overflow to the left where
+ * the scroll container could not reach it.
  * -------------------------------------------------------------------------- */
-#canvas[data-zoom="fit"] .pagedjs_pages {
-  transform: none;
-}
-
-#canvas[data-zoom="1"] .pagedjs_pages {
-  transform: scale(1);
-}
-
-#canvas[data-zoom="0.5"] .pagedjs_pages {
-  transform: scale(0.5);
+.pagedjs_pages {
+  transform: scale(var(--preview-zoom, 1));
 }
 
 /* -----------------------------------------------------------------------------
@@ -162,18 +174,25 @@
 }
 
 #canvas.is-paginating .paginating-overlay,
-.is-paginating .paginating-overlay {
+.is-paginating .paginating-overlay,
+/* The rasterized export reuses the same overlay for its per-page progress, under
+   its own state class so `.is-paginating` keeps meaning exactly one thing (the
+   e2e helper waits on it). */
+#canvas.is-exporting .paginating-overlay,
+.is-exporting .paginating-overlay {
   display: flex;
 }
 
-/* Dim the stale page stack while a fresh layout is in flight. */
+/* Dim the stale page stack while a fresh layout is in flight. Deliberately NOT
+   applied while exporting: html2canvas rasterizes these very sheets, and a dimmed
+   stack would be baked into the PDF. */
 #canvas.is-paginating .pagedjs_pages,
 .is-paginating .pagedjs_pages {
   opacity: 0.45;
   filter: saturate(0.85);
 }
 
-.paginating-overlay .spinner {
+.paginating-overlay .paginating-spinner {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -196,7 +215,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .paginating-overlay .spinner {
+  .paginating-overlay .paginating-spinner {
     animation: none;
     border-top-color: var(--accent);
     /* Show a static partial ring rather than a frozen full ring. */
@@ -205,12 +224,39 @@
 }
 
 /* -----------------------------------------------------------------------------
- * #page-chip — floating "page N of M" indicator, bottom-left of the canvas.
+ * .canvas-controls — the floating chip + zoom cluster.
+ *
+ * #canvas is the scroll container, so `position: absolute` children are placed in
+ * its scrolled coordinate space and slide out of sight as the reader scrolls
+ * (BUG-5). A sticky wrapper stays in the viewport instead. It is the LAST in-flow
+ * child of #canvas (see Canvas.ts append order) because sticky `bottom` can only
+ * hold an element back that would otherwise scroll off the bottom; `height: 0`
+ * plus `align-items: flex-end` keeps it out of the flow's height while its
+ * children hang upward from the pinned line.
+ * -------------------------------------------------------------------------- */
+.canvas-controls {
+  position: sticky;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  height: 0;
+  padding: 0 16px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvas-controls > * {
+  pointer-events: auto;
+}
+
+/* -----------------------------------------------------------------------------
+ * #page-chip — "Page N of M" for the topmost visible page (Canvas.ts tracks the
+ * scroll position); bottom-left of the canvas viewport.
  * -------------------------------------------------------------------------- */
 #page-chip {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
   z-index: 30;
   display: inline-flex;
   align-items: center;
@@ -231,18 +277,15 @@
   display: none;
 }
 
-#page-chip .page-chip-count {
+#page-chip .page-chip-label {
   color: var(--fg-strong);
 }
 
 /* -----------------------------------------------------------------------------
- * #zoom-control — floating zoom segmented control, bottom-right of the canvas.
+ * #zoom-control — zoom segmented control, bottom-right of the canvas viewport.
  * Reuses the segmented-control look from app.css.
  * -------------------------------------------------------------------------- */
 #zoom-control {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
   z-index: 30;
   display: inline-flex;
   align-items: center;
@@ -291,6 +334,173 @@
 }
 
 #zoom-control button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+ * .canvas-notices / #warning-banner — the non-fatal notification toast
+ * (rejected files, render warnings).
+ *
+ * Same scroll-container trap as .canvas-controls, in the other direction: the
+ * banner is appended after #paged-output (min-height: 100%), so in the flow it
+ * sits a full canvas-height below the fold and was simply never seen (BUG-6).
+ * The rail is PREPENDED to #canvas — sticky `top` cannot pull an element up above
+ * its flow position — and is zero-height so it displaces nothing.
+ * -------------------------------------------------------------------------- */
+.canvas-notices {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#warning-banner {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(17, 24, 39, 0.18);
+  pointer-events: auto;
+}
+
+#warning-banner[hidden] {
+  display: none;
+}
+
+.warning-banner .warning-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+.warning-banner .warning-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fg-strong);
+}
+
+.warning-banner .warning-dismiss {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.warning-banner .warning-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--fg-strong);
+}
+
+.warning-banner .warning-dismiss:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+ * #error-card — the fatal pane. Centred over the whole canvas, same overlay
+ * shape as #empty-state (which it replaces when the pipeline cannot produce a
+ * document at all), one z-layer above it.
+ * -------------------------------------------------------------------------- */
+#error-card {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  /* It floats over a possibly still-painted page stack, so it must be opaque. */
+  background: color-mix(in srgb, var(--bg-canvas) 82%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+#error-card[hidden] {
+  display: none;
+}
+
+.error-card .error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--danger) 16%, var(--bg-surface));
+  color: var(--danger);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.error-card .error-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+
+.error-card .error-message {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--fg-muted);
+  font-size: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.error-card .error-reload {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 36px;
+  padding: 0 18px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.error-card .error-reload:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.error-card .error-reload:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -422,6 +632,10 @@
   #empty-state,
   #page-chip,
   #zoom-control,
+  .canvas-controls,
+  .canvas-notices,
+  #warning-banner,
+  #error-card,
   .paginating-overlay,
   .skip-link {
     display: none !important;
