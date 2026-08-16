@@ -9,6 +9,51 @@
       name="description"
       content="Write or drop Markdown and export beautiful, page-break-safe PDFs for research and code documents. Live split-pane preview; everything runs in your browser."
     />
+
+    <!--
+      Identity + sharing. The og:/twitter: copy deliberately repeats the <title> and
+      description above verbatim so a wording change has one obvious blast radius;
+      tests/head-contract.test.ts fails the build if they drift or if a referenced
+      asset is missing from public/.
+
+      Absolute URLs are required by Open Graph and are pinned to the production origin
+      recorded in docs/DEPLOYMENT.md. Preview deployments therefore advertise the
+      production card — correct for sharing, and harmless otherwise.
+    -->
+    <link rel="canonical" href="https://mdviewer-c9r.pages.dev/" />
+    <!-- Light-theme toolbar surface (--bg-toolbar). Static: the screen theme is a user
+         setting applied after paint, so there is no honest single value for both. -->
+    <meta name="theme-color" content="#ffffff" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MDviewer" />
+    <meta property="og:url" content="https://mdviewer-c9r.pages.dev/" />
+    <meta property="og:title" content="MDviewer — Markdown to PDF" />
+    <meta
+      property="og:description"
+      content="Write or drop Markdown and export beautiful, page-break-safe PDFs for research and code documents. Live split-pane preview; everything runs in your browser."
+    />
+    <meta property="og:image" content="https://mdviewer-c9r.pages.dev/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="MDviewer — Markdown to page-break-safe PDF, running entirely in your browser."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MDviewer — Markdown to PDF" />
+    <meta
+      name="twitter:description"
+      content="Write or drop Markdown and export beautiful, page-break-safe PDFs for research and code documents. Live split-pane preview; everything runs in your browser."
+    />
+    <meta name="twitter:image" content="https://mdviewer-c9r.pages.dev/og-image.png" />
+
+    <!-- Keep this script LAST in <head>: it must run after the metadata is parsed and
+         still before first paint. -->
     <script>
       // Apply the saved screen theme before first paint to avoid a flash.
       try {
