@@ -216,14 +216,51 @@
   position: relative;
 }
 
+/* sanitize.ts forces every surviving checkbox to `disabled` (a security decision that
+ * stays). Chrome's disabled UA checkbox ignores `accent-color`, so the only styling the
+ * box ever had produced pale grey on pale grey — near-invisible on screen and worse on
+ * paper. Draw the control by hand instead: `appearance: none` plus a real border, and a
+ * ::after tick for the checked state. `print-color-adjust: exact` keeps the filled box
+ * from being dropped by the print pipeline; every colour used is a dark-on-white doc
+ * token (--doc-fg-muted #555b63 = 6.9:1 and --doc-link #1a4fb8 = 7.4:1 against white;
+ * the white tick on the filled box is the same 7.4:1 — all far above the 3:1 WCAG
+ * 1.4.11 non-text contrast minimum). */
 .doc .task-list-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   position: absolute;
   left: 0;
   top: 0.3em;
   margin: 0;
   width: 0.95em;
   height: 0.95em;
-  accent-color: var(--doc-link);
+  box-sizing: border-box;
+  border: 1.5px solid var(--doc-fg-muted);
+  border-radius: 3px;
+  background: #fff;
+  opacity: 1; /* the UA dims disabled controls; we already draw a static box */
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.doc .task-list-item input[type="checkbox"]:checked {
+  border-color: var(--doc-link);
+  background: var(--doc-link);
+}
+
+/* The tick: two borders of an empty box, rotated. Drawn in white on the filled
+ * box, so it reads at any size and survives a monochrome print as a knockout. */
+.doc .task-list-item input[type="checkbox"]:checked::after {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0.28em;
+  top: 0.08em;
+  width: 0.22em;
+  height: 0.45em;
+  border: solid #fff;
+  border-width: 0 0.14em 0.14em 0;
+  transform: rotate(45deg);
 }
 
 .doc .task-list-item label {
