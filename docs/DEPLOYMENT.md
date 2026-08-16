@@ -52,6 +52,33 @@ After a deployment, smoke both the stable and immutable URLs, inspect the entry 
 asset response, and confirm the `_headers` policy. Do not record Wrangler tokens or Cloudflare account
 identifiers in the repository.
 
+## Offline support and installability
+
+MDviewer ships a Workbox-generated service worker (`vite-plugin-pwa`, `generateSW` mode) and a
+web-app manifest. `dist/sw.js`, `dist/workbox-<hash>.js`, and `dist/manifest.webmanifest` are
+build artifacts — nothing to configure at deploy time.
+
+- The precache is deliberately the **whole** application (~180 entries, ~9.3 MiB): every lazy
+  chunk (Paged.js, Mermaid, jsPDF/html2canvas-pro, Shiki grammars and engine) and the KaTeX
+  `woff2` fonts. This is what makes Print / Download / math genuinely work offline instead of
+  only *appearing* to work until the first export. A first visit downloads the precache in the
+  background.
+- Updates use **prompt, not auto-update**: after a deploy, an already-open session shows a
+  "new version available" toast and reloads only when the user accepts. Returning users can be
+  one deploy behind until they do.
+- The manifest declares `standalone`, `start_url: "/"`, and 192/512/maskable icons, so the app
+  is installable from Chrome/Edge and via iOS "Add to Home Screen".
+- `public/_headers` serves `/sw.js` and `/manifest.webmanifest` with
+  `max-age=0, must-revalidate` (a stale `sw.js` would pin users to an old precache and hide the
+  update prompt) and the hashed `/workbox-*.js` as immutable. After each deploy, smoke-check
+  those `Cache-Control` values along with the existing header checks.
+- Brand assets (favicon, manifest icons, OG card) regenerate from the single source
+  `public/favicon.svg` via `node scripts/generate-icons.mjs` (uses the pinned Playwright
+  Chromium; no extra dependency).
+- Offline proof lives in `tests/e2e/offline.spec.ts` and only runs against the production
+  bundle: `npm run build`, then
+  `E2E_TARGET=preview npx playwright test tests/e2e/offline.spec.ts`.
+
 ## One command or one click on this PC
 
 Install Node.js once, clone the repository, then run:

@@ -12,20 +12,9 @@
  * before pagination. `awaitFontsAndImages` is the step-5 helper and lives here too.
  */
 
-import type { DocFont, Settings } from "../app/settings";
+import type { Settings } from "../app/settings";
+import { DOC_FONT_STACKS } from "../app/settings";
 import { ATTRS, CLASSES } from "../app/dom";
-
-/**
- * Font-family stacks per DocFont group. These mirror `src/styles/document.css` exactly; we
- * set both the canonical `data-doc-font` hook (which document.css keys on) and an inline
- * `--doc-font-family` custom property so the typography is correct regardless of which
- * cascade path wins (and so the fragment is self-describing for the export canvas path).
- */
-const DOC_FONT_STACKS: Record<DocFont, string> = {
-  serif: `"Source Serif 4", "Source Serif Pro", "Charter", "Georgia", "Times New Roman", serif`,
-  sans: `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`,
-  slab: `"Roboto Slab", "Rockwell", "Source Serif 4", "Georgia", "Times New Roman", serif`,
-};
 
 /** Outermost blocks whose identity must survive Paged.js cloning/splitting. */
 export const ATOMIC_BLOCK_SELECTOR = [
@@ -83,7 +72,10 @@ export function buildPaginationSource(html: string, settings: Settings): Documen
   const doc = document.createElement("div");
   doc.className = CLASSES.doc;
 
-  // Typography tokens consumed by document.css and the paged stylesheet.
+  // Typography tokens consumed by document.css and the paged stylesheet. We set both the
+  // canonical `data-doc-font` hook (which document.css keys on) and an inline
+  // `--doc-font-family` custom property so the typography is correct regardless of which
+  // cascade path wins (and so the fragment is self-describing for the export canvas path).
   doc.setAttribute("data-doc-font", settings.docFont);
   doc.style.setProperty("--doc-font-family", DOC_FONT_STACKS[settings.docFont]);
   doc.style.setProperty("--doc-font-size", `${settings.fontSizePt}pt`);
@@ -159,10 +151,12 @@ export function transformFootnotesToInline(root: ParentNode): void {
  * any TOC when it is off.
  *
  * markdown-it-toc-done-right emits a `<nav class="toc">` (or a bare `.toc` list) wherever the
- * source had `[[toc]]`. When present we normalise it: wrap in `nav.toc` if needed and tag each
- * intra-document link with `a.toc-link` so the paged `target-counter` leader rule applies.
+ * source had `[[toc]]`. When present we normalise it in place — the author chose where it
+ * goes: wrap in `nav.toc` if needed, tag each intra-document link with `a.toc-link` so the
+ * paged `target-counter` leader rule applies, and wrap each title in `span.toc-text`.
  * When the source had no `[[toc]]` marker, we synthesize a TOC from the rendered h1–h3 ids
- * (the very ids markdown-it-anchor produced) and prepend it.
+ * (the very ids markdown-it-anchor produced) and insert it immediately AFTER the first `h1`
+ * (top of the document when there is no h1).
  */
 export function injectToc(root: ParentNode, settings: Settings): void {
   const existing = findTocElement(root);
@@ -180,6 +174,16 @@ export function injectToc(root: ParentNode, settings: Settings): void {
   // No [[toc]] in source → synthesize from headings.
   const nav = buildTocFromHeadings(root);
   if (!nav) return;
+
+  // Deterministic placement rule: a SYNTHESIZED TOC goes immediately AFTER the document's
+  // first <h1> (the title), so the reader sees title → contents → body. Only when there is
+  // no h1 at all does it go to the top of the document. An author-placed `[[toc]]` marker
+  // always wins — that path returns above via normalizeToc.
+  const title = root.querySelector("h1");
+  if (title) {
+    title.after(nav);
+    return;
+  }
   const firstChild = (root as Element).firstElementChild;
   if (firstChild) firstChild.before(nav);
   else (root as Element).append(nav);
@@ -213,11 +217,27 @@ function normalizeToc(tocEl: Element): void {
 
   nav.querySelectorAll<HTMLAnchorElement>("a[href^='#']").forEach((a) => {
     a.classList.add(CLASSES.tocLink);
+    wrapTocTitle(a);
   });
 }
 
 /**
- * Synthesize `nav.toc > ol > li > a.toc-link[href="#id"]` from the rendered h1–h3 ids.
+ * Put the entry title in its own `span.toc-text` so the dot-leader row has three real flex
+ * items (title | leader | page number). Without it the leader-less fallback has nothing to
+ * grow and the dots run past the page number. Idempotent.
+ */
+function wrapTocTitle(link: HTMLAnchorElement): void {
+  if (link.querySelector(`:scope > .${CLASSES.tocText}`)) return;
+  const span = document.createElement("span");
+  span.className = CLASSES.tocText;
+  // Move the link's own content (text and any inline markup) into the span. Nested
+  // sub-lists are siblings of the link, so nothing structural is captured here.
+  span.append(...Array.from(link.childNodes));
+  link.appendChild(span);
+}
+
+/**
+ * Synthesize `nav.toc > ol > li > a.toc-link[href="#id"] > span.toc-text` from the h1–h3 ids.
  * Returns null when there are no usable headings. Headings are nested by level so the TOC
  * mirrors document structure; the header-anchor permalink (if any) is ignored — we link to
  * the heading id directly.
@@ -252,7 +272,10 @@ function buildTocFromHeadings(root: ParentNode): Element | null {
     const a = document.createElement("a");
     a.className = CLASSES.tocLink;
     a.setAttribute("href", `#${id}`);
-    a.textContent = headingText(heading);
+    const text = document.createElement("span");
+    text.className = CLASSES.tocText;
+    text.textContent = headingText(heading);
+    a.appendChild(text);
     li.appendChild(a);
     parent.list.appendChild(li);
 
@@ -268,11 +291,34 @@ function buildTocFromHeadings(root: ParentNode): Element | null {
   return nav;
 }
 
-/** Heading text without the injected permalink anchor (e.g. markdown-it-anchor's "¶"). */
+const HEADER_ANCHOR_SELECTOR = `a.${CLASSES.headerAnchor}, a.header-anchor`;
+
+/**
+ * Heading text without the injected permalink anchor.
+ *
+ * markdown-it-anchor has two permalink families and they need opposite treatment:
+ *
+ *  - GLYPH styles (`headerLink` is not one of them — think `linkInsideHeader`/`ariaHidden`
+ *    "¶" or "#") append a small standalone anchor NEXT TO the text. Those must be deleted.
+ *  - WRAPPER styles — `permalink.headerLink()`, which is what `createMarkdown` configures —
+ *    wrap the ENTIRE heading text in `a.header-anchor`. Deleting the anchor there deletes
+ *    the heading text, which is exactly how every synthesized TOC entry came out blank.
+ *
+ * So: strip anchors first; if anything is left, that was a glyph permalink and the stripped
+ * text is correct. If nothing is left, the anchor was a wrapper — unwrap it (replace it with
+ * its own children) and read the text back out.
+ */
 function headingText(heading: HTMLElement): string {
-  const clone = heading.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll(`a.${CLASSES.headerAnchor}, a.header-anchor`).forEach((a) => a.remove());
-  return (clone.textContent ?? "").trim();
+  const stripped = heading.cloneNode(true) as HTMLElement;
+  stripped.querySelectorAll(HEADER_ANCHOR_SELECTOR).forEach((a) => a.remove());
+  const withoutAnchors = (stripped.textContent ?? "").trim();
+  if (withoutAnchors) return withoutAnchors;
+
+  const unwrapped = heading.cloneNode(true) as HTMLElement;
+  unwrapped.querySelectorAll(HEADER_ANCHOR_SELECTOR).forEach((a) => {
+    a.replaceWith(...Array.from(a.childNodes));
+  });
+  return (unwrapped.textContent ?? "").trim();
 }
 
 /**

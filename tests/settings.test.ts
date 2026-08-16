@@ -23,6 +23,9 @@ describe("settings: defaults and constants", () => {
     expect(DEFAULT_SETTINGS.fontSizePt).toBe(11);
     expect(DEFAULT_SETTINGS.showToc).toBe(true);
     expect(DEFAULT_SETTINGS.showPageNumbers).toBe(true);
+    // BUG-9: the title-page convention became a setting rather than a hardcoded
+    // `@page :first` rule. `true` is the default so existing documents are unchanged.
+    expect(DEFAULT_SETTINGS.titlePage).toBe(true);
     expect(DEFAULT_SETTINGS.runningHeader).toBe("");
     expect(DEFAULT_SETTINGS.showLineNumbers).toBe(false);
     expect(DEFAULT_SETTINGS.zoom).toBe("fit");
@@ -114,6 +117,23 @@ describe("settings: migrateSettings", () => {
     expect(migrateSettings({ splitRatio: -12 }).splitRatio).toBe(SPLIT_RATIO_MIN);
     for (const bad of [NaN, Infinity, "wide", null, {}] as unknown[]) {
       expect(migrateSettings({ splitRatio: bad }).splitRatio).toBe(DEFAULT_SETTINGS.splitRatio);
+    }
+  });
+
+  // BUG-9: titlePage drives a CSS branch in buildStylesheet, so it is validated rather
+  // than spread — a truthy non-boolean must not reach the stylesheet builder.
+  it("defaults titlePage to true for a store written before the setting existed", () => {
+    expect(migrateSettings({ schemaVersion: 1, codeTheme: "nord" }).titlePage).toBe(true);
+  });
+
+  it("keeps an explicitly persisted titlePage value in both directions", () => {
+    expect(migrateSettings({ titlePage: false }).titlePage).toBe(false);
+    expect(migrateSettings({ titlePage: true }).titlePage).toBe(true);
+  });
+
+  it("rejects a non-boolean titlePage instead of coercing it", () => {
+    for (const bad of ["false", 0, 1, null, {}, []] as unknown[]) {
+      expect(migrateSettings({ titlePage: bad }).titlePage).toBe(DEFAULT_SETTINGS.titlePage);
     }
   });
 });

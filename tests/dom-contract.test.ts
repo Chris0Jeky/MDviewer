@@ -2,7 +2,14 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { IDS, CLASSES, ATTRS, PAGEDJS, SPLIT_RATIO_VAR } from "../src/app/dom";
+import {
+  IDS,
+  CLASSES,
+  ATTRS,
+  PAGEDJS,
+  SPLIT_RATIO_VAR,
+  PREVIEW_ZOOM_VAR,
+} from "../src/app/dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const STYLES_DIR = join(here, "..", "src", "styles");
@@ -29,14 +36,14 @@ const CSS = readAllCss();
  * never styled BY THIS SELECTOR). Excluding these keeps the drift guard meaningful:
  * anything NOT on this list must be referenced by at least one stylesheet selector.
  *
- * The codebase convention is id = JS hook, class = visual styling: Banner.ts gives
- * #warning-banner / #error-card a matching `.warning-banner` / `.error-card` class
- * and toggles visibility via the id, so those ids are styled (if at all) by class.
+ * #warning-banner / #error-card used to sit here on the assumption that their
+ * `.warning-banner` / `.error-card` classes carried the styling. Neither class had a
+ * single rule in any stylesheet, so both surfaces rendered as unstyled text a full
+ * canvas-height below the fold and rejected files failed silently (BUG-6). The
+ * exemptions are gone: both must now be reachable from the CSS.
  */
 const JS_ONLY_IDS = new Set<string>([
   IDS.fileInput, // hidden <input>; controlled via the `hidden` attribute, not by id
-  IDS.warningBanner, // styled by its `.warning-banner` class; id is the toggle hook
-  IDS.errorCard, // styled by its `.error-card` class; id is the toggle hook
 ]);
 
 const JS_ONLY_CLASSES = new Set<string>([
@@ -98,6 +105,16 @@ describe("dom-contract: data attributes the CSS keys off appear in the CSS", () 
 
   it("declares the split-ratio custom property the App writes", () => {
     expect(CSS.includes(SPLIT_RATIO_VAR)).toBe(true);
+  });
+
+  // Canvas writes the resolved zoom factor here; if the CSS stopped reading it the
+  // zoom control would go silently dead again (BUG-1).
+  it("declares the preview-zoom custom property the Canvas writes", () => {
+    expect(CSS.includes(PREVIEW_ZOOM_VAR)).toBe(true);
+    expect(
+      CSS.includes(`scale(var(${PREVIEW_ZOOM_VAR}`),
+      "preview zoom must stay a paint-only transform, never the `zoom` property",
+    ).toBe(true);
   });
 });
 

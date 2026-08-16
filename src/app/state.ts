@@ -91,6 +91,21 @@ export class DocStore {
   }
 }
 
+/**
+ * Is there work in the store a reload would actually destroy?
+ *
+ * MDviewer never persists document text (local-first, by design), so a reload loses
+ * everything open. Prompting unconditionally would nag on the one case where the
+ * prompt is pure noise: the bundled sample, opened and never touched. So a document
+ * counts as protectable only when it has content AND is not byte-identical to the
+ * pristine sample — which also means editing the sample re-arms the guard.
+ *
+ * Pure and store-independent so it is unit-testable without a DOM.
+ */
+export function hasProtectableWork(docs: readonly Doc[], pristineSample: string): boolean {
+  return docs.some((doc) => doc.text.trim().length > 0 && doc.text !== pristineSample);
+}
+
 const DEBOUNCE_MS: Record<RenderReason, number> = {
   content: 250,
   settings: 120,

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import type { HighlighterCore } from "shiki/core";
 import {
   buildPaginationSource,
   transformFootnotesToInline,
@@ -6,6 +7,8 @@ import {
   awaitFontsAndImages,
   stampAtomicBlocks,
 } from "../src/render/buildSource";
+import { createMarkdown, renderMarkdown } from "../src/render/markdown";
+import { getHighlighter } from "../src/render/highlight";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
 
 function settings(patch: Partial<Settings> = {}): Settings {
@@ -118,6 +121,158 @@ describe("injectToc", () => {
       const ids = new Set(Array.from(root.querySelectorAll("[id]")).map((e) => e.id));
       for (const href of hrefs) expect(ids.has(href)).toBe(true);
     }
+  });
+
+  // BUG-7: the synthesized TOC used to be prepended before the first element, landing
+  // ABOVE the document title. The deterministic rule is "immediately after the first h1".
+  describe("placement of a synthesized TOC", () => {
+    it("inserts the nav immediately after the first h1", () => {
+      const root = rootOf(`<h1 id="alpha">Alpha</h1><p>intro</p><h2 id="beta">Beta</h2>`);
+      injectToc(root, settings({ showToc: true }));
+
+      const children = Array.from(root.children);
+      const h1Index = children.findIndex((el) => el.tagName === "H1");
+      const navIndex = children.findIndex((el) => el.matches("nav.toc"));
+      expect(h1Index).toBe(0);
+      expect(navIndex).toBe(h1Index + 1);
+    });
+
+    it("falls back to the top of the document when there is no h1", () => {
+      const root = rootOf(`<p>lead-in</p><h2 id="beta">Beta</h2><h3 id="gamma">Gamma</h3>`);
+      injectToc(root, settings({ showToc: true }));
+      expect(root.firstElementChild?.matches("nav.toc")).toBe(true);
+    });
+
+    it("leaves an author-placed [[toc]] where it is", () => {
+      const root = rootOf(
+        `<h1 id="alpha">Alpha</h1><p>intro</p><nav class="toc"><ul><li><a href="#alpha">Alpha</a></li></ul></nav><h2 id="beta">Beta</h2>`,
+      );
+      injectToc(root, settings({ showToc: true }));
+      const navs = root.querySelectorAll("nav.toc");
+      expect(navs).toHaveLength(1);
+      expect(Array.from(root.children).findIndex((el) => el.matches("nav.toc"))).toBe(2);
+    });
+  });
+
+  // UX-8: the leader-dot fallback needs the title in its own flex item, otherwise the
+  // dotted rule has nothing to grow against and runs past the page number.
+  describe("span.toc-text", () => {
+    it("wraps each entry title in the synthesized path", () => {
+      const root = rootOf(HEADINGS);
+      injectToc(root, settings({ showToc: true }));
+      const links = Array.from(root.querySelectorAll("a.toc-link"));
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) {
+        const text = link.querySelector(".toc-text");
+        expect(text, "every synthesized toc-link needs a .toc-text").not.toBeNull();
+        expect((text?.textContent ?? "").trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    it("wraps each entry title in the normalize ([[toc]]) path", () => {
+      const root = rootOf(
+        `<nav class="toc"><ul><li><a href="#alpha">Alpha</a><ul><li><a href="#beta">Beta</a></li></ul></li></ul></nav><h1 id="alpha">Alpha</h1><h2 id="beta">Beta</h2>`,
+      );
+      injectToc(root, settings({ showToc: true }));
+      const links = Array.from(root.querySelectorAll("a.toc-link"));
+      expect(links).toHaveLength(2);
+      expect(links.map((a) => a.querySelector(".toc-text")?.textContent)).toEqual([
+        "Alpha",
+        "Beta",
+      ]);
+      // Nested sub-lists are siblings of the link and must not be swallowed by the span.
+      expect(root.querySelectorAll("nav.toc ul ul li").length).toBe(1);
+    });
+
+    it("is idempotent (a second normalize pass does not double-wrap)", () => {
+      const root = rootOf(
+        `<nav class="toc"><ul><li><a href="#alpha">Alpha</a></li></ul></nav><h1 id="alpha">Alpha</h1>`,
+      );
+      injectToc(root, settings({ showToc: true }));
+      injectToc(root, settings({ showToc: true }));
+      expect(root.querySelectorAll("a.toc-link .toc-text")).toHaveLength(1);
+      expect(root.querySelector("a.toc-link .toc-text .toc-text")).toBeNull();
+    });
+  });
+});
+
+/**
+ * BUG-3: `permalink.headerLink()` wraps the ENTIRE heading text in `a.header-anchor`, so
+ * the old "delete every header-anchor" rule emptied every TOC entry. These fixtures are
+ * REAL `createMarkdown(...).render()` output, not hand-written HTML, so the test breaks if
+ * the permalink style ever changes shape again.
+ */
+describe("injectToc against real markdown-it output", () => {
+  let hl: HighlighterCore;
+
+  beforeAll(async () => {
+    hl = await getHighlighter();
+  }, 30_000);
+
+  function renderDoc(src: string): HTMLElement {
+    const md = createMarkdown(hl, { ...DEFAULT_SETTINGS });
+    return rootOf(renderMarkdown(md, src).html);
+  }
+
+  const SRC = [
+    "# Report Title",
+    "",
+    "Intro paragraph.",
+    "",
+    "## Ünïcödé 🎉 Heading",
+    "",
+    "Body.",
+    "",
+    "### 1. Numbered Subsection",
+    "",
+    "More body.",
+  ].join("\n");
+
+  it("headings really are wrapped in a.header-anchor (the precondition for BUG-3)", () => {
+    const root = renderDoc(SRC);
+    const h1 = root.querySelector("h1");
+    expect(h1?.querySelector("a.header-anchor")?.textContent).toBe("Report Title");
+  });
+
+  it("gives every synthesized TOC entry non-empty text", () => {
+    const root = renderDoc(SRC);
+    injectToc(root, settings({ showToc: true }));
+
+    const texts = Array.from(root.querySelectorAll("a.toc-link")).map((a) =>
+      (a.textContent ?? "").trim(),
+    );
+    expect(texts.length).toBeGreaterThan(0);
+    for (const text of texts) expect(text).not.toBe("");
+    expect(texts).toEqual(["Report Title", "Ünïcödé 🎉 Heading", "1. Numbered Subsection"]);
+  });
+
+  it("still strips a glyph-style permalink that sits beside the heading text", () => {
+    const root = rootOf(
+      '<h2 id="beta">Beta<a class="header-anchor" href="#beta" aria-hidden="true">¶</a></h2>',
+    );
+    injectToc(root, settings({ showToc: true }));
+    expect(root.querySelector("a.toc-link .toc-text")?.textContent).toBe("Beta");
+  });
+
+  /**
+   * RESIDUAL (documented, not fixed): SLUGIFY drops every non-ASCII character, so ids for
+   * non-Latin headings are lossy. It is NOT a correctness bug — markdown-it-anchor
+   * de-duplicates colliding slugs (`caf`, `caf-1`) and the TOC link text is now correct
+   * either way. Making SLUGIFY unicode-aware would percent-encode the id, and
+   * handler.ts:fillTocPageNumbers resolves targets via `decodeURIComponent(href)`, so the
+   * screen-preview page numbers would stop resolving. Locked down here so the trade-off is
+   * visible if anyone revisits it.
+   */
+  it("documents the ASCII-only slug behaviour and its de-duplication", () => {
+    const root = renderDoc("## Café\n\n## Caf\n\n## Ünïcödé\n");
+    const ids = Array.from(root.querySelectorAll("h2")).map((h) => h.id);
+    expect(ids).toEqual(["caf", "caf-1", "ncd"]);
+    expect(new Set(ids).size, "ids stay unique despite the lossy slug").toBe(ids.length);
+
+    injectToc(root, settings({ showToc: true }));
+    expect(
+      Array.from(root.querySelectorAll("a.toc-link .toc-text")).map((s) => s.textContent),
+    ).toEqual(["Café", "Caf", "Ünïcödé"]);
   });
 });
 

@@ -105,11 +105,15 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await loadMarkdownIntoApp(page, SAMPLE_MD);
     await waitForPagination(page);
 
+    // offsetWidth, not getBoundingClientRect(): the preview zoom ("Fit" by default)
+    // applies a paint-only transform, so the painted rect tracks the pane width and
+    // no longer tells A4 from Letter. offsetWidth is the layout width — exactly the
+    // geometry this test is about, and the geometry the export inherits.
     const firstPageWidth = () =>
       page
         .locator("#paged-output .pagedjs_page")
         .first()
-        .evaluate((el) => el.getBoundingClientRect().width);
+        .evaluate((el) => (el as HTMLElement).offsetWidth);
     const beforeWidth = await firstPageWidth();
 
     // Drive the real settings path through the app's public test hook (exposed in main.ts).

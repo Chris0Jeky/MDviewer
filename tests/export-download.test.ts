@@ -136,4 +136,57 @@ describe("exportPaginatedToPdf: options", () => {
     const opts = html2canvas.mock.calls[0]?.[1] as { backgroundColor?: string } | undefined;
     expect(opts?.backgroundColor).toBe("#ffffff");
   });
+
+  /**
+   * html2canvas-pro's `logging` defaults to true and prints a block of clone/timing
+   * chatter per captured element, so a multi-page export buries anything real in the
+   * console (TECH-2). Pinned with objectContaining so the flag cannot be dropped by a
+   * future options refactor.
+   */
+  it("disables html2canvas logging so an export does not flood the console", async () => {
+    const host = hostWithPages(2);
+    await exportPaginatedToPdf(host, settings());
+    for (const call of html2canvas.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ logging: false }));
+    }
+  });
+});
+
+/**
+ * Rasterizing is a long blocking loop with no built-in progress signal, so this
+ * callback is the app's only way to tell the user anything is happening (UX-1).
+ */
+describe("exportPaginatedToPdf: progress reporting", () => {
+  it("reports progress exactly once per page, in order, with the total", async () => {
+    const host = hostWithPages(3);
+    const onProgress = vi.fn();
+    await exportPaginatedToPdf(host, settings(), { onProgress });
+    expect(onProgress).toHaveBeenCalledTimes(3);
+    expect(onProgress.mock.calls).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
+  });
+
+  it("reports a single-page export once", async () => {
+    const host = hostWithPages(1);
+    const onProgress = vi.fn();
+    await exportPaginatedToPdf(host, settings(), { onProgress });
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(onProgress).toHaveBeenCalledWith(1, 1);
+  });
+
+  it("never reports progress when there is nothing to export", async () => {
+    const host = hostWithPages(0);
+    const onProgress = vi.fn();
+    await expect(exportPaginatedToPdf(host, settings(), { onProgress })).rejects.toThrow();
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("stays optional — omitting onProgress still exports", async () => {
+    const host = hostWithPages(2);
+    await expect(exportPaginatedToPdf(host, settings())).resolves.toBeUndefined();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
 });

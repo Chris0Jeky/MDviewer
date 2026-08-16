@@ -5,10 +5,32 @@
  * How Shiki 3.x dual-theme works here (see LIBRARY_NOTES §3): markdown.ts wires
  * fromHighlighter with { themes: { light, dark }, defaultColor: "light",
  * cssVariablePrefix: "--shiki-" }. Each <pre class="shiki"> and every <span>
- * therefore carries an INLINE light color (so the vector PDF and the light/sepia
- * screen are correct with zero extra CSS) AND a --shiki-dark custom property for
- * the dark side. We only need to (a) opt into the dark vars on dark screens, and
- * (b) force the light side in print so the exported PDF is always dark-on-white.
+ * therefore carries an INLINE light color AND a --shiki-dark custom property for
+ * the dark side.
+ *
+ * THE PAPER IS ALWAYS PRINT-ACCURATE (UX-3). `.shiki` reaches only RENDERED
+ * document code — the page sheets — and those sheets are white in every screen
+ * theme because the exported PDF is pinned dark-on-white. So this file never
+ * opts into the dark side: the inline light colors stand as authored, on screen
+ * and on paper alike, and the preview is WYSIWYG with the export.
+ *
+ * This file used to swap in --shiki-dark via BOTH `prefers-color-scheme: dark`
+ * AND `[data-app-theme="dark"]`, which produced two real defects:
+ *   (a) a dark-OS user who explicitly picked the LIGHT app theme still got dark
+ *       code on the white sheet — the OS-only media query is a pure bug channel,
+ *       since the app always stamps data-app-theme on <html>; and
+ *   (b) in the dark app theme the white paper carried dark code that could not
+ *       match the always-light PDF — and the raster Download-PDF path
+ *       (html2canvas over the live DOM, screen media) could bake that dark code
+ *       straight into the exported file.
+ * Both are gone by construction now, not merely overridden late.
+ *
+ * The source EDITOR's backdrop is a different surface: it is app chrome, not
+ * paper, so a dark editor in the dark theme is correct. It carries its own
+ * --shiki-dark swap, scoped to #editor-highlight in editor.css, and does not use
+ * the .shiki class at all.
+ *
+ * The @media print force-light rules below stay as belt-and-braces.
  *
  * Imported by main.ts. Class names match dom.ts (.shiki, .line,
  * .line.highlighted, .with-line-numbers).
@@ -50,40 +72,12 @@
 }
 
 /* -----------------------------------------------------------------------------
- * SCREEN — dark theme. On a dark screen, swap each token's inline light color
- * for its --shiki-dark counterpart and apply the dark background. This is the
- * only place dark code colors are used; print always forces light (below).
- *
- * We key off prefers-color-scheme so the swap follows the OS-level dark
- * preference, matching shiki.css's design note. The app's screen theme tokens
- * (app.css) set color-scheme accordingly, so dark app theme → dark code.
+ * SCREEN — no dark swap, deliberately. Every app theme keeps Shiki's inline
+ * light colors on the page sheets, because the sheets are white in every theme
+ * and the PDF is always dark-on-white. See the file header for the two defects
+ * the removed dark-swap rules caused. Nothing to declare: the inline style
+ * Shiki already wrote is the correct value.
  * -------------------------------------------------------------------------- */
-@media screen and (prefers-color-scheme: dark) {
-  .shiki,
-  .shiki span {
-    color: var(--shiki-dark, inherit) !important;
-  }
-
-  .shiki {
-    background-color: var(--shiki-dark-bg, #0d1117) !important;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* Explicit app-theme override: when the user picks the dark app theme directly
- * (independent of OS), honour it too. data-app-theme is on <html>. */
-:root[data-app-theme="dark"] .shiki,
-:root[data-app-theme="dark"] .shiki span {
-  color: var(--shiki-dark, inherit) !important;
-}
-
-:root[data-app-theme="dark"] .shiki {
-  background-color: var(--shiki-dark-bg, #0d1117) !important;
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Light and sepia app themes keep Shiki's inline light colors as-authored;
- * no rule needed — the inline style already wins. */
 
 /* -----------------------------------------------------------------------------
  * PRINT — force the LIGHT side, always. The exported PDF must be dark-on-white
@@ -108,8 +102,8 @@
 
 /* -----------------------------------------------------------------------------
  * Highlighted lines (transformerNotationHighlight / transformerMetaHighlight).
- * A full-bleed tinted band behind the line. Tints differ per surface so the
- * band stays visible on light, dark, and the printed white page.
+ * A full-bleed tinted band behind the line. One tint is enough: the band only
+ * ever sits on a white page sheet, on screen and on paper alike.
  * -------------------------------------------------------------------------- */
 .shiki .line.highlighted {
   background-color: rgba(37, 99, 235, 0.1);
@@ -120,15 +114,8 @@
   -webkit-box-decoration-break: clone;
 }
 
-@media screen and (prefers-color-scheme: dark) {
-  .shiki .line.highlighted {
-    background-color: rgba(96, 165, 250, 0.16);
-  }
-}
-
-:root[data-app-theme="dark"] .shiki .line.highlighted {
-  background-color: rgba(96, 165, 250, 0.16);
-}
+/* No dark variant of the band either: the sheet it sits on is white in every
+ * screen theme, so the light tint is the one that reads correctly everywhere. */
 
 @media print {
   .shiki .line.highlighted {

@@ -15,7 +15,7 @@
  */
 
 import type { Settings } from "../app/settings";
-import { MARGIN_MM } from "../app/settings";
+import { DOC_FONT_STACKS, MARGIN_MM } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import printBase from "../styles/print.css?raw";
 
@@ -46,14 +46,23 @@ export function buildStylesheet(settings: Settings): string {
     : "";
 
   // The right header always shows the running document title (h1/h2 string-set).
-  const topRight = `  @top-right { content: string(doctitle); ${MARGIN_BOX_FONT} }\n`;
+  //
+  // The `start` variant is load-bearing, not decoration (UX-10). A bare `string(name)`
+  // resolves to the `first` variant: the value of the LAST string-set assignment made
+  // anywhere on the page. When the no-slice guarantee pushes a tall block onto the next
+  // page and a new h1/h2 also starts there, `first` labels the pushed content with the
+  // NEW section — a heading it does not belong to. `start` resolves to the value in
+  // effect at the START of the page, i.e. the section the pushed content came from,
+  // which is what a running header is supposed to name.
+  const topRight = `  @top-right { content: string(doctitle, start); ${MARGIN_BOX_FONT} }\n`;
 
   const bottomCenter = settings.showPageNumbers
     ? `  @bottom-center { content: counter(page) " / " counter(pages); ${MARGIN_BOX_FONT} }\n`
     : "";
 
   // Footnote float area lives at the bottom of each page; markdown-it footnotes are
-  // transformed into inline `float: footnote` spans by buildSource.ts.
+  // transformed into inline `.footnote` spans by buildSource.ts and floated by
+  // `footnoteFloatRule` below.
   const footnoteArea =
     "  @footnote {\n" +
     "    float: bottom;\n" +
@@ -72,16 +81,55 @@ export function buildStylesheet(settings: Settings): string {
     footnoteArea +
     `}\n`;
 
-  // No header/footer chrome on the first page (title page convention).
-  const firstPageBlock =
-    `@page :first {\n` +
-    `  @top-left { content: none; }\n` +
-    `  @top-right { content: none; }\n` +
-    `  @bottom-center { content: none; }\n` +
-    `}\n`;
+  // Optional title-page convention: blank the header/footer chrome on page 1.
+  //
+  // This used to be unconditional, which reads as a defect to anyone whose document has
+  // no title page — page 1 silently loses its page number and running header with no
+  // control to explain why (BUG-9). It is now a setting, defaulting to `true` so the
+  // established behavior is preserved.
+  //
+  // `counter(page)` is untouched either way: page 1 still counts, so page 2 shows "2 / n"
+  // whether or not its own chrome was suppressed. No counter-reset is needed or wanted.
+  const firstPageBlock = settings.titlePage
+    ? `@page :first {\n` +
+      `  @top-left { content: none; }\n` +
+      `  @top-right { content: none; }\n` +
+      `  @bottom-center { content: none; }\n` +
+      `}\n`
+    : "";
 
   // Running document title: every h1/h2 sets string(doctitle); @top-right reads it.
   const stringSet = `h1, h2 { string-set: doctitle content(text); }\n`;
+
+  // THE footnote float rule. Paged.js discovers footnotes by walking the declarations of
+  // the stylesheets handed to `previewer.preview()` — it never sees the app's globally
+  // imported document.css. So `float: footnote` MUST be emitted here or the notes stay
+  // inline and the @footnote area above renders empty. (The same holds for every other
+  // Paged.js-interpreted property: string-set, target-counter, footnote-*.)
+  //
+  // Paged.js injects its own numbered call glyph (`[data-footnote-call]::after`) next to
+  // each relocated note. markdown-it-footnote already rendered the visible `[n]` link at
+  // the call site, so suppress the duplicate; Paged.js still increments the counter and
+  // still numbers the note itself at the page foot via `[data-footnote-marker]::marker`.
+  const footnoteFloatRule =
+    `.${CLASSES.doc} .${CLASSES.footnote} {\n` +
+    `  float: footnote;\n` +
+    `  footnote-display: block;\n` +
+    `  font-size: 0.85em;\n` +
+    `  color: #4b5563;\n` +
+    `}\n` +
+    `.pagedjs_area [data-footnote-call]::after { content: none; }\n` +
+    // Paged.js lifts each note OUT of `.doc` (into .pagedjs_footnote_area, a sibling of
+    // the page content), so neither document.css's `.doc .footnote` typography nor the
+    // `--doc-*` custom properties reach it any more. Restate what a page-foot note needs
+    // so it matches the body text it belongs to instead of falling back to the app chrome
+    // font at full size.
+    `.pagedjs_footnote_area {\n` +
+    `  font-family: ${DOC_FONT_STACKS[settings.docFont]};\n` +
+    `  font-size: ${(settings.fontSizePt * 0.85).toFixed(2)}pt;\n` +
+    `  line-height: 1.45;\n` +
+    `  color: #4b5563;\n` +
+    `}\n`;
 
   // --- Settings-gated content rules -----------------------------------------
   // TOC page numbers via Paged.js target-counter. Only emitted when the TOC is shown;
@@ -114,6 +162,7 @@ export function buildStylesheet(settings: Settings): string {
     pageBlock +
     firstPageBlock +
     stringSet +
+    footnoteFloatRule +
     tocRule +
     lineNumbersRule
   );

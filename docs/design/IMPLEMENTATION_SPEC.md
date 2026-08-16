@@ -94,7 +94,23 @@ physically impossible and Paged.js will split):
 - **T4 clean forced split** — last resort; the above make even a multi-page listing read cleanly.
 
 This is verified by `tests/e2e/nocutoff.spec.ts`: no atomic block's rect may straddle a
-`.pagedjs_page` boundary.
+`.pagedjs_page` boundary (and no table cell may escape its page's content box horizontally —
+`.doc th, .doc td` carry `overflow-wrap: anywhere; word-break: break-word` so unbreakable
+tokens wrap instead of clipping at the paper edge).
+
+**Invariant — CSS that Paged.js itself must interpret lives in `buildStylesheet()`.**
+Paged.js only walks the stylesheets passed to `previewer.preview()`; `paginate()` passes
+exactly one — the blob built by `cssBuilder.buildStylesheet()`. Declarations Paged.js has to
+*parse* (`float: footnote`, `footnote-display`, `string-set`, `target-counter`, `leader()`,
+`@footnote`, `@page`) are invisible to it — and inert in the browser — if they sit in a
+globally imported file such as `document.css`. Corollary: Paged.js relocates footnote spans
+out of `.doc` into `.pagedjs_footnote_area` (a sibling of the page content), where `.doc`-scoped
+rules and `--doc-*` tokens no longer apply, so the footnote area's typography is restated in
+`buildStylesheet()` (sharing `DOC_FONT_STACKS` from `src/app/settings.ts`).
+
+**TOC placement rule:** an author-placed `[[toc]]` stays exactly where the author put it; a
+synthesized TOC (when `showToc` is on and no marker exists) is inserted immediately after the
+first `h1`, or at the top of the document when there is no `h1`.
 
 ## 5. Two export paths over one paginated DOM
 
@@ -104,9 +120,24 @@ This is verified by `tests/e2e/nocutoff.spec.ts`: no atomic block's rect may str
   each (scale ~1.5–2, white bg) → `jsPDF` `addImage`/`addPage`; one canvas == one already-broken
   page, so page-break safety is inherited. Rasterized (non-selectable), best-effort.
 
-Both are dynamic-imported on user action (keeps the initial bundle light). The exported
-PDF is **always dark-on-white** regardless of screen theme (`@media print` forces the Shiki
-light side and light callout backgrounds).
+Both are dynamic-imported on user action (keeps the initial bundle light). The exported PDF
+**and the on-screen page sheets** are always dark-on-white regardless of screen theme: rendered
+code (`.shiki`) has no screen dark variant at all — the preview is WYSIWYG with the export, and
+the raster path cannot leak a dark theme by construction. The only surviving `--shiki-dark`
+swap is the source editor's backdrop (`#editor-highlight` in `editor.css`), which is chrome,
+not paper; its scope must not widen. `@media print` force-light rules remain as belt-and-braces.
+The running header uses `string(doctitle, start)` (not the default `first` variant) so content
+pushed onto a page that also starts a new heading keeps its own section's title. In the
+toolbar, `.toolbar-spacer` is a semantic divide: document settings sit left of it, the
+screen-theme ("Screen") group and Export sit right of it.
+
+Fallback-path constraints learned in production: `html2canvas` is called with
+`logging: false` (its default floods the console with per-page clone timings and truncated
+data-URI dumps), and it **hangs on a pseudo-element attached to an `<input>`** — affordances
+on form controls (e.g. the task-list checkbox tick) must be drawn with embedded `data:`
+background images, never `::before`/`::after`. `exportPaginatedToPdf` accepts
+`onProgress?(done, total)` and the App exposes an export busy state so the toolbar can
+disable both export buttons and announce progress while the raster loop runs.
 
 ## 6. File tree (src + tests)
 
@@ -179,6 +210,9 @@ export interface Settings {
   screenTheme: ScreenTheme; codeTheme: CodeThemeId; docFont: DocFont; fontSizePt: FontSizePt;
   paperSize: PaperSize; margins: MarginPreset;
   showToc: boolean; showPageNumbers: boolean; runningHeader: string; showLineNumbers: boolean;
+  titlePage: boolean;   // default true: blank the @page :first margin boxes (title-page convention).
+                        // Validated in migrateSettings (boolean check, not spread); a REFLOW_KEYS member.
+                        // counter(page) counts page 1 either way — only its margin boxes are blanked.
   zoom: 'fit' | 1 | 0.5;
 }
 export const DEFAULT_SETTINGS: Settings;
@@ -231,7 +265,8 @@ export function ensureMarkdownLanguages(hl: HighlighterCore, src: string): Promi
 
 // src/render/markdown.ts
 import type MarkdownIt from 'markdown-it';
-export interface RenderWarning { kind: 'math' | 'diagram' | 'lang' | 'security'; message: string; }
+// 'content' = document-level notices that are not render failures (e.g. "document is empty")
+export interface RenderWarning { kind: 'math' | 'diagram' | 'lang' | 'security' | 'content'; message: string; }
 export function createMarkdown(hl: HighlighterCore, settings: Settings): MarkdownIt;
 export function renderMarkdown(md: MarkdownIt, src: string): { html: string; warnings: RenderWarning[] };
 export const SLUGIFY: (s: string) => string;
@@ -267,6 +302,7 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void;
 // src/paginate/handler.ts
 export function registerHandlersOnce(area: () => PageArea): Promise<void>;   // idempotent
 export function fillTocPageNumbers(host: HTMLElement): void;
+export function setPaginationProgress(sink: ((page: number) => void) | null): void; // per-page overlay label; set around paginate(), cleared in finally
 
 // src/paginate/paginate.ts
 import type { PagedFlow } from 'pagedjs';
@@ -276,24 +312,51 @@ export async function paginate(source: DocumentFragment, css: string, host: HTML
 // src/export/print.ts
 export async function exportViaPrint(host: HTMLElement): Promise<void>;
 // src/export/download.ts
-export interface FallbackPdfOptions { scale?: number; fileName?: string; }
+export interface FallbackPdfOptions { scale?: number; fileName?: string; onProgress?(done: number, total: number): void; }
+// html2canvas is always called with logging: false (its default floods the console per page)
 export async function exportPaginatedToPdf(host: HTMLElement, settings: Settings, opts?: FallbackPdfOptions): Promise<void>;
 
 // src/ui/*
 export function mountToolbar(root: HTMLElement, app: App): { destroy(): void };
-export function mountCanvas(root: HTMLElement): { host: HTMLElement; setPaginating(b: boolean): void; setPageCount(n: number): void; setZoom(z: Settings['zoom']): void };
+export interface CanvasPosition { /* topmost visible page + fractional offset */ }
+export interface CanvasOptions { onZoom(zoom: Settings['zoom']): void; }
+export interface CanvasController {
+  host: HTMLElement;
+  setPaginating(b: boolean): void; setProgress(page: number | null): void;
+  setBusy(busy: boolean, label?: string): void;                 // export overlay (.is-exporting)
+  setPageCount(n: number): void; setZoom(z: Settings['zoom']): void;
+  capturePosition(): CanvasPosition | null; restorePosition(p: CanvasPosition | null): void;
+  destroy(): void;
+}
+export function mountCanvas(root: HTMLElement, options: CanvasOptions): CanvasController;
+// zoom is paint-only: a transform driven by --preview-zoom, never the `zoom` property and
+// never a reflow key — layout geometry must stay identical to what the export inherits.
+// 'fit' = fit-to-width, capped at 1, recomputed via ResizeObserver.
 export function mountEmptyState(root: HTMLElement, onChoose: () => void, onSample: () => void): { destroy(): void };
 export function mountBanner(root: HTMLElement): { warn(w: RenderWarning[]): void; fatal(msg: string): void; clear(): void };
 
 // src/app/App.ts
+export interface ExportState { busy: boolean; hasDocument: boolean; } // toolbar gates both export buttons on this
+export function withEmptyDocWarning(warnings: RenderWarning[], src: string): RenderWarning[];
 export class App {
   settings: Settings; store: DocStore;
-  static init(root: HTMLElement): App;
+  static init(root: HTMLElement): App;              // also registers the beforeunload guard
   scheduleRender(reason: RenderReason): void;
   flushRender(): Promise<void>;                     // settle the preview; awaited by both exports
   updateSettings(patch: Partial<Settings>): void;   // persists + scheduleRender('settings')
   onSettingsChange(listener: (settings: Readonly<Settings>) => void): () => void;
+  onExportStateChange(listener: (state: ExportState) => void): () => void;
+  get exportState(): ExportState;
 }
+// src/app/state.ts (addition)
+export function hasProtectableWork(docs: readonly Doc[], pristineSample: string): boolean;
+// beforeunload prompts only when some open doc has content differing from the pristine sample
+// src/render/math.ts (additions)
+export const KATEX_ERROR_COLOR: string;             // single source for errorColor + detection
+export const KATEX_ERROR_HINT: string;
+export function tagKatexErrors(html: string): { html: string; count: number }; // normalizes failed math onto .katex-error + title
+// src/app/settings.ts (addition)
+export const DOC_FONT_STACKS: Record<DocFont, string>; // shared by buildSource AND cssBuilder (footnote area)
 ```
 
 ## 8. DOM IDs and CSS class names (single source: `src/app/dom.ts`)
@@ -305,16 +368,25 @@ DOM IDs: `#app #toolbar #workspace #editor-pane #editor-input #editor-highlight
 Paged.js-owned (never rename): `.pagedjs_pages` `.pagedjs_page`
 `style[data-pagedjs-inserted-styles]` `[data-page-number]`.
 
-App-authored: chrome — `.toolbar-group .toolbar-divider .seg-control .seg-option
-.toggle-btn[aria-pressed] .export-primary .export-secondary .is-paginating
-[data-app-theme]`; workspace — `.editor-head .editor-scroll .editor-line
+App-authored: chrome — `.toolbar-group .toolbar-divider .toolbar-spacer .toolbar-field
+.toolbar-label .toolbar-select .toolbar-input .doc-switcher .doc-close .seg-control
+.seg-option .toggle-btn[aria-pressed] .export-primary .export-secondary .is-paginating
+.is-exporting [data-app-theme]`; canvas chrome — `.canvas-controls .canvas-notices
+.page-chip-label .paginating-overlay .paginating-spinner .paginating-label
+.warning-banner(-icon/-text/-dismiss) .error-card(-icon/-title/-message/-reload)
+--preview-zoom`; workspace — `.editor-head .editor-scroll .editor-line
 [data-view-mode] [data-highlight] --split-ratio`; doc root — `.doc` (carries `--doc-font-family`/`--doc-font-size`,
 `data-code-theme`); code — `.shiki .shiki .line .line.highlighted .with-line-numbers
 figure.code-figure`; callouts — `.callout .callout-note .callout-tip .callout-warning
-.callout-danger .callout-title`; toc — `nav.toc .toc ol a.toc-link a.xref`; footnotes —
-`.footnote .footnotes .footnote-item .footnote-backref`; misc — `.task-list-item
-.header-anchor .katex .katex-display figure.mermaid-figure .mermaid [data-shrunk]
-.landscape`.
+.callout-danger .callout-title`; toc — `nav.toc .toc ol a.toc-link .toc-text a.xref`
+(`.toc-text` wraps the entry title inside the link — required by the leader-dot fallback);
+footnotes — `.footnote .footnotes .footnote-item .footnote-backref`; misc — `.task-list-item
+.header-anchor .katex .katex-display .katex-error figure.mermaid-figure .mermaid
+[data-shrunk] .landscape`.
+
+Every app-authored class name is listed in `CLASSES` in `src/app/dom.ts`, and
+`tests/dom-contract.test.ts` requires each to appear in some stylesheet — a TS-authored class
+with no CSS rule (the root cause of several shipped invisible-UI bugs) now fails CI.
 
 ## 9. Settings persistence
 

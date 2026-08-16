@@ -27,18 +27,88 @@ describe("cssBuilder: always-present dynamic scaffolding", () => {
     expect(css()).toMatch(/@page\b/);
   });
 
-  it("suppresses header/footer chrome on the first page (@page :first)", () => {
-    expect(squish(css())).toContain("@page :first");
-  });
-
   it("sets the doctitle named string from h1/h2 (string-set)", () => {
     const out = squish(css());
     expect(out).toContain("string-set:");
     expect(out).toContain("doctitle");
   });
 
+  // UX-10: a bare string(doctitle) resolves to the `first` variant — the LAST assignment
+  // made anywhere on the page. When the no-slice guarantee pushes a block onto a page
+  // where a new heading also starts, that names the wrong section. The `start` variant
+  // (supported by the bundled Paged.js content parser) reads the value in effect at the
+  // page's start, which is the section the pushed content actually belongs to.
+  it("reads the running title with the `start` variant, not the default `first`", () => {
+    const out = squish(css());
+    expect(out).toContain("string(doctitle, start)");
+    expect(out).not.toMatch(/string\(doctitle\)/);
+  });
+});
+
+// BUG-9: the `@page :first` blanking used to be unconditional, so a document with no
+// title page silently lost page 1's header and page number with no control to explain
+// it. Both directions are pinned here so the gate can't regress to a constant.
+describe("cssBuilder: title-page toggle", () => {
+  it("suppresses page-1 header/footer chrome when titlePage is true", () => {
+    expect(squish(css({ titlePage: true }))).toContain("@page :first");
+  });
+
+  it("omits the @page :first block entirely when titlePage is false", () => {
+    expect(squish(css({ titlePage: false }))).not.toContain("@page :first");
+  });
+
+  it("keeps the page counter in both modes (page 1 always counts)", () => {
+    for (const titlePage of [true, false]) {
+      const out = squish(css({ titlePage, showPageNumbers: true }));
+      expect(out).toContain("counter(page)");
+      // A counter-reset would renumber the document; the toggle only blanks chrome.
+      expect(out).not.toContain("counter-reset: page");
+    }
+  });
+
+  it("still emits the ordinary @page block and running title when titlePage is false", () => {
+    const out = squish(css({ titlePage: false }));
+    expect(out).toMatch(/@page\s*\{/);
+    expect(out).toContain("string(doctitle, start)");
+  });
+
   it("declares the @footnote area rule", () => {
     expect(squish(css())).toContain("@footnote");
+  });
+
+  // Paged.js discovers footnotes by walking the declarations of the stylesheets passed
+  // to previewer.preview(). document.css is a global app import Paged.js never sees, so
+  // the float MUST be emitted here or every note renders inline and the @footnote area
+  // stays empty (BUG-2).
+  it("emits float: footnote for the inline footnote span so Paged.js can find it", () => {
+    const out = squish(css());
+    expect(out).toContain("float: footnote");
+    expect(out).toContain(".doc .footnote");
+  });
+
+  // Paged.js lifts the note out of `.doc`, so document.css's typography no longer
+  // reaches it — the generated sheet has to restate it for .pagedjs_footnote_area.
+  it("restates document typography for the Paged.js footnote area", () => {
+    const out = squish(css({ docFont: "slab", fontSizePt: 12 }));
+    expect(out).toContain(".pagedjs_footnote_area");
+    expect(out).toContain("roboto slab");
+    expect(out).toMatch(/font-size:\s*10\.20pt/);
+  });
+
+  it("tracks the docFont setting in the footnote area", () => {
+    expect(squish(css({ docFont: "sans" }))).toContain("inter");
+    expect(squish(css({ docFont: "serif" }))).toContain("source serif 4");
+  });
+
+  it("keeps the footnote float rule regardless of unrelated settings", () => {
+    for (const patch of [
+      { showToc: false },
+      { showPageNumbers: false },
+      { showLineNumbers: true },
+      { paperSize: "letter" as const },
+    ]) {
+      expect(squish(css(patch))).toContain("float: footnote");
+    }
   });
 });
 

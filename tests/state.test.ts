@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { DocStore, createRenderScheduler } from "../src/app/state";
+import { DocStore, createRenderScheduler, hasProtectableWork } from "../src/app/state";
 
 describe("DocStore: open, switch, close", () => {
   it("add() makes the new document active and emits change", () => {
@@ -240,5 +240,50 @@ describe("createRenderScheduler", () => {
     scheduler.schedule("content");
     await scheduler.flush();
     expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * The reload guard (UX-6). MDviewer persists no document text, so a reload destroys
+ * whatever is open — but nagging about the untouched bundled sample would train the
+ * user to dismiss the dialog reflexively, which is worse than not having one.
+ */
+describe("hasProtectableWork: what a reload would actually destroy", () => {
+  const SAMPLE = "# Sample\n\nBundled demo text.\n";
+
+  it("is false with nothing open", () => {
+    expect(hasProtectableWork([], SAMPLE)).toBe(false);
+  });
+
+  it("is false for the pristine bundled sample alone", () => {
+    expect(hasProtectableWork([{ id: "1", name: "Sample.md", text: SAMPLE }], SAMPLE)).toBe(false);
+  });
+
+  it("is true once the sample has been edited", () => {
+    expect(
+      hasProtectableWork([{ id: "1", name: "Sample.md", text: `${SAMPLE}my notes` }], SAMPLE),
+    ).toBe(true);
+  });
+
+  it("is true for any user-supplied document", () => {
+    expect(hasProtectableWork([{ id: "1", name: "paper.md", text: "# Paper" }], SAMPLE)).toBe(true);
+  });
+
+  it("is true when a real document sits alongside the pristine sample", () => {
+    expect(
+      hasProtectableWork(
+        [
+          { id: "1", name: "Sample.md", text: SAMPLE },
+          { id: "2", name: "paper.md", text: "# Paper" },
+        ],
+        SAMPLE,
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores blank documents — typing then clearing must not arm the prompt", () => {
+    expect(hasProtectableWork([{ id: "1", name: "Untitled.md", text: "   \n\n " }], SAMPLE)).toBe(
+      false,
+    );
   });
 });

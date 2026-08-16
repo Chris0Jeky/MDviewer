@@ -1,9 +1,13 @@
 /**
  * Toolbar — the app chrome strip above the canvas. Builds groups A–F of native
- * controls (document switcher, screen theme, code theme, document font + size,
- * paper + margins, layout toggles, running-header input, export actions) and
- * binds each control straight to `app.updateSettings(...)`. No business logic
- * lives here: every change calls into the App, which persists and re-renders.
+ * controls (document switcher, view mode, code theme, document font + size,
+ * paper + margins, layout toggles, running-header input, then — past the spacer —
+ * screen theme and the export actions) and binds each control straight to
+ * `app.updateSettings(...)`. No business logic lives here: every change calls
+ * into the App, which persists and re-renders.
+ *
+ * The spacer is a semantic divide, not just alignment: document settings sit to
+ * its left, screen/export controls to its right (UX-2).
  */
 
 import { CLASSES, IDS, el } from "../app/dom";
@@ -32,11 +36,20 @@ const VIEW_MODE_OPTIONS: ReadonlyArray<Opt<ViewMode>> = [
   ["preview", "Preview", "Show only the paginated PDF preview"],
 ];
 
+/**
+ * The screen theme is APP CHROME, never a document setting: the page sheets stay
+ * white and the exported PDF stays dark-on-white in all three (UX-2). The tooltips
+ * say so, the group carries a visible "Screen" label, and it sits at the far right
+ * of the toolbar — past the spacer, away from the document controls.
+ */
 const SCREEN_THEMES: ReadonlyArray<Opt<ScreenTheme>> = [
-  ["light", "Light", "Light preview theme"],
-  ["dark", "Dark", "Dark preview theme"],
-  ["sepia", "Sepia", "Sepia preview theme"],
+  ["light", "Light", "Light app theme — does not affect the PDF"],
+  ["dark", "Dark", "Dark app theme — the page sheets and the PDF stay white"],
+  ["sepia", "Sepia", "Sepia app theme — does not affect the PDF"],
 ];
+
+/** One name for the screen-theme group: visible label, aria-label, and tooltip. */
+const SCREEN_THEME_LABEL = "Screen";
 
 const CODE_THEMES: ReadonlyArray<Opt<CodeThemeId>> = [
   ["github", "GitHub"],
@@ -143,7 +156,7 @@ function selectControl(
 ): { field: HTMLElement; select: HTMLSelectElement } {
   const select = el("select", {
     id,
-    class: "toolbar-select",
+    class: CLASSES.toolbarSelect,
     attrs: { "aria-label": label },
   });
   for (const [value, text, title] of options) {
@@ -153,8 +166,8 @@ function selectControl(
   }
   select.addEventListener("change", () => onPick(select.value));
 
-  const labelEl = el("label", { class: "toolbar-label", htmlFor: id }, label);
-  const field = el("div", { class: "toolbar-field" }, labelEl, select);
+  const labelEl = el("label", { class: CLASSES.toolbarLabel, htmlFor: id }, label);
+  const field = el("div", { class: CLASSES.toolbarField }, labelEl, select);
   return { field, select };
 }
 
@@ -219,22 +232,38 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   // ---- Group A: document switcher (only meaningful with more than one doc) ----
   const docSelect = el("select", {
-    class: "toolbar-select doc-switcher",
+    class: `${CLASSES.toolbarSelect} ${CLASSES.docSwitcher}`,
     attrs: { "aria-label": "Active document" },
   });
   docSelect.addEventListener("change", () => {
     app.store.setActive(docSelect.value);
   });
-  const docGroup = group(
-    "Document",
-    el(
-      "label",
-      { class: "toolbar-label", htmlFor: "doc-switcher-select" },
-      "Document",
-    ),
+  docSelect.id = "doc-switcher-select";
+
+  // The switcher itself is noise below two documents, but "close this document"
+  // is useful from the first one — so they hide independently (UX-7).
+  const docField = el(
+    "div",
+    { class: CLASSES.toolbarField },
+    el("label", { class: CLASSES.toolbarLabel, htmlFor: "doc-switcher-select" }, "Document"),
     docSelect,
   );
-  docSelect.id = "doc-switcher-select";
+
+  const docCloseBtn = el(
+    "button",
+    {
+      type: "button",
+      class: CLASSES.docClose,
+      attrs: { "aria-label": "Close document" },
+    },
+    "×",
+  );
+  docCloseBtn.addEventListener("click", () => {
+    const id = app.store.activeId;
+    if (id) app.store.remove(id);
+  });
+
+  const docGroup = group("Document", docField, docCloseBtn);
 
   // ---- Group A2: which panes are visible (screen layout only) ----
   const viewMode = segControl(
@@ -245,18 +274,24 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
   const viewGroup = group(
     "View",
-    el("span", { class: "toolbar-label" }, "View"),
+    el("span", { class: CLASSES.toolbarLabel }, "View"),
     viewMode.group,
   );
 
-  // ---- Group B: screen theme (preview only — never affects the PDF) ----
+  // ---- Group B: screen theme (app chrome only — never affects the PDF) ----
+  // Unlabelled and wedged between View and Typography, this read as a document
+  // setting (UX-2). It now names itself and lives past the spacer, next to Export.
   const screenTheme = segControl(
-    "Preview theme",
+    SCREEN_THEME_LABEL,
     SCREEN_THEMES,
     s.screenTheme,
     (value) => app.updateSettings({ screenTheme: value }),
   );
-  const themeGroup = group("Preview theme", screenTheme.group);
+  const themeGroup = group(
+    SCREEN_THEME_LABEL,
+    el("span", { class: CLASSES.toolbarLabel }, SCREEN_THEME_LABEL),
+    screenTheme.group,
+  );
 
   // ---- Group C: typography (code theme, body font, font size) ----
   const codeTheme = selectControl(
@@ -302,9 +337,9 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   );
   const pageGroup = group(
     "Page",
-    el("span", { class: "toolbar-label" }, "Paper"),
+    el("span", { class: CLASSES.toolbarLabel }, "Paper"),
     paperSize.group,
-    el("span", { class: "toolbar-label" }, "Margins"),
+    el("span", { class: CLASSES.toolbarLabel }, "Margins"),
     margins.group,
   );
 
@@ -327,10 +362,18 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     "Show line numbers in code blocks",
     (next) => app.updateSettings({ showLineNumbers: next }),
   );
+  // Page 1 used to lose its header and page number unconditionally, with nothing in the
+  // UI to say why (BUG-9). The behavior is unchanged by default — it just has a switch now.
+  const titlePage = toggleControl(
+    "Title page",
+    s.titlePage,
+    "Suppress the running header and page number on page 1",
+    (next) => app.updateSettings({ titlePage: next }),
+  );
 
   const headerInput = el("input", {
     id: "running-header-input",
-    class: "toolbar-input running-header",
+    class: `${CLASSES.toolbarInput} running-header`,
     type: "text",
     value: s.runningHeader,
     placeholder: "Running header…",
@@ -346,10 +389,10 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   });
   const headerField = el(
     "div",
-    { class: "toolbar-field" },
+    { class: CLASSES.toolbarField },
     el(
       "label",
-      { class: "toolbar-label", htmlFor: "running-header-input" },
+      { class: CLASSES.toolbarLabel, htmlFor: "running-header-input" },
       "Header",
     ),
     headerInput,
@@ -359,17 +402,23 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     "Layout",
     toc.button,
     pageNumbers.button,
+    titlePage.button,
     lineNumbers.button,
     headerField,
   );
 
   // ---- Group F: export actions ----
+  const PRINT_TITLE = "Open the system print dialog to save a vector PDF";
+  const DOWNLOAD_TITLE = "Download a rasterized PDF (fallback when printing is unavailable)";
+  const NO_DOC_TITLE = "Load a document first";
+  const BUSY_TITLE = "Export in progress…";
+
   const printBtn = el(
     "button",
     {
       type: "button",
       class: CLASSES.exportPrimary,
-      title: "Open the system print dialog to save a vector PDF",
+      title: PRINT_TITLE,
     },
     "Print / Save as PDF",
   );
@@ -382,7 +431,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     {
       type: "button",
       class: CLASSES.exportSecondary,
-      title: "Download a rasterized PDF (fallback when printing is unavailable)",
+      title: DOWNLOAD_TITLE,
     },
     "Download PDF",
   );
@@ -392,18 +441,22 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   const exportGroup = group("Export", printBtn, downloadBtn);
 
+  // Order encodes meaning: everything LEFT of the spacer changes the document (and
+  // therefore the PDF); everything RIGHT of it is about this screen and this export.
+  // The screen-theme group moved across that line as part of UX-2.
   bar.append(
     docGroup,
     divider(),
     viewGroup,
-    divider(),
-    themeGroup,
     divider(),
     typeGroup,
     divider(),
     pageGroup,
     divider(),
     layoutGroup,
+    // Absorb the slack so the export actions sit against the right edge (UX-11).
+    el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
+    themeGroup,
     divider(),
     exportGroup,
   );
@@ -418,8 +471,33 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
       if (doc.id === app.store.activeId) option.selected = true;
       docSelect.append(option);
     }
-    // Only relevant with more than one document open; hide it otherwise.
-    docGroup.hidden = docs.length < 2;
+    // The switcher is only meaningful with more than one document open…
+    docField.hidden = docs.length < 2;
+    // …but closing the current one is meaningful from the first.
+    docGroup.hidden = docs.length < 1;
+    const activeName = app.store.active?.name;
+    docCloseBtn.setAttribute(
+      "aria-label",
+      activeName ? `Close ${activeName}` : "Close document",
+    );
+    docCloseBtn.title = activeName ? `Close ${activeName}` : "Close document";
+  }
+
+  /** Export controls are inert with nothing to export, and while one is running. */
+  function syncExportState(state: { busy: boolean; hasDocument: boolean }): void {
+    const disabled = state.busy || !state.hasDocument;
+    printBtn.disabled = disabled;
+    downloadBtn.disabled = disabled;
+    if (!state.hasDocument) {
+      printBtn.title = NO_DOC_TITLE;
+      downloadBtn.title = NO_DOC_TITLE;
+    } else if (state.busy) {
+      printBtn.title = BUSY_TITLE;
+      downloadBtn.title = BUSY_TITLE;
+    } else {
+      printBtn.title = PRINT_TITLE;
+      downloadBtn.title = DOWNLOAD_TITLE;
+    }
   }
 
   function syncFromSettings(): void {
@@ -430,6 +508,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     margins.sync(cur.margins);
     toc.sync(cur.showToc);
     pageNumbers.sync(cur.showPageNumbers);
+    titlePage.sync(cur.titlePage);
     lineNumbers.sync(cur.showLineNumbers);
     codeTheme.select.value = cur.codeTheme;
     docFont.select.value = cur.docFont;
@@ -447,11 +526,14 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     syncFromSettings();
   });
   const unsubscribeSettings = app.onSettingsChange(syncFromSettings);
+  // Fires immediately with the current state, so this is also the initial sync.
+  const unsubscribeExport = app.onExportStateChange(syncExportState);
 
   return {
     destroy(): void {
       unsubscribe();
       unsubscribeSettings();
+      unsubscribeExport();
       bar.remove();
     },
   };

@@ -6,3 +6,17 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The Workbox runtime is content-hashed like everything in /assets, it just happens to be
+# emitted at the root by the service-worker build.
+/workbox-*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# The two files that must never be served stale. They are the only pointers to a new
+# deployment: a cached sw.js means the update prompt never appears and users stay pinned to
+# an old precache, and a cached manifest freezes the installed app's name and icons.
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/manifest.webmanifest
+  Cache-Control: public, max-age=0, must-revalidate
