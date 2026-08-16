@@ -12,9 +12,13 @@
 
 .pwa-toast {
   position: fixed;
-  z-index: 100; /* above the canvas and the drag overlay; it is a system-level message */
+  /* Above every canvas layer including #drag-overlay (60), below .skip-link (1000):
+     a system message outranks the document, but never the keyboard escape hatch. */
+  z-index: 900;
   right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
+  /* Stacked ON TOP of #zoom-control (bottom: 16px, ~34px tall) rather than over it, so a
+     transient message never swallows a live control in the canvas's bottom-right corner. */
+  bottom: calc(66px + env(safe-area-inset-bottom));
   max-width: min(360px, calc(100vw - 32px));
 
   display: flex;
