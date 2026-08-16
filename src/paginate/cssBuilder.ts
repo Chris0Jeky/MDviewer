@@ -46,7 +46,15 @@ export function buildStylesheet(settings: Settings): string {
     : "";
 
   // The right header always shows the running document title (h1/h2 string-set).
-  const topRight = `  @top-right { content: string(doctitle); ${MARGIN_BOX_FONT} }\n`;
+  //
+  // The `start` variant is load-bearing, not decoration (UX-10). A bare `string(name)`
+  // resolves to the `first` variant: the value of the LAST string-set assignment made
+  // anywhere on the page. When the no-slice guarantee pushes a tall block onto the next
+  // page and a new h1/h2 also starts there, `first` labels the pushed content with the
+  // NEW section — a heading it does not belong to. `start` resolves to the value in
+  // effect at the START of the page, i.e. the section the pushed content came from,
+  // which is what a running header is supposed to name.
+  const topRight = `  @top-right { content: string(doctitle, start); ${MARGIN_BOX_FONT} }\n`;
 
   const bottomCenter = settings.showPageNumbers
     ? `  @bottom-center { content: counter(page) " / " counter(pages); ${MARGIN_BOX_FONT} }\n`
@@ -73,13 +81,22 @@ export function buildStylesheet(settings: Settings): string {
     footnoteArea +
     `}\n`;
 
-  // No header/footer chrome on the first page (title page convention).
-  const firstPageBlock =
-    `@page :first {\n` +
-    `  @top-left { content: none; }\n` +
-    `  @top-right { content: none; }\n` +
-    `  @bottom-center { content: none; }\n` +
-    `}\n`;
+  // Optional title-page convention: blank the header/footer chrome on page 1.
+  //
+  // This used to be unconditional, which reads as a defect to anyone whose document has
+  // no title page — page 1 silently loses its page number and running header with no
+  // control to explain why (BUG-9). It is now a setting, defaulting to `true` so the
+  // established behavior is preserved.
+  //
+  // `counter(page)` is untouched either way: page 1 still counts, so page 2 shows "2 / n"
+  // whether or not its own chrome was suppressed. No counter-reset is needed or wanted.
+  const firstPageBlock = settings.titlePage
+    ? `@page :first {\n` +
+      `  @top-left { content: none; }\n` +
+      `  @top-right { content: none; }\n` +
+      `  @bottom-center { content: none; }\n` +
+      `}\n`
+    : "";
 
   // Running document title: every h1/h2 sets string(doctitle); @top-right reads it.
   const stringSet = `h1, h2 { string-set: doctitle content(text); }\n`;

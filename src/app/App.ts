@@ -59,6 +59,7 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
   "margins",
   "showToc",
   "showPageNumbers",
+  "titlePage",
   "runningHeader",
   "showLineNumbers",
 ];

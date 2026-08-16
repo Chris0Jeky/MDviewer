@@ -343,6 +343,14 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     "Show line numbers in code blocks",
     (next) => app.updateSettings({ showLineNumbers: next }),
   );
+  // Page 1 used to lose its header and page number unconditionally, with nothing in the
+  // UI to say why (BUG-9). The behavior is unchanged by default — it just has a switch now.
+  const titlePage = toggleControl(
+    "Title page",
+    s.titlePage,
+    "Suppress the running header and page number on page 1",
+    (next) => app.updateSettings({ titlePage: next }),
+  );
 
   const headerInput = el("input", {
     id: "running-header-input",
@@ -375,6 +383,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     "Layout",
     toc.button,
     pageNumbers.button,
+    titlePage.button,
     lineNumbers.button,
     headerField,
   );
@@ -477,6 +486,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     margins.sync(cur.margins);
     toc.sync(cur.showToc);
     pageNumbers.sync(cur.showPageNumbers);
+    titlePage.sync(cur.titlePage);
     lineNumbers.sync(cur.showLineNumbers);
     codeTheme.select.value = cur.codeTheme;
     docFont.select.value = cur.docFont;
