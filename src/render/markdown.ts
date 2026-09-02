@@ -11,8 +11,7 @@
  * UI can aggregate into a banner without aborting the export.
  */
 
-import MarkdownIt, { type PluginWithParams } from "markdown-it";
-import type Token from "markdown-it/lib/token.mjs";
+import MarkdownItCtor, { type MarkdownIt, type Token } from "markdown-it";
 import footnote from "markdown-it-footnote";
 import anchor from "markdown-it-anchor";
 import tocDoneRight from "markdown-it-toc-done-right";
@@ -66,6 +65,16 @@ export const SLUGIFY: (s: string) => string = (s: string): string => {
 /** Container-callout flavours; each becomes a `:::name` fenced block. */
 const CALLOUTS = ["note", "tip", "warning", "danger"] as const;
 
+/**
+ * The plugin shape `md.use()` accepts. markdown-it 15 ships its own typings and, unlike the
+ * old `@types/markdown-it`, no longer exports `PluginSimple`/`PluginWithParams`, so we name
+ * that shape here for the one call site that has to cast into it.
+ */
+type MarkdownItPlugin<Params extends unknown[] = unknown[]> = (
+  md: MarkdownIt,
+  ...params: Params
+) => void;
+
 /** Line-numbers transformer: marks the `<pre>` so the CSS counter (shiki.css) activates. */
 function lineNumbers(): ShikiTransformer {
   return {
@@ -82,7 +91,7 @@ function lineNumbers(): ShikiTransformer {
  * whenever the code theme or line-number toggle changes.
  */
 export function createMarkdown(hl: HighlighterCore, settings: Settings): MarkdownIt {
-  const md = new MarkdownIt({
+  const md = new MarkdownItCtor({
     html: true, // required: KaTeX / Mermaid produce raw HTML
     linkify: true,
     typographer: true,
@@ -107,7 +116,7 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
   for (const name of CALLOUTS) {
     // @types/markdown-it-container bundles its own (older) markdown-it types, so the
     // plugin's `md` parameter is nominally a different MarkdownIt — cast to our plugin type.
-    md.use(container as unknown as PluginWithParams, name, {
+    md.use(container as unknown as MarkdownItPlugin, name, {
       render(tokens: Token[], idx: number): string {
         const t = tokens[idx];
         if (t && t.nesting === 1) {
