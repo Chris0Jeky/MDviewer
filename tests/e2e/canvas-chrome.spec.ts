@@ -328,5 +328,10 @@ test.describe("preview accessibility and document lifecycle", () => {
 
     await expect(page.locator("#empty-state")).toBeVisible();
     await expect(page.locator(".export-primary").first()).toBeDisabled();
+    // The empty state is transparent outside its card and sits below the page chip, so
+    // "closed" has to mean the sheets are gone and the chip is reset — not just that an
+    // overlay was raised over a still-painted document.
+    await expect(page.locator("#paged-output .pagedjs_page")).toHaveCount(0);
+    await expect(page.locator("#page-chip")).toContainText("Page 0 / 0");
   });
 });
