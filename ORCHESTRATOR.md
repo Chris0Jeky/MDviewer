@@ -174,7 +174,8 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   - `npm run build` — tsc + vite build
   - `npm run agent:check` — typecheck + lint + unit in one shot
   - `npm run agent:hooks:smoke` / `npm run agent:skills:validate` — agentic tooling, before handoff
-- `.github/workflows/ci.yml` runs verification on Node 20/22 plus production-bundle Chromium E2E.
+- `.github/workflows/ci.yml` runs verification on Node 22/24 plus production-bundle Chromium E2E
+  (Node 20 dropped 2026-09-03: EOL 2026-04-30, jsdom 30 requires `^22.22.2 || ^24.15.0`; #60).
 
 ## Baseline (cycle 1 start, commit fe085b0)
 
@@ -342,6 +343,14 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   production id `e3bd9770` from `main`. Stable URL **https://mdviewer-c9r.pages.dev/** and immutable
   deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
   headers verified. No human action items remain open.
+- **C20 (2026-09-03) — NODE 20 DROPPED, jsdom 30:** Owner decision on #60: Node 20 (EOL
+  2026-04-30) leaves the support surface. `engines.node` is now `^22.13.0 || >=24`, the verify
+  matrix is `['22', '24']` (job names unchanged), and jsdom moved 29.1.1 → 30.0.1 (its only
+  breaking change is the Node floor; the rest is CSS/`getComputedStyle` fixes). Local proof on
+  Node v24.13.1: typecheck, lint, 359 unit tests, build, serve tests, production-preview E2E.
+  Branch protection still names the `(20)` check context — the coordinator swaps it for `(24)`
+  before merging. Dependabot #43 is superseded by this PR. Lockfile `libc` fields were restored
+  after the local Windows install (the W-2 gotcha).
 - **C19 (2026-08-08) — SPLIT-VIEW EDITOR MERGED after its review round:** PR #36's two Codex passes
   raised **11 findings** (5×P1, 6×P2); all are addressed and every thread is resolved. Ten needed a
   change, in four commits; the eleventh (dark-mode inline token colours) was already fixed in

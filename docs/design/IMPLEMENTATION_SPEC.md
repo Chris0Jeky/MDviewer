@@ -31,7 +31,7 @@ Runtime: `markdown-it@15.0.1` · `markdown-it-footnote@4.0.0` · `markdown-it-an
 · `jspdf@4.2.1` · `html2canvas-pro@1.6.7` · `dompurify@3.4.13`.
 
 Toolchain: `vite@8.1.5` · `vitest@4.1.10` · `typescript@6.0.3` · `eslint@10.8.0` +
-`typescript-eslint@8.65.0` · `jsdom@29.1.1` · `@playwright/test@1.62.0` · `@types/node@26.1.1`.
+`typescript-eslint@8.65.0` · `jsdom@30.0.1` · `@playwright/test@1.62.0` · `@types/node@26.1.1`.
 
 Notes that bite if ignored:
 - **Shiki is 4.x** (bumped from 3.x; the fine-grained API is unchanged across the major).
