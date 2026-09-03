@@ -1,8 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveBuildRevision, sourceNotice } from "./lib/revision.mjs";
+import { gitMetadataProbe, resolveBuildRevision, sourceNotice } from "./lib/revision.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const lock = JSON.parse(readFileSync(join(repoRoot, "package-lock.json"), "utf8"));
@@ -26,8 +33,9 @@ copyFileSync(
 // prove the tree is clean, and a mislabelled dirty build is worse than a loud error.
 const revision = resolveBuildRevision({
   env: process.env,
-  // `.git` is a directory in a normal clone and a file in a worktree or submodule.
-  hasGitMetadata: () => existsSync(join(repoRoot, ".git")),
+  // `.git` is a directory in a normal clone and a file in a worktree or submodule. The
+  // probe distinguishes "not there" from "cannot be read"; only the former is an archive.
+  hasGitMetadata: gitMetadataProbe(join(repoRoot, ".git"), (path) => statSync(path)),
   runGit: (args) =>
     execFileSync("git", args, {
       cwd: repoRoot,

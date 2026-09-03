@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { resolveBuildRevision, sourceNotice } from "../scripts/lib/revision.mjs";
+import {
+  gitMetadataProbe,
+  resolveBuildRevision,
+  sourceNotice,
+} from "../scripts/lib/revision.mjs";
+
+/** A Node `fs` error, which carries the failure reason in `code`. */
+function fsError(code: string): Error {
+  return Object.assign(new Error(`${code}: probing .git`), { code });
+}
 
 /** A `runGit` that must never be reached; reaching it is the failure. */
 function unreachableGit(): (args: string[]) => string {
@@ -95,6 +104,37 @@ describe("resolveBuildRevision", () => {
       }),
     ).toThrow(message);
   });
+});
+
+describe("gitMetadataProbe", () => {
+  it("reports metadata when the path stats cleanly", () => {
+    const probed: string[] = [];
+    const probe = gitMetadataProbe("/src/.git", (path) => probed.push(path));
+    expect(probe()).toBe(true);
+    expect(probed).toEqual(["/src/.git"]);
+  });
+
+  it.each([["ENOENT"], ["ENOTDIR"]])(
+    "reports no metadata when the path is genuinely absent (%s)",
+    (code) => {
+      const probe = gitMetadataProbe("/src/.git", () => {
+        throw fsError(code);
+      });
+      expect(probe()).toBe(false);
+    },
+  );
+
+  // `existsSync` would answer `false` here, silently downgrading a real — possibly dirty —
+  // checkout to an anonymous archive build. Unreadable is not absent.
+  it.each([["EACCES"], ["EPERM"], ["EIO"], ["ELOOP"]])(
+    "rethrows when the path exists but cannot be read (%s)",
+    (code) => {
+      const probe = gitMetadataProbe("/src/.git", () => {
+        throw fsError(code);
+      });
+      expect(probe).toThrow(new RegExp(code));
+    },
+  );
 });
 
 describe("sourceNotice", () => {

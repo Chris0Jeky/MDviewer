@@ -53,6 +53,36 @@ export function resolveBuildRevision({ env, hasGitMetadata, runGit }) {
 }
 
 /**
+ * Build the `hasGitMetadata` predicate `resolveBuildRevision` needs, from a `stat`-like
+ * probe of the `.git` path.
+ *
+ * `existsSync` is deliberately NOT used: it answers `false` for every failure, including
+ * `EACCES` on an unreadable `.git` or an unsearchable ancestor directory, which would
+ * relabel a real (possibly dirty) checkout as an anonymous archive — the same swallowing
+ * this module exists to avoid. Only a genuine absence returns `false`.
+ *
+ * @param {string} gitPath  The `.git` path to probe (a directory in a normal clone, a file
+ *   in a worktree or submodule).
+ * @param {(path: string) => unknown} statPath  Stats the path; throws a Node `fs` error.
+ * @returns {() => boolean}
+ */
+export function gitMetadataProbe(gitPath, statPath) {
+  return () => {
+    try {
+      statPath(gitPath);
+      return true;
+    } catch (error) {
+      const code = error && typeof error === "object" ? error.code : undefined;
+      // ENOENT: nothing there. ENOTDIR: a path component is not a directory, so there is
+      // likewise no `.git` here. Anything else (EACCES, EPERM, EIO, ELOOP) means the
+      // metadata may well exist and simply cannot be read — that must fail the build.
+      if (code === "ENOENT" || code === "ENOTDIR") return false;
+      throw error;
+    }
+  };
+}
+
+/**
  * The `dist/SOURCE.txt` body for a resolved revision (or the lack of one).
  *
  * @param {string | null} revision

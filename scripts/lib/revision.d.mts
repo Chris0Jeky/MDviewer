@@ -10,4 +10,9 @@ export declare function resolveBuildRevision(params: {
   runGit: (args: string[]) => string;
 }): string | null;
 
+export declare function gitMetadataProbe(
+  gitPath: string,
+  statPath: (path: string) => unknown,
+): () => boolean;
+
 export declare function sourceNotice(revision: string | null): string;
