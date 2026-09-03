@@ -344,7 +344,7 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   deployment URL returned HTTP 200; entry title, hashed JS asset, immutable cache header, and security
   headers verified. No human action items remain open.
 - **C20 (2026-09-03) — NODE 20 DROPPED, jsdom 30:** Owner decision on #60: Node 20 (EOL
-  2026-04-30) leaves the support surface. `engines.node` is now `^22.13.0 || >=24`, the verify
+  2026-04-30) leaves the support surface. `engines.node` is now `^22.22.2 || ^24.15.0 || >=26` (jsdom 30's own floor), the verify
   matrix is `['22', '24']` (job names unchanged), and jsdom moved 29.1.1 → 30.0.1 (its only
   breaking change is the Node floor; the rest is CSS/`getComputedStyle` fixes). Local proof on
   Node v24.13.1: typecheck, lint, 359 unit tests, build, serve tests, production-preview E2E.
