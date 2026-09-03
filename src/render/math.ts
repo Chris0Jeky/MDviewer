@@ -9,7 +9,7 @@
  * fonts ship with the bundle; pagination later waits on `document.fonts.ready`.
  */
 
-import type MarkdownIt from "markdown-it";
+import type { MarkdownIt } from "markdown-it";
 import mk from "@vscode/markdown-it-katex";
 import katex from "katex";
 import "katex/dist/katex.min.css";
