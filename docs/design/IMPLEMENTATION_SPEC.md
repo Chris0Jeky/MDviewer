@@ -21,9 +21,9 @@ re-runs the same pipeline that produces the PDF. See §12.
 ## 2. Resolved dependency versions (verified installed)
 
 Read back from `npm ls --depth=0` on 2026-08-08, after the dependency sweep that cleared the
-Dependabot backlog and every open advisory.
+Dependabot backlog and every open advisory; `markdown-it` re-read on its 15.0.1 bump.
 
-Runtime: `markdown-it@14.3.0` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.1`
+Runtime: `markdown-it@15.0.1` · `markdown-it-footnote@4.0.0` · `markdown-it-anchor@9.2.1`
 · `markdown-it-toc-done-right@4.2.0` · `markdown-it-container@4.0.0` · `markdown-it-attrs@5.0.1`
 · `markdown-it-task-lists@2.1.1` · `shiki@4.3.1` (+ `@shikijs/core`, `@shikijs/langs`,
 `@shikijs/themes`, `@shikijs/markdown-it`, `@shikijs/transformers` all `4.3.1`)
@@ -40,6 +40,17 @@ Notes that bite if ignored:
   `@shikijs/langs/<lang>`, `@shikijs/themes/<theme>`, `@shikijs/markdown-it/core`
   `fromHighlighter`) — use it. All `@shikijs/*` siblings are version-pinned in lockstep,
   so bump them together.
+- **`markdown-it` is 15.x and ships its own typings**, so the direct
+  `@types/markdown-it` devDependency was **removed** — do not reinstall it. The 15 typings
+  export the class *type* under the named `MarkdownIt` export, while the default export is a
+  value (the constructor) only — so `import type MarkdownIt from "markdown-it"` no longer
+  compiles, and `src/render/markdown.ts` imports
+  `MarkdownItCtor, { type MarkdownIt, type Token }` instead. They also drop
+  `PluginSimple`/`PluginWithParams`/`PluginWithOptions`, so the plugin signature is spelled
+  out locally in `src/render/markdown.ts` and `src/types/markdown-it-task-lists.d.ts`. A
+  transitive `@types/markdown-it@14` still arrives via `@types/markdown-it-container`,
+  `@types/markdown-it-footnote` and `markdown-it-anchor`, which is why those plugins'
+  `md` parameter stays nominally a different `MarkdownIt` and the container call site casts.
 - **`@types/markdown-it-footnote@3.0.4`** intentionally pairs with runtime `4.0.0`
   (type surface unchanged). Do not "fix" the mismatch.
 - **`markdown-it-task-lists`** ships no `@types` → local shim in `src/types/`.
@@ -264,7 +275,9 @@ export function isSupportedLanguage(lang: string): boolean;
 export function ensureMarkdownLanguages(hl: HighlighterCore, src: string): Promise<void>;
 
 // src/render/markdown.ts
-import type MarkdownIt from 'markdown-it';
+// markdown-it 15 ships its own typings: the class TYPE is the named export and the default
+// export is the constructor value. `import type MarkdownIt from 'markdown-it'` does not compile.
+import MarkdownItCtor, { type MarkdownIt, type Token } from 'markdown-it';
 // 'content' = document-level notices that are not render failures (e.g. "document is empty")
 export interface RenderWarning { kind: 'math' | 'diagram' | 'lang' | 'security' | 'content'; message: string; }
 export function createMarkdown(hl: HighlighterCore, settings: Settings): MarkdownIt;

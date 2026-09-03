@@ -1,7 +1,8 @@
 # Library Integration Notes (verified against installed versions)
 
 Copy-pasteable, version-correct integration recipes for MDviewer's stack. Verified
-against (read back 2026-08-08): `markdown-it@14.3.0`, `shiki@4.3.1` (+ `@shikijs/*@4.3.1`),
+against (read back 2026-08-08, `markdown-it` re-read on its 15.0.1 bump):
+`markdown-it@15.0.1`, `shiki@4.3.1` (+ `@shikijs/*@4.3.1`),
 `@vscode/markdown-it-katex@1.1.2`, `katex@0.18.1`, `mermaid@11.16.1`, `pagedjs@0.4.3`,
 `jspdf@4.2.1`, `html2canvas-pro@1.6.7`, `dompurify@3.4.13`. Read alongside
 [`IMPLEMENTATION_SPEC.md`](./IMPLEMENTATION_SPEC.md).
@@ -57,6 +58,11 @@ for (const name of CALLOUTS) {
   });
 }
 ```
+
+Types: markdown-it 15 ships its own, so there is no `@types/markdown-it` devDependency. The
+default export above is a value (the constructor); the class *type* and `Token` are named
+exports (`import MarkdownItCtor, { type MarkdownIt, type Token } from "markdown-it"`), and
+`PluginSimple`/`PluginWithParams`/`PluginWithOptions` are gone — see `IMPLEMENTATION_SPEC.md` §2.
 
 Notes: `html:true` is required (KaTeX/Mermaid raw HTML). TOC: `[[toc]]` in source expands to
 `<ul class="toc">`; it has NO page numbers — those come from Paged.js `target-counter` later.
