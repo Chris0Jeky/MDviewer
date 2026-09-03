@@ -93,6 +93,36 @@ describe("transformFootnotesToInline", () => {
     expect(() => transformFootnotesToInline(root)).not.toThrow();
     expect(root.innerHTML).toBe(before);
   });
+
+  // A footnote cited twice produces two call markers ([1] and [1:1]) pointing at the same
+  // #fn1. Floating BOTH would make Paged.js print the note twice at the page foot and
+  // advance its own marker counter past markdown-it's visible [n] numbering, so every
+  // later note's foot marker would name the wrong note.
+  it("floats one note per footnote even when it is referenced repeatedly", () => {
+    const root = rootOf(
+      [
+        "<p>Alpha",
+        '<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup>',
+        " and beta",
+        '<sup class="footnote-ref"><a href="#fn1" id="fnref1:1">[1:1]</a></sup>',
+        " and a second note",
+        '<sup class="footnote-ref"><a href="#fn2" id="fnref2">[2]</a></sup>.</p>',
+        '<section class="footnotes"><ol class="footnotes-list">',
+        '<li id="fn1" class="footnote-item"><p>Shared note.</p></li>',
+        '<li id="fn2" class="footnote-item"><p>Second note.</p></li>',
+        "</ol></section>",
+      ].join(""),
+    );
+
+    transformFootnotesToInline(root);
+
+    const spans = Array.from(root.querySelectorAll("span.footnote"));
+    expect(spans.map((s) => s.textContent)).toEqual(["Shared note.", "Second note."]);
+    // Both call markers survive — only the duplicated float is dropped.
+    expect(root.querySelectorAll("sup.footnote-ref")).toHaveLength(3);
+    // The single float sits at the FIRST citation, not the repeat.
+    expect(spans[0]?.previousElementSibling?.querySelector("a")?.id).toBe("fnref1");
+  });
 });
 
 describe("injectToc", () => {

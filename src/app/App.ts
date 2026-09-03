@@ -426,6 +426,12 @@ export class App {
   private async runPipeline(_reason: RenderReason): Promise<void> {
     const doc = this.store.active;
     if (!doc) {
+      // Closing the last document must actually clear the preview. #empty-state is a
+      // transparent overlay outside its card, and it sits BELOW the page chip and zoom
+      // control, so leaving the sheets in #paged-output would show the closed document
+      // through the empty state while the chip kept reporting its stale "Page n / N".
+      this.canvas.host.replaceChildren();
+      this.canvas.setPageCount(0);
       this.showPane("empty");
       this.hasGoodRender = false;
       this.banner.clear();
