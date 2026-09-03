@@ -123,6 +123,14 @@ export function transformFootnotesToInline(root: ParentNode): void {
 
   // Each call site is <sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup>.
   const refs = Array.from(root.querySelectorAll<HTMLElement>("sup.footnote-ref, a.footnote-ref"));
+  // One float span per NOTE, not per call site. A footnote cited twice renders two call
+  // markers ([1] and [1:1]) that both point at #fn1; giving each one its own
+  // `float: footnote` span would make Paged.js treat them as two distinct notes — it
+  // would print the same text twice at the page foot and advance its own marker counter,
+  // so every later note's foot marker would disagree with the [n] the reader sees at the
+  // call site. Floating only the first reference keeps Paged.js's numbering aligned with
+  // markdown-it's; a repeat citation on a later page still reads as "see note n".
+  const floated = new Set<string>();
   let moved = 0;
   for (const ref of refs) {
     const anchor = ref.matches("a") ? ref : ref.querySelector("a");
@@ -130,6 +138,8 @@ export function transformFootnotesToInline(root: ParentNode): void {
     const targetId = href.startsWith("#") ? href.slice(1) : "";
     const content = contentById.get(targetId);
     if (!content) continue;
+    if (floated.has(targetId)) continue;
+    floated.add(targetId);
 
     const span = document.createElement("span");
     span.className = CLASSES.footnote;
