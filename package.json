@@ -6,7 +6,7 @@
   "description": "Browser-based, drag-and-drop Markdown to PDF viewer with page-break-safe pagination for research and code documents.",
   "license": "GPL-3.0-only",
   "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "scripts": {
     "dev": "vite",
@@ -57,7 +57,7 @@
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/node": "^26.2.0",
     "eslint": "^10.8.1",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
     "vite": "^8.2.1",
