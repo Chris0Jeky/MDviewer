@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveBuildRevision, sourceNotice } from "./lib/revision.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const lock = JSON.parse(readFileSync(join(repoRoot, "package-lock.json"), "utf8"));
@@ -17,33 +18,23 @@ copyFileSync(
   join(outDir, "THIRD_PARTY_NOTICES.md"),
 );
 
-const deploymentRevision = process.env.CF_PAGES_COMMIT_SHA ?? process.env.GITHUB_SHA;
-if (!deploymentRevision) {
-  const dirtyPaths = execFileSync("git", ["status", "--porcelain"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
-  if (dirtyPaths) {
-    throw new Error(
-      "Refusing to label a dirty local build with HEAD. Commit the source or supply a trusted deployment SHA.",
-    );
-  }
-}
-const revision =
-  deploymentRevision ??
-  execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" }).trim();
+// Building from a GitHub ZIP or `git archive` is a supported way to build a GPL-licensed
+// project, and such a tree has no `.git` (and may have no `git` binary at all). The
+// resolver reports that as `null` rather than letting the spawn throw, so the documented
+// `npm run build` still produces a distribution — labelled honestly as an archive build.
+const revision = resolveBuildRevision({
+  env: process.env,
+  // stderr is piped, not inherited: "not a git repository" is an expected, handled
+  // outcome here, so it must not print an alarming line during a successful build.
+  runGit: (args) =>
+    execFileSync("git", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+});
 
-writeFileSync(
-  join(outDir, "SOURCE.txt"),
-  [
-    "Corresponding source for this MDviewer build:",
-    `https://github.com/Chris0Jeky/MDviewer/tree/${revision}`,
-    "",
-    "The owner-authored application is licensed under GPL-3.0-only.",
-    "See LICENSE.txt in this distribution.",
-    "",
-  ].join("\n"),
-);
+writeFileSync(join(outDir, "SOURCE.txt"), sourceNotice(revision));
 
 const sections = [];
 for (const [packagePath, metadata] of Object.entries(lock.packages ?? {}).sort(([a], [b]) =>
