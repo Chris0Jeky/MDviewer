@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { resolveBuildRevision, sourceNotice } from "../scripts/lib/revision.mjs";
 
-/** A `runGit` that fails the way a source archive (no `.git`, or no `git` binary) fails. */
-function noGit(): (args: string[]) => string {
-  return () => {
-    throw new Error("fatal: not a git repository (or any of the parent directories): .git");
+/** A `runGit` that must never be reached; reaching it is the failure. */
+function unreachableGit(): (args: string[]) => string {
+  return (args) => {
+    throw new Error(`git must not run here, but was asked for: git ${args.join(" ")}`);
   };
 }
 
@@ -24,6 +24,9 @@ describe("resolveBuildRevision", () => {
     const calls: string[][] = [];
     const revision = resolveBuildRevision({
       env: { CF_PAGES_COMMIT_SHA: "cf00ffee" },
+      hasGitMetadata: () => {
+        throw new Error("the filesystem must not be consulted for a deployment SHA");
+      },
       runGit: fakeGit({}, calls),
     });
     expect(revision).toBe("cf00ffee");
@@ -33,6 +36,7 @@ describe("resolveBuildRevision", () => {
   it("falls back to GITHUB_SHA", () => {
     const revision = resolveBuildRevision({
       env: { GITHUB_SHA: "gh12345" },
+      hasGitMetadata: () => true,
       runGit: fakeGit({}),
     });
     expect(revision).toBe("gh12345");
@@ -41,6 +45,7 @@ describe("resolveBuildRevision", () => {
   it("uses HEAD when the working tree is clean", () => {
     const revision = resolveBuildRevision({
       env: {},
+      hasGitMetadata: () => true,
       runGit: fakeGit({
         "status --porcelain": "\n",
         "rev-parse HEAD": "abc123\n",
@@ -53,6 +58,7 @@ describe("resolveBuildRevision", () => {
     expect(() =>
       resolveBuildRevision({
         env: {},
+        hasGitMetadata: () => true,
         runGit: fakeGit({ "status --porcelain": " M src/main.ts\n" }),
       }),
     ).toThrow(/dirty local build/i);
@@ -61,7 +67,33 @@ describe("resolveBuildRevision", () => {
   // The regression this file exists for: a GitHub ZIP or `git archive` has no `.git`, so
   // the documented `npm run build` used to die after Vite had already written dist/.
   it("reports no revision instead of throwing when there is no git metadata", () => {
-    expect(resolveBuildRevision({ env: {}, runGit: noGit() })).toBeNull();
+    expect(
+      resolveBuildRevision({
+        env: {},
+        hasGitMetadata: () => false,
+        runGit: unreachableGit(),
+      }),
+    ).toBeNull();
+  });
+
+  // The counterpart, and the reason the archive case is decided from the filesystem
+  // instead of from a failing git call: in a real repository a git failure proves nothing
+  // about the tree, so it must not be downgraded to "anonymous archive" — that would ship
+  // a dirty build mislabelled with an archive notice.
+  it.each([
+    ["dubious ownership", "fatal: detected dubious ownership in repository at '/src'"],
+    ["no git binary on PATH", "spawnSync git ENOENT"],
+    ["porcelain output past maxBuffer", "spawnSync /usr/bin/git ENOBUFS"],
+  ])("rethrows when git fails for a non-metadata reason (%s)", (_name, message) => {
+    expect(() =>
+      resolveBuildRevision({
+        env: {},
+        hasGitMetadata: () => true,
+        runGit: () => {
+          throw new Error(message);
+        },
+      }),
+    ).toThrow(message);
   });
 });
 

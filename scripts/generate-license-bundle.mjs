@@ -19,13 +19,15 @@ copyFileSync(
 );
 
 // Building from a GitHub ZIP or `git archive` is a supported way to build a GPL-licensed
-// project, and such a tree has no `.git` (and may have no `git` binary at all). The
-// resolver reports that as `null` rather than letting the spawn throw, so the documented
+// project, and such a tree has no `.git` (and may have no `git` binary at all). That case
+// is detected from the filesystem, before Git is ever spawned, so the documented
 // `npm run build` still produces a distribution — labelled honestly as an archive build.
+// Inside a real repository, a failing `git` command fails the build instead: it cannot
+// prove the tree is clean, and a mislabelled dirty build is worse than a loud error.
 const revision = resolveBuildRevision({
   env: process.env,
-  // stderr is piped, not inherited: "not a git repository" is an expected, handled
-  // outcome here, so it must not print an alarming line during a successful build.
+  // `.git` is a directory in a normal clone and a file in a worktree or submodule.
+  hasGitMetadata: () => existsSync(join(repoRoot, ".git")),
   runGit: (args) =>
     execFileSync("git", args, {
       cwd: repoRoot,

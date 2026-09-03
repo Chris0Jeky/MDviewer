@@ -4,7 +4,9 @@
 
 export declare function resolveBuildRevision(params: {
   env: Record<string, string | undefined>;
-  /** Runs `git <args>`; throws if Git is unavailable or this is not a repository. */
+  /** Whether this tree is a Git repository at all, decided without running Git. */
+  hasGitMetadata: () => boolean;
+  /** Runs `git <args>`; throws if Git is unavailable or refuses to answer. */
   runGit: (args: string[]) => string;
 }): string | null;
 

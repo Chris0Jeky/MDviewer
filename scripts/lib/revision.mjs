@@ -13,28 +13,35 @@
  *     build, not an exception. The caller gets `null` and labels the distribution as an
  *     unidentified source archive.
  *
- * `runGit` is injected so this is testable without a filesystem or a real Git.
+ * The absence of Git metadata is the ONLY thing that may downgrade a build to case 3, and
+ * it is decided before Git is invoked. A failing `git` command is never evidence of it:
+ * `git status` can fail inside a perfectly real repository (no `git` on PATH, a
+ * dubious-ownership refusal, output past the caller's `maxBuffer`), and each of those
+ * failures leaves the dirty-tree question unanswered rather than answering it "clean".
+ * Such an error propagates and fails the build loudly.
+ *
+ * `hasGitMetadata` and `runGit` are injected so this is testable without a filesystem or a
+ * real Git.
  */
 
 /**
  * @param {object} params
  * @param {Record<string, string | undefined>} params.env
+ * @param {() => boolean} params.hasGitMetadata  Whether this tree is a Git repository at
+ *   all (i.e. `.git` exists). Decided without running Git.
  * @param {(args: string[]) => string} params.runGit  Runs `git <args>`; throws if Git is
- *   unavailable or the directory is not a repository.
+ *   unavailable or refuses to answer. Only called when `hasGitMetadata()` is true.
  * @returns {string | null} The revision, or `null` when there is no Git metadata.
  */
-export function resolveBuildRevision({ env, runGit }) {
+export function resolveBuildRevision({ env, hasGitMetadata, runGit }) {
   const deploymentRevision = env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA;
   if (deploymentRevision) return deploymentRevision;
 
-  let dirtyPaths;
-  try {
-    dirtyPaths = runGit(["status", "--porcelain"]).trim();
-  } catch {
-    // No `.git`, or no `git` binary. Distinguishable from a dirty tree: that case
-    // returns output, this one cannot answer the question at all.
-    return null;
-  }
+  if (!hasGitMetadata()) return null;
+
+  // Deliberately uncaught: inside a real repository, a Git failure must fail the build
+  // rather than silently mislabel a possibly dirty tree as an anonymous archive.
+  const dirtyPaths = runGit(["status", "--porcelain"]).trim();
 
   if (dirtyPaths) {
     throw new Error(
