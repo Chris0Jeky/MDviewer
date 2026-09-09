@@ -1,0 +1,7 @@
+{
+  "version": "0.1.0",
+  "project": "mdviewer",
+  "target": "public/observatory.js",
+  "sha256": "6184fd3356fd1fd6b37f5cfc50eaab24f5539ab56da14e6a7de5b3cd98a71145",
+  "source": "Chris0Jeky/Pulseboard:observatory"
+}

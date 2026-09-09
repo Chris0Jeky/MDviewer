@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import vm from 'node:vm';
+const root = new URL('../', import.meta.url);
+const lock = JSON.parse(readFileSync(new URL('observatory.lock.json', root), 'utf8'));
+const code = readFileSync(new URL(lock.target, root), 'utf8');
+assert.equal(createHash('sha256').update(code).digest('hex'), lock.sha256);
+assert.ok(code.includes('"endpoint":""'), 'Activation requires a separate reviewed change');
+const context = { document: { readyState: 'complete' }, fetch() { throw new Error('Unexpected network'); }, setTimeout() { throw new Error('Unexpected timer'); } };
+vm.runInNewContext(code, context);
+assert.equal(context.PulseboardUsage, null);
+console.log('Observer hash and inactive runtime passed. Full host CI remains required.');
