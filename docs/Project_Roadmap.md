@@ -103,6 +103,12 @@ export paths.
   OG/Twitter metadata; offline behavior proven by `tests/e2e/offline.spec.ts` on the
   production bundle.
 - **Remaining:** profile very large documents before setting a production performance budget.
+- **Open (MD1):** prepare a reviewed CI-compatible direct-upload path for the existing Pages project;
+  production promotion and credentials remain separate gates.
+- **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
+  has been selected and ownership verified.
+- **Open (MD3):** keep hosting browser-only by re-proving render/export and runtime-egress contracts;
+  no document upload, converter backend or new runtime network path is authorized.
 
 ### P4 — Stretch — `DEFERRED`
 
