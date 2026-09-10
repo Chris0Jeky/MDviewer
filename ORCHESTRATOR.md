@@ -96,7 +96,22 @@ older CI and independent-review evidence.
   Local PDF evidence was retained at
   `C:\Users\Public\codex-shell-home\mdviewer-pdf-evidence-20260724` on the maintainer machine.
 
-### 3. Dependabot queue — RESOLVED 2026-08-08 (historical snapshot below)
+### 3. Hosting preparation queue — OPEN
+
+The reference-only intake in [`.hosting/manifest.json`](./.hosting/manifest.json) does not deploy
+or activate anything. These follow-on tasks are part of the resumable queue and retain the
+browser-only, local-document boundary:
+
+| Task | Status | Acceptance gate |
+| --- | --- | --- |
+| MD1 — prepare CI-compatible direct upload | **OPEN** | Reuse the existing Pages project and approved `dist` build; production requires a reviewed promotion and scoped credentials supplied outside Git. |
+| MD2 — prepare canonical-origin metadata | **BLOCKED — hostname not selected/owned** | Verify direct entry, refresh and lazy same-origin assets at the proposed base before setting a canonical hostname. |
+| MD3 — protect the browser-only boundary | **OPEN** | Re-run render/export and runtime-egress checks; introduce no converter backend, document upload or new runtime network path. |
+
+Use [`.hosting/README.md`](./.hosting/README.md) for the bounded implementation notes. The existing
+Direct Upload project remains authoritative; a Git push is not a production deployment trigger.
+
+### 4. Dependabot queue — RESOLVED 2026-08-08 (historical snapshot below)
 
 > **⚠ This section is history, not work.** Every dependency listed here is now at or beyond the
 > proposed version, applied in one consolidated sweep and verified together rather than PR by PR.

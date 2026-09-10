@@ -1,0 +1,15 @@
+{
+  "schema_version":1,"reviewed_on":"2026-09-10","repository":"Chris0Jeky/MDviewer","stable_id":"mdviewer","runtime_class":"static",
+  "public_origin":"https://mdviewer-c9r.pages.dev/","origin_evidence":"repository-reported",
+  "target":"Retain existing Cloudflare Pages Direct Upload",
+  "source_paths":["docs/DEPLOYMENT.md","README.md"],
+  "persistent_state":["Browser settings only; documents remain local"],
+  "invariants":["No document uploads or new runtime network calls","Preserve the rendering order and no-slice behavior","Do not replace the existing Pages project","Publish only the approved dist build"],
+  "gates":["Owned canonical hostname","Verified build and deployment trigger review","Regression proof for local document processing"],
+  "tasks":[
+    {"id":"MD1","goal":"Prepare CI-compatible direct upload","acceptance":"Use existing Pages project and approved build; production requires a reviewed promotion"},
+    {"id":"MD2","goal":"Prepare canonical-origin metadata","acceptance":"Deep links and lazy assets work at the proposed base; hostname stays unset until owned"},
+    {"id":"MD3","goal":"Protect the browser-only boundary","acceptance":"Existing render/export tests and runtime egress checks pass; no converter backend is introduced"}
+  ],
+  "activation_authorized":false
+}
