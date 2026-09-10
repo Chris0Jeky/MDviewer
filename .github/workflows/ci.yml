@@ -27,9 +27,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Validate both the declared engine floor (latest 20.x is >= 20.19, vite 8's floor)
-        # and the active LTS used by CI's e2e job.
-        node-version: ['20', '22']
+        # Validate both the declared engine floor (22.x, the active LTS used by CI's e2e job)
+        # and the current line (24.x). Node 20 reached end of life 2026-04-30 and jsdom 30
+        # dropped it (#60).
+        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v7
         with:
