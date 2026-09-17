@@ -46,6 +46,8 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm run test
+      - name: Observatory artifact guard
+        run: npm run agent:observatory:check
       - name: Build
         run: npm run build
 
