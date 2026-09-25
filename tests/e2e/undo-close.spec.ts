@@ -9,7 +9,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 320, height: 844 
     await waitForPagination(page);
     const source = "# Current draft\n\nExact edits: café → λ\n";
     await page.locator("#editor-input").fill(source);
-    await page.getByRole("button", { name: "Close document", exact: true }).click();
+    await page.getByRole("button", { name: "Close notes-café.md", exact: true }).click();
     await expect(page.locator("#empty-state")).toBeVisible();
     const undo = page.getByRole("button", { name: "Undo close", exact: true });
     await expect(undo).toBeVisible();
@@ -29,9 +29,11 @@ test("Undo close appends recovery without overwriting another open document", as
   await waitForPagination(page);
   await loadMarkdownIntoApp(page, "# Second draft", "second.md");
   await waitForPagination(page);
-  await page.getByRole("button", { name: "Close document", exact: true }).click();
+  await page.getByRole("button", { name: "Close second.md", exact: true }).click();
   await page.locator("#editor-input").fill("# First draft, edited after close");
-  await page.getByRole("button", { name: "Undo close", exact: true }).click();
+  const undo = page.getByRole("button", { name: "Undo close", exact: true });
+  await expect(undo).toBeVisible();
+  await undo.click();
   await expect(page.locator("#editor-input")).toHaveValue("# Second draft");
   await page.locator("#doc-switcher-select").selectOption({ label: "first.md" });
   await expect(page.locator("#editor-input")).toHaveValue("# First draft, edited after close");
