@@ -39,6 +39,23 @@ test("raster pages retain natural resolution and content independently of previe
     } else {
       await page.getByRole("button", { name: label, exact: true }).click();
     }
+    // Fit is recomputed by ResizeObserver when Markdown-only parks the canvas
+    // at a different width. Do not mistake that pending resize for an export
+    // mutation by recording the previous transform as the baseline (#92).
+    const selectedZoom = label === "100%" ? "1" : label === "50%" ? "0.5" : "fit";
+    await page.waitForFunction((zoom) => {
+      const canvas = document.querySelector<HTMLElement>("#canvas");
+      const sheet = document.querySelector<HTMLElement>("#paged-output .pagedjs_page");
+      const stack = document.querySelector<HTMLElement>("#paged-output .pagedjs_pages");
+      if (!canvas || !sheet || !stack || canvas.dataset.zoom !== zoom || sheet.offsetWidth <= 0) return false;
+      // Same documented 24px gutters and 0.1..1 Fit bounds as Canvas.ts.
+      const available = canvas.clientWidth - 48;
+      const expected = zoom === "fit"
+        ? available <= 0 ? 1 : Math.min(1, Math.max(0.1, available / sheet.offsetWidth))
+        : Number(zoom);
+      const actual = new DOMMatrixReadOnly(getComputedStyle(stack).transform);
+      return Math.abs(actual.a - expected) < 0.00001 && Math.abs(actual.d - expected) < 0.00001;
+    }, selectedZoom);
     const previewStyle = await page.locator(".pagedjs_pages").evaluate((el) => getComputedStyle(el).transform);
     await page.evaluate(() => { (window as unknown as { __rasterSizes: Capture[] }).__rasterSizes = []; });
     const downloading = page.waitForEvent("download", { timeout: 60000 });
