@@ -1,49 +1,109 @@
-# MDviewer — Agent Index
+# AGENT_INDEX
 
-> Fast code-seam map for agents. The goal: find the right file and its invariants **without**
-> bulk-reading the repo. For the full canonical detail, read
-> [`../docs/design/IMPLEMENTATION_SPEC.md`](../docs/design/IMPLEMENTATION_SPEC.md) (pinned signatures,
-> render order, CSS/DOM names, no-slice tiers) and
-> [`../docs/design/LIBRARY_NOTES.md`](../docs/design/LIBRARY_NOTES.md) (version-correct snippets).
+Current navigation map for MDviewer. Read the narrow owning seam before editing; do not skim unrelated rendering code to change toolbar behavior. The pre-integration index is retained in [AGENT_INDEX_BASELINE.md](AGENT_INDEX_BASELINE.md) for its detailed older symbol and fixture descriptions. This index and the canonical specification take precedence where behavior changed.
 
-## Start here
+## Read order
 
-1. [`../ACTION_ITEMS.md`](../ACTION_ITEMS.md) — human-only tasks; read first, flag every OPEN item.
-2. [`../AGENTS.md`](../AGENTS.md) — authority order, safety floor, worktree and review rules.
-3. [`../ORCHESTRATOR.md`](../ORCHESTRATOR.md) — resumable live state, exact evidence, queue, and next work.
-4. [`../docs/Project_Roadmap.md`](../docs/Project_Roadmap.md) — phase status and the active gate.
-5. [`../docs/design/IMPLEMENTATION_SPEC.md`](../docs/design/IMPLEMENTATION_SPEC.md) — source of truth for signatures and render order.
-6. [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) — pipeline, modules, CSS architecture.
-7. [`../src/app/dom.ts`](../src/app/dom.ts) — canonical DOM ids/classes (`IDS`, `CLASSES`, `ATTRS`, `PAGEDJS`); import these, never hardcode.
-8. [`../src/app/settings.ts`](../src/app/settings.ts) — `Settings`, `DEFAULT_SETTINGS`, `MARGIN_MM`, migrate.
-9. [`../src/app/state.ts`](../src/app/state.ts) — `DocStore` and `createRenderScheduler` (debounces **and serializes** renders; `flush()` is what exports await).
+1. `../CLAUDE.md` and `../AGENTS.md` for workflow and merge policy.
+2. `../docs/design/IMPLEMENTATION_SPEC.md` for current contracts, especially sections 3, 5, 7, 9 and 12.
+3. Its retained `IMPLEMENTATION_FOUNDATION.md` only for unchanged API or editor/no-slice details relevant to the task. Its dated dependency inventory is not current evidence.
+4. `STATE.md`, `DECISIONS.md`, `FAILURE_PATTERNS.md`, then the owning source/tests below.
 
-## Do not bulk-read
+Do not change a public export, DOM contract or render ordering without updating this index and the canonical specification in the same change. Keep branch work isolated; use merge commits, exact-head CI and latest-head independent review. Never claim an unavailable local, second-engine or live deployment check passed.
 
-`node_modules/`, `dist/`, `.vite/`, lockfiles, generated build output, and `tests/fixtures/*`
-content. Read fixtures only when changing the test that uses them.
+## Product and flow
 
-## The one rule that overrides convenience
+Local-first Markdown editor and paginated PDF preview. Only settings persist; no Markdown uploads or runtime telemetry. Vector print is primary; raster PDF is the fallback. The source-save action downloads exact current text without persisting it in the app.
 
-**Pagination runs last, exactly once**, after Shiki, markdown render, source build, Mermaid, and
-fonts/images all settle (render order §3 of the spec). Never paginate before async content settles —
-stale heights misplace breaks and break the no-slice guarantee.
+```text
+input / textarea → DocStore → serialized scheduler → App.runPipeline
+ → highlighter + curated grammars → synchronous Markdown + KaTeX
+ → build source / TOC / one float per footnote → Mermaid → stamp atomic identities
+ → fonts/images → Paged.js preview → href-only footnote repair → completed snapshot
 
-## Seam table
+Export click → capture document id/name/text and settings NOW
+ → scheduler.withRenderLock → prepare/reuse that captured input → print/capture
+ → release host → queued edits/switches/closes catch up
+```
 
-| Seam | Files | Key invariants | Edit seam | Verify |
-| --- | --- | --- | --- | --- |
-| **render** | `src/render/markdown.ts`, `sanitize.ts`, `highlight.ts`, `math.ts`, `mermaid.ts`, `buildSource.ts` | `getHighlighter()` is a singleton; pre-scan and await curated fenced grammars before the **sync** markdown render; Mermaid fences bypass Shiki; sanitize before DOM insertion and apply the narrower SVG-style policy after Mermaid; automatic remote-resource loads, including obfuscated CSS URLs, are forbidden; plugin order: attrs/anchor before toc; share one `SLUGIFY` (ASCII-only by design — see failure ledger 2026-08-16 before making it unicode-aware); `headerLink` permalinks wrap the whole heading, so `headingText()` unwraps rather than deletes them; synthesized TOC goes after the first `h1` (`[[toc]]` stays where the author put it) and every entry title is wrapped in `.toc-text`; failed KaTeX is normalized onto `.katex-error` via `tagKatexErrors`/`KATEX_ERROR_COLOR` (never string-match the hex); Mermaid uses SVG-native labels, `useMaxWidth:false`, and a stable light print theme. | New markdown feature, curated language loader, HTML/resource policy, theme pair, math macro, diagram handling, TOC/footnote source transform. | `tests/markdown.test.ts`, `highlight.test.ts`, `math.test.ts`, `mermaid.test.ts`, `buildSource.test.ts` (Vitest + jsdom) and real Mermaid assertions in `golden-path.spec.ts`. |
-| **paginate** | `src/paginate/cssBuilder.ts`, `measure.ts`, `handler.ts`, `shrinkToFit.ts`, `paginate.ts`, `pagedjs.d.ts` | Single engine (Paged.js 0.4.3); `buildStylesheet` = `print.css?raw` + dynamic `@page`; **any CSS Paged.js must interpret (`float: footnote`, `string-set`, `target-counter`, `@footnote`) must be emitted by `buildStylesheet` — globally imported stylesheets are invisible to the Polisher**; the footnote area is a sibling of `.doc`, so its typography is restated in `buildStylesheet` via `DOC_FONT_STACKS`; the running header uses `string(doctitle, start)` so pushed content keeps its own section's title; register handlers once; `setPaginationProgress` feeds the per-page overlay label; fresh `Previewer` per run; tear down `.pagedjs_pages` + inserted styles before re-run; stamp source atomic identities before pagination; never shrink reflowing tables. | Break rules, `@page` block, page-area math, Tier-3 shrink, lifecycle hooks. | `tests/cssBuilder.test.ts`, `measure.test.ts`, `buildSource.test.ts`; `nocutoff.spec.ts` verifies geometry (incl. horizontal table-cell containment) **and** logical block identity; `e2e/footnotes.spec.ts`, `e2e/toc.spec.ts`. |
-| **export** | `src/export/print.ts`, `download.ts` | Both operate over the **same** paginated DOM; print is vector (primary), download rasterizes one canvas per `.pagedjs_page` (fallback); PDF is always dark-on-white; both dynamic-imported on user action; both `await App.flushRender()` first — an export fired inside the 250 ms content debounce would otherwise ship the previous document's pages. | Export quality, fallback page assembly, file naming. | `tests/export-download.test.ts` (page count); real output in E2E `export.spec.ts`. |
-| **app-core** | `src/app/App.ts`, `state.ts`, `settings.ts`, `dom.ts`, `input.ts`, `sampleDoc.ts`, `main.ts` | `App.runPipeline` follows the render order exactly; only `Settings` persists (doc bytes never stored, editor text included); debounce settings 120ms / content 250ms; re-paginate reuses the pristine clone; `DocStore` emits `"change"` for identity and `"text"` for in-place edits; `viewMode`/`splitRatio` are validated in `migrateSettings`, not merely spread. | Controller flow, settings shape/migration, file ingest/validation, scheduler, the editor write path. | `tests/settings.test.ts`, `state.test.ts`, `input.test.ts`, `dom-contract.test.ts`. |
-| **ui** | `src/ui/Toolbar.ts`, `Canvas.ts`, `EmptyState.ts`, `Banner.ts` | Each `mount*` returns a small handle; controls write through `App.updateSettings` and subscribe via `onSettingsChange` so visual/accessible state also follows programmatic updates; export buttons gate on `App.onExportStateChange` (disabled when no doc or an export is in flight); zoom is a paint-only `--preview-zoom` transform (never the `zoom` property, never a reflow key), `fit` = fit-to-width capped at 1; the page chip and zoom cluster live in sticky `.canvas-controls`, warnings in sticky `.canvas-notices` — `#canvas` stays the sole scroller and is keyboard-focusable (`tabIndex 0`); every authored class must be in `dom.ts CLASSES` (dom-contract enforces CSS coverage); use ids/classes from `dom.ts`; `aria-live` status; paginating overlay during reflow. | Toolbar controls, preview chrome, empty/error/recovery states, a11y. | `tests/dom-contract.test.ts`; flows in E2E `golden-path.spec.ts`, `empty-error.spec.ts`, `canvas-chrome.spec.ts` (preview chrome, scroll restore, toolbar layout, export gating). |
-| **workspace / editor** | `src/ui/Editor.ts`, `Splitter.ts`, `src/styles/editor.css`, `App.onEditorInput`, `DocStore.updateText` | All three panes stay mounted — `data-view-mode` on `#workspace` only shows/hides columns, so a mode switch never re-renders or loses state; `viewMode`/`splitRatio` are **not** reflow keys (page geometry is mm-based, not canvas-based); **`#canvas` is never `display: none`** — Markdown mode still paginates into it and Paged.js measures real heights, so it is parked `position:absolute; visibility:hidden` and un-parked again under `@media print`; the backdrop `<pre>` and the `<textarea>` must keep identical font/size/line-height/padding/wrapping/`scrollbar-gutter` or the colors drift off the glyphs; the backdrop must equal the textarea's value at **all** times (paint plain synchronously, recolor on the debounce) because the textarea's glyphs are transparent; token text goes in via `textContent`, never `innerHTML`; `updateText` emits `"text"` (not `"change"`) so identity UI does not churn per keystroke; `@media print` must hide the pane and the divider. | Source-pane behaviour, syntax backdrop, view modes, split sizing, the typing→preview loop. | `tests/editor.test.ts`, `splitter.test.ts`, `state.test.ts`, `dom-contract.test.ts`; real layout + print media in E2E `editor.spec.ts`. |
-| **distribution / pwa** | `scripts/start.mjs`, `serve.mjs`, `serve.test.mjs`, `run-python.mjs`, `scripts/generate-icons.mjs`, `public/_headers`, `public/favicon.svg`, `public/icons/*`, `vite.config.ts` (VitePWA), `src/styles/pwa.css`, `docs/DEPLOYMENT.md` | Production server binds to loopback by default; traversal stays inside `dist`; extensionless routes alone use SPA fallback; hashed assets are immutable; `sw.js`/`manifest.webmanifest` are `must-revalidate`; the Workbox precache covers **every** lazy chunk + KaTeX woff2 (offline Print/Download is the point); updates are prompt-based (toast in `main.ts`), never silent; brand assets regenerate from `public/favicon.svg` via `generate-icons.mjs`; public builds omit source maps unless opted in. | Local launcher/server, static-host policy, PWA/offline behavior, head metadata, cross-platform tooling. | `npm run test:serve`, `tests/head-contract.test.ts`, `npm run build` (inspect `dist`), `E2E_TARGET=preview` run of `e2e/offline.spec.ts`. |
-| **styles** | `src/styles/app.css`, `preview.css`, `document.css`, `shiki.css`, `print.css` | `print.css` = static break rules, **no `@page`**, raw-imported into `cssBuilder`; `shiki.css` `@media print` forces light side; class names must match `dom.ts`. | Typography, callouts, TOC, footnotes, code colors, break rules. | `tests/dom-contract.test.ts` (name drift); visual checks in E2E. |
-| **tests** | `tests/*.test.ts`, `tests/e2e/*.spec.ts`, `tests/helpers/pagedDom.ts`, `tests/fixtures/*` | Unit = pure/DOM-structure (jsdom); layout (`getBoundingClientRect`) is E2E only; `nocutoff.spec.ts` is the crown-jewel guarantee test. | New coverage for any seam above. | `npm run test` (unit), `npm run test:e2e` (Playwright/Chromium). |
+## Ownership map
 
-## Cross-runtime note
+| Concern | Owning seam | Tests / contract |
+| --- | --- | --- |
+| App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
+| Document memory and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
+| Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
+| Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts` |
+| DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
+| Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
+| Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
+| Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
+| Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
+| Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
+| TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
+| Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
+| Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
+| Vector / raster PDF | `src/export/{print,download}.ts` | `tests/export-download.test.ts`, `tests/e2e/export.spec.ts` |
+| Exact source download and filename | `src/export/markdown.ts` | `tests/markdown-download.test.ts`, `tests/e2e/workspace-design.spec.ts` |
+| Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
+| Preview zoom envelope, horizontal reach, pinned feedback | `src/ui/Canvas.ts`, `src/styles/{preview,workspace}.css` | `tests/e2e/workspace-design.spec.ts` and canvas E2E |
+| Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
+| Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts` | `tests/e2e/empty-error.spec.ts` |
+| Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
+| Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 22/24 verification and production Chromium |
 
-Claude reads `.claude/skills/*/SKILL.md`; Codex follows the same intent via `AGENTS.md`. Keep
-workflow intent aligned across both; see [`../docs/agentic/SKILL_REGISTRY.md`](../docs/agentic/SKILL_REGISTRY.md).
+## New or changed public seams
+
+```typescript
+// Existing RenderScheduler additionally owns the host for the awaited task.
+withRenderLock<T>(task: () => Promise<T>): Promise<T>;
+// Never call flush from inside a lease. Pending preparation and later close are serialized.
+
+// src/paginate/footnoteLinks.ts
+repairFootnoteLinks(host: ParentNode): void;
+// Called inside paginate after awaited Previewer.preview; only citation hrefs change.
+
+// src/export/markdown.ts
+markdownFilename(name: string): string;
+downloadMarkdown(name: string, text: string): void;
+
+// src/app/reloadGuard.ts
+interface ReloadGuard { tryReload(): boolean; destroy(): void; }
+installReloadGuard(
+  hasWork: () => boolean,
+  actions?: { confirm(message: string): boolean; reload(): void },
+): ReloadGuard;
+
+// src/ui/UpdatePrompt.ts
+interface UpdatePromptController { notifyReady(): void; destroy(): void; }
+interface UpdatePromptOptions {
+  applyUpdate(): void | Promise<void>;
+  requestReload(): boolean;
+  activationTarget?: EventTarget;
+  onDismiss?(): void;
+}
+mountUpdatePrompt(options: UpdatePromptOptions): UpdatePromptController;
+
+// App additional method
+reloadForUpdate(): boolean;
+```
+
+`paginate`, `CanvasController`, existing editor/splitter functions and App export method signatures stay unchanged. `RenderInput`, snapshot matching and `prepareExport` are App-private, not a new global API. `src/types/window.d.ts` stays unchanged.
+
+## Invariants and tripwires
+
+Capture export input before queueing, not when a queued render eventually starts. Keep the host leased until capture/print settles; do not teardown it on an intervening close. New failed preparation invalidates export eligibility even if old pages stay visible. Stable input matching avoids unnecessary repagination when the requested document is already current.
+
+Source footnote IDs must avoid headings and suffix collisions. Repeated citations share one float; post-preview repair uses Paged.js `data-id` to generated-note mapping and leaves unrelated links alone.
+
+Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` or change natural page dimensions. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
+
+The PDF action classes identify PDF actions only; source Open/Save use `workspaceAction`. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings.
+
+UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plugin's automatic navigation. App rejects reload during export; current work is checked immediately before an explicitly accepted navigation. Cancellation, dismissal, rejection and timeout must leave usable controls and navigation protection.
+
+## Validation and handoff
+
+Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow runs supported Node 22 and 24 plus Chromium. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
+
+No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. Runtime fixes do not close #62 archive provenance or resolve #59's contradictory historical deployment receipts. Record remaining gates and actual commit/run identifiers in handoffs.

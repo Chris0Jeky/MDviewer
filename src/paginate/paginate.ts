@@ -15,6 +15,7 @@
 import type { PagedFlow } from "pagedjs";
 import { PAGEDJS } from "../app/dom";
 import { setPaginationHost } from "./handler";
+import { repairFootnoteLinks } from "./footnoteLinks";
 
 /**
  * Remove all paginated output and Paged.js-inserted stylesheets before a re-run.
@@ -50,7 +51,10 @@ export async function paginate(
   const blobUrl = URL.createObjectURL(new Blob([css], { type: "text/css" }));
   try {
     const previewer = new Previewer();
-    return await previewer.preview(source, [blobUrl], host);
+    const flow = await previewer.preview(source, [blobUrl], host);
+    // Only links change after layout, never document geometry.
+    repairFootnoteLinks(host);
+    return flow;
   } finally {
     URL.revokeObjectURL(blobUrl);
   }
