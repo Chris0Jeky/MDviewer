@@ -72,3 +72,18 @@
   #paged-output[data-preview-sized] { height: auto !important; width: auto !important; overflow: visible; }
   .canvas-overlay-anchor { display: none !important; }
 }
+
+/* Cross-axis auto margins center a fitting card and become zero on overflow,
+   unlike centered alignment which strands the beginning above scrollTop=0. */
+@media screen {
+  #empty-state { overflow-y: auto; align-items: flex-start; padding-bottom: 72px; scroll-padding-block: 8px 48px; }
+  #empty-state .empty-card { flex-shrink: 0; max-width: 100%; margin-block: auto; }
+}
+@media screen and (max-width: 760px), screen and (max-height: 600px) {
+  #empty-state { padding: 16px 16px 72px; }
+  #empty-state .empty-card { padding: 20px 16px; gap: 12px; }
+  #empty-state .empty-icon { font-size: 28px; }
+  #empty-state .empty-title { margin: 0; }
+  #empty-state .empty-sub { font-size: 13px; margin: 0; }
+  #empty-state .empty-hint { margin: 0; }
+}
