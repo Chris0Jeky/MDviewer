@@ -2,7 +2,7 @@
 #toolbar { display: block; padding: 0; max-height: 48dvh; overflow: auto; }
 .workspace-actions {
   display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
-  padding: 14px 20px; min-width: 0;
+  padding: 14px 16px; min-width: 0;
 }
 .workspace-brand { display: grid; gap: 1px; padding-right: 12px; border-right: 1px solid var(--border); }
 .workspace-brand strong { font-size: 18px; letter-spacing: -.04em; color: var(--fg-strong); }
@@ -24,6 +24,16 @@
 .workspace-privacy, .workspace-session-status { color: var(--fg-muted); }
 .workspace-session-status { margin-left: auto; }
 .workspace-session > button { min-height: 30px; font-size: 11px; white-space: nowrap; }
+
+.workspace-action {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  height: var(--ctl-h); padding: 0 16px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg-surface); color: var(--fg);
+  font: inherit; font-size: 13px; font-weight: 600; line-height: 1; cursor: pointer; white-space: nowrap;
+}
+.workspace-action:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.workspace-action:disabled { opacity: .5; cursor: not-allowed; pointer-events: none; }
+.workspace-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Paint-only zoom needs a matching outer scroll envelope, not a layout scale. */
 #paged-output[data-preview-sized] { overflow: clip; }
@@ -48,7 +58,7 @@
   .workspace-actions .doc-switcher { width: 100%; max-width: none; min-width: 0; }
   .workspace-actions .toolbar-label { display: none; }
   .workspace-actions > [aria-label="Export"] { flex: 1 1 100%; }
-  .workspace-actions > [aria-label="Export"] > button { flex: 1; }
+  .workspace-actions > [aria-label="Export"] > button { flex: 1; min-width: 0; white-space: normal; line-height: 1.3; }
   .workspace-actions button, .workspace-actions select { min-height: 36px; }
   .workspace-formatting summary { padding-inline: 12px; }
   .workspace-formatting-hint { display: none; }

@@ -8,6 +8,7 @@ test("keeps document identity and source saving available after opening", async 
   await waitForPagination(page);
   await expect(page.getByRole("button", { name: "Open Markdown", exact: true })).toBeVisible();
   await expect(page.getByLabel("Active document")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("workspace-desktop.png") });
   const source = "# Latest edit\n\nUnicode: café → λ\n";
   await page.locator("#editor-input").fill(source);
   const downloadPromise = page.waitForEvent("download");
@@ -54,5 +55,6 @@ for (const width of [320, 390, 760]) {
     await expect(page.getByRole("button", { name: "Open Markdown", exact: true })).toBeVisible();
     expect(await page.locator("#toolbar").evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
     expect(await page.locator("#canvas").evaluate((el) => el.clientHeight)).toBeGreaterThan(250);
+    await page.screenshot({ path: test.info().outputPath(`workspace-${width}.png`) });
   });
 }

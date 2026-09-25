@@ -260,9 +260,9 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   const docGroup = group("Document", docField, docCloseBtn);
   const brand = el("div", { class: "workspace-brand" },
     el("strong", {}, "MDviewer"), el("span", {}, "Markdown to print"));
-  const openBtn = el("button", { type: "button", class: CLASSES.exportSecondary }, "Open Markdown");
+  const openBtn = el("button", { type: "button", class: CLASSES.workspaceAction }, "Open Markdown");
   openBtn.addEventListener("click", () => app.openFilePicker());
-  const saveBtn = el("button", { type: "button", class: CLASSES.exportSecondary,
+  const saveBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
     title: "Download the current source. Documents are not saved by this app." }, "Save Markdown");
   const sessionStatus = el("span", { class: "workspace-session-status", attrs: { role: "status" } });
   saveBtn.addEventListener("click", () => {

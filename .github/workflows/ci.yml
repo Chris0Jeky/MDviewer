@@ -84,8 +84,8 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_TARGET: preview
-      - name: Upload Playwright artifacts on failure
-        if: failure()
+      - name: Upload Playwright browser evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
