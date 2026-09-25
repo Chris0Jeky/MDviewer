@@ -87,3 +87,13 @@
   #empty-state .empty-sub { font-size: 13px; margin: 0; }
   #empty-state .empty-hint { margin: 0; }
 }
+
+.document-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--accent-soft); color: var(--fg); font-size: 12px; }
+.document-recovery[hidden] { display: none; }
+.document-recovery-status { display: flex; align-items: baseline; gap: 4px; flex: 1 1 180px; min-width: 0; }
+.document-recovery-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.document-recovery-hint { flex-basis: 100%; color: var(--fg-muted); font-size: 11px; line-height: 1.5; }
+.document-recovery-action { appearance: none; font: inherit; font-weight: 600; min-height: 36px; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-surface); color: var(--fg); cursor: pointer; }
+.document-recovery-action:hover { background: var(--bg-hover); }
+.document-recovery-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media print { .document-recovery { display: none !important; } }
