@@ -45,6 +45,7 @@ Export click → capture document id/name/text and settings NOW
 | Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
 | Vector / raster PDF | `src/export/{print,download}.ts` | `tests/export-download.test.ts`, `tests/e2e/export.spec.ts` |
 | Exact source download and filename | `src/export/markdown.ts` | `tests/markdown-download.test.ts`, `tests/e2e/workspace-design.spec.ts` |
+| Local Open/Save keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
 | Preview zoom envelope, horizontal reach, pinned feedback | `src/ui/Canvas.ts`, `src/styles/{preview,workspace}.css` | `tests/e2e/workspace-design.spec.ts` and canvas E2E |
 | Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
@@ -66,6 +67,10 @@ repairFootnoteLinks(host: ParentNode): void;
 // src/export/markdown.ts
 markdownFilename(name: string): string;
 downloadMarkdown(name: string, text: string): void;
+
+// src/ui/DocumentShortcuts.ts
+mountDocumentShortcuts(root: HTMLElement): () => void;
+// Mount after Toolbar; returned teardown restores attributes and removes hints/listeners.
 
 // src/app/reloadGuard.ts
 interface ReloadGuard { tryReload(): boolean; destroy(): void; }
@@ -99,6 +104,8 @@ Source footnote IDs must avoid headings and suffix collisions. Repeated citation
 Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` or change natural page dimensions. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
 
 The PDF action classes identify PDF actions only; source Open/Save use `workspaceAction`. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings.
+
+Document shortcuts call the existing direct `button.workspace-action` controls in `.workspace-actions` and `.workspace-session`, not a new download/ingestion path. The session `.workspace-privacy` hosts the visible `.workspace-shortcuts` hint. Respect handled/IME/Alt/Shift/combined-modifier events; prevent matched disabled or repeated keys without clicking. Detached workspaces are inert. Main owns installation and HMR disposal; all original button attributes are restored on teardown. Saving source never persists it in the app or removes unload protection.
 
 UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plugin's automatic navigation. App rejects reload during export; current work is checked immediately before an explicitly accepted navigation. Cancellation, dismissal, rejection and timeout must leave usable controls and navigation protection.
 

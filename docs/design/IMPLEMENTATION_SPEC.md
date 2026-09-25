@@ -66,9 +66,10 @@ The foundation section 6 tree remains the map for unchanged modules. These curre
 | `src/export/markdown.ts` | Exact source download and portable filename |
 | `src/app/reloadGuard.ts` | Native navigation guard and one explicitly accepted update reload |
 | `src/ui/UpdatePrompt.ts` | Recoverable activation/readiness/reload presentation state |
+| `src/ui/DocumentShortcuts.ts` | Ctrl/Cmd+O and Ctrl/Cmd+S adapter over the existing document buttons |
 | `src/styles/workspace.css` | Screen toolbar hierarchy, disclosure, session row and preview envelope |
 
-`App.ts` remains the only render/export orchestrator. `state.ts` owns the scheduler lease. `main.ts` only connects the service-worker plugin and native readiness notifications to UpdatePrompt and App's reload decision. UI modules do not paginate directly.
+`App.ts` remains the only render/export orchestrator. `state.ts` owns the scheduler lease. `main.ts` connects the service-worker plugin and native readiness notifications to UpdatePrompt and App's reload decision, and mounts document keyboard shortcuts after the toolbar exists. UI modules do not paginate directly.
 
 ## 7. Module API (pinned signatures)
 
@@ -114,6 +115,9 @@ export interface UpdatePromptOptions {
 }
 export function mountUpdatePrompt(options: UpdatePromptOptions): UpdatePromptController;
 
+// src/ui/DocumentShortcuts.ts: returns an idempotent teardown function
+export function mountDocumentShortcuts(root: HTMLElement): () => void;
+
 // src/app/App.ts: additional public method; other public signatures unchanged
 // App.reloadForUpdate(): boolean
 ```
@@ -127,6 +131,8 @@ Existing IDs and named contracts stay in `src/app/dom.ts`; Paged.js-owned names 
 Import order in `main.ts` is **app → editor → preview → document → workspace → print → shiki → pwa**. Workspace styles are chrome, not document typography. Print overrides the screen envelope, and the generated Paged.js stylesheet remains independent.
 
 The primary toolbar row contains identity, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting; it starts expanded on desktop and collapsed at widths up to 760 px. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths.
+
+`DocumentShortcuts` requires exactly one direct `button.workspace-action` in each of `.workspace-actions` (Open) and `.workspace-session` (Save), plus the session's `.workspace-privacy` hint host. Missing/ambiguous controls are an explicit mount error. Shortcuts call these existing buttons synchronously; they do not duplicate input/download logic. Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S downloads current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose both actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
 
 ## 9. Persistence and navigation
 
