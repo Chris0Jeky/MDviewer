@@ -6,7 +6,7 @@
  *    empty-state / overlays / banner).
  *  - Coalesce render requests through the debounced scheduler (settings 120ms, content 250ms),
  *    which also serializes them: pagination owns one shared host, so runs must never overlap.
- *    Exports call `flushRender()` first so they can never emit stale pages.
+ *    Exports hold the same scheduler lock after flushing pending preparation.
  *  - Run `runPipeline` in the EXACT order mandated by IMPLEMENTATION_SPEC §3. Pagination is
  *    always last, exactly once, after every async height-affecting step settles.
  *  - Swap empty / loaded / error panes, surface render warnings, and keep the last good
@@ -27,7 +27,7 @@ import {
   stampAtomicBlocks,
 } from "../render/buildSource";
 import { buildStylesheet } from "../paginate/cssBuilder";
-import { paginate } from "../paginate/paginate";
+import { paginate, teardownPagination } from "../paginate/paginate";
 import { registerHandlersOnce, setPaginationProgress } from "../paginate/handler";
 import { measurePageArea } from "../paginate/measure";
 import { exportViaPrint } from "../export/print";
@@ -48,6 +48,7 @@ import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
 import { installInputHandlers } from "./input";
+import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
 
 /** Which settings, when changed, require a full re-pagination (heights move). */
@@ -93,7 +94,7 @@ export class App {
   private detachInput: (() => void) | null = null;
   private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
   private exportListeners = new Set<(state: ExportState) => void>();
-  private detachBeforeUnload: (() => void) | null = null;
+  private reloadGuard: ReloadGuard | null = null;
   /** True between the start and the end of an export (either path). */
   private exportBusy = false;
 
@@ -101,6 +102,8 @@ export class App {
   private renderToken = 0;
   /** True once at least one successful pagination has painted (so errors keep last good). */
   private hasGoodRender = false;
+  /** Metadata for the actual laid-out pages, never the mutable current editor. */
+  private renderedSnapshot: { name: string; settings: Settings } | null = null;
   private currentPane: Pane = "empty";
 
   private constructor(root: HTMLElement) {
@@ -139,14 +142,7 @@ export class App {
     // Nothing is persisted (local-first), so a reload silently destroys whatever is
     // open. Warn — but only when there is real work to lose, never for the pristine
     // bundled sample (UX-6).
-    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
-      if (!hasProtectableWork(app.store.openDocs, SAMPLE_MARKDOWN)) return;
-      event.preventDefault();
-      // Chromium still requires a truthy returnValue to arm the native dialog.
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    app.detachBeforeUnload = () => window.removeEventListener("beforeunload", onBeforeUnload);
+    app.reloadGuard = installReloadGuard(() => hasProtectableWork(app.store.openDocs, SAMPLE_MARKDOWN));
 
     return app;
   }
@@ -239,7 +235,7 @@ export class App {
   }
 
   /**
-   * Reflect the current view mode + split ratio on the workspace. Both are pure CSS
+   * Reflect the current view mode + split ratio as CSS state. This is screen-only
    * state: no pane is unmounted and no re-pagination is needed, because the paginated
    * sheets are sized in millimetres from the @page rules, not from the canvas width.
    */
@@ -361,6 +357,11 @@ export class App {
     input?.click();
   }
 
+  /** Explicit update acceptance; never abandon an in-flight export. */
+  reloadForUpdate(): boolean {
+    return !this.exportBusy && (this.reloadGuard?.tryReload() ?? false);
+  }
+
   /** Load the bundled sample document through the normal store path. */
   loadSample(): void {
     this.store.add("Sample.md", SAMPLE_MARKDOWN);
@@ -371,9 +372,12 @@ export class App {
     if (this.exportBusy) return;
     this.setExportBusy(true);
     try {
-      // Export what the user can see, not what the host happens to still hold.
-      await this.flushRender();
-      await exportViaPrint(this.canvas.host);
+      await this.scheduler.withRenderLock(async () => {
+        if (!this.renderedSnapshot) throw new Error("No paginated document to export.");
+        await exportViaPrint(this.canvas.host);
+      });
+    } catch (err) {
+      this.banner.fatal(`Print export failed: ${errorMessage(err)}`);
     } finally {
       this.setExportBusy(false);
     }
@@ -390,27 +394,29 @@ export class App {
     if (this.exportBusy) return;
     this.setExportBusy(true);
     try {
-      await this.flushRender();
-      const name = this.store.active?.name ?? "document";
-      const base = name.replace(/\.(md|markdown)$/i, "") || "document";
-      this.canvas.setBusy(true, "Preparing PDF…");
-      this.announce("Preparing PDF export…");
-      try {
-        await exportPaginatedToPdf(this.canvas.host, this.settings, {
-          fileName: `${base}.pdf`,
-          onProgress: (done, total) => {
-            this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
-            if (done === 1 || done === total || done % 5 === 0) {
-              this.announce(`Rendering page ${done} of ${total}.`);
-            }
-          },
-        });
-        this.announce("PDF downloaded.");
-      } catch (err) {
-        this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
-      } finally {
-        this.canvas.setBusy(false);
-      }
+      await this.scheduler.withRenderLock(async () => {
+        const snapshot = this.renderedSnapshot;
+        if (!snapshot) throw new Error("No paginated document to export.");
+        const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
+        this.canvas.setBusy(true, "Preparing PDF…");
+        this.announce("Preparing PDF export…");
+        try {
+          await exportPaginatedToPdf(this.canvas.host, snapshot.settings, {
+            fileName: `${base}.pdf`,
+            onProgress: (done, total) => {
+              this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
+              if (done === 1 || done === total || done % 5 === 0) {
+                this.announce(`Rendering page ${done} of ${total}.`);
+              }
+            },
+          });
+          this.announce("PDF downloaded.");
+        } finally {
+          this.canvas.setBusy(false);
+        }
+      });
+    } catch (err) {
+      this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
     } finally {
       this.setExportBusy(false);
     }
@@ -430,7 +436,8 @@ export class App {
       // transparent overlay outside its card, and it sits BELOW the page chip and zoom
       // control, so leaving the sheets in #paged-output would show the closed document
       // through the empty state while the chip kept reporting its stale "Page n / N".
-      this.canvas.host.replaceChildren();
+      teardownPagination(this.canvas.host);
+      this.renderedSnapshot = null;
       this.canvas.setPageCount(0);
       this.showPane("empty");
       this.hasGoodRender = false;
@@ -438,6 +445,13 @@ export class App {
       return;
     }
 
+    // A settings change during an async preparation belongs to the NEXT run.
+    // Mixing new margins with old source typography makes preview/export disagree.
+    const settings = { ...this.settings };
+    const name = doc.name;
+    // Retain old pages for reading on preparation failure, but never export them
+    // as though they represented the newly requested document.
+    this.renderedSnapshot = null;
     const token = ++this.renderToken;
     const stale = (): boolean => token !== this.renderToken;
 
@@ -469,11 +483,11 @@ export class App {
       if (stale()) return;
 
       // 2 — markdown → html (SYNC: Shiki via fromHighlighter + KaTeX inline)
-      const md = createMarkdown(hl, this.settings);
+      const md = createMarkdown(hl, settings);
       const { html, warnings } = renderMarkdown(md, src);
 
       // 3 — pagination source (inject TOC nav; end-of-doc footnotes → inline float spans)
-      const source = buildPaginationSource(html, this.settings);
+      const source = buildPaginationSource(html, settings);
 
       // 4 — async Mermaid → fixed-size SVG figures
       // SVG is shared by preview and print, so keep it light/theme-independent.
@@ -491,15 +505,16 @@ export class App {
       //     render rebuilds a fresh fragment, so no baked transforms persist.
 
       // 7 — PAGINATION LAST
-      await registerHandlersOnce(() => measurePageArea(this.settings));
+      await registerHandlersOnce(() => measurePageArea(settings));
       if (stale()) return;
-      const css = buildStylesheet(this.settings);
+      const css = buildStylesheet(settings);
       // Paged.js gives no progress signal; its per-page handler hook is the only one.
       setPaginationProgress((page) => {
         if (!stale()) this.canvas.setProgress(page);
       });
       let flow;
       try {
+        this.renderedSnapshot = null;
         flow = await paginate(source, css, this.canvas.host);
       } finally {
         setPaginationProgress(null);
@@ -508,6 +523,7 @@ export class App {
 
       // Success: swap to loaded pane, report page count + warnings.
       this.hasGoodRender = true;
+      this.renderedSnapshot = { name, settings };
       this.showPane("loaded");
       this.canvas.setPageCount(flow.total);
       // Put the reader back where they were, clamped to the new page count.
@@ -581,8 +597,8 @@ export class App {
   destroy(): void {
     this.detachInput?.();
     this.detachInput = null;
-    this.detachBeforeUnload?.();
-    this.detachBeforeUnload = null;
+    this.reloadGuard?.destroy();
+    this.reloadGuard = null;
     this.toolbar.destroy();
     this.splitter.destroy();
     this.editor.destroy();

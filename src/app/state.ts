@@ -121,6 +121,12 @@ export interface RenderScheduler {
    * use this so they cannot ship the previous document's pages.
    */
   flush(): Promise<void>;
+  /**
+   * Flush pending preparation, then exclusively own the render host until task settles.
+   * Later renders (including close/teardown) queue behind the task. Do not call flush()
+   * from inside task: it would wait for its own lock.
+   */
+  withRenderLock<T>(task: () => Promise<T>): Promise<T>;
   /** True while a request is waiting out its debounce. */
   readonly isPending: boolean;
 }
@@ -146,16 +152,19 @@ export function createRenderScheduler(
   /** Tail of the run chain; every fire appends to it, so runs never overlap. */
   let chain: Promise<void> = Promise.resolve();
   /** Identifies the most recently queued run, so older queued runs can bow out. */
-  let queued = 0;
+  // Each exclusive export seals a coalescing batch. Requests after the fence must
+  // not cancel the final preparation render queued before it.
+  let batch = { queued: 0 };
 
   function fire(): Promise<void> {
     const reasonToRun = pending;
     pending = "settings";
-    const id = ++queued;
+    const group = batch;
+    const id = ++group.queued;
     const thisRun = chain.then(async () => {
       // A newer request was queued while this one waited for the lock — its render
       // subsumes this one, so running it would only paginate the same text twice.
-      if (id !== queued) return;
+      if (id !== group.queued) return;
       await run(reasonToRun);
     });
     // The chain must stay resolvable: if one run rejects, the renders queued behind it
@@ -193,6 +202,19 @@ export function createRenderScheduler(
       // Nothing debounced, but a run may still be in flight — await the chain so the
       // host is settled either way.
       await chain;
+    },
+    withRenderLock<T>(task: () => Promise<T>): Promise<T> {
+      let prepared = chain;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+        prepared = fire();
+      }
+      batch = { queued: 0 };
+      const locked = prepared.then(task);
+      // Recovery is internal; the returned promise still reports the task failure.
+      chain = locked.then(() => undefined, () => undefined);
+      return locked;
     },
     get isPending(): boolean {
       return timer !== undefined;

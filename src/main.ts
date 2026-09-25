@@ -29,6 +29,7 @@ import "./styles/pwa.css";
 
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app/App";
+import { mountUpdatePrompt, type UpdatePromptController } from "./ui/UpdatePrompt";
 import { IDS } from "./app/dom";
 
 const root = document.getElementById(IDS.app);
@@ -72,70 +73,25 @@ sampleTrigger?.addEventListener("click", (e) => {
  * render/paginate cycle in half. The prompt below is the only way an update is applied.
  * -------------------------------------------------------------------------- */
 
-/** Build the update prompt. Returns nothing; the toast removes itself on dismiss/reload. */
-function showUpdatePrompt(applyUpdate: () => void): void {
-  // Guard against a second onNeedRefresh (e.g. two deployments in one session) stacking
-  // two identical toasts on top of each other.
-  if (document.querySelector(".pwa-toast")) return;
-
-  const toast = document.createElement("div");
-  toast.className = "pwa-toast";
-  // "status"/polite, not "alert": this is informational and must not interrupt a screen
-  // reader mid-sentence while the user is reading their document.
-  toast.setAttribute("role", "status");
-  toast.setAttribute("aria-live", "polite");
-
-  const message = document.createElement("p");
-  message.className = "pwa-toast__message";
-  message.textContent = "A new version of MDviewer is available.";
-
-  const actions = document.createElement("div");
-  actions.className = "pwa-toast__actions";
-
-  const dismiss = document.createElement("button");
-  dismiss.type = "button";
-  dismiss.className = "pwa-toast__action";
-  dismiss.textContent = "Dismiss";
-  dismiss.addEventListener("click", () => toast.remove());
-
-  const reload = document.createElement("button");
-  reload.type = "button";
-  reload.className = "pwa-toast__action pwa-toast__action--primary";
-  reload.textContent = "Reload";
-  reload.addEventListener("click", () => {
-    // The reload is driven by the worker taking control, which is not instantaneous.
-    // Lock the controls so a second click cannot race it.
-    reload.disabled = true;
-    dismiss.disabled = true;
-    message.textContent = "Updating MDviewer…";
-
-    // Own the reload rather than leaving it to the plugin. vite-plugin-pwa reloads from
-    // workbox-window's `controlling` event, but only when it considers the registration an
-    // "update" — which is false for the session that first registered a worker, because
-    // there was no controller at register() time. In that session the prompt could appear
-    // and then never resolve, leaving this toast stuck on "Updating…" forever.
-    // `controllerchange` is the unambiguous signal that the new bundle has taken over.
-    // (Harmless if the plugin also reloads: both calls collapse into one navigation.)
-    navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), {
-      once: true,
-    });
-    applyUpdate();
-  });
-
-  actions.append(dismiss, reload);
-  toast.append(message, actions);
-  document.body.append(toast);
-}
+let updatePrompt: UpdatePromptController | null = null;
 
 const updateSW = registerSW({
   onNeedRefresh() {
-    showUpdatePrompt(() => {
-      void updateSW(true);
+    if (updatePrompt) return;
+    updatePrompt = mountUpdatePrompt({
+      applyUpdate: () => updateSW(),
+      requestReload: () => app.reloadForUpdate(),
+      activationTarget: navigator.serviceWorker,
+      onDismiss: () => { updatePrompt = null; },
     });
   },
+  // In vite-plugin-pwa 1.3, the reloadPage argument is ignored. This hook is
+  // required to suppress its default reload; the native fallback and this signal
+  // converge on the same idempotent handoff instead of requesting two navigations.
+  onNeedReload() {
+    updatePrompt?.notifyReady();
+  },
   onRegisterError(error) {
-    // Not fatal — the app works exactly as before without a worker — but it must not pass
-    // silently, or a broken offline story would look identical to a working one.
     console.warn("MDviewer: service worker registration failed; offline support is unavailable.", error);
   },
 });
