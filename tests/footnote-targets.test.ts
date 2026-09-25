@@ -3,6 +3,21 @@ import { repairFootnoteLinks } from "../src/paginate/footnoteLinks";
 import { transformFootnotesToInline } from "../src/render/buildSource";
 
 describe("floated footnote anchor identity (#61)", () => {
+  it("avoids heading and suffix collisions while rewriting every repeated citation", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<h1 id="fn1">Heading</h1><h2 id="fn1-footnote-1">Other</h2>
+      <p><sup class="footnote-ref"><a href="#fn1">[1]</a></sup>
+      <sup class="footnote-ref"><a href="#fn1">[1:1]</a></sup></p>
+      <section class="footnotes"><ol><li id="fn1"><p>Note</p></li></ol></section>`;
+    transformFootnotesToInline(root);
+    const ids = Array.from(root.querySelectorAll("[id]"), (el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(root.querySelector("h1")?.id).toBe("fn1");
+    expect(root.querySelector("span.footnote")?.id).toBe("fn1-footnote-2");
+    expect(Array.from(root.querySelectorAll("sup a"), (a) => a.getAttribute("href")))
+      .toEqual(["#fn1-footnote-2", "#fn1-footnote-2"]);
+  });
+
   it("keeps first and repeated citations connected to exactly one note", () => {
     const root = document.createElement("div");
     root.innerHTML = `<p>

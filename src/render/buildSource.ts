@@ -130,6 +130,9 @@ export function transformFootnotesToInline(root: ParentNode): void {
   // so every later note's foot marker would disagree with the [n] the reader sees at the
   // call site. Floating only the first reference keeps Paged.js's numbering aligned with
   // markdown-it's; a repeat citation on a later page still reads as "see note n".
+  const occupiedIds = new Set(Array.from(root.querySelectorAll<HTMLElement>("[id]"))
+    .filter((element) => !section.contains(element)).map((element) => element.id));
+  const targetById = new Map<string, string>();
   const floated = new Set<string>();
   let moved = 0;
   for (const ref of refs) {
@@ -138,6 +141,16 @@ export function transformFootnotesToInline(root: ParentNode): void {
     const targetId = href.startsWith("#") ? href.slice(1) : "";
     const content = contentById.get(targetId);
     if (!content) continue;
+    let destination = targetById.get(targetId);
+    if (!destination) {
+      destination = targetId;
+      let suffix = 0;
+      while (occupiedIds.has(destination)) destination = `${targetId}-footnote-${++suffix}`;
+      occupiedIds.add(destination);
+      targetById.set(targetId, destination);
+    }
+    // Rewrite repeats too, before the single-float guard. Never rename headings.
+    anchor?.setAttribute("href", `#${destination}`);
     if (floated.has(targetId)) continue;
     floated.add(targetId);
 
@@ -145,7 +158,7 @@ export function transformFootnotesToInline(root: ParentNode): void {
     span.className = CLASSES.footnote;
     // The endnote list is removed below. Transfer its target to the single retained
     // float so both the first citation and repeats still have a destination.
-    span.id = targetId;
+    span.id = destination;
     span.innerHTML = content;
     // Insert the float span immediately after the reference marker (the whole `sup` or the
     // bare anchor) so Paged.js anchors it to the correct page; the visible [n] marker stays
