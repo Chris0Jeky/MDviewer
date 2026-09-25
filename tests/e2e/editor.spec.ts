@@ -36,7 +36,7 @@ test.describe("split workspace: view modes", () => {
 
   test("the three view-mode buttons show exactly the panes they name", async ({ page }) => {
     await page.goto("/");
-    const markdownOnly = page.getByRole("button", { name: "Markdown" });
+    const markdownOnly = page.getByRole("button", { name: "Markdown", exact: true });
     const split = page.getByRole("button", { name: "Split", exact: true });
     const previewOnly = page.getByRole("button", { name: "Preview", exact: true });
 
@@ -62,7 +62,7 @@ test.describe("split workspace: view modes", () => {
     await loadMarkdownIntoApp(page, "# Kept\n\nThis survives a mode switch.");
     await waitForPagination(page);
 
-    await page.getByRole("button", { name: "Markdown" }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
     await expect(page.locator(INPUT)).toHaveValue(/# Kept/);
 
     await page.getByRole("button", { name: "Preview", exact: true }).click();
@@ -73,12 +73,12 @@ test.describe("split workspace: view modes", () => {
 
   test("the view mode persists across a reload", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Markdown" }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
     await expect(page.locator(WORKSPACE)).toHaveAttribute("data-view-mode", "editor");
 
     await page.reload();
     await expect(page.locator(WORKSPACE)).toHaveAttribute("data-view-mode", "editor");
-    await expect(page.locator("#canvas")).toBeHidden();
+    await expect(page.locator(EDITOR)).toBeVisible();
   });
 });
 
@@ -114,7 +114,7 @@ test.describe("split workspace: typing drives the preview", () => {
       .toContain("Revised title");
     expect(await firstPageText(page)).not.toContain("Original title");
     // Still one document — editing must not open a second.
-    await expect(page.locator(".doc-switcher")).toBeHidden();
+    await expect(page.locator(".doc-switcher option")).toHaveCount(1);
   });
 
   test("a code fence typed by hand still renders through Shiki", async ({ page }) => {
@@ -213,7 +213,7 @@ test.describe("split workspace: the divider", () => {
 test.describe("split workspace: the hidden preview stays measurable", () => {
   test("the canvas keeps its real box in Markdown mode", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Markdown" }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
     await expect(page.locator(WORKSPACE)).toHaveAttribute("data-view-mode", "editor");
     await expect(page.locator("#canvas")).toBeHidden();
 
@@ -231,7 +231,7 @@ test.describe("split workspace: the hidden preview stays measurable", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: "Markdown" }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
 
     await page
       .locator(INPUT)
@@ -297,7 +297,7 @@ test.describe("split workspace: the editing surface never reaches paper", () => 
     await loadMarkdownIntoApp(page, "# Printed blind\n\nThis must reach paper.");
     await waitForPagination(page);
 
-    await page.getByRole("button", { name: "Markdown" }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
     await expect(page.locator("#canvas")).toBeHidden();
 
     await page.emulateMedia({ media: "print" });

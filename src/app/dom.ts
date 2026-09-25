@@ -39,6 +39,7 @@ export const CLASSES = {
   segControl: "seg-control",
   segOption: "seg-option",
   toggleBtn: "toggle-btn",
+  workspaceAction: "workspace-action",
   exportPrimary: "export-primary",
   exportSecondary: "export-secondary",
   isPaginating: "is-paginating",

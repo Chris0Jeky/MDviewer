@@ -1,13 +1,7 @@
 /**
- * Toolbar — the app chrome strip above the canvas. Builds groups A–F of native
- * controls (document switcher, view mode, code theme, document font + size,
- * paper + margins, layout toggles, running-header input, then — past the spacer —
- * screen theme and the export actions) and binds each control straight to
- * `app.updateSettings(...)`. No business logic lives here: every change calls
- * into the App, which persists and re-renders.
- *
- * The spacer is a semantic divide, not just alignment: document settings sit to
- * its left, screen/export controls to its right (UX-2).
+ * Native document actions, collapsible PDF layout controls, and a local-session
+ * save row. Screen settings are kept separate from document formatting.
+ * All rendering/settings changes remain owned by App.
  */
 
 import { CLASSES, IDS, el } from "../app/dom";
@@ -22,6 +16,7 @@ import type {
   ViewMode,
 } from "../app/settings";
 import type { App } from "../app/App";
+import { downloadMarkdown } from "../export/markdown";
 
 export interface ToolbarController {
   destroy(): void;
@@ -230,7 +225,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     attrs: { role: "toolbar", "aria-label": "Document and export controls" },
   });
 
-  // ---- Group A: document switcher (only meaningful with more than one doc) ----
+  // ---- Group A: document identity remains visible from the first document ----
   const docSelect = el("select", {
     class: `${CLASSES.toolbarSelect} ${CLASSES.docSwitcher}`,
     attrs: { "aria-label": "Active document" },
@@ -240,8 +235,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   });
   docSelect.id = "doc-switcher-select";
 
-  // The switcher itself is noise below two documents, but "close this document"
-  // is useful from the first one — so they hide independently (UX-7).
+  // Keep the current filename visible, including while viewing only the preview.
   const docField = el(
     "div",
     { class: CLASSES.toolbarField },
@@ -264,6 +258,19 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   });
 
   const docGroup = group("Document", docField, docCloseBtn);
+  const brand = el("div", { class: "workspace-brand" },
+    el("strong", {}, "MDviewer"), el("span", {}, "Markdown to print"));
+  const openBtn = el("button", { type: "button", class: CLASSES.workspaceAction }, "Open Markdown");
+  openBtn.addEventListener("click", () => app.openFilePicker());
+  const saveBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
+    title: "Download the current source. Documents are not saved by this app." }, "Save Markdown");
+  const sessionStatus = el("span", { class: "workspace-session-status", attrs: { role: "status" } });
+  saveBtn.addEventListener("click", () => {
+    const doc = app.store.active;
+    if (!doc) return;
+    try { downloadMarkdown(doc.name, doc.text); sessionStatus.textContent = "Markdown download requested."; }
+    catch { sessionStatus.textContent = "Download failed. Copy your Markdown before closing."; }
+  });
 
   // ---- Group A2: which panes are visible (screen layout only) ----
   const viewMode = segControl(
@@ -441,25 +448,27 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   const exportGroup = group("Export", printBtn, downloadBtn);
 
-  // Order encodes meaning: everything LEFT of the spacer changes the document (and
-  // therefore the PDF); everything RIGHT of it is about this screen and this export.
-  // The screen-theme group moved across that line as part of UX-2.
-  bar.append(
-    docGroup,
-    divider(),
-    viewGroup,
-    divider(),
-    typeGroup,
-    divider(),
-    pageGroup,
-    divider(),
-    layoutGroup,
-    // Absorb the slack so the export actions sit against the right edge (UX-11).
+  const primaryRow = el("div", { class: "workspace-actions" },
+    brand, openBtn, docGroup,
     el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
-    themeGroup,
-    divider(),
-    exportGroup,
-  );
+    viewGroup, themeGroup, exportGroup);
+  const layoutDetails = el("details", { class: "workspace-formatting" });
+  layoutDetails.open = typeof matchMedia !== "function" || !matchMedia("(max-width: 760px)").matches;
+  const layoutSummary = el("summary", {}, "Document layout",
+    el("span", { class: "workspace-formatting-hint" }, "Typography, paper & page furniture"));
+  const formattingRow = el("div", { class: "workspace-formatting-controls" },
+    typeGroup, divider(), pageGroup, divider(), layoutGroup);
+  layoutDetails.append(layoutSummary, formattingRow);
+  layoutDetails.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && layoutDetails.open) {
+      event.preventDefault(); layoutDetails.open = false; layoutSummary.focus();
+    }
+  });
+  const sessionRow = el("div", { class: "workspace-session" },
+    el("span", { class: "workspace-local" }, "Local session"),
+    el("span", { class: "workspace-privacy" }, "Documents stay in memory. Save a copy before closing."),
+    sessionStatus, saveBtn);
+  bar.append(primaryRow, layoutDetails, sessionRow);
   root.append(bar);
 
   // ---- Keep the document switcher and stateful controls in sync ----
@@ -471,9 +480,11 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
       if (doc.id === app.store.activeId) option.selected = true;
       docSelect.append(option);
     }
-    // The switcher is only meaningful with more than one document open…
-    docField.hidden = docs.length < 2;
-    // …but closing the current one is meaningful from the first.
+    // Identity and local saving are useful from the first open document.
+    docField.hidden = docs.length < 1;
+    saveBtn.disabled = docs.length < 1;
+    sessionStatus.textContent = docs.length ? `${docs.length} ${docs.length === 1 ? "document" : "documents"} open` : "No document open";
+    // The whole document group disappears only when the session is empty.
     docGroup.hidden = docs.length < 1;
     const activeName = app.store.active?.name;
     docCloseBtn.setAttribute(
