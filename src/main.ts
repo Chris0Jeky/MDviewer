@@ -23,6 +23,7 @@ import "./styles/app.css";
 import "./styles/editor.css";
 import "./styles/preview.css";
 import "./styles/document.css";
+import "./styles/workspace.css";
 import "./styles/print.css";
 import "./styles/shiki.css";
 import "./styles/pwa.css";
