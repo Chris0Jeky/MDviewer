@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
 
 interface Capture { width: number; height: number; ink: number; png?: string }
@@ -57,5 +58,10 @@ test("raster pages retain natural resolution and content independently of previe
     }
     expect(await page.locator(".pagedjs_pages").evaluate((el) => getComputedStyle(el).transform)).toBe(previewStyle);
     await writeFile(test.info().outputPath(`raster-${index}.png`), Buffer.from(captured[0]!.png!.split(",")[1]!, "base64"));
+    // This static, same-browser document must also retain its small generated
+    // TOC leader/page number. A broad ink ratio alone cannot detect their loss.
+    const digest = (png: string): string => createHash("sha256").update(png).digest("hex");
+    expect(digest(captured[0]!.png!), `${label}: generated page furniture is preserved`)
+      .toBe(digest(baseline[0]!.png!));
   }
 });
