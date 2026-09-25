@@ -69,6 +69,6 @@
   .workspace-session > button { min-height: 36px; }
 }
 @media print {
-  #paged-output[data-preview-sized] { height: auto !important; overflow: visible; }
+  #paged-output[data-preview-sized] { height: auto !important; width: auto !important; overflow: visible; }
   .canvas-overlay-anchor { display: none !important; }
 }

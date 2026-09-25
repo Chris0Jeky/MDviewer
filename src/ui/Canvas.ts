@@ -197,6 +197,7 @@ export function mountCanvas(root: HTMLElement, options: CanvasOptions): CanvasCo
     // Remove the screen-only scroll envelope before Paged.js starts measuring.
     if (busy) {
       host.style.removeProperty("height");
+      host.style.removeProperty("width");
       delete host.dataset.previewSized;
     }
     canvas.setAttribute("aria-busy", String(busy));
@@ -314,10 +315,15 @@ export function mountCanvas(root: HTMLElement, options: CanvasOptions): CanvasCo
     if (stack && !canvas.classList.contains(CLASSES.isPaginating)) {
       // A transform shrinks paint but not scroll overflow. Clip only the outer
       // envelope to its painted height; every sheet keeps its natural geometry.
+      const naturalWidth = host.querySelector<HTMLElement>(`.${PAGEDJS.pageClass}`)?.offsetWidth ?? 0;
+      // Preserve a horizontal panning surface at explicit zooms wider than the
+      // viewport. Clipping the height must not make a full-size sheet unreachable.
+      host.style.width = `${Math.max(canvas.clientWidth, Math.ceil((naturalWidth + STACK_GUTTER_PX * 2) * scale))}px`;
       host.style.height = `${Math.ceil(stack.offsetHeight * scale)}px`;
       host.dataset.previewSized = "true";
     } else if (!stack) {
       host.style.removeProperty("height");
+      host.style.removeProperty("width");
       delete host.dataset.previewSized;
     }
   }

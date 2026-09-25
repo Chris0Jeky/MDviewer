@@ -58,3 +58,21 @@ for (const width of [320, 390, 760]) {
     await page.screenshot({ path: test.info().outputPath(`workspace-${width}.png`) });
   });
 }
+
+
+test("full-size sheets remain horizontally reachable on a narrow preview", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await loadMarkdownIntoApp(page, "# Wide page\n\nBoth page edges must stay reachable.");
+  await waitForPagination(page);
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await page.getByRole("button", { name: "100%", exact: true }).click();
+  await expect.poll(() => page.locator("#canvas").evaluate((canvas) => {
+    const sheet = canvas.querySelector(".pagedjs_page")!;
+    return canvas.scrollWidth - sheet.getBoundingClientRect().width;
+  })).toBeGreaterThanOrEqual(0);
+  await page.locator("#canvas").evaluate((canvas) => { canvas.scrollLeft = canvas.scrollWidth; });
+  await expect.poll(() => page.locator("#canvas").evaluate((canvas) => {
+    return canvas.querySelector(".pagedjs_page")!.getBoundingClientRect().right - canvas.getBoundingClientRect().right;
+  })).toBeLessThanOrEqual(1);
+});
