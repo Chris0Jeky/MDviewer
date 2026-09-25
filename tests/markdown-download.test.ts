@@ -18,7 +18,7 @@ describe("local source download", () => {
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     let filename = "";
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () { filename = this.download; });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { filename = this.download; });
     downloadMarkdown("notes.md", source);
     expect(filename).toBe("notes.md");
     const blob = createObjectURL.mock.calls[0]?.[0] as unknown as Blob;
