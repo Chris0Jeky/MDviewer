@@ -27,10 +27,12 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
       event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return;
     const key = event.key.toLowerCase();
     if (key !== "o" && key !== "s") return;
+    const button = actions[key];
+    // App teardown can remove Toolbar while leaving its root connected.
+    if (!button.isConnected || !root.contains(button)) return;
     // Even with no document or a held key, never fall through to saving app HTML.
     event.preventDefault();
-    const button = actions[key];
-    if (!event.repeat && button.isConnected && !button.disabled) button.click();
+    if (!event.repeat && !button.disabled) button.click();
   }
   target.addEventListener("keydown", onKeyDown);
   let disposed = false;
