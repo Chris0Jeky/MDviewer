@@ -62,14 +62,18 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement): void {
     if (generated.style.visibility !== "hidden") continue;
     const parent = generated.parentElement;
     if (!parent) continue;
+    const before = parent.classList.contains("___html2canvas___pseudoelement_before");
+    const after = parent.classList.contains("___html2canvas___pseudoelement_after");
+    // v1 surrounds ordinary children; v2 clones both pseudos before them.
+    // Their relative before/after order is stable. Match only a complete,
+    // recognized set of direct generated children, never an arbitrary node.
+    const peers = Array.from(parent.children).filter((child) => child.localName === "html2canvaspseudoelement");
+    if (peers.length !== Number(before) + Number(after)) continue;
+    const index = peers.indexOf(generated);
     let pseudo: "::before" | "::after";
-    if (parent.firstChild === generated && parent.classList.contains("___html2canvas___pseudoelement_before")) {
-      pseudo = "::before";
-    } else if (parent.lastChild === generated && parent.classList.contains("___html2canvas___pseudoelement_after")) {
-      pseudo = "::after";
-    } else {
-      continue;
-    }
+    if (before && index === 0) pseudo = "::before";
+    else if (after && index === (before ? 1 : 0)) pseudo = "::after";
+    else continue;
     generated.style.visibility = view.getComputedStyle(parent, pseudo).visibility;
   }
 }
