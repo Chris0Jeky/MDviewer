@@ -14,7 +14,7 @@
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas-pro";
 import type { Settings } from "../app/settings";
-import { PAGEDJS } from "../app/dom";
+import { IDS, PAGEDJS } from "../app/dom";
 
 export interface FallbackPdfOptions {
   scale?: number;
@@ -32,6 +32,28 @@ const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
   a4: [210, 297],
   letter: [215.9, 279.4],
 };
+
+/**
+ * html2canvas measures its cloned target after onclone. Remove screen-only
+ * ancestor scaling/clipping there, not on the live preview. Do not touch any
+ * transform inside a sheet: those can be part of the no-slice layout itself.
+ */
+function prepareRasterClone(_document: Document, sheet: HTMLElement): void {
+  const stack = sheet.closest<HTMLElement>(`.${PAGEDJS.pagesClass}`);
+  if (stack) {
+    stack.style.setProperty("transform", "none", "important");
+    stack.style.setProperty("transition", "none", "important");
+  }
+  const host = sheet.closest<HTMLElement>(`#${IDS.pagedOutput}`);
+  if (host) {
+    host.style.setProperty("height", "auto", "important");
+    host.style.setProperty("width", "auto", "important");
+    host.style.setProperty("overflow", "visible", "important");
+  }
+  // Markdown-only mode parks a measurable but invisible preview. The copied
+  // sheet must be visible to capture without revealing the user's live pane.
+  sheet.style.setProperty("visibility", "visible", "important");
+}
 
 export async function exportPaginatedToPdf(
   host: HTMLElement,
@@ -59,6 +81,7 @@ export async function exportPaginatedToPdf(
       scale,
       backgroundColor: "#ffffff",
       useCORS: true,
+      onclone: prepareRasterClone,
       // html2canvas-pro logs a block of timing/clone chatter per element by default,
       // which floods the console on every export (TECH-2). We surface progress through
       // onProgress instead.
