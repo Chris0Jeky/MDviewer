@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { repairFootnoteLinks } from "../src/paginate/footnoteLinks";
 import { transformFootnotesToInline } from "../src/render/buildSource";
 
 describe("floated footnote anchor identity (#61)", () => {
@@ -40,5 +41,22 @@ describe("floated footnote anchor identity (#61)", () => {
     const before = root.innerHTML;
     transformFootnotesToInline(root);
     expect(root.innerHTML).toBe(before);
+  });
+});
+
+describe("Paged.js generated footnote destinations", () => {
+  it("repairs first and repeated citations without renaming generated targets", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `<sup class="footnote-ref"><a href="#fn1">[1]</a></sup>
+      <sup class="footnote-ref"><a href="#fn1">[1:1]</a></sup>
+      <a class="footnote-ref" href="#missing">[2]</a>
+      <a href="#fn1">unrelated link</a>
+      <span id="note-ref" data-id="fn1" data-footnote-marker="ref">Note</span>`;
+    repairFootnoteLinks(host);
+    repairFootnoteLinks(host);
+    expect(Array.from(host.querySelectorAll("sup a"), (a) => a.getAttribute("href"))).toEqual(["#note-ref", "#note-ref"]);
+    expect(host.querySelector("span")?.id).toBe("note-ref");
+    expect(host.querySelector("a.footnote-ref")?.getAttribute("href")).toBe("#missing");
+    expect(host.querySelector("a[href='#fn1']")?.textContent).toBe("unrelated link");
   });
 });
