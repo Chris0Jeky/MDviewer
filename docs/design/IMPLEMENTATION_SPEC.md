@@ -163,3 +163,25 @@ Foundation section 12 remains the detailed editor contract: mounted panes, an in
 Canvas zoom is still a paint-only transform and never a reflow key. The screen-only outer host envelope tracks the painted stack height to remove the unscaled blank scroll tail. Its width is at least the painted sheet plus gutters and viewport width so explicit 100% or 50% zoom retains horizontal access to the whole sheet. Remove the envelope before pagination. Reset height and width to auto and overflow to visible for print. Do not scale sheet layout measurements or crop exported pages.
 
 A zero-height sticky overlay anchor keeps progress feedback in the preview viewport during deep scroll. The page chip and zoom controls retain their existing sticky behavior. Production browser tests, not jsdom rectangles, determine whether these geometry contracts hold.
+
+## 13. Undo the latest explicit close
+
+`src/ui/DocumentRecovery.ts` is owned by Toolbar, not a second document store or renderer. Its pinned interface is:
+
+```typescript
+export interface DocumentRecoveryController {
+  closeActive(): void;
+  destroy(): void;
+}
+export function mountDocumentRecovery(
+  root: HTMLElement,
+  store: DocStore,
+  returnFocus: () => void,
+): DocumentRecoveryController;
+```
+
+Toolbar mounts it in its own bar, delegates its Close button, and destroys it during toolbar teardown. The controller keeps only the latest explicitly closed name and exact text in memory. Another real close replaces that snapshot. Undo consumes it once and calls `DocStore.add`, yielding a fresh identity and appending to the open set without overwriting another document. Discard and teardown clear both the snapshot and filename DOM text/title. Detached or destroyed controls cannot act. No disk/browser storage, automatic reload recovery, timer or global listener is added. Explicitly closed content is not part of the open-document navigation guard; the recovery row warns that reload or tab close clears it.
+
+The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not use the unique Open/Save `.workspace-action` selector. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
+
+Store notifications continue through App's existing render scheduler and export leases. The pipeline and all App/DocStore public signatures are unchanged. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.

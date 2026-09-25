@@ -17,6 +17,7 @@ import type {
 } from "../app/settings";
 import type { App } from "../app/App";
 import { downloadMarkdown } from "../export/markdown";
+import { mountDocumentRecovery } from "./DocumentRecovery";
 
 export interface ToolbarController {
   destroy(): void;
@@ -252,10 +253,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     },
     "×",
   );
-  docCloseBtn.addEventListener("click", () => {
-    const id = app.store.activeId;
-    if (id) app.store.remove(id);
-  });
+  docCloseBtn.addEventListener("click", () => recovery.closeActive());
 
   const docGroup = group("Document", docField, docCloseBtn);
   const brand = el("div", { class: "workspace-brand" },
@@ -470,6 +468,11 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     sessionStatus, saveBtn);
   bar.append(primaryRow, layoutDetails, sessionRow);
   root.append(bar);
+  const recovery = mountDocumentRecovery(bar, app.store, () => {
+    if (!app.store.active) openBtn.focus();
+    else if (app.settings.viewMode === "preview") docSelect.focus();
+    else root.querySelector<HTMLTextAreaElement>(`#${IDS.editorInput}`)?.focus();
+  });
 
   // ---- Keep the document switcher and stateful controls in sync ----
   function syncDocSwitcher(): void {
@@ -542,6 +545,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
 
   return {
     destroy(): void {
+      recovery.destroy();
       unsubscribe();
       unsubscribeSettings();
       unsubscribeExport();
