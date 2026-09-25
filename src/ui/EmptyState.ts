@@ -51,7 +51,7 @@ export function mountEmptyState(
   const subline = el(
     "p",
     { class: "empty-sub" },
-    "Write in the source pane on the left and this preview repaginates as you type.",
+    "Write in the source pane and this preview repaginates as you type.",
   );
 
   const chooseBtn = el(
