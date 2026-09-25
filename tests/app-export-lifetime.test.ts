@@ -15,7 +15,7 @@ function fixture() {
   host.textContent = "Completed pages";
   const store = new DocStore();
   store.add("Original.md", "Original");
-  const snapshot = { name: "Original.md", settings: { ...DEFAULT_SETTINGS } };
+  const snapshot = { id: store.activeId!, text: "Original", name: "Original.md", settings: { ...DEFAULT_SETTINGS } };
   const fatal = vi.fn();
   const scheduler = createRenderScheduler(async () => { host.replaceChildren(); });
   const app = Object.create(App.prototype) as App;

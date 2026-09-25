@@ -42,7 +42,7 @@ import type { SplitterController } from "../ui/Splitter";
 import { mountEmptyState } from "../ui/EmptyState";
 import { mountBanner } from "../ui/Banner";
 import { DocStore, hasProtectableWork } from "./state";
-import type { RenderReason, RenderScheduler } from "./state";
+import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
 import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
@@ -66,6 +66,13 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
 ];
 
 type Pane = "empty" | "loaded" | "error";
+
+/** One immutable in-memory request, captured before an export joins the queue. */
+interface RenderInput {
+  doc: Readonly<Doc> | null;
+  settings: Settings;
+}
+
 
 /** What the export controls need to know to render themselves correctly. */
 export interface ExportState {
@@ -103,7 +110,7 @@ export class App {
   /** True once at least one successful pagination has painted (so errors keep last good). */
   private hasGoodRender = false;
   /** Metadata for the actual laid-out pages, never the mutable current editor. */
-  private renderedSnapshot: { name: string; settings: Settings } | null = null;
+  private renderedSnapshot: { id: string; text: string; name: string; settings: Settings } | null = null;
   private currentPane: Pane = "empty";
 
   private constructor(root: HTMLElement) {
@@ -370,9 +377,11 @@ export class App {
   /** Trigger the primary (vector) print export. */
   async exportPrint(): Promise<void> {
     if (this.exportBusy) return;
+    const input = this.captureRenderInput();
     this.setExportBusy(true);
     try {
       await this.scheduler.withRenderLock(async () => {
+        await this.prepareExport(input);
         if (!this.renderedSnapshot) throw new Error("No paginated document to export.");
         await exportViaPrint(this.canvas.host);
       });
@@ -392,9 +401,11 @@ export class App {
    */
   async exportPdf(): Promise<void> {
     if (this.exportBusy) return;
+    const input = this.captureRenderInput();
     this.setExportBusy(true);
     try {
       await this.scheduler.withRenderLock(async () => {
+        await this.prepareExport(input);
         const snapshot = this.renderedSnapshot;
         if (!snapshot) throw new Error("No paginated document to export.");
         const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
@@ -424,13 +435,34 @@ export class App {
 
   // ---- pipeline ------------------------------------------------------------
 
+  private captureRenderInput(): RenderInput {
+    const doc = this.store.active;
+    return { doc: doc ? { ...doc } : null, settings: { ...this.settings } };
+  }
+
+  /** Called only inside the render-host lease; never schedules or flushes itself. */
+  private async prepareExport(input: RenderInput): Promise<void> {
+    const completed = this.renderedSnapshot;
+    const matches = completed && input.doc &&
+      completed.id === input.doc.id && completed.name === input.doc.name &&
+      completed.text === input.doc.text &&
+      REFLOW_KEYS.every((key) => completed.settings[key] === input.settings[key]);
+    // A queued preparation may already have consumed newer editor state. Restore
+    // precisely the requested input while holding the lease, then let later work
+    // catch up after export. Reuse a matching completed render without extra layout.
+    if (!matches) await this.runPipeline("content", input);
+  }
+
   /**
    * THE load-bearing render order (§3). Steps 0–6 prepare a DocumentFragment whose heights
    * are final; step 7 paginates exactly once. Resilient: on failure we surface the error
    * but keep the last good render painted.
    */
-  private async runPipeline(_reason: RenderReason): Promise<void> {
-    const doc = this.store.active;
+  private async runPipeline(
+    _reason: RenderReason,
+    input: RenderInput = this.captureRenderInput(),
+  ): Promise<void> {
+    const { doc, settings } = input;
     if (!doc) {
       // Closing the last document must actually clear the preview. #empty-state is a
       // transparent overlay outside its card, and it sits BELOW the page chip and zoom
@@ -447,7 +479,6 @@ export class App {
 
     // A settings change during an async preparation belongs to the NEXT run.
     // Mixing new margins with old source typography makes preview/export disagree.
-    const settings = { ...this.settings };
     const name = doc.name;
     // Retain old pages for reading on preparation failure, but never export them
     // as though they represented the newly requested document.
@@ -523,7 +554,7 @@ export class App {
 
       // Success: swap to loaded pane, report page count + warnings.
       this.hasGoodRender = true;
-      this.renderedSnapshot = { name, settings };
+      this.renderedSnapshot = { id: doc.id, text: src, name, settings };
       this.showPane("loaded");
       this.canvas.setPageCount(flow.total);
       // Put the reader back where they were, clamped to the new page count.
