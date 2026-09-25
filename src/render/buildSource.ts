@@ -143,6 +143,9 @@ export function transformFootnotesToInline(root: ParentNode): void {
 
     const span = document.createElement("span");
     span.className = CLASSES.footnote;
+    // The endnote list is removed below. Transfer its target to the single retained
+    // float so both the first citation and repeats still have a destination.
+    span.id = targetId;
     span.innerHTML = content;
     // Insert the float span immediately after the reference marker (the whole `sup` or the
     // bare anchor) so Paged.js anchors it to the correct page; the visible [n] marker stays
