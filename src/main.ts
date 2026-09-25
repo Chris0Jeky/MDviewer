@@ -18,11 +18,14 @@ import "./styles/pwa.css";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./app/App";
 import { mountUpdatePrompt, type UpdatePromptController } from "./ui/UpdatePrompt";
+import { mountDocumentShortcuts } from "./ui/DocumentShortcuts";
 import { IDS } from "./app/dom";
 
 const root = document.getElementById(IDS.app);
 if (!root) throw new Error(`Missing #${IDS.app} host element — check index.html.`);
 const app = App.init(root);
+const detachDocumentShortcuts = mountDocumentShortcuts(root);
+import.meta.hot?.dispose(detachDocumentShortcuts);
 
 // Forward only existing public methods; no document content is persisted here.
 window.__mdviewer = {

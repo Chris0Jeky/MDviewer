@@ -19,11 +19,7 @@ import { IDS, PAGEDJS } from "../app/dom";
 export interface FallbackPdfOptions {
   scale?: number;
   fileName?: string;
-  /**
-   * Called once per rasterized page with the 1-based page just finished and the
-   * total. Rasterizing is a long blocking loop, so without this the UI has no way
-   * to tell the user anything is happening (UX-1).
-   */
+  /** Called once per rasterized page with the 1-based page and the total. */
   onProgress?(done: number, total: number): void;
 }
 
@@ -38,7 +34,7 @@ const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
  * ancestor scaling/clipping there, not on the live preview. Do not touch any
  * transform inside a sheet: those can be part of the no-slice layout itself.
  */
-function prepareRasterClone(_document: Document, sheet: HTMLElement): void {
+function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement): void {
   const stack = sheet.closest<HTMLElement>(`.${PAGEDJS.pagesClass}`);
   if (stack) {
     stack.style.setProperty("transform", "none", "important");
@@ -50,9 +46,32 @@ function prepareRasterClone(_document: Document, sheet: HTMLElement): void {
     host.style.setProperty("width", "auto", "important");
     host.style.setProperty("overflow", "visible", "important");
   }
-  // Markdown-only mode parks a measurable but invisible preview. The copied
-  // sheet must be visible to capture without revealing the user's live pane.
+  // Markdown-only mode parks a measurable but invisible preview. Reveal only
+  // the copied sheet; inherited visibility in the live workspace stays intact.
   sheet.style.setProperty("visibility", "visible", "important");
+
+  // The cloner materializes ::before/::after before onclone, copying their
+  // computed visibility inline. Revealing the sheet cannot override that copy.
+  // Re-read the originating pseudo's visibility in the now-visible clone so
+  // TOC leaders/counters return, while explicitly hidden author content stays
+  // hidden. These tag/class names belong to html2canvas-pro's cloner and are
+  // covered by real-raster regressions when that dependency changes.
+  const view = cloneDocument.defaultView;
+  if (!view) return;
+  for (const generated of sheet.querySelectorAll<HTMLElement>("html2canvaspseudoelement")) {
+    if (generated.style.visibility !== "hidden") continue;
+    const parent = generated.parentElement;
+    if (!parent) continue;
+    let pseudo: "::before" | "::after";
+    if (parent.firstChild === generated && parent.classList.contains("___html2canvas___pseudoelement_before")) {
+      pseudo = "::before";
+    } else if (parent.lastChild === generated && parent.classList.contains("___html2canvas___pseudoelement_after")) {
+      pseudo = "::after";
+    } else {
+      continue;
+    }
+    generated.style.visibility = view.getComputedStyle(parent, pseudo).visibility;
+  }
 }
 
 export async function exportPaginatedToPdf(
@@ -82,9 +101,7 @@ export async function exportPaginatedToPdf(
       backgroundColor: "#ffffff",
       useCORS: true,
       onclone: prepareRasterClone,
-      // html2canvas-pro logs a block of timing/clone chatter per element by default,
-      // which floods the console on every export (TECH-2). We surface progress through
-      // onProgress instead.
+      // Progress is surfaced by onProgress, not per-element console chatter.
       logging: false,
     });
     if (i > 0) pdf.addPage(settings.paperSize, "portrait");
