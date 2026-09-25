@@ -114,3 +114,20 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow runs supported Node 22 and 24 plus Chromium. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
 No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. Runtime fixes do not close #62 archive provenance or resolve #59's contradictory historical deployment receipts. Record remaining gates and actual commit/run identifiers in handoffs.
+
+## Latest-close recovery seam
+
+`src/ui/DocumentRecovery.ts`, mounted and destroyed by `src/ui/Toolbar.ts`, owns a single memory-only closed-document snapshot. See canonical specification section 13. Signature:
+
+```typescript
+export interface DocumentRecoveryController { closeActive(): void; destroy(): void; }
+export function mountDocumentRecovery(
+  root: HTMLElement,
+  store: DocStore,
+  returnFocus: () => void,
+): DocumentRecoveryController;
+```
+
+Toolbar Close delegates to `closeActive`; Undo consumes the copied name/text and calls the existing `DocStore.add` with a fresh identity. Existing App store listeners continue to own rendering/export coordination. A later real close replaces recovery. Discard and toolbar teardown clear it and the displayed filename/title. Nothing persists, no timer/global listener is added, and reload/tab close loses recovery. Closed content is not an open document for navigation protection.
+
+Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not reuse `.workspace-action` for these buttons or break the unique keyboard Open/Save selectors. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
