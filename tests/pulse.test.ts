@@ -288,11 +288,14 @@ describe("pulse: the page loads the locked SDK artifact", () => {
   const html = readFileSync(join(REPO_ROOT, "index.html"), "utf8");
   const page = new DOMParser().parseFromString(html, "text/html");
 
-  it("loads /pulseboard.js with defer and reserves the bar as the first child of <body>", () => {
+  it("loads /pulseboard.js with defer and reserves the bar right after the skip link", () => {
     const script = page.querySelector<HTMLScriptElement>("script[src='/pulseboard.js']");
     expect(script).not.toBeNull();
     expect(script?.hasAttribute("defer")).toBe(true);
-    expect(page.body.firstElementChild?.hasAttribute("data-pulseboard-bar")).toBe(true);
+    // The skip link must stay first in tab order (the bar's Choose/OK are focusable); it is
+    // absolutely positioned, so the bar is still the first in-flow element on screen.
+    expect(page.body.firstElementChild?.classList.contains("skip-link")).toBe(true);
+    expect(page.body.firstElementChild?.nextElementSibling?.hasAttribute("data-pulseboard-bar")).toBe(true);
     expect(page.querySelector("script[src='/observatory.js']")).toBeNull();
   });
 
