@@ -152,7 +152,7 @@ An isolated component probe is not a production-app test. A local dependency-ins
 
 ## 11. Known risks and release gates
 
-All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster and editor-tokenizing risks remain. The source archive provenance part of #62 remains open: runtime export fixes do not identify the embedded source ZIP. #59's historical deployment-evidence inconsistency also requires reconciliation rather than invented operator evidence.
+All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster and editor-tokenizing risks remain. The source archive provenance part of #62 is closed by the `MDVIEWER_SOURCE_ID` build labelling (a supplied release tag or archive checksum names the archive in `dist/SOURCE.txt`; runtime export fixes alone never could). #59's historical deployment-evidence inconsistency also requires reconciliation rather than invented operator evidence.
 
 **AI-6 second-engine/manual-feel and AI-7 live deployment/two-version PWA operator verification remain open.** Hosted Chromium success does not close them. This specification makes no deployment, Safari/Firefox acceptance, live cache-header, installed-PWA or operator-sign-off claim.
 
