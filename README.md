@@ -39,7 +39,7 @@ days (planned to move to 400 days).
 
 **How to turn it off.** Any of these works, and each is respected immediately:
 
-- Click **Choose → Turn all off** in the Beta bar, or the small **Beta** button (bottom-left) once
+- Click **Choose → Turn all off** in the Beta bar, or the small **Beta** button beside "Local session" in the toolbar once
   a choice is recorded. Turning a category off deletes its local keys and drops anything queued.
 - Turn on **Global Privacy Control** or **Do Not Track** in your browser: every category is off,
   no bar is shown and no request of any kind is made.

@@ -123,7 +123,9 @@
   1. Open the site in a fresh private window. A one-line **Beta** bar sits at the top; the toolbar
      is directly below it and the page does not scroll.
   2. Open DevTools → Network. Click **Choose**: three switches appear. Click **OK**: the bar
-     collapses to a small **Beta** button bottom-left and the toolbar moves up to the top.
+     collapses to a small **Beta** button beside "Local session" in the toolbar (never over
+     the editor or the page chip), and the toolbar moves up to the top. Click it: the switches open
+     as a row under the strip; Escape closes them and returns focus to the button.
   3. Load the sample, switch view and theme, Print, and Download PDF. In Network, open each request
      to `pulseboard-observatory.commit-atlas.workers.dev` and confirm the payloads contain only the
      enums listed in README "Privacy and usage data" — no Markdown text, file name or heading.
