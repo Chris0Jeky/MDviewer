@@ -310,7 +310,7 @@ describe("pulse: the page loads the locked SDK artifact", () => {
     const lock = JSON.parse(readFileSync(join(REPO_ROOT, "observatory.lock.json"), "utf8")) as {
       sdk: string; installs: Record<string, { sha256: string }>;
     };
-    expect(lock.sdk).toBe("3.0.0");
+    expect(lock.sdk).toBe("3.1.0");
     const code = readFileSync(join(REPO_ROOT, "public", "pulseboard.js"));
     expect(createHash("sha256").update(code).digest("hex")).toBe(lock.installs["public/pulseboard.js"]?.sha256);
   });

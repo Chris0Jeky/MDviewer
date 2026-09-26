@@ -1,4 +1,4 @@
-// Guard for the locked Pulseboard SDK v3 artifact (Chris0Jeky/Pulseboard#105).
+// Guard for the locked Pulseboard SDK 3.1 artifact (Chris0Jeky/Pulseboard#105).
 // It proves the file is the exact reviewed build, points only at the Pulseboard collector,
 // publishes no server constants, and defines window.Pulseboard in a vm without making any
 // network request before mount, or at all off the registered HTTPS origin.
@@ -10,7 +10,8 @@ import vm from 'node:vm';
 const COLLECTOR = 'https://pulseboard-observatory.commit-atlas.workers.dev';
 const root = new URL('../', import.meta.url);
 const lock = JSON.parse(readFileSync(new URL('observatory.lock.json', root), 'utf8'));
-assert.equal(lock.sdk, '3.0.0', 'The lock must record SDK 3.0.0');
+const SDK = '3.1.0';
+assert.equal(lock.sdk, SDK, `The lock must record SDK ${SDK}`);
 const entries = Object.entries(lock.installs ?? {});
 assert.equal(entries.length, 1, 'The lock must record exactly one installed artifact');
 
@@ -18,7 +19,7 @@ for (const [target, entry] of entries) {
   assert.equal(entry.project, 'mdviewer', target);
   const code = readFileSync(new URL(target, root), 'utf8');
   assert.equal(createHash('sha256').update(code).digest('hex'), entry.sha256, `${target} does not match the lock`);
-  assert.match(code.split('\n', 3)[1], /^ \* pulseboard-sdk 3\.0\.0 for mdviewer\. /, 'Header must name pulseboard-sdk 3.0.0');
+  assert.ok(code.split('\n', 3)[1].startsWith(` * pulseboard-sdk ${SDK} for mdviewer. `), `Header must name pulseboard-sdk ${SDK}`);
   assert.ok(code.includes(`"collector":"${COLLECTOR}"`), 'Collector origin must be the Pulseboard Worker');
   assert.ok(code.includes('"origin":"https://mdviewer-c9r.pages.dev"'), 'Registered origin must be the production Pages host');
   assert.ok(!/MAX_BYTES|MAX_BATCH/.test(code), 'Server-only constants must not be published');
@@ -52,7 +53,7 @@ for (const [target, entry] of entries) {
   vm.runInContext(code, ctx);
   const api = ctx.Pulseboard;
   assert.ok(api, 'window.Pulseboard must be defined');
-  assert.equal(api.version, '3.0.0');
+  assert.equal(api.version, SDK);
   assert.deepEqual(Object.keys(api), ['version', 'route', 'count', 'track', 'consent']);
   assert.equal(network.length, 0, 'No request before mount');
   // Mount off the registered origin: the SDK must stay inert and never throw into the host.
@@ -62,4 +63,4 @@ for (const [target, entry] of entries) {
   assert.equal(api.track('doc.opened', { source: 'file', sizeBucket: '<1k' }), false);
   assert.equal(network.length, 0, 'No request off the registered origin');
 }
-console.log('Pulseboard SDK 3.0.0 artifact: hash, collector, header and inert-off-origin vm run passed. Full host CI remains required.');
+console.log(`Pulseboard SDK ${SDK} artifact: hash, collector, header and inert-off-origin vm run passed. Full host CI remains required.`);
