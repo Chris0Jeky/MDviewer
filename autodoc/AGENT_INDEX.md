@@ -33,6 +33,7 @@ Export click → capture document id/name/text and settings NOW
 | App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
+| Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
 | Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts` |
 | DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
@@ -70,6 +71,11 @@ downloadMarkdown(name: string, text: string): void;
 
 // src/ui/DocumentShortcuts.ts
 mountDocumentShortcuts(root: HTMLElement): () => void;
+
+// src/app/themeColor.ts: meta theme-color mirrors --bg-toolbar per screen theme
+export const THEME_COLORS: Record<ScreenTheme, string>;
+export function themeColorFor(theme: ScreenTheme): string;
+export function syncThemeColor(theme: ScreenTheme): void;
 // Mount after Toolbar; returned teardown restores attributes and removes hints/listeners.
 
 // src/app/reloadGuard.ts
