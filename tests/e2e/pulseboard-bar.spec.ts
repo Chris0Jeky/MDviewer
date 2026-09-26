@@ -1,6 +1,22 @@
 import { test, expect } from "@playwright/test";
 
 /**
+ * The preview pane marks itself as the SDK's scroll source: SDK 3.2 measures
+ * page.engaged scroll depth on [data-pulseboard-scroll] instead of the
+ * full-height window (which always read about 100%). If this attribute is ever
+ * lost, engagement depth silently goes wrong again with no other test failing.
+ */
+test("the preview pane carries data-pulseboard-scroll for SDK engagement", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#canvas")).toHaveAttribute(
+    "data-pulseboard-scroll",
+    "",
+  );
+});
+
+/**
  * The documented content-blocker opt-out (README "How to turn it off") must leave
  * MDviewer working unchanged: when /pulseboard.js never loads, the SDK can't run
  * its own placeholder release, so the script's onerror fallback releases it and
