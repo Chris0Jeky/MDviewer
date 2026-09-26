@@ -71,12 +71,12 @@ downloadMarkdown(name: string, text: string): void;
 
 // src/ui/DocumentShortcuts.ts
 mountDocumentShortcuts(root: HTMLElement): () => void;
+// Mount after Toolbar; returned teardown restores attributes and removes hints/listeners.
 
 // src/app/themeColor.ts: meta theme-color mirrors --bg-toolbar per screen theme
 export const THEME_COLORS: Record<ScreenTheme, string>;
 export function themeColorFor(theme: ScreenTheme): string;
 export function syncThemeColor(theme: ScreenTheme): void;
-// Mount after Toolbar; returned teardown restores attributes and removes hints/listeners.
 
 // src/app/reloadGuard.ts
 interface ReloadGuard { tryReload(): boolean; destroy(): void; }
