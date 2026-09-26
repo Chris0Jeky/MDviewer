@@ -3,19 +3,21 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (Pulseboard SDK shipped to production):**
-> PR **#105** (Pulseboard SDK 3.1 install) merged as `0da2e26` (post-merge `main`
-> CI run `36277132449` green). Review was shared with the owner in real time: nine
-> Codex threads, all triaged — placeholder fallback, skip-link order, guardrail/UA/
-> region/visit disclosure fixes in-PR, plus two OPEN upstream ledger entries (scroll
-> engagement, cross-tab focus) and an owner-escalated campaign-bucketing item for the
-> SDK 3.2 re-cut. Production is now deployment **`cdc831b1`** from `main`
-> **`0da2e26`** (immutable URL `https://cdc831b1.mdviewer-c9r.pages.dev/`, id
-> `cdc831b1-1882-428b-86ad-d7f56ae40f48`), smoke-verified live including a real
-> non-automation boot where the Beta bar renders with a resolved region. No open
-> PRs except this deploy-record PR, no open issues.
-> Next: merge this record, then loop for the next slice (very-large-document
-> budgets) or hand back.
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (SDK 3.2 shipped to production):**
+> PR **#107** (Pulseboard SDK 3.2.0 rebuild: campaign allowlist, preview-pane scroll
+> depth, no cross-tab focus steal) merged as `b566e23` (post-merge `main` CI run
+> `36278869189` green). Owner merged concurrently after a completed Codex Cloud review
+> at the exact head plus a coordinator gate (no CRIT/HIGH/MED; two LOWs noted). My
+> independent pass: line-by-line artifact diff, guard + URL audit, and a Grok
+> adversarial review (claims hold; one real P2 on scrollMax latching for an upstream
+> ledger entry, one ledger-hygiene P2 to fix forward). Production is now deployment
+> **`f73c4f85`** from `main` **`b566e23`** (immutable URL
+> `https://f73c4f85.mdviewer-c9r.pages.dev/`, id
+> `f73c4f85-e62f-4060-9360-6fb602f5798b`), smoke-verified live: masked-automation probe
+> shows SDK 3.2.0, `campaign: "other"`, no verbatim `utm_campaign` leak. No open PRs
+> except this deploy-record PR, no open issues.
+> Next: merge this record, then the review-follow-ups slice (Grok P2s + scroll-attr
+> test), then very-large-document budgets.
 > **Three OPEN human items: AI-8 (Beta bar), AI-7 (steps 4–8), and AI-6.**
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
@@ -212,18 +214,19 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Loop shipped (#100–#103) and Pulseboard SDK #105
-  merged; production is `cdc831b1` from `0da2e26`. Next slice: very-large-document
-  budgets. Longer backlog plus operator-owned AI-6/AI-7/AI-8.
+  merge → repeat, then redeploy). Loop shipped (#100–#103), SDK #105 merged, SDK 3.2
+  #107 merged; production is `f73c4f85` from `b566e23`. Next slice: review
+  follow-ups, then very-large-document budgets. Longer backlog plus operator-owned
+  AI-6/AI-7/AI-8.
 - **Last updated:** 2026-09-26
 - **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record
-  PR, no open issues; production is `cdc831b1` from `0da2e26` (fresh).
+  PR, no open issues; production is `f73c4f85` from `b566e23` (fresh).
   Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `0da2e26daab7b938df981484cf045f7be9e39b4c` (PR #105 merge).
-- **PRs merged to `main`:** 60 PR merges, most recently #105 (Pulseboard SDK 3.1),
-  #104 (deploy record), #103 (header e2e), #102 (theme-color follow).
-- **Current main verification (`0da2e26`):** hosted Node 22/24 and production Chromium
-  CI run `36277132449` green. Production serves `cdc831b1` from this anchor (see the
+- **Verified `main` anchor:** `b566e234cf6b09f57e5f4c69612c215b87bc31b8` (PR #107 merge).
+- **PRs merged to `main`:** 62 PR merges, most recently #107 (SDK 3.2.0 rebuild),
+  #106 (deploy record), #105 (Pulseboard SDK 3.1), #104 (deploy record).
+- **Current main verification (`b566e23`):** hosted Node 22/24 and production Chromium
+  CI run `36278869189` green. Production serves `f73c4f85` from this anchor (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -509,3 +512,10 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   boot where the Beta bar renders with a resolved region. Nine Codex threads, all
   triaged; two upstream SDK defects ledgered OPEN (scroll, focus), campaign
   bucketing owner-escalated for the 3.2 re-cut. New operator item AI-8 (Beta bar).
+- **C27 (2026-09-26) — SDK 3.2 SHIPPED TO PRODUCTION:** PR **#107** → `b566e23`,
+  post-merge `main` CI run `36278869189` green (owner merged concurrently after the
+  Codex Cloud review + coordinator gate). Production is now **`f73c4f85`** from
+  `b566e23`; masked-automation live probe confirms SDK 3.2.0, `campaign: "other"`,
+  no verbatim leak. Scroll/focus ledger entries closed by the PR; Grok review adds
+  one upstream P2 (scrollMax latch) and one ledger-hygiene P2, both queued as the
+  review-follow-ups slice.
