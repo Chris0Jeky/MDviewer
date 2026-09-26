@@ -1,4 +1,4 @@
-// Guard for the locked Pulseboard SDK 3.1 artifact (Chris0Jeky/Pulseboard#105).
+// Guard for the locked Pulseboard SDK 3.2 artifact (Chris0Jeky/Pulseboard#105).
 // It proves the file is the exact reviewed build, points only at the Pulseboard collector,
 // publishes no server constants, and defines window.Pulseboard in a vm without making any
 // network request before mount, or at all off the registered HTTPS origin.
@@ -10,7 +10,7 @@ import vm from 'node:vm';
 const COLLECTOR = 'https://pulseboard-observatory.commit-atlas.workers.dev';
 const root = new URL('../', import.meta.url);
 const lock = JSON.parse(readFileSync(new URL('observatory.lock.json', root), 'utf8'));
-const SDK = '3.1.0';
+const SDK = '3.2.0';
 assert.equal(lock.sdk, SDK, `The lock must record SDK ${SDK}`);
 const entries = Object.entries(lock.installs ?? {});
 assert.equal(entries.length, 1, 'The lock must record exactly one installed artifact');
