@@ -21,8 +21,8 @@
   with worst non-last trailing blank 76%→4%) both merged with green exact-head CI and
   reviewed threads. `main` is now `4115563` (CI run `36267035533` green) but production
   still serves `f353480c` from `4e7d99a` — the checklist fix is not live yet. A redeploy
-  is queued after the improvement loop (TECH-1 toolbar done in #101, theme-color in
-  #102; header e2e pending).
+  is queued after the improvement loop (TECH-1 toolbar done in #101, theme-color
+  done in #102, header e2e in #103; redeploy next).
   AI-6 and AI-7 remain OPEN for the operator.
 
 - **2026-09-26 (maintenance + deploy)** — The review/dependency queue is clear and

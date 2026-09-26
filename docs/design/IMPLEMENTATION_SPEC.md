@@ -151,7 +151,7 @@ Worker activation and document reload are distinct. UpdatePrompt remains dismiss
 
 ## 10. Testing and evidence
 
-Keep foundation section 10's unit/real-browser distinction. Added regressions cover note target uniqueness after actual pagination, heading collisions, queued edit/close export races, metadata consistency, stale-output refusal, lease failure recovery, one-shot navigation consent, update retries and late callbacks, exact Unicode source-download bytes, disclosure focus, narrow controls, zoom scroll extent, horizontal access and print reset.
+Keep foundation section 10's unit/real-browser distinction. Added regressions cover note target uniqueness after actual pagination, heading collisions, queued edit/close export races, metadata consistency, stale-output refusal, lease failure recovery, one-shot navigation consent, update retries and late callbacks, exact Unicode source-download bytes, disclosure focus, narrow controls, zoom scroll extent, horizontal access and print reset, running-header `start` semantics over pushed content, and titlePage page-1 chrome (`tests/e2e/running-header.spec.ts`).
 
 Required checks remain Node 22 and 24 typecheck/lint/unit/build plus the production Chromium suite and Observatory guard. Browser artifacts are uploaded on both success and failure. Do not weaken no-slice or export assertions to make a UI change pass.
 
