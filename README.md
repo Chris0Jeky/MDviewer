@@ -30,8 +30,9 @@ offers **Choose** and **OK**. There are three categories:
 | **Journeys and product data** | A random per-tab session id and these events only: `doc.opened` with `source` (`file`, `paste`, `sample`, `typed`) and `sizeBucket` (`<1k`, `1-10k`, `10-100k`, `>100k` characters); `view.mode` (`editor`, `split`, `preview`); `theme.changed` (`light`, `dark`, `sepia`); `export.print_requested` (a dialog request, never a claim a PDF was saved); `export.pdf_completed` with the page count; page views for the `home` and `editor` screens | On | Off until you click OK |
 
 **Never sent:** document text, file names, titles, headings, URLs from documents, export contents,
-your IP address (the collector sees it in transit and stores none), user agent, the page URL or
-path, cookies, or any identifier other than the per-tab session id.
+your IP address (the collector sees it in transit and stores none), user agent (the browser
+attaches it to every request and the collector stores none — the SDK never reads it), the page
+URL or path, cookies, or any identifier other than the per-tab session id.
 
 **Kept:** detailed data (diagnostics and journeys) for 90 days; aggregate counts currently for 14
 days (planned to move to 400 days).
