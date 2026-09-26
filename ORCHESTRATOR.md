@@ -124,8 +124,9 @@ older CI and independent-review evidence.
 - **Deployment mode:** Wrangler direct upload. A Git push does **not** deploy automatically. From an
   authenticated maintainer machine, build and deploy with the commands in `docs/DEPLOYMENT.md`.
 - **Privacy/product boundary:** the public product is still entirely client-side. Documents and PDFs
-  remain in the browser; there is no conversion API, document storage, telemetry, or third-party
-  document/resource request. Same-origin application chunks and fonts can load lazily as features run.
+  remain in the browser; there is no conversion API, document storage, or third-party
+  document/resource request. Since the Pulseboard SDK v3 install (owner decision, Pulseboard q-13/q-21),
+  the production origin sends content-free usage data only (README "Privacy and usage data"). Same-origin application chunks and fonts can load lazily as features run.
 - **Human queue (2026-08-16):** **AI-7** (manual live-site acceptance of the QA sweep, steps
   4–8) and **AI-6** (split-workspace browser acceptance). `ACTION_ITEMS.md` is authoritative
   and only the maintainer may close items.

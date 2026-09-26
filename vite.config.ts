@@ -81,8 +81,9 @@ export default defineConfig({
         clientsClaim: true,
         // Drop precaches from superseded deployments instead of accumulating them.
         cleanupOutdatedCaches: true,
-        // NO runtimeCaching. MDviewer makes zero cross-origin requests by design, and a
-        // runtime cache rule is exactly the seam through which one would later creep in.
+        // NO runtimeCaching. The only cross-origin requests are the Pulseboard SDK's calls to its
+        // collector (never cached), and a runtime cache rule is exactly the seam through which
+        // a document request would later creep in.
         runtimeCaching: [],
       },
     }),

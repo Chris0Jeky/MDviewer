@@ -39,7 +39,7 @@ block, figure, table, or callout is ever sliced across a page boundary.
 
 - Bulk-read `node_modules`, generated build output, or archives.
 - Mix render, paginate, export, and UI layers in one slice unless the seam requires it.
-- Add runtime network calls, telemetry, or document persistence (only `Settings`
+- Add runtime network calls or telemetry beyond `src/app/pulse.ts`'s content-free enums, or document persistence (only `Settings`
   persists, localStorage key `mdviewer.settings.v1`).
 
 ## Verify

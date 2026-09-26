@@ -6,7 +6,7 @@ Companions: [Product vision](../PRODUCT_VISION.md), [Architecture](../ARCHITECTU
 
 ## 1. What MDviewer is
 
-A browser-based, local-first Markdown editor and PDF preview/export tool for research and technical documents. Documents arrive through file picker, drop, paste or direct editing. Document content stays in memory. Only settings persist. No upload, document persistence, runtime telemetry, remote conversion or new runtime request is permitted.
+A browser-based, local-first Markdown editor and PDF preview/export tool for research and technical documents. Documents arrive through file picker, drop, paste or direct editing. Document content stays in memory. Only settings persist. No upload, document persistence, remote conversion or document request is permitted. The single permitted runtime request is the Pulseboard SDK v3 (`public/pulseboard.js`, locked by `observatory.lock.json`, active only on the production origin), and product code reaches it only through `src/app/pulse.ts`, whose events carry closed enums, size buckets and page counts; error events are shielded from it (`installErrorShield`). Document text, file names, titles, headings, document URLs and export contents never reach it (`tests/pulse.test.ts`). Any other runtime request or telemetry still needs an owner decision.
 
 The product invariant remains page-break-safe output: keep normal-size code blocks, figures, tables and callouts intact; use the foundation's explicit graceful-split/shrink/forced-split tiers for genuinely oversize content. Both PDF paths consume the same prepared page DOM.
 

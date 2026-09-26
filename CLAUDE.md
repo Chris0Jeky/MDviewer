@@ -8,7 +8,8 @@ procedures in `.claude/skills/*/SKILL.md` and deep detail in `docs/*`.
 A browser-based, drag-and-drop **Markdown → PDF** tool. The one job that defines it:
 export beautiful PDFs where **no code block, figure, table, or callout is ever sliced
 across a page boundary**. Built for research papers and code-heavy docs. 100%
-client-side, local-first (no runtime network calls, nothing uploaded). Vanilla
+client-side, local-first (documents are never uploaded or sent; the only runtime request is the
+owner-approved, content-free Pulseboard SDK — README "Privacy and usage data"). Vanilla
 TypeScript + Vite. Full design: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md).
 
 ## Authority Order
@@ -63,7 +64,7 @@ Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). The
 ## Default Work Style
 
 - Prefer narrow diffs over rewrites; preserve existing behavior unless the task asks for a change.
-- Keep the app **local-first**: no runtime network calls, telemetry, or document persistence (only `Settings` in localStorage).
+- Keep the app **local-first**: no document network calls or document persistence (only `Settings` in localStorage). The one runtime request is the Pulseboard SDK (`public/pulseboard.js`), reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
 - The **render order is load-bearing** (parse → Shiki → KaTeX → Mermaid await → fonts → paginate). Never paginate before async content settles — that defeats the no-slice guarantee.
 - Do not mix render-pipeline, pagination, export, and UI concerns in one slice unless the seam requires it.
 - Do not silently ignore failures. Classify as blocker, non-blocking risk, pre-existing noise, or invalid signal.
