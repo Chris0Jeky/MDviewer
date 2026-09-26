@@ -97,7 +97,9 @@ export function mountCanvas(root: HTMLElement, options: CanvasOptions): CanvasCo
     // Focusable so the skip link lands somewhere operable and the preview can be
     // scrolled with the keyboard alone (TECH-6).
     tabIndex: 0,
-    attrs: { "aria-label": "Document preview" },
+    // data-pulseboard-scroll: the document scrolls here, not in the window, so the
+    // Pulseboard SDK measures engagement scroll depth on this pane (a number only).
+    attrs: { "aria-label": "Document preview", "data-pulseboard-scroll": "" },
   });
 
   // The Paged.js render target. Paged.js replaces its children with .pagedjs_pages.

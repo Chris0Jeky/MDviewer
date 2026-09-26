@@ -18,15 +18,15 @@ anyone. This is enforced in code: every usage call goes through one module
 it reaches a usage call.
 
 **What is sent.** The live site (https://mdviewer-c9r.pages.dev only; local runs, previews and
-self-hosted copies send nothing) loads the Pulseboard SDK 3.1 from its own origin
+self-hosted copies send nothing) loads the Pulseboard SDK 3.2 from its own origin
 (`/pulseboard.js`) and sends data only to `https://pulseboard-observatory.commit-atlas.workers.dev`,
 the owner's first-party collector. A one-line **Beta** bar at the top of the page explains it and
 offers **Choose** and **OK**. There are three categories:
 
 | Category | What MDviewer sends | Default outside the EEA | Default in the EEA (or unknown) |
 | --- | --- | --- | --- |
-| **Usage counts** | Daily aggregate counts: page views and the two export events (print dialog requested, PDF download completed), with device class (mobile/tablet/desktop), referral category and the referring platform from a fixed allowlist such as google.com or github.com (any other site is sent as `other`; never a path), campaign tag, light/dark preference and new/returning visit | On | On |
-| **Diagnostics** | Page-load timings (web vitals) and engagement (visible seconds, deepest scroll %). MDviewer deliberately sends **no JavaScript error reports**, because an error message can quote document text | On | Off until you click OK |
+| **Usage counts** | Daily aggregate counts: page views and the two export events (print dialog requested, PDF download completed), with device class (mobile/tablet/desktop), referral category and the referring platform from a fixed allowlist such as google.com or github.com (any other site is sent as `other`; never a path), whether a `utm_campaign` tag was present (MDviewer registers no campaign tags, so only `none` or `other` is sent, never the tag itself), light/dark preference and new/returning visit | On | On |
+| **Diagnostics** | Page-load timings (web vitals) and engagement (visible seconds, deepest scroll % of the preview pane). MDviewer deliberately sends **no JavaScript error reports**, because an error message can quote document text | On | Off until you click OK |
 | **Journeys and product data** | A random per-tab session id and these events only: `doc.opened` with `source` (`file`, `paste`, `sample`, `typed`) and `sizeBucket` (`<1k`, `1-10k`, `10-100k`, `>100k` characters); `view.mode` (`editor`, `split`, `preview`); `theme.changed` (`light`, `dark`, `sepia`); `export.print_requested` (a dialog request, never a claim a PDF was saved); `export.pdf_completed` with the page count; page views for the `home` and `editor` screens | On | Off until you click OK |
 
 **Never sent:** document text, file names, titles, headings, URLs from documents, export contents,
