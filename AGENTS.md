@@ -67,7 +67,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 ## Default Work Style
 
 - Narrow diffs; preserve behavior unless asked.
-- Local-first: no runtime network calls, no telemetry, no document persistence (only `Settings`).
+- Local-first: no document network calls, no document persistence (only `Settings`). The one runtime
+  request is the owner-approved Pulseboard SDK, reached only through `src/app/pulse.ts` (closed enums,
+  size buckets, counts; never document content or names; `tests/pulse.test.ts`). No other telemetry.
 - Don't mix render / pagination / export / UI concerns in one slice unless the seam requires it.
 - Surface every failure; classify it (blocker / non-blocking risk / pre-existing noise / invalid signal).
 - Record workarounds and their future-fix path.
@@ -89,9 +91,16 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 ## Security / Privacy Guardrails
 
-- Nothing leaves the device. No fetch/XHR/WebSocket at runtime; bundle Shiki themes/langs, KaTeX
-  fonts, and Mermaid locally so the tool works offline.
+- Document content never leaves the device and is never written to storage: no document
+  network calls, no document persistence — only the small `Settings` object plus the SDK
+  keys below. Bundle Shiki themes/langs, KaTeX fonts, and Mermaid locally so the tool
+  works offline.
+- The one runtime-network exception is the owner-approved Pulseboard SDK
+  (`public/pulseboard.js`, called only through `src/app/pulse.ts`): closed enums, size
+  buckets, and page counts to the Pulseboard collector — never document text, file names,
+  titles, headings, document URLs, or export contents (`tests/pulse.test.ts` proves it).
+  It stores only its own `pulseboard:*` consent/visit/region/session keys. No other
+  fetch/XHR/WebSocket at runtime, and no other telemetry.
 - `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
   before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
   image data URLs are allowed. Mermaid SVG output is sanitized again after rendering.
-- Document content is never written to storage; only the small `Settings` object persists.

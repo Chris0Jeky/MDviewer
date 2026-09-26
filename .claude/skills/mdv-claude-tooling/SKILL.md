@@ -28,8 +28,9 @@ handoff that touched skills/hooks.
 - Explain-before-acting: before any history-rewriting or work-discarding git command,
   state in plain language what you will do, what could be lost, and whether it is
   reversible, then wait for approval.
-- No runtime network calls, telemetry, or document persistence in the app — these are
-  product invariants, not just tooling preferences.
+- No document network calls, new telemetry, or document persistence in the app — these are
+  product invariants, not just tooling preferences. The one exception is the owner-approved
+  Pulseboard SDK, reached only through `src/app/pulse.ts` with content-free enums.
 
 ## Pre-handoff smoke checks
 

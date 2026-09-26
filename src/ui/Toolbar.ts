@@ -462,8 +462,13 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
       event.preventDefault(); layoutDetails.open = false; layoutSummary.focus();
     }
   });
+  // The Pulseboard SDK renders its Beta pill (and the privacy-choices panel) into this slot
+  // instead of floating it bottom-left over the editor and the page chip. It stays empty
+  // wherever the SDK is inert (any origin but production, automation, GPC/DNT, blocked).
+  const pulseSlot = el("span", { class: "workspace-pulse", attrs: { "data-pulseboard-slot": "" } });
   const sessionRow = el("div", { class: "workspace-session" },
     el("span", { class: "workspace-local" }, "Local session"),
+    pulseSlot,
     el("span", { class: "workspace-privacy" }, "Documents stay in memory. Save a copy before closing."),
     sessionStatus, saveBtn);
   bar.append(primaryRow, layoutDetails, sessionRow);

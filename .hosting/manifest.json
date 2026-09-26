@@ -4,7 +4,7 @@
   "target":"Retain existing Cloudflare Pages Direct Upload",
   "source_paths":["docs/DEPLOYMENT.md","README.md"],
   "persistent_state":["Browser settings only; documents remain local"],
-  "invariants":["No document uploads or new runtime network calls","Preserve the rendering order and no-slice behavior","Do not replace the existing Pages project","Publish only the approved dist build"],
+  "invariants":["No document uploads; no runtime network calls beyond the content-free Pulseboard SDK (README Privacy and usage data)","Preserve the rendering order and no-slice behavior","Do not replace the existing Pages project","Publish only the approved dist build"],
   "gates":["Owned canonical hostname","Verified build and deployment trigger review","Regression proof for local document processing"],
   "tasks":[
     {"id":"MD1","goal":"Prepare CI-compatible direct upload","acceptance":"Use existing Pages project and approved build; production requires a reviewed promotion"},

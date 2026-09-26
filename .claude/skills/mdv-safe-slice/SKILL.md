@@ -28,7 +28,8 @@ task explicitly asks to change it.
 
 - Import DOM ids/classes from `src/app/dom.ts`; never hardcode names.
 - Import `Settings` from `src/app/settings.ts`.
-- No new runtime network calls, telemetry, or document persistence.
+- No new runtime network calls, telemetry, or document persistence. Pulseboard events go through
+  `src/app/pulse.ts` only, with closed enums/counts, never document text or names.
 - Touch CSS only in the correct file: break rules live in `src/styles/print.css`;
   dynamic `@page` lives in `src/paginate/cssBuilder.ts`; screen chrome in `app.css`.
 

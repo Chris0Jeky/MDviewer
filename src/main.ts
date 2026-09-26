@@ -20,6 +20,11 @@ import { App } from "./app/App";
 import { mountUpdatePrompt, type UpdatePromptController } from "./ui/UpdatePrompt";
 import { mountDocumentShortcuts } from "./ui/DocumentShortcuts";
 import { IDS } from "./app/dom";
+import { installErrorShield } from "./app/pulse";
+
+// Before anything else: error messages can quote document text, so they never reach the
+// optional Pulseboard SDK (public/pulseboard.js), which loads after this module.
+installErrorShield();
 
 const root = document.getElementById(IDS.app);
 if (!root) throw new Error(`Missing #${IDS.app} host element — check index.html.`);

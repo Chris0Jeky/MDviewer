@@ -2,7 +2,9 @@
 
 MDviewer is a static, client-side application. Hosting serves the application code, fonts, and
 syntax grammars; Markdown documents and generated PDFs stay in the visitor's browser. There is no
-conversion backend, database, telemetry, or runtime network API.
+conversion backend, database, or document API. The production origin also loads the Pulseboard SDK
+(`public/pulseboard.js`), which sends content-free usage data to the owner's collector; it is inert on
+every other origin, including previews, Tailscale and local serves (README "Privacy and usage data").
 
 ## Recommended paths
 

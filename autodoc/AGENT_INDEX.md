@@ -13,7 +13,7 @@ Do not change a public export, DOM contract or render ordering without updating 
 
 ## Product and flow
 
-Local-first Markdown editor and paginated PDF preview. Only settings persist; no Markdown uploads or runtime telemetry. Vector print is primary; raster PDF is the fallback. The source-save action downloads exact current text without persisting it in the app.
+Local-first Markdown editor and paginated PDF preview. Only settings persist; no Markdown uploads. The only runtime request is the content-free Pulseboard SDK via `src/app/pulse.ts`. Vector print is primary; raster PDF is the fallback. The source-save action downloads exact current text without persisting it in the app.
 
 ```text
 input / textarea → DocStore → serialized scheduler → App.runPipeline
@@ -35,6 +35,7 @@ Export click → capture document id/name/text and settings NOW
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
 | Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
 | Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts` |
+| Pulseboard SDK seam (content-free events, error shield) and locked artifact | `src/app/pulse.ts`, `public/pulseboard.js`, `observatory.lock.json`, `observatory/check.mjs` | `tests/pulse.test.ts`, `npm run agent:observatory:check`; spec §1 |
 | DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |

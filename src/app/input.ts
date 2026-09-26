@@ -11,6 +11,7 @@
 
 import type { Doc, DocStore } from "./state";
 import { IDS } from "./dom";
+import { pulseDocOpened } from "./pulse";
 
 /** Extensions we accept. Lower-case, dot-prefixed. */
 export const MD_EXTENSIONS: readonly string[] = [".md", ".markdown"];
@@ -182,7 +183,10 @@ export function installInputHandlers(
   };
 
   const commit = (batch: ReadBatch): void => {
-    for (const doc of batch.opened) store.add(doc.name, doc.text);
+    for (const doc of batch.opened) {
+      store.add(doc.name, doc.text);
+      pulseDocOpened("file", doc.text.length);
+    }
     if (batch.rejected.length > 0) opts.onReject(batch.rejected);
   };
 
@@ -220,7 +224,10 @@ export function installInputHandlers(
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text.trim()) return;
     e.preventDefault();
-    void openMarkdown(text, "Pasted.md").then((doc) => store.add(doc.name, doc.text));
+    void openMarkdown(text, "Pasted.md").then((doc) => {
+      store.add(doc.name, doc.text);
+      pulseDocOpened("paste", doc.text.length);
+    });
   };
 
   const onFileInputChange = (e: Event): void => {

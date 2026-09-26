@@ -12,7 +12,8 @@ A **browser-based, drag-and-drop Markdown → PDF tool** whose #1 job is to expo
 beautiful PDFs where **no code block, figure, table, or callout is ever sliced
 across a page boundary** — the failure of typical online md-to-pdf converters.
 Optimized for **research papers and code-heavy technical docs**. 100% client-side,
-local-first (no runtime network calls, nothing uploaded). Vanilla TypeScript + Vite.
+local-first (nothing uploaded; the only runtime request is the content-free Pulseboard SDK,
+IMPLEMENTATION_SPEC §1). Vanilla TypeScript + Vite.
 
 Documents arrive by drop, paste, or file picker, **or are written directly in the app**:
 the workspace pairs a Markdown source editor with the paginated preview, and every edit
