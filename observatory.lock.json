@@ -1,10 +1,11 @@
 {
   "version": "0.1.0",
+  "sdk": "3.0.0",
   "source": "Chris0Jeky/Pulseboard:observatory",
   "installs": {
-    "public/observatory.js": {
+    "public/pulseboard.js": {
       "project": "mdviewer",
-      "sha256": "fdf73b56bba73dc657b02d838c220e53f0969929a62c885889019b7bf3adda0d"
+      "sha256": "e3aedd78bcbb37d9b2dc42f300d3dcb9a7c4b94ecf08651386a97446dffc09f7"
     }
   }
 }
