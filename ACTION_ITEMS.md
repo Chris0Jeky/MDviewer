@@ -15,6 +15,20 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (maintenance + deploy)** — The review/dependency queue is clear and
+  production is fresh: PR #94 (archive provenance via `MDVIEWER_SOURCE_ID`, closes #62),
+  PR #95 (Mermaid 12 with the v11 rendering pinned; supersedes #74), PR #96 (orchestrator
+  header refresh, #59 part A), and PR #97 (6-package patch sweep) all merged with green
+  exact-head CI and reviewed threads. `npm audit` reports 0 vulnerabilities. Production is
+  now deployment `f353480c` from `main` `4e7d99a` (immutable URL
+  `https://f353480c.mdviewer-c9r.pages.dev`), smoke-verified live: identical stable/immutable
+  bytes, immutable hashed assets, `max-age=0, must-revalidate` on `/sw.js` and
+  `/manifest.webmanifest`, immutable `/workbox-*.js`, security headers present, and a real
+  Chromium boot to the empty state. The #59B header disagreement is superseded by this dated
+  record; what remains is the real-browser install/update-toast half (AI-7 step 5), which
+  this redeploy freshly enables. TypeScript 7 is deliberately deferred (major version).
+  AI-6 and AI-7 remain OPEN for the operator.
+
 - **2026-08-16 (QA sweep)** — The manual QA report (`mdviewerqareport.md`, run against the
   outdated July deployment `7f4eedf`) drove a full fix sweep on branch `qa-sweep-20260816`:
   all 9 functional bugs, the UX-feel items, and the tech items addressed or explicitly
@@ -91,10 +105,14 @@
 ## OPEN items
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  (2026-08-16): PR #48 merged as `8a9c942` with CI green; deployed via
-  `wrangler pages deploy` (immutable URL `https://3378378d.mdviewer-c9r.pages.dev`); smoke
-  checks passed — entry title, hashed-asset immutability, security headers, and
-  `Cache-Control: max-age=0, must-revalidate` on both `/sw.js` and `/manifest.webmanifest`.
+  again for the current deployment (2026-09-26): `main` `4e7d99a` merged with CI green;
+  deployed via `wrangler pages deploy` (immutable URL
+  `https://f353480c.mdviewer-c9r.pages.dev`, id `f353480c-22f4-4833-b8e4-47dc8a10b3e9`);
+  smoke checks passed — identical stable/immutable bytes, entry title, hashed-asset
+  immutability, security headers, `Cache-Control: max-age=0, must-revalidate` on both
+  `/sw.js` and `/manifest.webmanifest`, immutable `/workbox-*.js`, and a Chromium boot.
+  (The 2026-08-16 `8a9c942`/`3378378d` record is superseded but retained in
+  `docs/DEPLOYMENT.md` history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download

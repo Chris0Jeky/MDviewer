@@ -3,18 +3,17 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26:** Provenance slice merged, mermaid migration in
-> review, live-state docs catching up, deploy pending. PR **#94** merged as **`0bbbc0a`**
-> (issue-#62 archive identification via `MDVIEWER_SOURCE_ID`; the other two #62 sub-items
-> had already landed with render-lease tests in `5622a7d`), exact-head CI green plus one
-> Codex P2 (stale spec/index provenance lines) fixed with evidence — issue **#62 closed**.
-> PR **#74** (dependency-only mermaid 12, red on the golden-path label assertion) is closed
-> as superseded by PR **#95**, the full migration: ELK/neo/narrow-metric defaults pinned
-> back to the v11 rendering (verified identical label-by-label vs 11.17.2 in Chromium),
-> lodash-es override keeps `npm audit` at 0, state/class diagram coverage added, 183-entry
-> offline precache re-verified. Issue **#59A** (this stale run header) is fixed here; **#59B**
-> (DEPLOYMENT.md vs failure-ledger PWA claims) reconciles against fresh live evidence at the
-> pending deploy. Production is still the 2026-08-16 `8a9c942` build until that deploy lands.
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (deploy done):** Cycle 4 is complete except this
+> record PR and the #59 close. Merged since the last checkpoint: PR **#95** (mermaid 12,
+> one Codex P2 on vacuous init-test assertions fixed with a mutation proof), PR **#96**
+> (this run-header refresh, three Codex P2s fixed), PR **#97** (6-package patch sweep,
+> one Codex P2 on raster-adapter revalidation fixed) — all with green exact-head CI and
+> resolved threads. Production is now deployment **`f353480c`** from `main` **`4e7d99a`**
+> (immutable URL `https://f353480c.mdviewer-c9r.pages.dev/`); the deploy needed one human
+> step (stored Wrangler OAuth lacked `pages` scope → operator re-authorized). Live smoke
+> passed on every header the #59B dispute was about, so #59B is reconciled by dated
+> supersession: headers verified today, install/update-toast stays operator work under
+> AI-7 step 5. `npm audit` is 0; TypeScript 7 deliberately deferred (major).
 > **Two OPEN human items: AI-7 (manual live-site acceptance, steps 4–8) and AI-6.**
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-08-16:** The QA sweep is **MERGED AND LIVE**. The manual QA
@@ -180,21 +179,19 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   and production Chromium CI run `30060892316` green; fuller product/release gate evidence at
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 4 — post-launch maintenance, IN PROGRESS: the dependency/review queue
-  closes and a fresh production build deploys when PR #95 merges and the pending deploy lands.
-  Next work after the deploy: the pending P2/P3 product slice (very-large-document budgets)
-  plus operator-owned AI-6/AI-7.
+- **Current cycle:** 4 — post-launch maintenance, DONE except this record PR and the #59
+  close. Next work: the pending P2/P3 product slice (very-large-document budgets) plus
+  operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** PR #95 (mermaid 12 migration, supersedes closed
-  #74) open; issue #59 part B open pending deploy evidence; issues #62 and PR #74 closed this
-  session. Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `0bbbc0a117f7e23fe315da10ca5d2e8adc658f67` (PR #94 merge).
-- **PRs merged to `main`:** 49 first-parent merges, most recently #94 (provenance labelling),
-  #93 (raster geometry readiness), #91 (undo-close recovery), #89 (raster capture independent
-  of preview zoom).
-- **Current main verification (`0bbbc0a`):** hosted Node 22/24 and production Chromium CI run
-  `36257974242` green. Production still serves the 2026-08-16 `8a9c942` build until the pending
-  deploy lands (see the current checkpoint).
+- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record PR;
+  issue #59 closes with it; issues #62 and PR #74 closed earlier this session; production
+  is `f353480c` from `4e7d99a`. Refresh before use — snapshots expire at the next head change.
+- **Verified `main` anchor:** `4e7d99a9d4d67e1c4ccc4ece6116b00ef63ca4c9` (PR #97 merge).
+- **PRs merged to `main`:** 52 first-parent merges, most recently #97 (patch sweep), #96
+  (run-header refresh), #95 (mermaid 12 migration), #94 (provenance labelling).
+- **Current main verification (`4e7d99a`):** hosted Node 22/24 and production Chromium
+  CI run `36260700769` green. Production serves `f353480c` from this anchor (see the
+  current checkpoint).
 
 ## Environment / verification commands
 
