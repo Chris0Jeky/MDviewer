@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   gitMetadataProbe,
+  resolveArchiveIdentity,
   resolveBuildRevision,
   sourceNotice,
 } from "../scripts/lib/revision.mjs";
@@ -137,6 +138,25 @@ describe("gitMetadataProbe", () => {
   );
 });
 
+describe("resolveArchiveIdentity (#62)", () => {
+  it("returns null when MDVIEWER_SOURCE_ID is unset", () => {
+    expect(resolveArchiveIdentity({ env: {} })).toBeNull();
+  });
+
+  it.each([[""], ["   "], ["\t\n "]])(
+    "treats a blank identifier the same as unset (%j)",
+    (value) => {
+      expect(resolveArchiveIdentity({ env: { MDVIEWER_SOURCE_ID: value } })).toBeNull();
+    },
+  );
+
+  it("returns the trimmed identifier for a release tag or checksum", () => {
+    expect(
+      resolveArchiveIdentity({ env: { MDVIEWER_SOURCE_ID: "  v0.2.0  " } }),
+    ).toBe("v0.2.0");
+  });
+});
+
 describe("sourceNotice", () => {
   it("links the exact tree for a known revision", () => {
     const text = sourceNotice("abc123");
@@ -150,5 +170,19 @@ describe("sourceNotice", () => {
     expect(text).toContain("https://github.com/Chris0Jeky/MDviewer");
     expect(text).toMatch(/source archive with no Git metadata/i);
     expect(text).toContain("GPL-3.0-only");
+  });
+
+  it("names the supplied archive identifier instead of pleading unknown (#62)", () => {
+    const text = sourceNotice(null, "v0.2.0");
+    expect(text).not.toContain("/tree/");
+    expect(text).toContain('"v0.2.0"');
+    expect(text).not.toMatch(/cannot name its exact revision/i);
+    expect(text).toContain("GPL-3.0-only");
+  });
+
+  it("ignores the archive identifier when an exact revision is known", () => {
+    const text = sourceNotice("abc123", "v0.2.0");
+    expect(text).toContain("https://github.com/Chris0Jeky/MDviewer/tree/abc123");
+    expect(text).not.toContain("v0.2.0");
   });
 });

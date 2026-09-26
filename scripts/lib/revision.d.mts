@@ -15,4 +15,11 @@ export declare function gitMetadataProbe(
   statPath: (path: string) => unknown,
 ): () => boolean;
 
-export declare function sourceNotice(revision: string | null): string;
+export declare function resolveArchiveIdentity(params: {
+  env: Record<string, string | undefined>;
+}): string | null;
+
+export declare function sourceNotice(
+  revision: string | null,
+  archiveId?: string | null,
+): string;

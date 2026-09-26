@@ -113,7 +113,7 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 
 Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow runs supported Node 22 and 24 plus Chromium. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
-No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. Runtime fixes do not close #62 archive provenance or resolve #59's contradictory historical deployment receipts. Record remaining gates and actual commit/run identifiers in handoffs.
+No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's contradictory historical deployment receipts still need reconciliation. Record remaining gates and actual commit/run identifiers in handoffs.
 
 ## Latest-close recovery seam
 
