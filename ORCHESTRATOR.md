@@ -9,7 +9,8 @@
 > findings; post-merge `main` CI green. PR **#98** (deploy record for
 > `f353480c` from `4e7d99a`) merged as `7fa3a1f` just before it. Production
 > still serves `f353480c` from `4e7d99a` — it predates the checklist fix, so a
-> redeploy is pending once the improvement loop lands. No open PRs or issues.
+> redeploy is pending once the improvement loop lands. No open PRs except this
+> record PR (#100), no open issues.
 > Next slices, smallest first: (1) this docs-sync record; (2) TECH-1 responsive
 > toolbar (ledgered plan); (3) theme-color follow screen theme (or record why
 > white stays); (4) running-header/titlePage e2e gap; then redeploy + smoke.
@@ -212,8 +213,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   theme-color follow, running-header/titlePage e2e, then production redeploy. Longer
   backlog: very-large-document budgets, plus operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** no open PRs, no open issues; production
-  is `f353480c` from `4e7d99a`, which predates the #99 checklist fix — redeploy pending.
+- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this record PR
+  (#100), no open issues; production is `f353480c` from `4e7d99a`, which predates
+  the #99 checklist fix — redeploy pending.
   Refresh before use — snapshots expire at the next head change.
 - **Verified `main` anchor:** `4115563130ccfa1f7e180bbd9edcfb58b169ea3a` (PR #99 merge).
 - **PRs merged to `main`:** 54 PR merges, most recently #99 (checklist pagination fix),
