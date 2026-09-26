@@ -10,8 +10,10 @@
  *  3. No Git metadata at all — the source came from a GitHub ZIP or `git archive`, so
  *     there is no `.git` directory (and `git` may not even be installed). This is a
  *     supported way to build a GPL-licensed project from source, so it must produce a
- *     build, not an exception. The caller gets `null` and labels the distribution as an
- *     unidentified source archive.
+ *     build, not an exception. The caller gets `null` for the revision and consults
+ *     `resolveArchiveIdentity` separately: when the party that produced the archive
+ *     supplied an identifier (release tag or archive checksum) via `MDVIEWER_SOURCE_ID`,
+ *     the distribution names it; otherwise it is labelled honestly as unidentified.
  *
  * The absence of Git metadata is the ONLY thing that may downgrade a build to case 3, and
  * it is decided before Git is invoked. A failing `git` command is never evidence of it:
@@ -83,21 +85,52 @@ export function gitMetadataProbe(gitPath, statPath) {
 }
 
 /**
+ * The identifier a source-archive build should name in `dist/SOURCE.txt`, when the
+ * party that produced the archive supplied one. GitHub ZIPs and `git archive` trees
+ * carry no revision on their own (and GitHub does not expand `export-subst`
+ * keywords), so an out-of-band value is the only honest identifier available:
+ * `MDVIEWER_SOURCE_ID`, a release tag or an archive checksum. Blank and whitespace
+ * values are the same as unset — an identifier of " " would mislabel, not identify.
+ *
+ * Only meaningful when `resolveBuildRevision` returned `null`. Inside a Git tree the
+ * exact HEAD is strictly more informative and this value is ignored.
+ *
+ * @param {object} params
+ * @param {Record<string, string | undefined>} params.env
+ * @returns {string | null} The trimmed identifier, or `null` when none was supplied.
+ */
+export function resolveArchiveIdentity({ env }) {
+  const raw = env.MDVIEWER_SOURCE_ID;
+  if (raw === undefined) return null;
+  const trimmed = raw.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
  * The `dist/SOURCE.txt` body for a resolved revision (or the lack of one).
  *
- * @param {string | null} revision
+ * @param {string | null} revision  Exact revision from `resolveBuildRevision`.
+ * @param {string | null} [archiveId]  Supplied archive identifier; only read when
+ *   `revision` is `null`.
  * @returns {string}
  */
-export function sourceNotice(revision) {
+export function sourceNotice(revision, archiveId = null) {
   const locator =
     revision === null
-      ? [
-          "https://github.com/Chris0Jeky/MDviewer",
-          "",
-          "This build was produced from a source archive with no Git metadata, so it",
-          "cannot name its exact revision. The corresponding source is the archive it",
-          "was built from.",
-        ]
+      ? archiveId === null
+        ? [
+            "https://github.com/Chris0Jeky/MDviewer",
+            "",
+            "This build was produced from a source archive with no Git metadata, so it",
+            "cannot name its exact revision. The corresponding source is the archive it",
+            "was built from.",
+          ]
+        : [
+            "https://github.com/Chris0Jeky/MDviewer",
+            "",
+            `This build was produced from the source archive identified as "${archiveId}".`,
+            "The corresponding source is that archive.",
+          ]
       : [`https://github.com/Chris0Jeky/MDviewer/tree/${revision}`];
 
   return [

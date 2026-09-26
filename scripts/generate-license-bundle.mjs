@@ -9,7 +9,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gitMetadataProbe, resolveBuildRevision, sourceNotice } from "./lib/revision.mjs";
+import {
+  gitMetadataProbe,
+  resolveArchiveIdentity,
+  resolveBuildRevision,
+  sourceNotice,
+} from "./lib/revision.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const lock = JSON.parse(readFileSync(join(repoRoot, "package-lock.json"), "utf8"));
@@ -44,7 +49,11 @@ const revision = resolveBuildRevision({
     }),
 });
 
-writeFileSync(join(outDir, "SOURCE.txt"), sourceNotice(revision));
+// A `null` revision means "built from a source archive" (a git failure inside a real
+// repository throws instead of returning null). Only then is a supplied out-of-band
+// archive identifier meaningful; inside a Git tree HEAD names the source exactly.
+const archiveId = revision === null ? resolveArchiveIdentity({ env: process.env }) : null;
+writeFileSync(join(outDir, "SOURCE.txt"), sourceNotice(revision, archiveId));
 
 const sections = [];
 for (const [packagePath, metadata] of Object.entries(lock.packages ?? {}).sort(([a], [b]) =>

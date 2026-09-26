@@ -54,6 +54,13 @@ After a deployment, smoke both the stable and immutable URLs, inspect the entry 
 asset response, and confirm the `_headers` policy. Do not record Wrangler tokens or Cloudflare account
 identifiers in the repository.
 
+Building from a downloaded source archive (no `.git`) is supported: `npm run build`
+still produces a distribution, and `dist/SOURCE.txt` says so honestly. Such a tree
+carries no revision on its own, so whoever produced the archive can identify it with
+`MDVIEWER_SOURCE_ID` (a release tag or an archive checksum), which the notice then
+names verbatim. Inside a Git checkout the variable is ignored — exact HEAD is the
+stronger claim.
+
 ## Offline support and installability
 
 MDviewer ships a Workbox-generated service worker (`vite-plugin-pwa`, `generateSW` mode) and a
