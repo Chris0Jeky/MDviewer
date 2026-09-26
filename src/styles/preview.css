@@ -643,6 +643,7 @@
   .paginating-overlay,
   .skip-link,
   [data-pulseboard-bar],
+  [data-pulseboard-slot],
   .pb-bar,
   .pb-pill,
   .pb-panel {
