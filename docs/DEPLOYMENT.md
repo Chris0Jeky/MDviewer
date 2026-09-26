@@ -24,22 +24,23 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
-- Current production deployment: `f353480c` from merge commit `4e7d99a` (2026-09-26 —
-  provenance labelling, Mermaid 12 migration, orchestrator refresh, dependency sweep) —
-  immutable URL **https://f353480c.mdviewer-c9r.pages.dev/**, deployment id
-  `f353480c-22f4-4833-b8e4-47dc8a10b3e9`
-- Previous production deployment: `3378378d` from merge commit `8a9c942` (2026-08-16, the
+- Current production deployment: `c3dee6ad` from merge commit `578590c` (2026-09-26 —
+  checklist pagination fix, TECH-1 phone toolbar strip, theme-color follow, header e2e) —
+  immutable URL **https://c3dee6ad.mdviewer-c9r.pages.dev/**, deployment id
+  `c3dee6ad-f059-4a80-9799-d280177e300b`
+- Previous production deployment: `f353480c` from merge commit `4e7d99a` (2026-09-26,
+  provenance labelling + Mermaid 12 + orchestrator refresh + dependency sweep) —
+  immutable URL **https://f353480c.mdviewer-c9r.pages.dev/**
+- Earlier production deployment: `3378378d` from merge commit `8a9c942` (2026-08-16, the
   QA-sweep + PWA release) — immutable URL **https://3378378d.mdviewer-c9r.pages.dev/**
 - Last operator verification: 2026-09-26 — stable/immutable URLs return HTTP 200 with
-  identical bytes and the entry title; hashed assets immutable; security headers
+  identical bytes (4521) and the entry title; hashed assets immutable; security headers
   (`Cross-Origin-Opener-Policy: same-origin`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) present;
   `/sw.js` and `/manifest.webmanifest` return `max-age=0, must-revalidate`;
-  `/workbox-9c191d2f.js` returns immutable; `/SOURCE.txt` names `4e7d99a`; the live
-  immutable URL boots to the empty state in real Chromium. The 2026-08-16 PWA-header
-  disagreement with the failure ledger is superseded by this dated record: headers are
-  verified, while real-browser install and the update-toast flow remain operator work
-  (AI-7 step 5).
+  `/workbox-9c191d2f.js` returns immutable; `/SOURCE.txt` names `578590c`; the live
+  immutable URL boots to the empty state in real Chromium. Real-browser install and
+  the update-toast flow remain operator work (AI-7 step 5).
 
 The current project uses Wrangler direct upload. To publish a new verified `main` build from an
 authenticated maintainer machine:

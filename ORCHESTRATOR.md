@@ -3,17 +3,17 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (improvement loop: header e2e in review):**
-> PR **#102** (theme-color follows the screen theme) merged as `43baba4`
-> (post-merge `main` CI run `36271056347` green; two Codex P2s fixed in-PR, one a
-> real prototype-chain bug with a mutation-proven regression test). PR **#103**
-> (running-header/titlePage e2e) is in review: `tests/e2e/running-header.spec.ts`
-> proves `string(doctitle, start)` over pushed content plus titlePage page-1
-> chrome in the real engine (mutation-proven red under `first`).
-> Production still serves `f353480c` from `4e7d99a` — it predates the checklist
-> fix and all three loop slices, so a redeploy is pending once this lands. No open
-> PRs except #103, no open issues.
-> Next: redeploy + smoke, then loop for the next slice (very-large-document
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (improvement loop shipped to production):**
+> PR **#103** (running-header/titlePage e2e) merged as `578590c` (post-merge `main`
+> CI run `36271782617` green; Codex no-findings at the head). Cycle-5 loop complete:
+> #100 docs-sync, #101 TECH-1 strip, #102 theme-color, #103 header e2e — all with
+> green exact-head CI and reviewed threads. Production is now deployment
+> **`c3dee6ad`** from `main` **`578590c`** (immutable URL
+> `https://c3dee6ad.mdviewer-c9r.pages.dev/`, id
+> `c3dee6ad-f059-4a80-9799-d280177e300b`), smoke-verified live (identical
+> stable/immutable bytes, headers, cache policy, source id, Chromium boot). No open
+> PRs except this deploy-record PR, no open issues.
+> Next: merge this record, then loop for the next slice (very-large-document
 > budgets) or hand back.
 > **Two OPEN human items: AI-7 (steps 4–8) and AI-6.**
 >
@@ -210,18 +210,18 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Queued: production redeploy, then next slice
-  (very-large-document budgets). Longer backlog plus operator-owned AI-6/AI-7.
+  merge → repeat, then redeploy). Loop shipped: #100–#103 merged, production is
+  `c3dee6ad` from `578590c`. Next slice: very-large-document budgets. Longer backlog
+  plus operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** no open PRs except #103 (header e2e,
-  in review), no open issues; production is `f353480c` from `4e7d99a`, which predates
-  the #99 checklist fix — redeploy pending.
+- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record
+  PR, no open issues; production is `c3dee6ad` from `578590c` (fresh).
   Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `43baba46a0f7ded6a0d07d330921f97a33822ff2` (PR #102 merge).
-- **PRs merged to `main`:** 57 PR merges, most recently #102 (theme-color follow),
-  #101 (TECH-1 toolbar strip), #100 (docs-sync record), #99 (checklist fix).
-- **Current main verification (`43baba4`):** hosted Node 22/24 and production Chromium
-  CI run `36271056347` green. Production still serves `f353480c` from `4e7d99a` (see the
+- **Verified `main` anchor:** `578590c1317ae632448684c0799ea3f0ddf50682` (PR #103 merge).
+- **PRs merged to `main`:** 58 PR merges, most recently #103 (header e2e),
+  #102 (theme-color follow), #101 (TECH-1 toolbar strip), #100 (docs-sync record).
+- **Current main verification (`578590c`):** hosted Node 22/24 and production Chromium
+  CI run `36271782617` green. Production serves `c3dee6ad` from this anchor (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -492,3 +492,8 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   running-header/titlePage e2e gap with `tests/e2e/running-header.spec.ts`
   (start-semantics over pushed content + titlePage chrome, mutation-proven).
   Redeploy queued right after this merge.
+- **C25 (2026-09-26) — LOOP SHIPPED TO PRODUCTION:** PR **#103** → `578590c`,
+  post-merge `main` CI run `36271782617` green. Production is now **`c3dee6ad`**
+  from `578590c`, smoke-verified live on every header plus a Chromium boot. The
+  cycle-5 loop (docs-sync, TECH-1 strip, theme-color, header e2e) is fully merged,
+  reviewed, and live; only this record PR remains open.
