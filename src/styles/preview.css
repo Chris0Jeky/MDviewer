@@ -621,6 +621,10 @@
     overflow: visible !important;
   }
 
+  body {
+    display: block !important;
+  }
+
   #app {
     display: block;
     height: auto !important;
@@ -637,7 +641,11 @@
   #warning-banner,
   #error-card,
   .paginating-overlay,
-  .skip-link {
+  .skip-link,
+  [data-pulseboard-bar],
+  .pb-bar,
+  .pb-pill,
+  .pb-panel {
     display: none !important;
   }
 
