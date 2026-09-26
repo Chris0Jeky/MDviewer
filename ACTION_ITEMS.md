@@ -15,6 +15,22 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (Pulseboard SDK shipped)** — PR #105 (Pulseboard SDK 3.1 install with
+  the consented Beta bar, inline pill slot, runtime enum guards) merged with green
+  exact-head CI and nine triaged Codex threads, shared-review with the owner. `main`
+  is `0da2e26` (CI run `36277132449` green) and production is now deployment
+  `cdc831b1` from that anchor (immutable URL
+  `https://cdc831b1.mdviewer-c9r.pages.dev`), smoke-verified live including a real
+  bar render. New operator item AI-8 (Beta-bar acceptance) joins OPEN AI-6/AI-7.
+
+- **2026-09-26 (improvement loop shipped)** — PRs #100 (docs-sync), #101 (TECH-1
+  phone toolbar strip), #102 (theme-color follow, incl. a prototype-chain fix),
+  and #103 (running-header/titlePage e2e) all merged with green exact-head CI and
+  reviewed threads. `main` is `578590c` (CI run `36271782617` green) and production
+  is now deployment `c3dee6ad` from that anchor (immutable URL
+  `https://c3dee6ad.mdviewer-c9r.pages.dev`), smoke-verified live. AI-6 and AI-7
+  remain OPEN for the operator.
+
 - **2026-09-26 (checklist fix merged; redeploy pending)** — PR #98 (deploy record for
   `f353480c` from `4e7d99a`) and PR #99 (checklist pagination fix: `li` fragments like
   `p`, inline code no longer hyphenates; the 610-line owner todo list went 20→16 pages
@@ -115,7 +131,7 @@
 ## OPEN items
 
 - **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate, after deploy).** The
-  Pulseboard SDK v3 install (branch `feat/pulseboard-sdk-v3`, Pulseboard#105) is proven by unit
+  Pulseboard SDK 3.1 install (PR #105, Pulseboard#105) is proven by unit
   tests and the artifact guard, but the SDK is deliberately inert under Playwright and off the
   production origin, so only the live site shows the real bar. Nothing is stored until Pulseboard
   lists `mdviewer` in `COLLECT_STAT_PROJECTS` and `COLLECT_PRODUCT_PROJECTS` (a Pulseboard change).
@@ -134,14 +150,15 @@
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  again for the current deployment (2026-09-26): `main` `4e7d99a` merged with CI green;
+  again for the current deployment (2026-09-26): `main` `0da2e26` merged with CI green;
   deployed via `wrangler pages deploy` (immutable URL
-  `https://f353480c.mdviewer-c9r.pages.dev`, id `f353480c-22f4-4833-b8e4-47dc8a10b3e9`);
-  smoke checks passed — identical stable/immutable bytes, entry title, hashed-asset
+  `https://cdc831b1.mdviewer-c9r.pages.dev`, id `cdc831b1-1882-428b-86ad-d7f56ae40f48`);
+  smoke checks passed — identical stable/immutable bytes (5331), entry title, hashed-asset
   immutability, security headers, `Cache-Control: max-age=0, must-revalidate` on both
-  `/sw.js` and `/manifest.webmanifest`, immutable `/workbox-*.js`, and a Chromium boot.
-  (The 2026-08-16 `8a9c942`/`3378378d` record is superseded but retained in
-  `docs/DEPLOYMENT.md` history.)
+  `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving, `/SOURCE.txt`
+  naming `0da2e26`, a Chromium boot, and a non-automation boot showing the Beta bar.
+  (The `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records are
+  superseded but retained in `docs/DEPLOYMENT.md` history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
@@ -150,8 +167,9 @@
      its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
      are clearly visible; an empty `.md` shows the "document is empty" notice.
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
-     reload → load the sample → Print/Save-as-PDF still produces page sheets. After the *next*
-     deploy, confirm the update toast appears and Reload applies it.
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `cdc831b1`
+     deploy is the second version the update-toast check needs: with the app open from the
+     previous (`c3dee6ad`) deployment, confirm the update toast appears and Reload applies it.
   6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
      stay light (print-accurate), and a Download PDF taken in dark theme must contain light
      code. The theme control is now labelled "Screen" and sits at the right, before Export.
