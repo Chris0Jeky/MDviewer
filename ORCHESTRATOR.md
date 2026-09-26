@@ -3,7 +3,22 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (deploy done):** Cycle 4 is complete except this
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (checklist pagination fix, in review):**
+> Owner report: `HUMAN_TODO.pdf` (610 lines, 30 long task items) paginated with
+> mostly-blank sheets (worst non-last page 76% empty, 20 pages) and hyphenated
+> inline-code chips. Root causes: `li` carried `break-inside: avoid` (each long
+> item pushed itself whole) and inline `code` inherited `hyphens: auto`.
+> Branch `fix/checklist-pagination-flow`: `li` fragments like `p`
+> (`orphans/widows: 3`, no avoid), `li` leaves `ATOMIC_BLOCK_SELECTOR`, inline
+> code gets `hyphens: none` + `overflow-wrap: anywhere` + decoration-clone.
+> Post-fix the real doc is 16 pages with worst non-last trailing 4%. Cover:
+> `tests/e2e/list-flow.spec.ts` + `tests/fixtures/checklist.md` (fill cap 20%,
+> fragmentation count, style pins, nested-pre guard) — verified red pre-fix /
+> green post-fix; `tests/buildSource.test.ts` updated for the contract change;
+> spec §4 carries the explicit foundation replacement. Gates outstanding at
+> this checkpoint: full `agent:check`, build, dev + preview e2e, PR review.
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-09-26 (deploy done):** Cycle 4 is complete except this
 > record PR and the #59 close. Merged since the last checkpoint: PR **#95** (mermaid 12,
 > one Codex P2 on vacuous init-test assertions fixed with a mutation proof), PR **#96**
 > (this run-header refresh, three Codex P2s fixed), PR **#97** (6-package patch sweep,
