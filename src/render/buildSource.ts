@@ -16,7 +16,13 @@ import type { Settings } from "../app/settings";
 import { DOC_FONT_STACKS } from "../app/settings";
 import { ATTRS, CLASSES } from "../app/dom";
 
-/** Outermost blocks whose identity must survive Paged.js cloning/splitting. */
+/**
+ * Outermost blocks whose identity must survive Paged.js cloning/splitting.
+ * Deliberately NOT included: `li`. List items fragment across pages like
+ * paragraphs (print.css gives them orphans/widows instead of break-inside:
+ * avoid), so stamping them would assert a keep-whole promise the fragmenter no
+ * longer makes. Nested atomics inside an item are still stamped and protected.
+ */
 export const ATOMIC_BLOCK_SELECTOR = [
   "pre",
   ".shiki",
@@ -36,7 +42,6 @@ export const ATOMIC_BLOCK_SELECTOR = [
   ".callout-danger",
   ".katex-display",
   "blockquote",
-  "li",
 ].join(",");
 
 /**

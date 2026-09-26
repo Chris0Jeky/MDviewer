@@ -87,11 +87,25 @@ tfoot {
 
 tr,
 td,
-th,
-li {
+th {
   -webkit-column-break-inside: avoid;
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+/* -----------------------------------------------------------------------------
+ * List items fragment like paragraphs. They were once `break-inside: avoid`, but
+ * a long item (a checklist entry with several sentences of inline code) then
+ * pushed itself WHOLE onto the next page whenever it did not fit in the
+ * remaining space — leaving up to half a page blank above it. Checklist-heavy
+ * documents paginated with mostly-empty sheets. orphans/widows keep a split
+ * item reading cleanly instead; nested atomics (pre, table, figure) inside an
+ * item keep their own keep-whole rules, so the no-slice guarantee still holds
+ * for the block families the product promises (code, figures, tables, callouts).
+ * -------------------------------------------------------------------------- */
+li {
+  orphans: 3;
+  widows: 3;
 }
 
 /* -----------------------------------------------------------------------------
