@@ -49,16 +49,23 @@
   .workspace-formatting-controls > .toolbar-divider { display: none; }
 }
 @media (max-width: 760px) {
-  #toolbar { max-height: 52dvh; }
-  .workspace-actions { gap: 8px; padding: 10px 12px; }
-  .workspace-brand { margin-right: auto; }
+  #toolbar { max-height: 52dvh; min-width: 0; }
+  /* Single-row horizontal strip: wrapping the primary controls stacked them to
+     347px on a 375x667 phone with a document loaded (TECH-1), leaving a 192px
+     preview. The strip keeps one ~56px row; every control stays tabbable and
+     focus/touch scrolls it into view. The 10px vertical padding keeps the 2px
+     focus ring clear of the overflow clip. */
+  .workspace-actions {
+    gap: 8px; padding: 10px 12px; min-width: 0;
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+  .workspace-actions > * { flex: 0 0 auto; min-width: 0; }
+  .workspace-brand { margin-right: 0; }
   .workspace-brand > span { display: none; }
-  .workspace-actions > [aria-label="Document"] { flex: 1 1 100%; }
-  .workspace-actions > [aria-label="Document"] .toolbar-field { flex: 1; }
-  .workspace-actions .doc-switcher { width: 100%; max-width: none; min-width: 0; }
+  .workspace-actions .doc-switcher { width: auto; max-width: 168px; }
   .workspace-actions .toolbar-label { display: none; }
-  .workspace-actions > [aria-label="Export"] { flex: 1 1 100%; }
-  .workspace-actions > [aria-label="Export"] > button { flex: 1; min-width: 0; white-space: normal; line-height: 1.3; }
+  .workspace-actions > [aria-label="Export"] > button { white-space: nowrap; }
   .workspace-actions button, .workspace-actions select { min-height: 36px; }
   .workspace-formatting summary { padding-inline: 12px; }
   .workspace-formatting-hint { display: none; }
