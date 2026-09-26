@@ -15,6 +15,14 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (improvement loop shipped)** — PRs #100 (docs-sync), #101 (TECH-1
+  phone toolbar strip), #102 (theme-color follow, incl. a prototype-chain fix),
+  and #103 (running-header/titlePage e2e) all merged with green exact-head CI and
+  reviewed threads. `main` is `578590c` (CI run `36271782617` green) and production
+  is now deployment `c3dee6ad` from that anchor (immutable URL
+  `https://c3dee6ad.mdviewer-c9r.pages.dev`), smoke-verified live. AI-6 and AI-7
+  remain OPEN for the operator.
+
 - **2026-09-26 (checklist fix merged; redeploy pending)** — PR #98 (deploy record for
   `f353480c` from `4e7d99a`) and PR #99 (checklist pagination fix: `li` fragments like
   `p`, inline code no longer hyphenates; the 610-line owner todo list went 20→16 pages
