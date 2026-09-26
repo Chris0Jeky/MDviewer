@@ -212,9 +212,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Loop shipped: #100–#103 merged, production is
-  `c3dee6ad` from `578590c`. Next slice: very-large-document budgets. Longer backlog
-  plus operator-owned AI-6/AI-7.
+  merge → repeat, then redeploy). Loop shipped (#100–#103) and Pulseboard SDK #105
+  merged; production is `cdc831b1` from `0da2e26`. Next slice: very-large-document
+  budgets. Longer backlog plus operator-owned AI-6/AI-7/AI-8.
 - **Last updated:** 2026-09-26
 - **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record
   PR, no open issues; production is `cdc831b1` from `0da2e26` (fresh).
