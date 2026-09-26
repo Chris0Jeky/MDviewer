@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-08-08.
+> Last updated: 2026-09-26.
 
 ## Status legend
 
@@ -62,8 +62,12 @@ export paths.
   pushed content keeps its own section's running header; and the paper made permanently
   print-accurate — rendered code has no screen dark variant, the "Screen" theme control is
   visibly labelled and moved beside Export.
-- **Remaining (ledgered 2026-08-16):** responsive toolbar below the shared 720px breakpoint
-  (QA TECH-1) — implementation plan recorded in `docs/agentic/failure_ledger.jsonl`.
+- **Done (2026-09-26):** responsive toolbar (QA TECH-1, closed). The workspace
+  refresh had already fixed the overflow half; what remained was vertical bulk — a
+  347px wrapped toolbar over a 192px preview on a 375x667 phone with a document
+  loaded. The primary row is now a single-row horizontal strip at the existing
+  760px toolbar breakpoint (toolbar 204px, workspace 463px), covered by
+  `tests/e2e/responsive-toolbar.spec.ts`. No P2 QA-sweep items remain.
 
 - **Done (2026-08-08): the split workspace.** A Markdown source pane with Shiki syntax colors
   beside the paginated preview, three view modes (`Markdown` / `Split` / `Preview`), and a
