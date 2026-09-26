@@ -131,7 +131,7 @@
 ## OPEN items
 
 - **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate, after deploy).** The
-  Pulseboard SDK v3 install (branch `feat/pulseboard-sdk-v3`, Pulseboard#105) is proven by unit
+  Pulseboard SDK 3.1 install (PR #105, Pulseboard#105) is proven by unit
   tests and the artifact guard, but the SDK is deliberately inert under Playwright and off the
   production origin, so only the live site shows the real bar. Nothing is stored until Pulseboard
   lists `mdviewer` in `COLLECT_STAT_PROJECTS` and `COLLECT_PRODUCT_PROJECTS` (a Pulseboard change).

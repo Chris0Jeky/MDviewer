@@ -252,6 +252,10 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
+- **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate).** Opened 2026-09-26
+  with PR #105. The SDK is inert under automation and off-origin, so only the live site shows
+  the real bar: bar/pill/panel behavior, payload enums, print exclusion, GPC silence.
+  Step-by-step instructions are in `ACTION_ITEMS.md`; only the maintainer may close it.
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Opened 2026-08-16 with
   PR #48. Merge, deploy, and smoke (steps 1–3) are done; the remaining steps 4–8 are the
   in-browser checks on **https://mdviewer-c9r.pages.dev/** (zoom/chip/banners/export progress,
