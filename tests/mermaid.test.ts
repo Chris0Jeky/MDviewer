@@ -148,9 +148,24 @@ describe("renderAllMermaid: initialization", () => {
     if (initializeMock.mock.calls.length > 0) {
       const cfg = initializeMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
       expect(cfg?.startOnLoad).toBe(false);
-      const flowchart = cfg?.flowchart as { useMaxWidth?: boolean } | undefined;
+      const flowchart = cfg?.flowchart as
+        | { useMaxWidth?: boolean; wrappingWidth?: number; minNodeWidth?: number }
+        | undefined;
       expect(flowchart?.useMaxWidth).toBe(false);
       expect(cfg?.htmlLabels).toBe(false);
+      // Mermaid 12's own defaults (ELK layout, neo look) change diagram geometry
+      // and appearance; the preserved v11 rendering stays pinned explicitly.
+      expect(cfg?.layout).toBe("dagre");
+      expect(cfg?.look).toBe("classic");
+      // ...including v11 text metrics (v12 wraps at 120px and floors nodes at
+      // 120px wide, which re-wraps labels and widens small nodes).
+      expect(flowchart?.wrappingWidth).toBe(200);
+      expect(flowchart?.minNodeWidth).toBe(0);
+      const state = cfg?.state as
+        | { wrappingWidth?: number; minNodeWidth?: number }
+        | undefined;
+      expect(state?.wrappingWidth).toBe(200);
+      expect(state?.minNodeWidth).toBe(0);
     }
     // Regardless, this run must have produced a rendered figure.
     expect(r.querySelector(`figure.${CLASSES.mermaidFigure} svg`)).not.toBeNull();

@@ -47,12 +47,28 @@ export async function renderAllMermaid(
       startOnLoad: false,
       theme,
       securityLevel: "strict",
+      // Mermaid 12 changed its own defaults: ELK layout and the neo look (drop
+      // shadows, recolored nodes) replaced dagre/classic. Diagram geometry feeds
+      // page breaking, so the preserved appearance is pinned explicitly — a future
+      // visual migration must change these lines deliberately, never by upgrade.
+      layout: "dagre",
+      look: "classic",
       // Root-level option covers every diagram type; diagram-specific htmlLabels
       // is deprecated in Mermaid 11. SVG text sanitizes and prints reliably.
       htmlLabels: false,
       // SVG-native labels survive sanitization and print reliably. Mermaid's
       // default HTML labels use <foreignObject>, which DOMPurify removes.
-      flowchart: { useMaxWidth: false },
+      //
+      // Mermaid 12 also narrowed text metrics: flowchart wrappingWidth 200→120
+      // and a new minNodeWidth floor of 120 (both new on state diagrams too),
+      // which wraps "Markdown source" onto two lines and widens small nodes.
+      // The v11 values are pinned back so identical input renders identical
+      // geometry — verified label-by-label against 11.17.2 in real Chromium for
+      // flowchart, state, class and sequence diagrams. Sequence/class need no
+      // section: their v12 defaults only add theme/look, which the root pins
+      // above already beat (same verification run).
+      flowchart: { useMaxWidth: false, wrappingWidth: 200, minNodeWidth: 0 },
+      state: { wrappingWidth: 200, minNodeWidth: 0 },
     });
     initialized = true;
   }
