@@ -83,7 +83,9 @@
   <body>
     <!-- Reserved space for the Pulseboard Beta bar (public/pulseboard.js). The SDK renders
          into it on the production origin and releases it (height 0 + hidden) everywhere
-         else and once a choice is recorded. Hidden from print in preview.css. -->
+         else and once a choice is recorded. If a content blocker stops the SDK from
+         loading at all, the script's onerror releases it instead, so the documented
+         opt-out leaves no dead strip. Hidden from print in preview.css. -->
     <div data-pulseboard-bar style="min-height: 2.5rem"></div>
     <a class="skip-link" href="#canvas">Skip to document</a>
     <div id="app"></div>
@@ -95,6 +97,10 @@
       hidden
     />
     <script type="module" src="/src/main.ts"></script>
-    <script defer src="/pulseboard.js"></script>
+    <script
+      defer
+      src="/pulseboard.js"
+      onerror="document.querySelector('[data-pulseboard-bar]')?.setAttribute('hidden', '')"
+    ></script>
   </body>
 </html>

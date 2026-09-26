@@ -289,6 +289,13 @@ describe("pulse: the page loads the locked SDK artifact", () => {
     expect(page.querySelector("script[src='/observatory.js']")).toBeNull();
   });
 
+  it("releases the bar placeholder when a content blocker stops the SDK loading", () => {
+    // The onerror fallback is registered at parse time, so it cannot miss the
+    // failure the way a main.ts listener registered during deferred execution could.
+    const script = page.querySelector<HTMLScriptElement>("script[src='/pulseboard.js']");
+    expect(script?.getAttribute("onerror") ?? "").toContain("[data-pulseboard-bar]");
+  });
+
   it("the served file is the one the lock records", () => {
     const lock = JSON.parse(readFileSync(join(REPO_ROOT, "observatory.lock.json"), "utf8")) as {
       sdk: string; installs: Record<string, { sha256: string }>;
