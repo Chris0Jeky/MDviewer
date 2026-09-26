@@ -15,6 +15,15 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (checklist fix merged; redeploy pending)** — PR #98 (deploy record for
+  `f353480c` from `4e7d99a`) and PR #99 (checklist pagination fix: `li` fragments like
+  `p`, inline code no longer hyphenates; the 610-line owner todo list went 20→16 pages
+  with worst non-last trailing blank 76%→4%) both merged with green exact-head CI and
+  reviewed threads. `main` is now `4115563` (CI run `36267035533` green) but production
+  still serves `f353480c` from `4e7d99a` — the checklist fix is not live yet. A redeploy
+  is queued after the improvement loop (TECH-1 toolbar, theme-color, header e2e).
+  AI-6 and AI-7 remain OPEN for the operator.
+
 - **2026-09-26 (maintenance + deploy)** — The review/dependency queue is clear and
   production is fresh: PR #94 (archive provenance via `MDVIEWER_SOURCE_ID`, closes #62),
   PR #95 (Mermaid 12 with the v11 rendering pinned; supersedes #74), PR #96 (orchestrator
