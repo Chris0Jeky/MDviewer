@@ -180,16 +180,18 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   and production Chromium CI run `30060892316` green; fuller product/release gate evidence at
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 4 — post-launch maintenance; this checkpoint closes the dependency/review
-  queue and ships a fresh production deploy. Next work after the deploy: the pending P2/P3
-  product slice (very-large-document budgets) plus operator-owned AI-6/AI-7.
+- **Current cycle:** 4 — post-launch maintenance, IN PROGRESS: the dependency/review queue
+  closes and a fresh production build deploys when PR #95 merges and the pending deploy lands.
+  Next work after the deploy: the pending P2/P3 product slice (very-large-document budgets)
+  plus operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
 - **Live GitHub queue snapshot (2026-09-26):** PR #95 (mermaid 12 migration, supersedes closed
   #74) open; issue #59 part B open pending deploy evidence; issues #62 and PR #74 closed this
   session. Refresh before use — snapshots expire at the next head change.
 - **Verified `main` anchor:** `0bbbc0a117f7e23fe315da10ca5d2e8adc658f67` (PR #94 merge).
-- **PRs merged to `main`:** 63 merge commits, most recently #94 (provenance labelling), #93/#91
-  (raster/export hardening), #89 (export update lifetime).
+- **PRs merged to `main`:** 49 first-parent merges, most recently #94 (provenance labelling),
+  #93 (raster geometry readiness), #91 (undo-close recovery), #89 (raster capture independent
+  of preview zoom).
 - **Current main verification (`0bbbc0a`):** hosted Node 22/24 and production Chromium CI run
   `36257974242` green. Production still serves the 2026-08-16 `8a9c942` build until the pending
   deploy lands (see the current checkpoint).
