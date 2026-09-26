@@ -135,24 +135,40 @@ describe("renderAllMermaid: failure handling", () => {
 });
 
 describe("renderAllMermaid: initialization", () => {
-  // The module memoizes initialization, so across the whole suite mermaid.initialize
-  // runs at most once. We assert the config shape from whichever call captured it,
-  // without depending on test ordering or the theme arg of this particular call.
-  it("configures mermaid with startOnLoad:false and useMaxWidth:false when it initializes", async () => {
+  // The module memoizes initialization, so in a full-file run an earlier test
+  // consumes the one initialize call and beforeEach then wipes the mock history —
+  // asserting conditionally on "a call was captured" would skip every assertion
+  // below. Reset the module registry so this test owns a fresh, uninitialized
+  // copy and the pin assertions always execute. (The vi.mock("mermaid") factory
+  // survives resetModules; only the module cache is dropped.)
+  it("configures mermaid with the pinned v11 rendering flags", async () => {
+    vi.resetModules();
+    const fresh = await import("../src/render/mermaid");
     const r = root('<pre><code class="language-mermaid">graph TD; A--&gt;B;</code></pre>');
-    await renderAllMermaid(r, "forest");
+    await fresh.renderAllMermaid(r, "forest");
 
-    // If this run was the first to touch mermaid, it will have initialized here.
-    // Otherwise initialization already happened in an earlier test; either way the
-    // captured config (when present) must carry the load-bearing flags.
-    if (initializeMock.mock.calls.length > 0) {
-      const cfg = initializeMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-      expect(cfg?.startOnLoad).toBe(false);
-      const flowchart = cfg?.flowchart as { useMaxWidth?: boolean } | undefined;
-      expect(flowchart?.useMaxWidth).toBe(false);
-      expect(cfg?.htmlLabels).toBe(false);
-    }
-    // Regardless, this run must have produced a rendered figure.
+    expect(initializeMock).toHaveBeenCalledTimes(1);
+    const cfg = initializeMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+    expect(cfg?.startOnLoad).toBe(false);
+    const flowchart = cfg?.flowchart as
+      | { useMaxWidth?: boolean; wrappingWidth?: number; minNodeWidth?: number }
+      | undefined;
+    expect(flowchart?.useMaxWidth).toBe(false);
+    expect(cfg?.htmlLabels).toBe(false);
+    // Mermaid 12's own defaults (ELK layout, neo look) change diagram geometry
+    // and appearance; the preserved v11 rendering stays pinned explicitly.
+    expect(cfg?.layout).toBe("dagre");
+    expect(cfg?.look).toBe("classic");
+    // ...including v11 text metrics (v12 wraps at 120px and floors nodes at
+    // 120px wide, which re-wraps labels and widens small nodes).
+    expect(flowchart?.wrappingWidth).toBe(200);
+    expect(flowchart?.minNodeWidth).toBe(0);
+    const state = cfg?.state as
+      | { wrappingWidth?: number; minNodeWidth?: number }
+      | undefined;
+    expect(state?.wrappingWidth).toBe(200);
+    expect(state?.minNodeWidth).toBe(0);
+    // This run must also have produced a rendered figure.
     expect(r.querySelector(`figure.${CLASSES.mermaidFigure} svg`)).not.toBeNull();
   });
 });

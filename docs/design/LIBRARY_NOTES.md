@@ -18,8 +18,18 @@ The dependency-only head `01601fef501ce039fbb7012f12fc2cde619743e1` failed run `
 
 Keep `tests/raster-clone.test.ts`, `tests/raster-pseudo-visibility.test.ts`, `tests/raster-pseudo-order.test.ts` and `tests/e2e/raster-resolution.spec.ts`. The latter checks actual dimensions, content, unchanged live preview and identical first-page captures across 100%, 50%, Fit and dark Markdown-only mode within the same browser run. It does not compare old-version golden images. See [RASTER_CAPTURE.md](RASTER_CAPTURE.md) and [RASTER_RENDERER_2.md](RASTER_RENDERER_2.md) for root-cause details.
 
+## Mermaid 12 migration (supersedes #74)
+
+`src/render/mermaid.ts` pins the preserved v11 rendering explicitly because Mermaid 12 changed its own defaults: ELK layout and the `neo` look replaced dagre/classic, flowchart `wrappingWidth` narrowed 200→120, and a new `minNodeWidth` floor of 120 appeared (both new on state diagrams too). The shipped config is root `layout: "dagre"`, `look: "classic"`, `theme: "default"`, plus `flowchart`/`state` sections restoring `wrappingWidth: 200` and `minNodeWidth: 0`. Sequence/class need no section: their v12 defaults only add theme/look, which the root pins already beat. A future visual migration must change these lines deliberately, never by upgrade.
+
+`package.json` carries an `overrides` pin, `lodash-es: ^4.18.1`: mermaid 12 pulls chevrotain 11, whose lodash-es range admits only vulnerable releases (5 high advisories without the override; `npm audit` is 0 with it). Drop the override once mermaid or chevrotain ships a fixed lodash-es floor.
+
+### Evidence and required checks
+
+Identical input renders identical output under 11.17.2 and 12.0.0 with these pins: a real-Chromium matrix compared label text, label row counts, node widths, node fills, filters and SVG viewBoxes for representative flowchart, state, class and sequence diagrams — all equal, including single-line `Markdown source` and the 70px `x` node. `tests/e2e/golden-path.spec.ts` covers all four diagram types through the sanitizer in the production bundle, and both no-cutoff tests re-prove page breaking against the new engine. `tests/mermaid.test.ts` asserts the pinned init config so a later edit cannot silently drop a pin.
+
+Browser floor: mermaid 12 requires ES2024 / Safari 17.4+ / Node 22.12+. The Node floor is inside `engines` (`^22.22.2`); the Safari floor is accepted as stated. AI-6 second-engine/manual-feel and AI-7 live/PWA checks remain open.
+
 ## Other integrations
 
 Unchanged render sequencing, strict TypeScript requirements and no-slice behavior remain governed by the canonical specification. Follow current `src/render/{markdown,math,highlight,mermaid,sanitize}.ts` and `src/paginate/*` rather than a dated illustrative recipe. In particular, sanitization precedes DOM insertion, height-affecting preparation precedes pagination, and PDF export consumes a captured input under the render-host lease.
-
-Mermaid 12 is a separate unmerged migration in #74; this renderer upgrade does not imply acceptance of changed diagram layout/look or browser support. AI-6 second-engine/manual-feel and AI-7 live/PWA checks remain open.

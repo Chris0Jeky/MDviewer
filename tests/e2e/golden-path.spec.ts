@@ -87,6 +87,28 @@ test.describe("golden path: open a document and see a paginated preview", () => 
     await expect(diagram.locator("foreignObject")).toHaveCount(0);
   });
 
+  // Mermaid 12 changed state-diagram defaults (ELK layout, 120px wrap/width
+  // floors) alongside the flowchart ones; class diagrams lost their dagre
+  // default renderer. Both must still render as sanitized SVG text with the
+  // preserved v11 geometry, not re-laid-out output.
+  test("renders state and class diagrams as sanitized SVG text", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(
+      page,
+      "# States and classes\n\n" +
+        "```mermaid\nstateDiagram-v2\n  [*] --> Active\n  Active --> Inactive: toggle switch\n```\n\n" +
+        "```mermaid\nclassDiagram\n  class Animal {\n    +name: string\n  }\n  Animal <|-- Dog\n```",
+    );
+    await waitForPagination(page);
+    const diagrams = page.locator("#paged-output figure.mermaid-figure");
+    await expect(diagrams).toHaveCount(2);
+    await expect(diagrams.nth(0)).toContainText("Active");
+    await expect(diagrams.nth(0)).toContainText("toggle switch");
+    await expect(diagrams.nth(1)).toContainText("Animal");
+    await expect(diagrams.nth(1).locator("svg")).toBeVisible();
+    await expect(page.locator("#paged-output foreignObject")).toHaveCount(0);
+  });
+
   test("the page chip reflects a positive page count", async ({ page }) => {
     await page.goto("/");
     await loadMarkdownIntoApp(page, SAMPLE_MD);

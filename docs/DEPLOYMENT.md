@@ -67,11 +67,11 @@ MDviewer ships a Workbox-generated service worker (`vite-plugin-pwa`, `generateS
 web-app manifest. `dist/sw.js`, `dist/workbox-<hash>.js`, and `dist/manifest.webmanifest` are
 build artifacts — nothing to configure at deploy time.
 
-- The precache is deliberately the **whole** application (~180 entries, ~9.3 MiB): every lazy
-  chunk (Paged.js, Mermaid, jsPDF/html2canvas-pro, Shiki grammars and engine) and the KaTeX
-  `woff2` fonts. This is what makes Print / Download / math genuinely work offline instead of
-  only *appearing* to work until the first export. A first visit downloads the precache in the
-  background.
+- The precache is deliberately the **whole** application (~183 entries, ~11 MiB): every lazy
+  chunk (Paged.js, Mermaid 12 including its bundled ELK engine, jsPDF/html2canvas-pro, Shiki
+  grammars and engine) and the KaTeX `woff2` fonts. This is what makes Print / Download / math
+  genuinely work offline instead of only *appearing* to work until the first export. A first
+  visit downloads the precache in the background.
 - Updates use **prompt, not auto-update**: after a deploy, an already-open session shows a
   "new version available" toast and reloads only when the user accepts. Returning users can be
   one deploy behind until they do.
