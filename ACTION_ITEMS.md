@@ -15,6 +15,14 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (SDK 3.2 shipped)** — PR #107 (Pulseboard SDK 3.2.0 rebuild: campaign
+  allowlist, preview-pane scroll depth, no cross-tab focus steal) merged with green
+  exact-head CI, a completed Codex Cloud review, and an owner coordinator gate. `main`
+  is `b566e23` (CI run `36278869189` green) and production is now deployment
+  `f73c4f85` from that anchor (immutable URL
+  `https://f73c4f85.mdviewer-c9r.pages.dev`), smoke-verified live with SDK 3.2.0
+  sending `campaign: "other"` and no verbatim leak. OPEN AI-6/AI-7/AI-8 unchanged.
+
 - **2026-09-26 (Pulseboard SDK shipped)** — PR #105 (Pulseboard SDK 3.1 install with
   the consented Beta bar, inline pill slot, runtime enum guards) merged with green
   exact-head CI and nine triaged Codex threads, shared-review with the owner. `main`
@@ -150,15 +158,17 @@
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  again for the current deployment (2026-09-26): `main` `0da2e26` merged with CI green;
+  again for the current deployment (2026-09-26): `main` `b566e23` merged with CI green;
   deployed via `wrangler pages deploy` (immutable URL
-  `https://cdc831b1.mdviewer-c9r.pages.dev`, id `cdc831b1-1882-428b-86ad-d7f56ae40f48`);
+  `https://f73c4f85.mdviewer-c9r.pages.dev`, id `f73c4f85-e62f-4060-9360-6fb602f5798b`);
   smoke checks passed — identical stable/immutable bytes (5331), entry title, hashed-asset
   immutability, security headers, `Cache-Control: max-age=0, must-revalidate` on both
-  `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving, `/SOURCE.txt`
-  naming `0da2e26`, a Chromium boot, and a non-automation boot showing the Beta bar.
-  (The `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records are
-  superseded but retained in `docs/DEPLOYMENT.md` history.)
+  `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving SDK 3.2.0, `/SOURCE.txt`
+  naming `b566e23`, a Chromium boot, and a masked-automation probe showing the SDK
+  unblocked with `campaign: "other"` and no verbatim leak.
+  (The `0da2e26`/`cdc831b1`, `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and
+  `8a9c942`/`3378378d` records are superseded but retained in `docs/DEPLOYMENT.md`
+  history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
@@ -167,9 +177,9 @@
      its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
      are clearly visible; an empty `.md` shows the "document is empty" notice.
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
-     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `cdc831b1`
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `f73c4f85`
      deploy is the second version the update-toast check needs: with the app open from the
-     previous (`c3dee6ad`) deployment, confirm the update toast appears and Reload applies it.
+     previous (`cdc831b1`) deployment, confirm the update toast appears and Reload applies it.
   6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
      stay light (print-accurate), and a Download PDF taken in dark theme must contain light
      code. The theme control is now labelled "Screen" and sits at the right, before Export.
