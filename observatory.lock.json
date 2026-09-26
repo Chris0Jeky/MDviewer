@@ -5,7 +5,7 @@
   "installs": {
     "public/pulseboard.js": {
       "project": "mdviewer",
-      "sha256": "e3aedd78bcbb37d9b2dc42f300d3dcb9a7c4b94ecf08651386a97446dffc09f7"
+      "sha256": "fa670327bbdf9c11fb1e64d6e37564e2fa4ed1d63a9ab37d420b840e400fb831"
     }
   }
 }
