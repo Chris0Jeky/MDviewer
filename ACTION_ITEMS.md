@@ -21,7 +21,8 @@
   with worst non-last trailing blank 76%→4%) both merged with green exact-head CI and
   reviewed threads. `main` is now `4115563` (CI run `36267035533` green) but production
   still serves `f353480c` from `4e7d99a` — the checklist fix is not live yet. A redeploy
-  is queued after the improvement loop (TECH-1 toolbar, theme-color, header e2e).
+  is queued after the improvement loop (TECH-1 toolbar done in #101; theme-color and
+  header e2e pending).
   AI-6 and AI-7 remain OPEN for the operator.
 
 - **2026-09-26 (maintenance + deploy)** — The review/dependency queue is clear and
@@ -138,8 +139,11 @@
   7. Turn the new "Title page" toggle OFF — page 1 must now show the running header and page
      number (with it ON, current behavior: page 1 shows neither).
   8. Reply "AI-7 is done" (or report what looked wrong).
-     Known gap, deliberately deferred (ledgered): the toolbar is still desktop-only below
-     ~720px (QA TECH-1) — phone/tablet layout is the one QA item not fixed in this sweep.
+     Resolved 2026-09-26 (PR #101, closes QA TECH-1): the primary toolbar row is now
+     a single-row strip at ≤760px (204px toolbar on a 375x667 phone, automated cover
+     in `tests/e2e/responsive-toolbar.spec.ts`) — phone/tablet layout is no longer
+     the deferred QA item. Residual trade-off: Export sits off the initial phone
+     viewport until swiped or focus-scrolled into view.
 
 - **AI-6 — Accept the split workspace in a real browser (manual UI gate).** The split editor is
   merged to `main` (PR #36, `87249e0`) with 36/36 Chromium E2E tests green, including layer
