@@ -3,7 +3,21 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-08-16:** The QA sweep is **MERGED AND LIVE**. The manual QA
+> **▶ CURRENT CHECKPOINT — 2026-09-26:** Provenance slice merged, mermaid migration in
+> review, live-state docs catching up, deploy pending. PR **#94** merged as **`0bbbc0a`**
+> (issue-#62 archive identification via `MDVIEWER_SOURCE_ID`; the other two #62 sub-items
+> had already landed with render-lease tests in `5622a7d`), exact-head CI green plus one
+> Codex P2 (stale spec/index provenance lines) fixed with evidence — issue **#62 closed**.
+> PR **#74** (dependency-only mermaid 12, red on the golden-path label assertion) is closed
+> as superseded by PR **#95**, the full migration: ELK/neo/narrow-metric defaults pinned
+> back to the v11 rendering (verified identical label-by-label vs 11.17.2 in Chromium),
+> lodash-es override keeps `npm audit` at 0, state/class diagram coverage added, 183-entry
+> offline precache re-verified. Issue **#59A** (this stale run header) is fixed here; **#59B**
+> (DEPLOYMENT.md vs failure-ledger PWA claims) reconciles against fresh live evidence at the
+> pending deploy. Production is still the 2026-08-16 `8a9c942` build until that deploy lands.
+> **Two OPEN human items: AI-7 (manual live-site acceptance, steps 4–8) and AI-6.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-08-16:** The QA sweep is **MERGED AND LIVE**. The manual QA
 > report `mdviewerqareport.md` (27 findings against the outdated July deployment) drove a
 > coordinated fix sweep on `qa-sweep-20260816`: 25 findings fixed, 1 already fixed on `main`,
 > 1 deferred with a written plan (TECH-1 responsive toolbar <720px — see the 2026-08-16
@@ -15,7 +29,6 @@
 > build and the smoke checks passed, including `max-age=0, must-revalidate` on `/sw.js` +
 > `/manifest.webmanifest` and immutable `workbox-*.js`. Evidence at the merged head: 341 unit,
 > 4 server, 65+67 Chromium E2E (dev + production incl. offline and both no-cutoff tests).
-> **Two OPEN human items: AI-7 (manual live-site acceptance, steps 4–8) and AI-6.**
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-08-12:** The repository owner selected
 > `GPL-3.0-only` for current and future owner-authored MDviewer code, superseding
@@ -161,20 +174,25 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## Run header
 
-- **Start commit:** `fe085b0` (Initial scaffold) on `main`, tracking `origin/main`.
+- **Start commit (static — start of record):** `fe085b0` (Initial scaffold) on `main`.
+- **Cycle-2 base (static — historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
+- **Launch record (static):** 14 PRs through PR #29 (`43af438`), verified by hosted Node 20/22
+  and production Chromium CI run `30060892316` green; fuller product/release gate evidence at
+  PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 3 — **PUBLIC LAUNCH COMPLETE**; next work is dependency reconciliation or a
-  deliberately selected P2/P3 product slice.
-- **Last updated:** 2026-08-16
-- **Cycle-2 base (historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.
-- **Live GitHub queue snapshot (2026-07-24):** Dependabot PRs #22–#27 reported clean/mergeable with
-  green CI at the exact heads listed above. Refresh before use; several checks predate current `main`.
-- **Verified `main` anchor:** `43af438a47df08030cf0e6eafcc7b6ec7c580ea1` (PR #29 merge).
-- **PRs merged through the launch record:** 14, including housekeeping PR #20,
-  product-hardening/deployment PR #28, and deployment-record PR #29.
-- **Current main verification (`43af438`):** hosted Node 20/22 and production Chromium CI run
-  `30060892316` green. The fuller product/release gate evidence belongs to PR #28 / `7f4eedf` and is
-  summarized above; production Pages smoke is recorded in C16.
+- **Current cycle:** 4 — post-launch maintenance; this checkpoint closes the dependency/review
+  queue and ships a fresh production deploy. Next work after the deploy: the pending P2/P3
+  product slice (very-large-document budgets) plus operator-owned AI-6/AI-7.
+- **Last updated:** 2026-09-26
+- **Live GitHub queue snapshot (2026-09-26):** PR #95 (mermaid 12 migration, supersedes closed
+  #74) open; issue #59 part B open pending deploy evidence; issues #62 and PR #74 closed this
+  session. Refresh before use — snapshots expire at the next head change.
+- **Verified `main` anchor:** `0bbbc0a117f7e23fe315da10ca5d2e8adc658f67` (PR #94 merge).
+- **PRs merged to `main`:** 63 merge commits, most recently #94 (provenance labelling), #93/#91
+  (raster/export hardening), #89 (export update lifetime).
+- **Current main verification (`0bbbc0a`):** hosted Node 22/24 and production Chromium CI run
+  `36257974242` green. Production still serves the 2026-08-16 `8a9c942` build until the pending
+  deploy lands (see the current checkpoint).
 
 ## Environment / verification commands
 
