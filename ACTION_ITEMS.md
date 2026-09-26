@@ -15,6 +15,14 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (Pulseboard SDK shipped)** — PR #105 (Pulseboard SDK 3.1 install with
+  the consented Beta bar, inline pill slot, runtime enum guards) merged with green
+  exact-head CI and nine triaged Codex threads, shared-review with the owner. `main`
+  is `0da2e26` (CI run `36277132449` green) and production is now deployment
+  `cdc831b1` from that anchor (immutable URL
+  `https://cdc831b1.mdviewer-c9r.pages.dev`), smoke-verified live including a real
+  bar render. New operator item AI-8 (Beta-bar acceptance) joins OPEN AI-6/AI-7.
+
 - **2026-09-26 (improvement loop shipped)** — PRs #100 (docs-sync), #101 (TECH-1
   phone toolbar strip), #102 (theme-color follow, incl. a prototype-chain fix),
   and #103 (running-header/titlePage e2e) all merged with green exact-head CI and
