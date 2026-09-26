@@ -140,6 +140,45 @@ test.describe("paper stays print-accurate in every screen theme", () => {
   });
 });
 
+test.describe("theme-color follows the screen theme", () => {
+  const EXPECTED: Record<"light" | "dark" | "sepia", { meta: string; toolbar: string }> = {
+    light: { meta: "#ffffff", toolbar: "rgb(255, 255, 255)" },
+    dark: { meta: "#1d2026", toolbar: "rgb(29, 32, 38)" },
+    sepia: { meta: "#f7f0e1", toolbar: "rgb(247, 240, 225)" },
+  };
+
+  test("meta content and toolbar surface track light/dark/sepia together", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    for (const theme of ["light", "dark", "sepia"] as const) {
+      await setTheme(page, theme);
+      await expect(page.locator("meta[name='theme-color']")).toHaveAttribute(
+        "content",
+        EXPECTED[theme].meta,
+      );
+      // The meta must mirror --bg-toolbar, not merely change: the tab chrome
+      // should meet the toolbar without a seam.
+      expect(
+        await page
+          .locator("#toolbar")
+          .evaluate((el) => getComputedStyle(el).backgroundColor),
+      ).toBe(EXPECTED[theme].toolbar);
+    }
+  });
+
+  test("a reloaded dark session still reports the dark theme-color", async ({ page }) => {
+    await page.goto("/");
+    await setTheme(page, "dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-app-theme", "dark");
+    await expect(page.locator("meta[name='theme-color']")).toHaveAttribute(
+      "content",
+      "#1d2026",
+    );
+  });
+});
+
 test.describe("the screen-theme control names itself as screen-only (UX-2)", () => {
   // The left-of/right-of assertions describe the single-row desktop toolbar.
   // At Playwright's 1280px default the toolbar wraps on Linux (wider system

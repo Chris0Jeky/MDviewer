@@ -46,6 +46,7 @@ import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
 import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
+import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
 import { installInputHandlers } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
@@ -237,6 +238,7 @@ export class App {
   /** Apply persisted zoom + theme attributes on the relevant roots. */
   private applyThemeAttributes(): void {
     document.documentElement.setAttribute(ATTRS.appTheme, this.settings.screenTheme);
+    syncThemeColor(this.settings.screenTheme);
     const out = document.getElementById(IDS.pagedOutput);
     if (out) out.setAttribute(ATTRS.codeTheme, this.settings.codeTheme);
   }
@@ -301,6 +303,7 @@ export class App {
     // Always reflect theme attributes immediately (cheap, no reflow).
     if (patch.screenTheme !== undefined) {
       document.documentElement.setAttribute(ATTRS.appTheme, next.screenTheme);
+      syncThemeColor(next.screenTheme);
     }
     if (patch.codeTheme !== undefined) {
       const out = document.getElementById(IDS.pagedOutput);

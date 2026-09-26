@@ -38,7 +38,11 @@ export default defineConfig({
         start_url: "/",
         scope: "/",
         display: "standalone",
-        // Mirrors <meta name="theme-color"> and the light-theme --bg-toolbar / --bg-app tokens.
+        // The manifest is static, so this stays the light default even though the
+        // tab's <meta name="theme-color"> follows the screen theme at runtime
+        // (src/app/themeColor.ts): manifest-driven installed chrome stays light
+        // while the in-page meta tracks the theme once the page boots. Mirrors
+        // the light --bg-toolbar token.
         theme_color: "#ffffff",
         background_color: "#f3f4f6",
         icons: [

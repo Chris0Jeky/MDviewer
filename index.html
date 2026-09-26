@@ -21,8 +21,9 @@
       production card — correct for sharing, and harmless otherwise.
     -->
     <link rel="canonical" href="https://mdviewer-c9r.pages.dev/" />
-    <!-- Light-theme toolbar surface (--bg-toolbar). Static: the screen theme is a user
-         setting applied after paint, so there is no honest single value for both. -->
+    <!-- Default theme-color (light --bg-toolbar). The pre-paint script below and
+         src/app/themeColor.ts keep it in sync with the saved/active screen theme;
+         the three values mirror --bg-toolbar in src/styles/app.css. -->
     <meta name="theme-color" content="#ffffff" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -56,6 +57,7 @@
          still before first paint. -->
     <script>
       // Apply the saved screen theme before first paint to avoid a flash.
+      // Mirrors THEME_COLORS in src/app/themeColor.ts (this script cannot import it).
       try {
         const raw = localStorage.getItem("mdviewer.settings.v1");
         const saved = raw ? JSON.parse(raw) : {};
@@ -63,6 +65,9 @@
           saved.screenTheme ||
           (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
         document.documentElement.setAttribute("data-app-theme", theme);
+        const colors = { light: "#ffffff", dark: "#1d2026", sepia: "#f7f0e1" };
+        const meta = document.querySelector("meta[name='theme-color']");
+        if (meta) meta.setAttribute("content", colors[theme] || colors.light);
       } catch {
         document.documentElement.setAttribute("data-app-theme", "light");
       }

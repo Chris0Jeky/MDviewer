@@ -137,4 +137,12 @@ describe("head-contract: the pre-paint theme script stays last in <head>", () =>
     expect(last?.tagName.toLowerCase()).toBe("script");
     expect(last?.textContent ?? "").toContain("data-app-theme");
   });
+
+  it("sets theme-color from the saved theme (mirroring src/app/themeColor.ts)", () => {
+    const script = head.lastElementChild?.textContent ?? "";
+    expect(script).toContain("theme-color");
+    for (const hex of ["#ffffff", "#1d2026", "#f7f0e1"]) {
+      expect(script, `pre-paint script lost the ${hex} mirror`).toContain(hex);
+    }
+  });
 });
