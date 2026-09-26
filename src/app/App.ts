@@ -13,8 +13,9 @@
  *    render on screen if a later render throws.
  *  - Apply CSS-only setting changes (screen theme, code-theme family) without repaginating.
  *
- * Local-first: no network calls, no document persistence — only `Settings` round-trips
- * through localStorage.
+ * Local-first: no document network calls, no document persistence — only `Settings`
+ * round-trips through localStorage. Optional content-free usage events go through
+ * ./pulse.ts only (enums, size buckets and page counts; never document text or names).
  */
 
 import { ensureMarkdownLanguages, getHighlighter } from "../render/highlight";
@@ -51,6 +52,14 @@ import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
 import { installInputHandlers } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
+import {
+  pulseDocOpened,
+  pulsePdfCompleted,
+  pulsePrintRequested,
+  pulseRoute,
+  pulseTheme,
+  pulseViewMode,
+} from "./pulse";
 
 /** Which settings, when changed, require a full re-pagination (heights move). */
 const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
@@ -270,6 +279,7 @@ export class App {
     }
     if (!text) return;
     this.store.add("Untitled.md", text);
+    pulseDocOpened("typed", text.length);
   }
 
   /** Public: request a render. Reason picks the debounce window. */
@@ -302,6 +312,7 @@ export class App {
 
     // Always reflect theme attributes immediately (cheap, no reflow).
     if (patch.screenTheme !== undefined) {
+      if (next.screenTheme !== prev.screenTheme) pulseTheme(next.screenTheme);
       document.documentElement.setAttribute(ATTRS.appTheme, next.screenTheme);
       syncThemeColor(next.screenTheme);
     }
@@ -315,6 +326,7 @@ export class App {
     }
     // Layout-only state: pure CSS, never a reflow (see applyViewMode).
     if (patch.viewMode !== undefined) {
+      if (next.viewMode !== prev.viewMode) pulseViewMode(next.viewMode);
       this.workspaceEl.setAttribute(ATTRS.viewMode, next.viewMode);
     }
     if (patch.splitRatio !== undefined) {
@@ -375,6 +387,7 @@ export class App {
   /** Load the bundled sample document through the normal store path. */
   loadSample(): void {
     this.store.add("Sample.md", SAMPLE_MARKDOWN);
+    pulseDocOpened("sample", SAMPLE_MARKDOWN.length);
   }
 
   /** Trigger the primary (vector) print export. */
@@ -386,6 +399,8 @@ export class App {
       await this.scheduler.withRenderLock(async () => {
         await this.prepareExport(input);
         if (!this.renderedSnapshot) throw new Error("No paginated document to export.");
+        // A dialog request, never a claim that a PDF was saved.
+        pulsePrintRequested();
         await exportViaPrint(this.canvas.host);
       });
     } catch (err) {
@@ -414,10 +429,12 @@ export class App {
         const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
         this.announce("Preparing PDF export…");
+        let pages = 0;
         try {
           await exportPaginatedToPdf(this.canvas.host, snapshot.settings, {
             fileName: `${base}.pdf`,
             onProgress: (done, total) => {
+              pages = total;
               this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
               if (done === 1 || done === total || done % 5 === 0) {
                 this.announce(`Rendering page ${done} of ${total}.`);
@@ -425,6 +442,7 @@ export class App {
             },
           });
           this.announce("PDF downloaded.");
+          pulsePdfCompleted(pages);
         } finally {
           this.canvas.setBusy(false);
         }
@@ -587,6 +605,7 @@ export class App {
 
   private showPane(pane: Pane): void {
     this.currentPane = pane;
+    if (pane !== "error") pulseRoute(pane === "empty" ? "home" : "editor");
     // The canvas is always present; #empty-state overlays it until a document loads.
     this.emptyEl.hidden = pane !== "empty";
     if (pane !== "error") {

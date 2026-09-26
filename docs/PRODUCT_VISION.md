@@ -25,7 +25,7 @@ These two audiences share the same hard requirement: **structure must be preserv
 
 ## Design principles
 
-1. **Local-first and private.** Everything happens in your browser. No upload, no server round-trip, no telemetry, and no runtime network calls. Document bytes are never persisted — only a small settings object lives in `localStorage`. Your draft never leaves your machine.
+1. **Local-first and private.** Everything happens in your browser. No upload and no server round-trip for documents: document text, file names, headings, URLs and exports never leave the machine. The public site sends only content-free, opt-out usage data (closed enums and counts) through the Pulseboard SDK — see README "Privacy and usage data". Document bytes are never persisted — only a small settings object lives in `localStorage`. Your draft never leaves your machine.
 2. **A focused tool, not an IDE.** MDviewer does one thing well: Markdown in, page-perfect PDF out. It is not a knowledge base and not a document manager. The interface is a source pane, a paginated preview, and a small toolbar — nothing more. The source pane is a plain text surface with syntax colors, not a code editor: no file tree, no projects, no autocomplete, no plugins.
 3. **Vector-first export.** The primary export path is the browser's own print pipeline, producing vector PDFs with selectable text and crisp code. A rasterized fallback exists for convenience, but quality output is always the default.
 4. **The no-slice guarantee is the product.** Every architectural decision — a single pagination engine, the strict render order, the pristine-clone re-pagination model, the tiered break strategy — serves keeping blocks whole. If a change would weaken the guarantee, it does not ship.

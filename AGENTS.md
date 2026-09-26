@@ -67,7 +67,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 ## Default Work Style
 
 - Narrow diffs; preserve behavior unless asked.
-- Local-first: no runtime network calls, no telemetry, no document persistence (only `Settings`).
+- Local-first: no document network calls, no document persistence (only `Settings`). The one runtime
+  request is the owner-approved Pulseboard SDK, reached only through `src/app/pulse.ts` (closed enums,
+  size buckets, counts; never document content or names; `tests/pulse.test.ts`). No other telemetry.
 - Don't mix render / pagination / export / UI concerns in one slice unless the seam requires it.
 - Surface every failure; classify it (blocker / non-blocking risk / pre-existing noise / invalid signal).
 - Record workarounds and their future-fix path.

@@ -122,6 +122,23 @@
 
 ## OPEN items
 
+- **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate, after deploy).** The
+  Pulseboard SDK v3 install (branch `feat/pulseboard-sdk-v3`, Pulseboard#105) is proven by unit
+  tests and the artifact guard, but the SDK is deliberately inert under Playwright and off the
+  production origin, so only the live site shows the real bar. Nothing is stored until Pulseboard
+  lists `mdviewer` in `COLLECT_STAT_PROJECTS` and `COLLECT_PRODUCT_PROJECTS` (a Pulseboard change).
+  After the merge is deployed to https://mdviewer-c9r.pages.dev:
+  1. Open the site in a fresh private window. A one-line **Beta** bar sits at the top; the toolbar
+     is directly below it and the page does not scroll.
+  2. Open DevTools → Network. Click **Choose**: three switches appear. Click **OK**: the bar
+     collapses to a small **Beta** button bottom-left and the toolbar moves up to the top.
+  3. Load the sample, switch view and theme, Print, and Download PDF. In Network, open each request
+     to `pulseboard-observatory.commit-atlas.workers.dev` and confirm the payloads contain only the
+     enums listed in README "Privacy and usage data" — no Markdown text, file name or heading.
+  4. In the print preview, confirm neither the bar nor the Beta button appears on any page.
+  5. With Global Privacy Control on (Brave, or Firefox's setting), reload: no bar, no request.
+  6. Reply "AI-8 is done" (or report what looked wrong).
+
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
   again for the current deployment (2026-09-26): `main` `578590c` merged with CI green;
   deployed via `wrangler pages deploy` (immutable URL

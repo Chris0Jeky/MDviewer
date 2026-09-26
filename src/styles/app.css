@@ -156,6 +156,24 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  /* Shrinks by the Pulseboard bar's height while that bar is showing (body flex below). */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* -----------------------------------------------------------------------------
+ * Pulseboard Beta bar (public/pulseboard.js, index.html [data-pulseboard-bar]).
+ * The body is a column so the bar takes its own row and #app keeps the rest of the
+ * viewport instead of being pushed below the fold. The SDK releases the placeholder
+ * (height 0 + hidden) whenever no bar is showing, which gives #app the full height back.
+ * -------------------------------------------------------------------------- */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-pulseboard-bar] {
+  flex: 0 0 auto;
 }
 
 /* -----------------------------------------------------------------------------

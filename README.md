@@ -4,9 +4,51 @@
 
 **Write Markdown, or drag a file in — get a beautiful PDF out, with no code block, figure, table, or callout ever sliced across a page boundary.**
 
-MDviewer is a browser-based Markdown → PDF tool built for **research papers and code-heavy technical docs**. Write in the built-in source pane and watch the paginated preview rebuild as you type, or drop a file in and edit it in place. It runs 100% in your browser: nothing is uploaded, no document is ever stored on a server, and it makes no document/API or third-party runtime requests. Same-origin application assets may load lazily as features run. The only thing it persists is a small settings object in `localStorage`.
+MDviewer is a browser-based Markdown → PDF tool built for **research papers and code-heavy technical docs**. Write in the built-in source pane and watch the paginated preview rebuild as you type, or drop a file in and edit it in place. It runs 100% in your browser: your documents are never uploaded, never stored on a server, and never sent anywhere. Same-origin application assets may load lazily as features run. The app itself persists only a small settings object in `localStorage`. The public site also sends pseudonymous, content-free usage data to the owner's own Pulseboard collector (never document text, file names or exports) — see [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
 
 ![MDviewer rendering its bundled sample as a seven-page, print-ready document.](docs/assets/mdviewer-preview.png)
+
+## Privacy and usage data
+
+Your documents stay private. Markdown text, file names, titles, headings, links or URLs that appear
+in a document, and PDF or print contents **never leave your browser** — not to Pulseboard, not to
+anyone. This is enforced in code: every usage call goes through one module
+([`src/app/pulse.ts`](src/app/pulse.ts)) whose functions accept only fixed choices, and
+[`tests/pulse.test.ts`](tests/pulse.test.ts) opens documents full of marker text and fails if any of
+it reaches a usage call.
+
+**What is sent.** The live site (https://mdviewer-c9r.pages.dev only; local runs, previews and
+self-hosted copies send nothing) loads the Pulseboard SDK v3 from its own origin
+(`/pulseboard.js`) and sends data only to `https://pulseboard-observatory.commit-atlas.workers.dev`,
+the owner's first-party collector. A one-line **Beta** bar at the top of the page explains it and
+offers **Choose** and **OK**. There are three categories:
+
+| Category | What MDviewer sends | Default outside the EEA | Default in the EEA (or unknown) |
+| --- | --- | --- | --- |
+| **Usage counts** | Daily aggregate counts: page views and the two export events (print dialog requested, PDF download completed), with device class (mobile/tablet/desktop), referral category and referring site name (never a path), campaign tag, light/dark preference and new/returning visit | On | On |
+| **Diagnostics** | Page-load timings (web vitals) and engagement (visible seconds, deepest scroll %). MDviewer deliberately sends **no JavaScript error reports**, because an error message can quote document text | On | Off until you click OK |
+| **Journeys and product data** | A random per-tab session id and these events only: `doc.opened` with `source` (`file`, `paste`, `sample`, `typed`) and `sizeBucket` (`<1k`, `1-10k`, `10-100k`, `>100k` characters); `view.mode` (`editor`, `split`, `preview`); `theme.changed` (`light`, `dark`, `sepia`); `export.print_requested` (a dialog request, never a claim a PDF was saved); `export.pdf_completed` with the page count; page views for the `home` and `editor` screens | On | Off until you click OK |
+
+**Never sent:** document text, file names, titles, headings, URLs from documents, export contents,
+your IP address (the collector sees it in transit and stores none), user agent, the page URL or
+path, cookies, or any identifier other than the per-tab session id.
+
+**Kept:** detailed data (diagnostics and journeys) for 90 days; aggregate counts currently for 14
+days (planned to move to 400 days).
+
+**How to turn it off.** Any of these works, and each is respected immediately:
+
+- Click **Choose → Turn all off** in the Beta bar, or the small **Beta** button (bottom-left) once
+  a choice is recorded. Turning a category off deletes its local keys and drops anything queued.
+- Turn on **Global Privacy Control** or **Do Not Track** in your browser: every category is off,
+  no bar is shown and no request of any kind is made.
+- Block `/pulseboard.js` or the collector with a content blocker, or run MDviewer locally
+  (`npm start`) — MDviewer works exactly the same without it.
+
+**On your device** the SDK stores your choice (`pulseboard:consent:v3:mdviewer`), a visit marker
+holding only a month (`pulseboard:visit:mdviewer`, not written in the EEA until you click OK), and
+the per-tab session record in `sessionStorage`. Details of the SDK and collector:
+[Pulseboard `observatory/docs/SDK.md`](https://github.com/Chris0Jeky/Pulseboard/blob/main/observatory/docs/SDK.md).
 
 ## Why MDviewer exists
 
