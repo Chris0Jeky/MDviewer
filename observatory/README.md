@@ -1,11 +1,32 @@
-# Observatory integration
+# Pulseboard SDK integration
 
-Shared kit: [Pulseboard #15](https://github.com/Chris0Jeky/Pulseboard/pull/15), source commit `8d92fff11f581d600c357e402cd521426665f318`.
+MDviewer serves the Pulseboard SDK v3 artifact `public/pulseboard.js` (Chris0Jeky/Pulseboard#105),
+built by Pulseboard's `observatory/adapters/build-sdk.mjs` for project `mdviewer` and pinned by
+`observatory.lock.json` (`"sdk": "3.0.0"`, SHA-256 per target). Never edit the artifact; rebuild it
+from a Pulseboard checkout and update the lock:
 
-The local SDK is staged with an empty endpoint. It neither sends telemetry nor reads consent storage. MDviewer's current no-upload/no-runtime-API promise remains in force. Do not activate remote reporting merely by merging this PR.
+```sh
+cd <Pulseboard>/observatory
+node adapters/build-sdk.mjs mdviewer <MDviewer checkout> public/pulseboard.js
+```
 
-Run `node observatory/check.mjs` and the existing Node 22/24, head-contract, production-build and Playwright checks. Verify the new same-origin asset is precached and that offline rendering/export remains intact. The shared kit's 58 local tests do not replace these host checks.
+`node observatory/check.mjs` (`npm run agent:observatory:check`, part of `npm run agent:check` and
+CI) verifies the hash against the lock, the `pulseboard-sdk 3.0.0` header, the collector origin
+`https://pulseboard-observatory.commit-atlas.workers.dev`, the absence of server constants, and that
+the file defines `window.Pulseboard` in a vm without any request before mount or off the registered
+origin.
 
-Activation requires a separately approved product-policy and notice change, collector deployment, CSP review, an updated locked artifact and explicit consent/withdrawal tests. No document text, Markdown, filenames, images, URLs, math source or export contents may enter the event contract.
+The SDK is active only on `https://mdviewer-c9r.pages.dev`; local runs, Pages previews, automation
+(`navigator.webdriver`, so the Playwright suite) and browsers with GPC or DNT get an inert API that
+sends nothing. Storage on the collector also requires `mdviewer` in Pulseboard's
+`COLLECT_STAT_PROJECTS` and `COLLECT_PRODUCT_PROJECTS`; that is a separate Pulseboard change.
 
-After deliberate activation the baseline is page views and content-free error occurrence counts. Export names are reserved but not yet wired. `export.print_requested` must mean a dialog request, never a claimed saved PDF. `export.pdf_completed` belongs only after a successful actual PDF operation. A later semantic-hook PR must cover both paths and their failure tests.
+Product code talks to the SDK only through `src/app/pulse.ts`, whose functions take closed enums,
+a size bucket and a page count — never a string from a document or a user. `tests/pulse.test.ts`
+proves no document text, file name, heading or URL reaches any `window.Pulseboard` call, that the app
+works without the SDK, and that JavaScript error events are stopped before the SDK's listener
+(`installErrorShield`, because error messages can quote document text). What is sent, what is never
+sent and how to turn it off: README "Privacy and usage data".
+
+Event meanings: `export.print_requested` is a print-dialog request, never a claim that a PDF was
+saved; `export.pdf_completed` fires only after the raster PDF download finished.
