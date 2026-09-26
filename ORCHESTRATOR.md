@@ -3,7 +3,20 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (checklist pagination fix, in review):**
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (checklist fix merged; improvement loop):**
+> PR **#99** (checklist pagination fix) merged as **`4115563`** with green
+> exact-head CI (run `36267035533`) and a completed exact-head review with no
+> findings; post-merge `main` CI green. PR **#98** (deploy record for
+> `f353480c` from `4e7d99a`) merged as `7fa3a1f` just before it. Production
+> still serves `f353480c` from `4e7d99a` — it predates the checklist fix, so a
+> redeploy is pending once the improvement loop lands. No open PRs except this
+> record PR (#100), no open issues.
+> Next slices, smallest first: (1) this docs-sync record; (2) TECH-1 responsive
+> toolbar (ledgered plan); (3) theme-color follow screen theme (or record why
+> white stays); (4) running-header/titlePage e2e gap; then redeploy + smoke.
+> **Two OPEN human items: AI-7 (steps 4–8) and AI-6.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
 > Owner report: `HUMAN_TODO.pdf` (610 lines, 30 long task items) paginated with
 > mostly-blank sheets (worst non-last page 76% empty, 20 pages) and hyphenated
 > inline-code chips. Root causes: `li` carried `break-inside: avoid` (each long
@@ -15,8 +28,9 @@
 > `tests/e2e/list-flow.spec.ts` + `tests/fixtures/checklist.md` (fill cap 20%,
 > fragmentation count, style pins, nested-pre guard) — verified red pre-fix /
 > green post-fix; `tests/buildSource.test.ts` updated for the contract change;
-> spec §4 carries the explicit foundation replacement. Gates outstanding at
-> this checkpoint: full `agent:check`, build, dev + preview e2e, PR review.
+> spec §4 carries the explicit foundation replacement. Gates all green at merge:
+> typecheck, lint, 421 unit, build, hook smoke, 14 skills, dev e2e 91 passed,
+> preview e2e 92 passed, exact-head CI green.
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (deploy done):** Cycle 4 is complete except this
 > record PR and the #59 close. Merged since the last checkpoint: PR **#95** (mermaid 12,
@@ -194,18 +208,20 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   and production Chromium CI run `30060892316` green; fuller product/release gate evidence at
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
-- **Current cycle:** 4 — post-launch maintenance, DONE except this record PR and the #59
-  close. Next work: the pending P2/P3 product slice (very-large-document budgets) plus
-  operator-owned AI-6/AI-7.
+- **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
+  merge → repeat, then redeploy). Queued: docs-sync record, TECH-1 responsive toolbar,
+  theme-color follow, running-header/titlePage e2e, then production redeploy. Longer
+  backlog: very-large-document budgets, plus operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record PR;
-  issue #59 closes with it; issues #62 and PR #74 closed earlier this session; production
-  is `f353480c` from `4e7d99a`. Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `4e7d99a9d4d67e1c4ccc4ece6116b00ef63ca4c9` (PR #97 merge).
-- **PRs merged to `main`:** 52 first-parent merges, most recently #97 (patch sweep), #96
-  (run-header refresh), #95 (mermaid 12 migration), #94 (provenance labelling).
-- **Current main verification (`4e7d99a`):** hosted Node 22/24 and production Chromium
-  CI run `36260700769` green. Production serves `f353480c` from this anchor (see the
+- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this record PR
+  (#100), no open issues; production is `f353480c` from `4e7d99a`, which predates
+  the #99 checklist fix — redeploy pending.
+  Refresh before use — snapshots expire at the next head change.
+- **Verified `main` anchor:** `4115563130ccfa1f7e180bbd9edcfb58b169ea3a` (PR #99 merge).
+- **PRs merged to `main`:** 54 PR merges, most recently #99 (checklist pagination fix),
+  #98 (deploy record), #97 (patch sweep), #96 (run-header refresh).
+- **Current main verification (`4115563`):** hosted Node 22/24 and production Chromium
+  CI run `36267035533` green. Production still serves `f353480c` from `4e7d99a` (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -452,3 +468,11 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   `43af438`. Main CI run `30060892316` then passed all three required jobs. The relaxed solo-owner
   protection profile was read back from GitHub, the Pages deployment was read back from Wrangler,
   and open work is now only Dependabot #22–#27 plus the explicit P2/P3 roadmap choices above.
+- **C21 (2026-09-26) — CHECKLIST FIX MERGED:** Owner-reported `HUMAN_TODO.pdf` defects
+  (blank sheets, hyphenated inline code) fixed on `fix/checklist-pagination-flow` and merged
+  as PR **#99** → `4115563`: `li` fragments like `p`, leaves `ATOMIC_BLOCK_SELECTOR`, inline
+  code `hyphens: none` + `overflow-wrap: anywhere`. Real doc 20→16 pages, worst non-last
+  trailing 76%→4%. Evidence: typecheck, lint, 421 unit, build, hook smoke, 14 skills, dev
+  e2e 91 passed, preview e2e 92 passed, exact-head CI run `36267035533` green, exact-head
+  review with no findings. Just before it, PR **#98** → `7fa3a1f` recorded the `f353480c`
+  production deploy. Production now predates `main`; redeploy queued after the loop.
