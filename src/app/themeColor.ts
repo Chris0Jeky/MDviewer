@@ -22,7 +22,13 @@ export const THEME_COLORS: Record<ScreenTheme, string> = {
 };
 
 export function themeColorFor(theme: ScreenTheme): string {
-  return THEME_COLORS[theme] ?? THEME_COLORS.light;
+  // Explicit membership test, NOT a map lookup: a hand-edited store can hand us
+  // "__proto__"/"toString"/"constructor", which resolve through Object.prototype
+  // instead of missing and would bypass a `?? fallback`.
+  if (theme === "light" || theme === "dark" || theme === "sepia") {
+    return THEME_COLORS[theme];
+  }
+  return THEME_COLORS.light;
 }
 
 /** Point the theme-color meta at `theme`. Silently no-ops when the meta is absent. */

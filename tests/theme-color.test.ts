@@ -14,6 +14,17 @@ describe("themeColor", () => {
     expect(themeColorFor("neon" as never)).toBe("#ffffff");
   });
 
+  it("degrades prototype-chain keys to light (they must not resolve via Object.prototype)", () => {
+    for (const hostile of ["__proto__", "toString", "constructor", "hasOwnProperty"] as never[]) {
+      expect(themeColorFor(hostile)).toBe("#ffffff");
+    }
+    document.head.innerHTML = `<meta name="theme-color" content="#ffffff">`;
+    syncThemeColor("toString" as never);
+    expect(
+      document.querySelector("meta[name='theme-color']")?.getAttribute("content"),
+    ).toBe("#ffffff");
+  });
+
   it("syncThemeColor rewrites the theme-color meta in place", () => {
     document.head.innerHTML = `<meta name="theme-color" content="#ffffff">`;
     syncThemeColor("dark");

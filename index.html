@@ -67,7 +67,14 @@
         document.documentElement.setAttribute("data-app-theme", theme);
         const colors = { light: "#ffffff", dark: "#1d2026", sepia: "#f7f0e1" };
         const meta = document.querySelector("meta[name='theme-color']");
-        if (meta) meta.setAttribute("content", colors[theme] || colors.light);
+        // Membership test, not colors[theme]: a corrupt saved theme like
+        // "__proto__" would otherwise resolve through Object.prototype.
+        if (meta) {
+          meta.setAttribute(
+            "content",
+            theme === "dark" || theme === "sepia" ? colors[theme] : colors.light,
+          );
+        }
       } catch {
         document.documentElement.setAttribute("data-app-theme", "light");
       }

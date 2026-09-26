@@ -177,6 +177,24 @@ test.describe("theme-color follows the screen theme", () => {
       "#1d2026",
     );
   });
+
+  test("a corrupt persisted theme degrades the meta to light, not prototype garbage", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "mdviewer.settings.v1",
+        JSON.stringify({ screenTheme: "toString" }),
+      );
+    });
+    await page.goto("/");
+    // Both the pre-paint script and the boot sync must treat an inherited-key
+    // theme as unknown: the meta keeps a valid color either way.
+    await expect(page.locator("meta[name='theme-color']")).toHaveAttribute(
+      "content",
+      "#ffffff",
+    );
+  });
 });
 
 test.describe("the screen-theme control names itself as screen-only (UX-2)", () => {
