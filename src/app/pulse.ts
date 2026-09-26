@@ -1,7 +1,7 @@
 /**
  * The only seam between MDviewer and the optional Pulseboard SDK (public/pulseboard.js).
  *
- * Privacy contract (README "Privacy", docs/design/IMPLEMENTATION_SPEC.md §1): every value
+ * Privacy contract (README "Privacy and usage data", docs/design/IMPLEMENTATION_SPEC.md §1): every value
  * that leaves this module is a closed enum, a size bucket or a page count. Markdown text,
  * file names, titles, headings, URLs found in documents and export contents never reach a
  * Pulseboard call — the functions below take no string that a user or a document supplies.
@@ -11,7 +11,11 @@
  * production host, automation, GPC/DNT) or throws, the product carries on unchanged.
  */
 
+import { VIEW_MODES } from "./settings";
 import type { ScreenTheme, ViewMode } from "./settings";
+
+/** Runtime allow-lists: a hand-edited settings record must not smuggle a free string out. */
+const SCREEN_THEMES: readonly ScreenTheme[] = ["light", "dark", "sepia"];
 
 /** Routes registered for `mdviewer` in Pulseboard observatory/src/projects.mjs. */
 export type PulseRoute = "home" | "editor";
@@ -89,10 +93,12 @@ export function pulsePdfCompleted(pages: number): void {
 }
 
 export function pulseViewMode(mode: ViewMode): void {
+  if (!VIEW_MODES.includes(mode)) return;
   call((api) => api.track("view.mode", { mode }));
 }
 
 export function pulseTheme(theme: ScreenTheme): void {
+  if (!SCREEN_THEMES.includes(theme)) return;
   call((api) => api.track("theme.changed", { theme }));
 }
 
