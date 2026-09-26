@@ -47,8 +47,9 @@ days (planned to move to 400 days).
   (`npm start`) — MDviewer works exactly the same without it.
 
 **On your device** the SDK stores your choice (`pulseboard:consent:v3:mdviewer`), a visit marker
-holding only a month (`pulseboard:visit:mdviewer`, not written in the EEA until you click OK),
-a region hint (`pulseboard:region:mdviewer` in `sessionStorage`, just `eea` or `other`, gone when
+(`pulseboard:visit:mdviewer`: in `localStorage` only the month of your last visit, and in
+`sessionStorage` a copy of this tab's answer, `new` or `returning`, gone when the tab closes; neither
+is written in the EEA until you click OK), a region hint (`pulseboard:region:mdviewer` in `sessionStorage`, just `eea` or `other`, gone when
 the tab closes), and the per-tab session record in `sessionStorage`. Details of the SDK and collector:
 [Pulseboard `observatory/docs/SDK.md`](https://github.com/Chris0Jeky/Pulseboard/blob/main/observatory/docs/SDK.md).
 
