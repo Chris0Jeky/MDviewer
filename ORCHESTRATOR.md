@@ -3,19 +3,20 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (improvement loop shipped to production):**
-> PR **#103** (running-header/titlePage e2e) merged as `578590c` (post-merge `main`
-> CI run `36271782617` green; Codex no-findings at the head). Cycle-5 loop complete:
-> #100 docs-sync, #101 TECH-1 strip, #102 theme-color, #103 header e2e — all with
-> green exact-head CI and reviewed threads. Production is now deployment
-> **`c3dee6ad`** from `main` **`578590c`** (immutable URL
-> `https://c3dee6ad.mdviewer-c9r.pages.dev/`, id
-> `c3dee6ad-f059-4a80-9799-d280177e300b`), smoke-verified live (identical
-> stable/immutable bytes, headers, cache policy, source id, Chromium boot). No open
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (Pulseboard SDK shipped to production):**
+> PR **#105** (Pulseboard SDK 3.1 install) merged as `0da2e26` (post-merge `main`
+> CI run `36277132449` green). Review was shared with the owner in real time: nine
+> Codex threads, all triaged — placeholder fallback, skip-link order, guardrail/UA/
+> region/visit disclosure fixes in-PR, plus two OPEN upstream ledger entries (scroll
+> engagement, cross-tab focus) and an owner-escalated campaign-bucketing item for the
+> SDK 3.2 re-cut. Production is now deployment **`cdc831b1`** from `main`
+> **`0da2e26`** (immutable URL `https://cdc831b1.mdviewer-c9r.pages.dev/`, id
+> `cdc831b1-1882-428b-86ad-d7f56ae40f48`), smoke-verified live including a real
+> non-automation boot where the Beta bar renders with a resolved region. No open
 > PRs except this deploy-record PR, no open issues.
 > Next: merge this record, then loop for the next slice (very-large-document
 > budgets) or hand back.
-> **Two OPEN human items: AI-7 (steps 4–8) and AI-6.**
+> **Three OPEN human items: AI-8 (Beta bar), AI-7 (steps 4–8), and AI-6.**
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
 > Owner report: `HUMAN_TODO.pdf` (610 lines, 30 long task items) paginated with
@@ -211,18 +212,18 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Loop shipped: #100–#103 merged, production is
-  `c3dee6ad` from `578590c`. Next slice: very-large-document budgets. Longer backlog
-  plus operator-owned AI-6/AI-7.
+  merge → repeat, then redeploy). Loop shipped (#100–#103) and Pulseboard SDK #105
+  merged; production is `cdc831b1` from `0da2e26`. Next slice: very-large-document
+  budgets. Longer backlog plus operator-owned AI-6/AI-7/AI-8.
 - **Last updated:** 2026-09-26
 - **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record
-  PR, no open issues; production is `c3dee6ad` from `578590c` (fresh).
+  PR, no open issues; production is `cdc831b1` from `0da2e26` (fresh).
   Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `578590c1317ae632448684c0799ea3f0ddf50682` (PR #103 merge).
-- **PRs merged to `main`:** 58 PR merges, most recently #103 (header e2e),
-  #102 (theme-color follow), #101 (TECH-1 toolbar strip), #100 (docs-sync record).
-- **Current main verification (`578590c`):** hosted Node 22/24 and production Chromium
-  CI run `36271782617` green. Production serves `c3dee6ad` from this anchor (see the
+- **Verified `main` anchor:** `0da2e26daab7b938df981484cf045f7be9e39b4c` (PR #105 merge).
+- **PRs merged to `main`:** 60 PR merges, most recently #105 (Pulseboard SDK 3.1),
+  #104 (deploy record), #103 (header e2e), #102 (theme-color follow).
+- **Current main verification (`0da2e26`):** hosted Node 22/24 and production Chromium
+  CI run `36277132449` green. Production serves `cdc831b1` from this anchor (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -251,6 +252,10 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
+- **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate).** Opened 2026-09-26
+  with PR #105. The SDK is inert under automation and off-origin, so only the live site shows
+  the real bar: bar/pill/panel behavior, payload enums, print exclusion, GPC silence.
+  Step-by-step instructions are in `ACTION_ITEMS.md`; only the maintainer may close it.
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Opened 2026-08-16 with
   PR #48. Merge, deploy, and smoke (steps 1–3) are done; the remaining steps 4–8 are the
   in-browser checks on **https://mdviewer-c9r.pages.dev/** (zoom/chip/banners/export progress,
@@ -498,3 +503,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   from `578590c`, smoke-verified live on every header plus a Chromium boot. The
   cycle-5 loop (docs-sync, TECH-1 strip, theme-color, header e2e) is fully merged,
   reviewed, and live; only this record PR remains open.
+- **C26 (2026-09-26) — PULSEBOARD SDK SHIPPED TO PRODUCTION:** PR **#105** →
+  `0da2e26`, post-merge `main` CI run `36277132449` green. Production is now
+  **`cdc831b1`** from `0da2e26`, smoke-verified live including a non-automation
+  boot where the Beta bar renders with a resolved region. Nine Codex threads, all
+  triaged; two upstream SDK defects ledgered OPEN (scroll, focus), campaign
+  bucketing owner-escalated for the 3.2 re-cut. New operator item AI-8 (Beta bar).

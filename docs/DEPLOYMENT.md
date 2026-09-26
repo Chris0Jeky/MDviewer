@@ -26,23 +26,26 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
-- Current production deployment: `c3dee6ad` from merge commit `578590c` (2026-09-26 —
-  checklist pagination fix, TECH-1 phone toolbar strip, theme-color follow, header e2e) —
-  immutable URL **https://c3dee6ad.mdviewer-c9r.pages.dev/**, deployment id
-  `c3dee6ad-f059-4a80-9799-d280177e300b`
-- Previous production deployment: `f353480c` from merge commit `4e7d99a` (2026-09-26,
-  provenance labelling + Mermaid 12 + orchestrator refresh + dependency sweep) —
-  immutable URL **https://f353480c.mdviewer-c9r.pages.dev/**
-- Earlier production deployment: `3378378d` from merge commit `8a9c942` (2026-08-16, the
-  QA-sweep + PWA release) — immutable URL **https://3378378d.mdviewer-c9r.pages.dev/**
+- Current production deployment: `cdc831b1` from merge commit `0da2e26` (2026-09-26 —
+  Pulseboard SDK 3.1 install with the consented Beta bar) —
+  immutable URL **https://cdc831b1.mdviewer-c9r.pages.dev/**, deployment id
+  `cdc831b1-1882-428b-86ad-d7f56ae40f48`
+- Previous production deployment: `c3dee6ad` from merge commit `578590c` (2026-09-26,
+  checklist fix + TECH-1 strip + theme-color + header e2e) —
+  immutable URL **https://c3dee6ad.mdviewer-c9r.pages.dev/**
+- Earlier production deployments: `f353480c` from `4e7d99a` (2026-09-26) and `3378378d`
+  from `8a9c942` (2026-08-16, QA-sweep + PWA release).
 - Last operator verification: 2026-09-26 — stable/immutable URLs return HTTP 200 with
-  identical bytes (4521) and the entry title; hashed assets immutable; security headers
+  identical bytes (5331) and the entry title; hashed assets immutable; security headers
   (`Cross-Origin-Opener-Policy: same-origin`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) present;
   `/sw.js` and `/manifest.webmanifest` return `max-age=0, must-revalidate`;
-  `/workbox-9c191d2f.js` returns immutable; `/SOURCE.txt` names `578590c`; the live
-  immutable URL boots to the empty state in real Chromium. Real-browser install and
-  the update-toast flow remain operator work (AI-7 step 5).
+  `/pulseboard.js` serves 200; `/SOURCE.txt` names `0da2e26`; the live
+  immutable URL boots to the empty state in real Chromium with the SDK correctly inert
+  (origin + automation gates), while the stable origin in a non-automation browser shows
+  the Beta bar with a resolved region (observed `eea`, zero boot errors). Real-browser
+  install, the update-toast flow, and the full Beta-bar acceptance remain operator work
+  (AI-7 step 5, AI-8).
 
 The current project uses Wrangler direct upload. To publish a new verified `main` build from an
 authenticated maintainer machine:

@@ -15,6 +15,14 @@
 
 ## Current State (snapshot)
 
+- **2026-09-26 (Pulseboard SDK shipped)** — PR #105 (Pulseboard SDK 3.1 install with
+  the consented Beta bar, inline pill slot, runtime enum guards) merged with green
+  exact-head CI and nine triaged Codex threads, shared-review with the owner. `main`
+  is `0da2e26` (CI run `36277132449` green) and production is now deployment
+  `cdc831b1` from that anchor (immutable URL
+  `https://cdc831b1.mdviewer-c9r.pages.dev`), smoke-verified live including a real
+  bar render. New operator item AI-8 (Beta-bar acceptance) joins OPEN AI-6/AI-7.
+
 - **2026-09-26 (improvement loop shipped)** — PRs #100 (docs-sync), #101 (TECH-1
   phone toolbar strip), #102 (theme-color follow, incl. a prototype-chain fix),
   and #103 (running-header/titlePage e2e) all merged with green exact-head CI and
@@ -123,7 +131,7 @@
 ## OPEN items
 
 - **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate, after deploy).** The
-  Pulseboard SDK v3 install (branch `feat/pulseboard-sdk-v3`, Pulseboard#105) is proven by unit
+  Pulseboard SDK 3.1 install (PR #105, Pulseboard#105) is proven by unit
   tests and the artifact guard, but the SDK is deliberately inert under Playwright and off the
   production origin, so only the live site shows the real bar. Nothing is stored until Pulseboard
   lists `mdviewer` in `COLLECT_STAT_PROJECTS` and `COLLECT_PRODUCT_PROJECTS` (a Pulseboard change).
@@ -142,15 +150,15 @@
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  again for the current deployment (2026-09-26): `main` `578590c` merged with CI green;
+  again for the current deployment (2026-09-26): `main` `0da2e26` merged with CI green;
   deployed via `wrangler pages deploy` (immutable URL
-  `https://c3dee6ad.mdviewer-c9r.pages.dev`, id `c3dee6ad-f059-4a80-9799-d280177e300b`);
-  smoke checks passed — identical stable/immutable bytes (4521), entry title, hashed-asset
+  `https://cdc831b1.mdviewer-c9r.pages.dev`, id `cdc831b1-1882-428b-86ad-d7f56ae40f48`);
+  smoke checks passed — identical stable/immutable bytes (5331), entry title, hashed-asset
   immutability, security headers, `Cache-Control: max-age=0, must-revalidate` on both
-  `/sw.js` and `/manifest.webmanifest`, immutable `/workbox-*.js`, `/SOURCE.txt`
-  naming `578590c`, and a Chromium boot.
-  (The `4e7d99a`/`f353480c` and `8a9c942`/`3378378d` records are superseded but retained
-  in `docs/DEPLOYMENT.md` history.)
+  `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving, `/SOURCE.txt`
+  naming `0da2e26`, a Chromium boot, and a non-automation boot showing the Beta bar.
+  (The `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records are
+  superseded but retained in `docs/DEPLOYMENT.md` history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
@@ -159,9 +167,9 @@
      its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
      are clearly visible; an empty `.md` shows the "document is empty" notice.
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
-     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `c3dee6ad`
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `cdc831b1`
      deploy is the second version the update-toast check needs: with the app open from the
-     previous (`f353480c`) deployment, confirm the update toast appears and Reload applies it.
+     previous (`c3dee6ad`) deployment, confirm the update toast appears and Reload applies it.
   6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
      stay light (print-accurate), and a Download PDF taken in dark theme must contain light
      code. The theme control is now labelled "Screen" and sits at the right, before Export.
