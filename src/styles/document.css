@@ -274,6 +274,17 @@
   border: 1px solid var(--doc-border);
   color: #b3134a; /* AA on the light chip */
   white-space: break-spaces;
+  /* Identifiers, paths and flags must wrap WITHOUT hyphenation: the inherited
+   * `.doc { hyphens: auto }` otherwise inserts hyphen glyphs mid-token
+   * ("jeky-claude-" / "lane"), which reads as part of the code and can corrupt
+   * a copied command. `overflow-wrap: anywhere` still lets unbreakable tokens
+   * wrap (and keeps their min-content width small so narrow cells don't blow
+   * out); `box-decoration-break: clone` keeps the chip frame continuous on each
+   * fragment line, on screen and on paper alike. */
+  hyphens: none;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 /* code-figure wraps a captioned/numbered listing around a <pre>. */

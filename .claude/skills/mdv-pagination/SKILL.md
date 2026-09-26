@@ -20,8 +20,10 @@ product's core promise: no atomic block ever straddles a page boundary.
   if `showPageNumbers`, TOC `target-counter` only if `showToc`, line-number CSS only if
   `showLineNumbers`, `@footnote` area, `h1/h2 string-set`).
 - `src/styles/print.css` — STATIC break rules only: `break-inside:avoid` +
-  `box-decoration-break:clone` + `orphans/widows` + `thead` repeat + tr/td/th/li +
-  headings `break-after:avoid` + `katex-display` + figures. NO `@page` block here.
+  `box-decoration-break:clone` + `orphans/widows` + `thead` repeat + tr/td/th +
+  headings `break-after:avoid` + `katex-display` + figures. `li` is NOT in the
+  avoid set: list items fragment like paragraphs (`orphans/widows:3`), since
+  keep-whole items left mostly-blank sheets (spec §4). NO `@page` block here.
 - `src/paginate/measure.ts` — `MM`, `IN`, `SHRINK_LIMIT` (1.15), `measurePageArea`.
 - `src/paginate/handler.ts` — `MDViewerHandler`, `registerHandlersOnce` (idempotent),
   `fillTocPageNumbers`.

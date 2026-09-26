@@ -368,11 +368,16 @@ describe("stampAtomicBlocks", () => {
       '<img alt="fixture"><svg></svg><ul><li>one</li><li>two</li></ul><aside class="callout-warning">careful</aside>',
     );
 
-    expect(stampAtomicBlocks(root)).toBe(5);
-    for (const selector of ["img", "svg", "li", ".callout-warning"]) {
+    // img + svg + callout only: `li` fragments across pages like a paragraph
+    // (print.css) and is deliberately NOT stamped atomic.
+    expect(stampAtomicBlocks(root)).toBe(3);
+    for (const selector of ["img", "svg", ".callout-warning"]) {
       const elements = Array.from(root.querySelectorAll<HTMLElement>(selector));
       expect(elements.length).toBeGreaterThan(0);
       expect(elements.every((element) => Boolean(element.dataset.mdvAtomicId))).toBe(true);
+    }
+    for (const item of Array.from(root.querySelectorAll<HTMLElement>("li"))) {
+      expect(item.hasAttribute("data-mdv-atomic-id")).toBe(false);
     }
   });
 });
