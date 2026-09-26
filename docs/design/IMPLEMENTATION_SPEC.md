@@ -120,6 +120,11 @@ export function mountUpdatePrompt(options: UpdatePromptOptions): UpdatePromptCon
 // src/ui/DocumentShortcuts.ts: returns an idempotent teardown function
 export function mountDocumentShortcuts(root: HTMLElement): () => void;
 
+// src/app/themeColor.ts: browser chrome tracks the screen theme, never the PDF
+export const THEME_COLORS: Record<ScreenTheme, string>;
+export function themeColorFor(theme: ScreenTheme): string;
+export function syncThemeColor(theme: ScreenTheme): void;
+
 // src/app/App.ts: additional public method; other public signatures unchanged
 // App.reloadForUpdate(): boolean
 ```
