@@ -224,6 +224,13 @@ describe("pulse: the product survives a missing or broken SDK", () => {
     expect(mocks.capture).toHaveBeenCalled();
   });
 
+  it("drops a theme or view mode outside the closed set at runtime", () => {
+    const spy = installSpy();
+    pulseTheme("ZebraSecretBody" as never);
+    pulseViewMode("Top Secret Heading" as never);
+    expect(spy.track).not.toHaveBeenCalled();
+  });
+
   it("swallows an SDK that throws", () => {
     window.Pulseboard = {
       route: () => { throw new Error("boom"); },
