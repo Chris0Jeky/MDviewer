@@ -52,8 +52,9 @@
   #toolbar { max-height: 52dvh; min-width: 0; }
   /* Single-row horizontal strip: wrapping the primary controls stacked them to
      347px on a 375x667 phone with a document loaded (TECH-1), leaving a 192px
-     preview. The strip keeps one ~56px row; every control stays tabbable and
-     focus/touch scrolls it into view. The 10px vertical padding keeps the 2px
+     preview. The strip keeps one short row (~62px measured on 375x667); every
+     control stays tabbable and focus/touch scrolls it into view. The 10px
+     vertical padding keeps the 2px
      focus ring clear of the overflow clip. */
   .workspace-actions {
     gap: 8px; padding: 10px 12px; min-width: 0;

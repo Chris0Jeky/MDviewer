@@ -3,16 +3,16 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (checklist fix merged; improvement loop):**
-> PR **#99** (checklist pagination fix) merged as **`4115563`** with green
-> exact-head CI (run `36267035533`) and a completed exact-head review with no
-> findings; post-merge `main` CI green. PR **#98** (deploy record for
-> `f353480c` from `4e7d99a`) merged as `7fa3a1f` just before it. Production
-> still serves `f353480c` from `4e7d99a` — it predates the checklist fix, so a
-> redeploy is pending once the improvement loop lands. No open PRs except this
-> record PR (#100), no open issues.
-> Next slices, smallest first: (1) this docs-sync record; (2) TECH-1 responsive
-> toolbar (ledgered plan); (3) theme-color follow screen theme (or record why
+> **▶ CURRENT CHECKPOINT — 2026-09-26 (improvement loop: TECH-1 in review):**
+> PR **#100** (docs-sync record) merged as `4cb1635` (post-merge `main` CI run
+> `36268592849` green). PR **#101** (TECH-1 phone toolbar strip) is in review:
+> `.workspace-actions` is a single-row horizontal strip at ≤760px, toolbar
+> 347→204px and workspace 320→463px on a 375x667 phone with a document loaded,
+> covered by `tests/e2e/responsive-toolbar.spec.ts` (red pre-fix, green post).
+> Production still serves `f353480c` from `4e7d99a` — it predates the checklist
+> fix and this slice, so a redeploy is pending once the loop lands. No open PRs
+> except #101, no open issues.
+> Next slices, smallest first: (3) theme-color follow screen theme (or record why
 > white stays); (4) running-header/titlePage e2e gap; then redeploy + smoke.
 > **Two OPEN human items: AI-7 (steps 4–8) and AI-6.**
 >
@@ -209,19 +209,19 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Queued: docs-sync record, TECH-1 responsive toolbar,
-  theme-color follow, running-header/titlePage e2e, then production redeploy. Longer
-  backlog: very-large-document budgets, plus operator-owned AI-6/AI-7.
+  merge → repeat, then redeploy). Queued: theme-color follow, running-header/titlePage
+  e2e, then production redeploy. Longer backlog: very-large-document budgets, plus
+  operator-owned AI-6/AI-7.
 - **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this record PR
-  (#100), no open issues; production is `f353480c` from `4e7d99a`, which predates
+- **Live GitHub queue snapshot (2026-09-26):** no open PRs except #101 (TECH-1 strip,
+  in review), no open issues; production is `f353480c` from `4e7d99a`, which predates
   the #99 checklist fix — redeploy pending.
   Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `4115563130ccfa1f7e180bbd9edcfb58b169ea3a` (PR #99 merge).
-- **PRs merged to `main`:** 54 PR merges, most recently #99 (checklist pagination fix),
-  #98 (deploy record), #97 (patch sweep), #96 (run-header refresh).
-- **Current main verification (`4115563`):** hosted Node 22/24 and production Chromium
-  CI run `36267035533` green. Production still serves `f353480c` from `4e7d99a` (see the
+- **Verified `main` anchor:** `4cb1635cf915c613517d5aa76406de4a21b4659a` (PR #100 merge).
+- **PRs merged to `main`:** 55 PR merges, most recently #100 (docs-sync record),
+  #99 (checklist pagination fix), #98 (deploy record), #97 (patch sweep).
+- **Current main verification (`4cb1635`):** hosted Node 22/24 and production Chromium
+  CI run `36268592849` green. Production still serves `f353480c` from `4e7d99a` (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -476,3 +476,9 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   e2e 91 passed, preview e2e 92 passed, exact-head CI run `36267035533` green, exact-head
   review with no findings. Just before it, PR **#98** → `7fa3a1f` recorded the `f353480c`
   production deploy. Production now predates `main`; redeploy queued after the loop.
+- **C22 (2026-09-26) — DOCS SYNC MERGED, TECH-1 IN REVIEW:** PR **#100** → `4cb1635`
+  (post-merge `main` CI run `36268592849` green; one self-review finding fixed).
+  PR **#101** closes TECH-1: phone toolbar strip at ≤760px, 347→204px toolbar on
+  375x667 with a doc loaded, `tests/e2e/responsive-toolbar.spec.ts` red→green.
+  Its Codex P2 (sync ORCHESTRATOR/ACTION_ITEMS/original ledger entry) is addressed
+  in-PR. Production still `f353480c`; redeploy after the loop.
