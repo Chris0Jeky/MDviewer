@@ -46,7 +46,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Refuse non-main refs
-        if: github.ref != 'refs/heads/main'
+        if: ${{ github.ref != 'refs/heads/main' }}
         run: |
           echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
           exit 1
@@ -104,7 +104,7 @@ jobs:
     environment: production
     steps:
       - name: Refuse non-main refs
-        if: github.ref != 'refs/heads/main'
+        if: ${{ github.ref != 'refs/heads/main' }}
         run: |
           echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
           exit 1
