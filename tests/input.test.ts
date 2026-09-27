@@ -27,6 +27,12 @@ describe("input: constants", () => {
     expect(SIZE_SOFT_BYTES).toBeLessThanOrEqual(5_000_000);
     expect(SIZE_HARD_BYTES).toBeGreaterThanOrEqual(10_000_000);
   });
+
+  it("pins the soft gate where the measured wait stops being negligible", () => {
+    // docs/PERF_BUDGET.md: 250 kB paginates in ~7 s, 500 kB in ~26 s on the
+    // reference machine. Move this only with a re-measured ladder.
+    expect(SIZE_SOFT_BYTES).toBe(250_000);
+  });
 });
 
 describe("input: isMarkdownFile", () => {

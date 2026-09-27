@@ -19,8 +19,11 @@ export const MD_EXTENSIONS: readonly string[] = [".md", ".markdown"];
 /**
  * Soft cap: above this we ask the user to confirm before paginating, because a very
  * large document can freeze the main thread during Paged.js layout (Section 11).
+ * Set from measurement (docs/PERF_BUDGET.md): 250 kB paginates in ~7 s on the
+ * reference machine while 500 kB takes ~26 s, so the gate sits where the wait
+ * stops being negligible.
  */
-export const SIZE_SOFT_BYTES = 2_000_000;
+export const SIZE_SOFT_BYTES = 250_000;
 
 /** Hard cap: above this we refuse outright — pagination would be unusable. */
 export const SIZE_HARD_BYTES = 25_000_000;
