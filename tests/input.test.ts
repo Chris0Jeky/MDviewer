@@ -29,8 +29,8 @@ describe("input: constants", () => {
   });
 
   it("pins the soft gate where the measured wait stops being negligible", () => {
-    // docs/PERF_BUDGET.md: 250 kB paginates in ~7 s, 500 kB in ~26 s on the
-    // reference machine. Move this only with a re-measured ladder.
+    // docs/PERF_BUDGET.md: 250 kB paginates in ~7-11 s, 500 kB in ~25 s on
+    // the reference machine. Move this only with a re-measured ladder.
     expect(SIZE_SOFT_BYTES).toBe(250_000);
   });
 });

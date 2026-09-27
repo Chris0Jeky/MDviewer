@@ -9,8 +9,9 @@ real file-input path and times load to paginated.
 
 Reference machine: 13th Gen Intel i5-13600K, 32 GB RAM, Windows, headless
 Chromium (Playwright 1.63). Production bundle (`E2E_TARGET=preview`) built from
-the ladder commit below. Times are wall clock from document load to pagination
-settled.
+the ladder at `f63cb40` (later commits touch docs and the paste/drop gates
+only, which do not affect the measured numbers). Times are wall clock from
+document load to pagination settled.
 
 | Input | Pages | Wall time | Longtasks (blocking) | JS heap | DOM nodes |
 | --- | --- | --- | --- | --- | --- |
@@ -23,9 +24,10 @@ settled.
 Heap is read with `--enable-precise-memory-info` (the ladder's own
 `perf-chromium` project) after a CDP garbage collection, so the delta is
 retained memory, not live garbage. Repeat runs vary with machine load: the
-250 kB rung measured 6–11 s wall (1–7 s blocking) and the 500 kB rung 18–26 s
+250 kB rung measured 6–11 s wall (1–8 s blocking) and the 500 kB rung 18–26 s
 across runs, so treat every figure above as approximate and read the
-budgets below as wide bands, not thresholds.
+budgets below as wide bands, not thresholds. Budgets are defined on the
+production bundle; dev-target numbers are comparison only.
 
 Dev-server comparison on the same machine and commit (unminified, HMR):
 
@@ -53,23 +55,23 @@ dominates, not module loading — so the ladder is valid on either target.
 - **Up to 250 kB (~170 pages):** seconds-scale on the reference machine
   (2–11 s wall depending on load). No warning; this is the comfortable band.
 - **Above 250 kB:** confirm-to-proceed (`SIZE_SOFT_BYTES`) on every ingestion
-  path — file picker/drop, window paste, and editor paste. The dialog is the
-  honest UX for waits of tens of seconds to minutes (500 kB → ~18–25 s,
-  1 MB → ~62–69 s, 1.8 MB → ~192–225 s) during which the page is mostly
-  frozen. Gradual in-editor growth past the gate (typing, not pasting) is
-  accepted without a dialog: each debounced render grows incrementally, and
-  gating keystrokes would need an async confirm plus a textarea revert that
-  discards the native undo history.
+  path — file picker/drop, window paste, and editor paste and text drop. The
+  dialog is the honest UX for waits of tens of seconds to minutes
+  (500 kB → ~18–25 s, 1 MB → ~62–69 s, 1.8 MB → ~3–4 min) during which the
+  page is mostly frozen. Gradual in-editor growth past the gate (typing, not
+  pasting or dropping) is accepted without a dialog: each debounced render
+  grows incrementally, and gating keystrokes would need an async confirm
+  plus a textarea revert that discards the native undo history.
 - **Above 25 MB:** refused outright (`SIZE_HARD_BYTES`) on every ingestion
   path: pagination would be unusable.
 - **Responsiveness:** no unguarded input may block the main thread more than
   ~10 s on the quiet reference machine. The worst unguarded rung (250 kB)
-  blocks ~1–2 s quiet, up to ~7 s observed under load; everything above the
+  blocks ~1–2 s quiet, up to ~8 s observed under load; everything above the
   gate carries the confirm dialog. If a future quiet ladder shows the 250 kB
   rung approaching 10 s of blocking, lower the gate — do not widen this
   budget.
-- **Memory:** retained JS heap growth must stay under 50 MB at every rung
-  (reference: +20 to +30 MB over a 7.3 MB baseline on the bundle target).
+- **Memory:** retained JS heap growth must stay under 50 MB at every rung on
+  the bundle target (reference: +20 to +30 MB over a 7.3 MB baseline).
   DOM nodes must scale linearly with pages (~230–300/page on the reference
   mix); superlinear node growth is a leak-shaped regression.
 - **CI:** the ladder is skipped by default (`MDVIEWER_PERF` unset) and asserts

@@ -197,8 +197,8 @@ export class App {
     this.editor = mountEditor(this.workspaceEl, {
       codeTheme: this.settings.codeTheme,
       onInput: (text) => this.onEditorInput(text),
-      largePasteBytes: SIZE_SOFT_BYTES,
-      confirmLargePaste: (bytes) => this.confirmLargePaste(bytes),
+      largeInsertBytes: SIZE_SOFT_BYTES,
+      confirmLargeInsert: (bytes) => this.confirmLargeInsert(bytes),
     });
     this.splitter = mountSplitter(this.workspaceEl, {
       track: this.workspaceEl,
@@ -639,16 +639,16 @@ export class App {
     );
   }
 
-  /** Editor-paste twin of the file gate: refuse past the hard cap, else confirm. */
-  private async confirmLargePaste(bytes: number): Promise<boolean> {
+  /** Editor-insert twin of the file gate: refuse past the hard cap, else confirm. */
+  private async confirmLargeInsert(bytes: number): Promise<boolean> {
     if (bytes > SIZE_HARD_BYTES) {
-      this.onTooLarge("Pasted text");
+      this.onTooLarge("Inserted text");
       return false;
     }
     const mb = (bytes / 1_000_000).toFixed(1);
     return Promise.resolve(
       window.confirm(
-        `Pasting this would grow the document to about ${mb} MB. Pagination may briefly freeze the page. Paste it anyway?`,
+        `Inserting this would grow the document to about ${mb} MB. Pagination may briefly freeze the page. Insert it anyway?`,
       ),
     );
   }
