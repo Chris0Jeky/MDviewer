@@ -14,24 +14,28 @@ settled.
 
 | Input | Pages | Wall time |
 | --- | --- | --- |
-| 103 kB | 67 | 2.5 s |
-| 507 kB | 336 | 21.0 s |
-| 1.0 MB | 668 | 64.8 s |
-| 1.8 MB | 1203 | 235.8 s |
+| 103 kB | 68 | 2.5 s |
+| 507 kB | 341 | 20.2 s |
+| 1.0 MB | 678 | 95.9 s |
+| 1.8 MB | 1218 | 267.7 s |
+
+Repeat runs vary with machine load: the 1 MB rung measured 65–96 s across
+three runs, so treat every figure above as approximate (±30%) and read the
+budgets below as wide bands, not thresholds.
 
 Dev-server comparison on the same machine and commit (unminified, HMR):
 
 | Input | Pages | Wall time |
 | --- | --- | --- |
-| 103 kB | 67 | 2.3 s |
-| 507 kB | 336 | 19.2 s |
-| 1.0 MB | 668 | 64.5 s |
-| 1.8 MB | 1203 | 198.3 s |
+| 103 kB | 68 | 2.7 s |
+| 507 kB | 341 | 23.5 s |
+| 1.0 MB | 678 | 76.0 s |
+| 1.8 MB | 1218 | 264.1 s |
 
-Cost per page grows with document length (roughly 37 ms/page at 67 pages to
-196 ms/page at 1200 pages on the production bundle): pagination is
+Cost per page grows with document length (roughly 36 ms/page at 68 pages to
+220 ms/page at 1218 pages on the production bundle): pagination is
 superlinear, so budgets are set per size band, not per page. The dev target
-measures within 20% of the bundle at every rung — layout dominates, not
+measures within 30% of the bundle at every rung — layout dominates, not
 module loading — so the ladder is valid on either target.
 
 ## The budget

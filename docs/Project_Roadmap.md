@@ -109,8 +109,8 @@ export paths.
 - **Done (2026-09-26):** profiled very large documents and set the production
   performance budget (`docs/PERF_BUDGET.md`): deterministic generator
   (`tests/perf/generateLargeDoc.ts`) plus an opt-in Playwright ladder
-  (`tests/e2e/large-doc-perf.spec.ts`, `MDVIEWER_PERF=1`) measuring 67–1203
-  pages in 2.5 s–3.9 min on the reference machine, with per-band budgets and
+  (`tests/e2e/large-doc-perf.spec.ts`, `MDVIEWER_PERF=1`) measuring 68–1218
+  pages in 2.5 s–4.5 min on the reference machine, with per-band budgets and
   the existing soft/hard size gates carrying the UX above 2 MB.
 - **Open (MD1):** prepare a reviewed CI-compatible direct-upload path for the existing Pages project;
   production promotion and credentials remain separate gates.
