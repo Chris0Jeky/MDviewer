@@ -15,14 +15,22 @@
 
 ## Current State (snapshot)
 
+- **2026-09-27 (MD3 egress proof shipped)** — PR #114 (offline export proofs +
+  two-part production-egress proof) merged as `df50e7a` with green exact-head CI;
+  one Codex P2 fixed in-PR and a self-review vacuous-probe gap reworked into the
+  split proof (`tests/pulse-egress.test.ts` in CI + `scripts/smoke-egress.mjs`
+  per-deploy). Production is now deployment `f97778db` from that anchor
+  (immutable URL `https://f97778db.mdviewer-c9r.pages.dev`), smoke-verified live
+  with SDK 3.3.0 byte-matching the lock, a clean Chromium boot, and an egress
+  probe PASS (498 requests, all same-origin). OPEN AI-6/AI-7/AI-8 unchanged.
+
 - **2026-09-27 (perf budget + SDK 3.3 shipped)** — PR #110 (large-doc performance
   budget, 250 kB confirm gate on all ingestion paths) merged with green exact-head
   CI and twelve triaged threads over seven review rounds; owner PRs #111/#112
   (SDK version from lock, SDK 3.3.0 sync) rode along and were reviewed
-  retrospectively. `main` is `a56b2f5` (CI run `36289158995` green) and production
-  is now deployment `c3509120` from that anchor (immutable URL
-  `https://c3509120.mdviewer-c9r.pages.dev`), smoke-verified live with SDK 3.3.0
-  byte-matching the lock and a clean Chromium boot. OPEN AI-6/AI-7/AI-8 unchanged.
+  retrospectively. `main` was `a56b2f5` and production was deployment `c3509120`
+  from that anchor (immutable URL `https://c3509120.mdviewer-c9r.pages.dev`),
+  smoke-verified live. Superseded by the `f97778db` deploy above.
 
 - **2026-09-26 (SDK 3.2 shipped)** — PR #107 (Pulseboard SDK 3.2.0 rebuild: campaign
   allowlist, preview-pane scroll depth, no cross-tab focus steal) merged with green
@@ -167,17 +175,18 @@
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  again for the current deployment (2026-09-27): `main` `a56b2f5` merged with CI green;
-  deployed via `wrangler pages deploy` (immutable URL
-  `https://c3509120.mdviewer-c9r.pages.dev`, id `c3509120-1de1-4f67-8c26-27de441830b5`);
-  smoke checks passed — identical stable/immutable bytes (5331), entry title, hashed-asset
-  immutability, security headers, `Cache-Control: max-age=0, must-revalidate` on both
+  again for the current deployment (2026-09-27): `main` `df50e7a` (PR #114, MD3 egress
+  proof) merged with CI green; deployed via `wrangler pages deploy` (immutable URL
+  `https://f97778db.mdviewer-c9r.pages.dev`, id `f97778db-22ac-4637-b40c-758ecd96885e`);
+  smoke checks passed — identical stable/immutable bytes (5331), entry title,
+  security headers, `Cache-Control: max-age=0, must-revalidate` on both
   `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving SDK 3.3.0
-  byte-identical to the lock hash, `/SOURCE.txt` naming `a56b2f5`, and a clean
-  Chromium boot with zero console/page errors.
-  (The `b566e23`/`f73c4f85`, `0da2e26`/`cdc831b1`, `578590c`/`c3dee6ad`,
-  `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records are superseded but retained
-  in `docs/DEPLOYMENT.md` history.)
+  byte-identical to the lock hash, `/SOURCE.txt` naming `df50e7a`, a clean
+  Chromium boot (6 sample sheets, zero console/page errors), and an egress probe
+  PASS (498 requests, all same-origin).
+  (The `a56b2f5`/`c3509120`, `b566e23`/`f73c4f85`, `0da2e26`/`cdc831b1`,
+  `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records
+  are superseded but retained in `docs/DEPLOYMENT.md` history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
   4. In a real browser on the live site: zoom 50%/100%/Fit works and `aria-pressed` follows;
      the page chip tracks scrolling; drop a `.txt` file → visible "skipped" banner; Download
@@ -186,9 +195,9 @@
      its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
      are clearly visible; an empty `.md` shows the "document is empty" notice.
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
-     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `c3509120`
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `f97778db`
      deploy is the second version the update-toast check needs: with the app open from the
-     previous (`f73c4f85`) deployment, confirm the update toast appears and Reload applies it.
+     previous (`c3509120`) deployment, confirm the update toast appears and Reload applies it.
   6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
      stay light (print-accurate), and a Download PDF taken in dark theme must contain light
      code. The theme control is now labelled "Screen" and sits at the right, before Export.
