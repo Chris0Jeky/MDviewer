@@ -110,10 +110,11 @@ export paths.
   performance budget (`docs/PERF_BUDGET.md`): deterministic generator
   (`tests/perf/generateLargeDoc.ts`) plus an opt-in Playwright ladder
   (`tests/e2e/large-doc-perf.spec.ts`, `MDVIEWER_PERF=1`) measuring 67–1206
-  pages in 2.2 s–3.3 min on the reference machine, with per-band wall-time,
-  responsiveness (longtask) and memory (DOM nodes, JS heap) budgets. The soft
-  gate drops 2 MB → 250 kB so the confirm dialog guards the minutes-scale
-  band the ladder revealed.
+  pages in 2.3 s–3.2 min on the reference machine, with per-band wall-time,
+  responsiveness (longtask) and memory (JS heap, DOM nodes) budgets. The soft
+  gate drops 2 MB → 250 kB and now guards file, window-paste and editor-paste
+  ingestion, so the confirm dialog covers the minutes-scale band the ladder
+  revealed.
 - **Open (MD1):** prepare a reviewed CI-compatible direct-upload path for the existing Pages project;
   production promotion and credentials remain separate gates.
 - **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
