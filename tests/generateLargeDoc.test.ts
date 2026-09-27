@@ -52,7 +52,9 @@ describe("generateLargeDoc", () => {
     const div = document.createElement("div");
     div.innerHTML = html;
     expect(div.querySelectorAll(".callout").length).toBeGreaterThan(0);
-  });
+    // A 20 kB Shiki render in jsdom runs 3-5 s under a loaded full-suite run,
+    // at or past vitest's 5 s default; match the 30 s budget of the Shiki tests.
+  }, 30_000);
 
   it("mulberry32 is stable", () => {
     const a = mulberry32(42);

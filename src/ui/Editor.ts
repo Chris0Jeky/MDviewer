@@ -52,16 +52,23 @@ export interface EditorOptions {
   /** Placeholder shown while the editor is empty. */
   placeholder?: string;
   /**
-   * Byte size above which a paste or text drop is intercepted for
-   * confirmation. Inserts that keep the document at or below this proceed
-   * natively with no async hop, so the native undo entry is untouched in the
-   * common case.
+   * Byte size a paste or text drop may not cross without confirmation. An
+   * insert is intercepted only when it grows the document from at or below
+   * this to above it, or is itself larger than this; every other insert
+   * (including small edits to a document already past the gate) proceeds
+   * natively with no async hop, so the native undo entry is untouched.
    */
   largeInsertBytes?: number;
   /**
-   * Confirm an insert that would grow the document past `largeInsertBytes`.
-   * Resolve false to drop it, true to insert it (via execCommand, so the
-   * native undo entry survives where the command exists).
+   * Byte size past which any insert, however small, is routed to
+   * `confirmLargeInsert` so the host can refuse it. Unset means no hard limit.
+   * Only enforced while `largeInsertBytes` and `confirmLargeInsert` are set.
+   */
+  hardLimitBytes?: number;
+  /**
+   * Confirm an intercepted insert (see `largeInsertBytes`), given the
+   * resulting document size. Resolve false to drop it, true to insert it (via
+   * execCommand, so the native undo entry survives where the command exists).
    */
   confirmLargeInsert?(bytes: number): Promise<boolean>;
 }
@@ -363,18 +370,25 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   /**
    * Large-insert gate shared by paste and text drop. A megabytes insert would
    * otherwise start a minutes-long frozen render with no warning
-   * (docs/PERF_BUDGET.md). Only over-threshold inserts are intercepted;
-   * everything else proceeds natively.
+   * (docs/PERF_BUDGET.md). Only inserts that cross the threshold, are
+   * themselves over it, or would pass the hard limit are intercepted; small
+   * edits to a document the user already accepted as large proceed natively.
    */
   const gateLargeInsert = (text: string, event: { preventDefault(): void }): void => {
     const threshold = opts.largeInsertBytes ?? 0;
+    const hardLimit = opts.hardLimitBytes ?? 0;
     const confirmer = opts.confirmLargeInsert;
     if (!confirmer || threshold <= 0 || !text) return;
+    const encoder = new TextEncoder();
     const { selectionStart, selectionEnd, value } = input;
-    const nextBytes = new TextEncoder().encode(
+    const currentBytes = encoder.encode(value).length;
+    const textBytes = encoder.encode(text).length;
+    const nextBytes = encoder.encode(
       value.slice(0, selectionStart) + text + value.slice(selectionEnd),
     ).length;
-    if (nextBytes <= threshold) return;
+    const crossesGate = nextBytes > threshold && currentBytes <= threshold;
+    const passesHardLimit = hardLimit > 0 && nextBytes > hardLimit;
+    if (!crossesGate && textBytes <= threshold && !passesHardLimit) return;
     event.preventDefault();
     void confirmer(nextBytes).then((proceed) => {
       if (proceed) insertTextPreservingUndo(text);

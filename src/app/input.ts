@@ -113,13 +113,17 @@ function dragHasFiles(dt: DataTransfer | null): boolean {
 
 interface ReadBatch {
   opened: Doc[];
+  /** Not Markdown, or unreadable: reported as a file-type rejection. */
   rejected: string[];
+  /** Over the hard cap: reported as a size refusal, never as a type rejection. */
+  tooLarge: string[];
 }
 
 /**
  * Read accepted files into `Doc`s, enforcing the size gate. Files over the hard cap are
- * skipped; files over the soft cap require the `onLargeFile` confirmation. The first file
- * that passes the gate becomes active (handled by the store).
+ * skipped as too large; files over the soft cap require the `onLargeFile` confirmation,
+ * and a declined one is dropped silently (the user chose that). The first file that
+ * passes the gate becomes active (handled by the store).
  */
 async function readFiles(
   files: File[],
@@ -128,18 +132,16 @@ async function readFiles(
   const { accept, reject } = classifyFiles(files);
   const opened: Doc[] = [];
   const rejected = [...reject];
+  const tooLarge: string[] = [];
 
   for (const file of accept) {
     if (file.size > SIZE_HARD_BYTES) {
-      rejected.push(file.name);
+      tooLarge.push(file.name);
       continue;
     }
     if (file.size > SIZE_SOFT_BYTES) {
       const proceed = await onLargeFile(file.size);
-      if (!proceed) {
-        rejected.push(file.name);
-        continue;
-      }
+      if (!proceed) continue;
     }
     let text: string;
     try {
@@ -150,7 +152,7 @@ async function readFiles(
     }
     opened.push(await openMarkdown(text, file.name));
   }
-  return { opened, rejected };
+  return { opened, rejected, tooLarge };
 }
 
 /**
@@ -166,7 +168,12 @@ async function readFiles(
 export function installInputHandlers(
   store: DocStore,
   opts: {
-    onReject(names: string[]): void;
+    /**
+     * Files skipped from one pick or drop, reported together so the host can show
+     * one notice: `names` were not Markdown (or unreadable), `tooLarge` were over
+     * the hard cap. Called once per batch when either list is non-empty.
+     */
+    onReject(names: string[], tooLarge: string[]): void;
     onLargeFile(bytes: number): Promise<boolean>;
     /** Size refusal feedback for pastes (a file-type rejection would mislabel it). */
     onTooLarge?(name: string): void;
@@ -192,7 +199,11 @@ export function installInputHandlers(
       store.add(doc.name, doc.text);
       pulseDocOpened("file", doc.text.length);
     }
-    if (batch.rejected.length > 0) opts.onReject(batch.rejected);
+    // One call per batch: the banner holds a single message, so separate calls
+    // for type and size refusals would overwrite each other.
+    if (batch.rejected.length > 0 || batch.tooLarge.length > 0) {
+      opts.onReject(batch.rejected, batch.tooLarge);
+    }
   };
 
   const onDragEnter = (e: DragEvent): void => {

@@ -225,6 +225,48 @@ describe("input: installInputHandlers", () => {
     uninstall();
   });
 
+  it("drops a declined over-gate markdown file without a file-type rejection", async () => {
+    const store = new DocStore();
+    const onReject = vi.fn();
+    const onTooLarge = vi.fn();
+    const onLargeFile = vi.fn(async () => false);
+    const uninstall = installInputHandlers(store, { onReject, onLargeFile, onTooLarge });
+
+    const big = new File(["x"], "big.md", { type: "text/markdown" });
+    Object.defineProperty(big, "size", { value: SIZE_SOFT_BYTES + 1 });
+    window.dispatchEvent(fakeFileDrop([big]));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onLargeFile).toHaveBeenCalledTimes(1);
+    expect(store.openDocs.length).toBe(0);
+    expect(onReject).not.toHaveBeenCalled();
+    expect(onTooLarge).not.toHaveBeenCalled();
+    uninstall();
+  });
+
+  it("reports a hard-cap refusal with the type rejections of the same drop, in one call", async () => {
+    const store = new DocStore();
+    const onReject = vi.fn();
+    const onTooLarge = vi.fn();
+    const onLargeFile = vi.fn(async () => true);
+    const uninstall = installInputHandlers(store, { onReject, onLargeFile, onTooLarge });
+
+    const huge = new File(["x"], "huge.md", { type: "text/markdown" });
+    Object.defineProperty(huge, "size", { value: SIZE_HARD_BYTES + 1 });
+    const png = fileOf("image.png", "image/png");
+    window.dispatchEvent(fakeFileDrop([huge, png]));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onLargeFile).not.toHaveBeenCalled();
+    expect(onTooLarge).not.toHaveBeenCalled();
+    expect(onReject).toHaveBeenCalledTimes(1);
+    expect(onReject).toHaveBeenCalledWith(["image.png"], ["huge.md"]);
+    expect(store.openDocs.length).toBe(0);
+    uninstall();
+  });
+
   it("opens a dropped markdown file into the store", async () => {
     const store = new DocStore();
     const onReject = vi.fn();

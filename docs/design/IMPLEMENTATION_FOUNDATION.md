@@ -262,7 +262,9 @@ export function isMarkdownFile(name: string, mime: string): boolean;
 export function classifyFiles(files: File[]): { accept: File[]; reject: string[] };
 export async function openMarkdown(text: string, filename: string): Promise<Doc>;
 export function installInputHandlers(store: DocStore, opts: {
-  onReject(names: string[]): void; onLargeFile(bytes: number): Promise<boolean>;
+  onReject(names: string[], tooLarge: string[]): void;  // once per pick/drop batch
+  onLargeFile(bytes: number): Promise<boolean>;         // soft-gate confirm; decline is silent
+  onTooLarge?(name: string): void;                      // window-paste hard-cap refusal
 }): () => void;
 
 // src/render/highlight.ts

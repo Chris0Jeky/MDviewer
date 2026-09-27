@@ -58,7 +58,10 @@ dominates, not module loading — so the ladder is valid on either target.
   path — file picker/drop, window paste, and editor paste and text drop. The
   dialog is the honest UX for waits of tens of seconds to minutes
   (500 kB → ~18–25 s, 1 MB → ~62–69 s, 1.8 MB → ~3–4 min) during which the
-  page is mostly frozen. Gradual in-editor growth past the gate (typing, not
+  page is mostly frozen. An editor paste or text drop is confirmed when it
+  crosses the gate or is itself over 250 kB; once the user has accepted a
+  large document, smaller pastes and drops into it insert natively.
+  Gradual in-editor growth past the gate (typing, not
   pasting or dropping) is accepted without a dialog: each debounced render
   grows incrementally, and gating keystrokes would need an async confirm
   plus a textarea revert that discards the native undo history.
