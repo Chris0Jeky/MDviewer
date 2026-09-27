@@ -90,9 +90,12 @@ function table(rand: () => number): string {
 }
 
 function callout(rand: () => number): string {
+  // markdown-it-container form (src/render/markdown.ts CALLOUTS): GitHub-style
+  // `> [!kind]` would render as a plain blockquote with no .callout element.
   const kinds = ["note", "tip", "warning", "danger"];
   const kind = kinds[Math.floor(rand() * kinds.length)]!;
-  return `> [!${kind}] ${kind[0]!.toUpperCase() + kind.slice(1)}\n> ${sentence(rand, 12)}`;
+  const title = kind[0]!.toUpperCase() + kind.slice(1);
+  return `:::${kind} ${title}\n${sentence(rand, 12)}\n:::`;
 }
 
 function mermaid(index: number): string {

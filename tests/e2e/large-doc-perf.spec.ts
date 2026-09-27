@@ -12,7 +12,10 @@ import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
  */
 const ENABLED = process.env.MDVIEWER_PERF === "1";
 const SIZES = [100_000, 500_000, 1_000_000, 1_800_000];
-const PER_DOC_TIMEOUT_MS = 300_000;
+// Generous on purpose: the ladder asserts completion, never a duration, and the
+// reference top rung already takes ~4 minutes. A tight cap would turn slower
+// hardware into a failure instead of a valid measurement.
+const PER_DOC_TIMEOUT_MS = 900_000;
 
 test.describe("large-document profile", () => {
   test.describe.configure({ mode: "serial" });
