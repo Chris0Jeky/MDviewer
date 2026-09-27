@@ -36,6 +36,25 @@ async function heapMB(page: Page): Promise<string> {
   return bytes === null ? "n/a" : (bytes / 1_000_000).toFixed(1);
 }
 
+/**
+ * Collect garbage through CDP so heap samples measure retained memory rather
+ * than whatever V8 has not gotten around to freeing. Without this, GC timing
+ * alone moves the readings rung to rung. Best-effort: runtimes without CDP
+ * (non-Chromium) fall back to a raw sample.
+ */
+async function collectGarbage(page: Page): Promise<void> {
+  try {
+    const session = await page.context().newCDPSession(page);
+    try {
+      await session.send("HeapProfiler.collectGarbage");
+    } finally {
+      await session.detach();
+    }
+  } catch {
+    // No CDP — the sample below still runs, just with live garbage included.
+  }
+}
+
 test.describe("large-document profile", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(!ENABLED, "Set MDVIEWER_PERF=1 to run the profiling ladder.");
@@ -58,6 +77,7 @@ test.describe("large-document profile", () => {
           for (const entry of list.getEntries()) w.__perfLongtasks?.push(entry.duration);
         }).observe({ entryTypes: ["longtask"] });
       });
+      await collectGarbage(page);
       const heapBefore = await heapMB(page);
       const started = Date.now();
       await loadMarkdownIntoApp(page, markdown, `perf-${target}.md`);
@@ -67,6 +87,7 @@ test.describe("large-document profile", () => {
         (await page.evaluate(
           () => (window as unknown as LongtaskWindow).__perfLongtasks ?? [],
         )) as number[];
+      await collectGarbage(page);
       const heapAfter = await heapMB(page);
       // The paginated DOM lives mostly outside the V8 heap, so node count is
       // the memory proxy with teeth; the JS-heap pair guards JS-side retention.
