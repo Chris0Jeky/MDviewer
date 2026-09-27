@@ -68,6 +68,9 @@ test.describe("large-document profile", () => {
           () => (window as unknown as LongtaskWindow).__perfLongtasks ?? [],
         )) as number[];
       const heapAfter = await heapMB(page);
+      // The paginated DOM lives mostly outside the V8 heap, so node count is
+      // the memory proxy with teeth; the JS-heap pair guards JS-side retention.
+      const nodeCount = await page.evaluate(() => document.getElementsByTagName("*").length);
       expect(pageCount).toBeGreaterThan(0);
       // A failed pipeline can leave partial sheets behind (runPipeline clears
       // .is-paginating in a finally), so a bare page count would record a broken
@@ -80,7 +83,7 @@ test.describe("large-document profile", () => {
       console.log(
         `PERF bytes=${bytes} pages=${pageCount} elapsedMs=${elapsedMs} ` +
           `longtasks=${longtasks.length} longtaskMs=${longtaskMs} ` +
-          `heapBeforeMB=${heapBefore} heapAfterMB=${heapAfter}`,
+          `heapBeforeMB=${heapBefore} heapAfterMB=${heapAfter} nodes=${nodeCount}`,
       );
     });
   }
