@@ -168,6 +168,8 @@ export function installInputHandlers(
   opts: {
     onReject(names: string[]): void;
     onLargeFile(bytes: number): Promise<boolean>;
+    /** Size refusal feedback for pastes (a file-type rejection would mislabel it). */
+    onTooLarge?(name: string): void;
   },
 ): () => void {
   const overlay = document.getElementById(IDS.dragOverlay);
@@ -227,10 +229,22 @@ export function installInputHandlers(
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text.trim()) return;
     e.preventDefault();
-    void openMarkdown(text, "Pasted.md").then((doc) => {
+    // Pastes are ingestion like a file drop: the same gates apply, or a megabytes
+    // clipboard would start a minutes-long frozen render with no warning.
+    void (async () => {
+      const bytes = new TextEncoder().encode(text).length;
+      if (bytes > SIZE_HARD_BYTES) {
+        opts.onTooLarge?.("Pasted.md");
+        return;
+      }
+      if (bytes > SIZE_SOFT_BYTES) {
+        const proceed = await opts.onLargeFile(bytes);
+        if (!proceed) return;
+      }
+      const doc = await openMarkdown(text, "Pasted.md");
       store.add(doc.name, doc.text);
       pulseDocOpened("paste", doc.text.length);
-    });
+    })();
   };
 
   const onFileInputChange = (e: Event): void => {

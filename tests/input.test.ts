@@ -161,6 +161,54 @@ describe("input: installInputHandlers", () => {
     uninstall();
   });
 
+  it("confirms a window paste over the soft gate and opens on accept", async () => {
+    const store = new DocStore();
+    const onLargeFile = vi.fn(async () => true);
+    const uninstall = installInputHandlers(store, {
+      onReject: vi.fn(),
+      onLargeFile,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_SOFT_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLargeFile).toHaveBeenCalledTimes(1);
+    expect(store.openDocs.length).toBe(1);
+    uninstall();
+  });
+
+  it("drops a window paste over the soft gate on decline", async () => {
+    const store = new DocStore();
+    const onReject = vi.fn();
+    const uninstall = installInputHandlers(store, {
+      onReject,
+      onLargeFile: async () => false,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_SOFT_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.openDocs.length).toBe(0);
+    expect(onReject).not.toHaveBeenCalled();
+    uninstall();
+  });
+
+  it("refuses a window paste over the hard cap with a size notice", async () => {
+    const store = new DocStore();
+    const onLargeFile = vi.fn(async () => true);
+    const onTooLarge = vi.fn();
+    const uninstall = installInputHandlers(store, {
+      onReject: vi.fn(),
+      onLargeFile,
+      onTooLarge,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_HARD_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLargeFile).not.toHaveBeenCalled();
+    expect(onTooLarge).toHaveBeenCalledWith("Pasted.md");
+    expect(store.openDocs.length).toBe(0);
+    uninstall();
+  });
+
   it("invokes onReject when a dropped file is not markdown", async () => {
     const store = new DocStore();
     const onReject = vi.fn();

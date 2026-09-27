@@ -330,6 +330,60 @@ describe("Editor: teardown", () => {
   });
 });
 
+describe("Editor: large-paste gate", () => {
+  function fakePaste(text: string): Event {
+    const evt = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, "clipboardData", {
+      value: { getData: (type: string) => (type === "text/plain" ? text : "") },
+    });
+    return evt;
+  }
+
+  function remountWithGate(confirmLargePaste: (bytes: number) => Promise<boolean>): void {
+    editor.destroy();
+    onInput.mockClear();
+    editor = mountEditor(root, {
+      codeTheme: "github",
+      onInput,
+      largePasteBytes: 100,
+      confirmLargePaste,
+    });
+  }
+
+  it("lets an under-threshold paste insert natively without confirming", () => {
+    const confirmLargePaste = vi.fn(async () => true);
+    remountWithGate(confirmLargePaste);
+    const evt = fakePaste("small");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargePaste).not.toHaveBeenCalled();
+  });
+
+  it("drops an over-threshold paste on decline without touching the text", async () => {
+    const confirmLargePaste = vi.fn(async () => false);
+    remountWithGate(confirmLargePaste);
+    editor.input.value = "existing";
+    const evt = fakePaste("x".repeat(200));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargePaste).toHaveBeenCalledWith(expect.any(Number));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.input.value).toBe("existing");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("inserts an over-threshold paste on accept and reports the edit", async () => {
+    const confirmLargePaste = vi.fn(async () => true);
+    remountWithGate(confirmLargePaste);
+    editor.input.value = "existing";
+    editor.input.selectionStart = editor.input.selectionEnd = 8;
+    editor.input.dispatchEvent(fakePaste("y".repeat(200)));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.input.value).toBe("existing" + "y".repeat(200));
+    expect(onInput).toHaveBeenLastCalledWith("existing" + "y".repeat(200));
+  });
+});
+
 describe("Editor: header helpers", () => {
   it("countWords counts whitespace-separated runs", () => {
     expect(countWords("")).toBe(0);

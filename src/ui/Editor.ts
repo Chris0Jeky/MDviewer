@@ -51,6 +51,18 @@ export interface EditorOptions {
   codeTheme: CodeThemeId;
   /** Placeholder shown while the editor is empty. */
   placeholder?: string;
+  /**
+   * Byte size above which a paste is intercepted for confirmation. Pastes that
+   * keep the document at or below this insert normally with no async hop, so
+   * the native undo entry is untouched in the common case.
+   */
+  largePasteBytes?: number;
+  /**
+   * Confirm a paste that would grow the document past `largePasteBytes`.
+   * Resolve false to drop the paste, true to insert it (via execCommand, so
+   * the native undo entry survives where the command exists).
+   */
+  confirmLargePaste?(bytes: number): Promise<boolean>;
 }
 
 /**
@@ -329,9 +341,46 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     onInputEvent();
   };
 
+  /**
+   * Large-paste gate. A megabytes paste would otherwise start a minutes-long
+   * frozen render with no warning (docs/PERF_BUDGET.md). Only over-threshold
+   * pastes are intercepted; everything else inserts natively.
+   */
+  const onPasteEvent = (event: ClipboardEvent): void => {
+    const threshold = opts.largePasteBytes ?? 0;
+    const confirmer = opts.confirmLargePaste;
+    if (!confirmer || threshold <= 0) return;
+    const pasted = event.clipboardData?.getData("text/plain") ?? "";
+    if (!pasted) return;
+    const { selectionStart, selectionEnd, value } = input;
+    const nextBytes = new TextEncoder().encode(
+      value.slice(0, selectionStart) + pasted + value.slice(selectionEnd),
+    ).length;
+    if (nextBytes <= threshold) return;
+    event.preventDefault();
+    void confirmer(nextBytes).then((proceed) => {
+      if (!proceed) return;
+      let inserted: boolean;
+      try {
+        input.focus();
+        inserted = document.execCommand("insertText", false, pasted);
+      } catch {
+        inserted = false;
+      }
+      if (inserted) return;
+      const current = input.value;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.value = `${current.slice(0, start)}${pasted}${current.slice(end)}`;
+      input.selectionStart = input.selectionEnd = start + pasted.length;
+      onInputEvent();
+    });
+  };
+
   input.addEventListener("input", onInputEvent);
   input.addEventListener("scroll", onScroll);
   input.addEventListener("keydown", onKeyDown);
+  input.addEventListener("paste", onPasteEvent);
 
   syncSize("");
 
@@ -372,6 +421,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       input.removeEventListener("input", onInputEvent);
       input.removeEventListener("scroll", onScroll);
       input.removeEventListener("keydown", onKeyDown);
+      input.removeEventListener("paste", onPasteEvent);
       pane.remove();
     },
   };
