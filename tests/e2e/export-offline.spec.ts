@@ -12,7 +12,7 @@
  *   npm run build
  *   E2E_TARGET=preview E2E_PORT=5283 npx playwright test tests/e2e/export-offline.spec.ts
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { waitForPagination } from "../helpers/pagedDom";
 
 const IS_PREVIEW = process.env.E2E_TARGET === "preview";
@@ -24,9 +24,17 @@ test.describe("export with the network cut", () => {
     "The service worker is only emitted by `vite build` — run with E2E_TARGET=preview after `npm run build`.",
   );
 
+  function assertNoEgress(page: Page) {
+    const seen =
+      (page as unknown as { __foreignRequests?: string[] }).__foreignRequests ?? [];
+    expect(seen, "MDviewer must never request a cross-origin URL").toEqual([]);
+  }
+
   test.beforeEach(async ({ page, context, baseURL }) => {
     const ownOrigin = new URL(baseURL!).origin;
     const foreignRequests: string[] = [];
+    (page as unknown as { __foreignRequests?: string[] }).__foreignRequests =
+      foreignRequests;
     page.on("request", (request) => {
       const url = new URL(request.url());
       if (url.protocol.startsWith("http") && url.origin !== ownOrigin) {
@@ -78,6 +86,9 @@ test.describe("export with the network cut", () => {
     });
     expect(snapshot.calls).toBe(1);
     expect(snapshot.sheets).toBeGreaterThan(1);
+    // The beforeEach assertion only covers setup; re-assert after the export
+    // so an export-time fetch/XHR/WebSocket cannot slip through unexamined.
+    assertNoEgress(page);
   });
 
   test("raster export downloads a PDF with no network access", async ({ page }) => {
@@ -95,5 +106,11 @@ test.describe("export with the network cut", () => {
       timeout: 30_000,
     });
     await expect(downloadBtn).toBeEnabled();
+    assertNoEgress(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    // Belt-and-braces: covers skipped-assertion paths (e.g. early skip).
+    assertNoEgress(page);
   });
 });
