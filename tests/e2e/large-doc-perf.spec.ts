@@ -32,6 +32,10 @@ test.describe("large-document profile", () => {
       const pageCount = await waitForPagination(page, PER_DOC_TIMEOUT_MS - 5_000);
       const elapsedMs = Date.now() - started;
       expect(pageCount).toBeGreaterThan(0);
+      // A failed pipeline can leave partial sheets behind (runPipeline clears
+      // .is-paginating in a finally), so a bare page count would record a broken
+      // render as a valid measurement. The fatal card must stay hidden.
+      await expect(page.locator("#error-card")).toBeHidden();
       console.log(
         `PERF bytes=${bytes} pages=${pageCount} elapsedMs=${elapsedMs}`,
       );

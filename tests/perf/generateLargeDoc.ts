@@ -138,9 +138,10 @@ function section(rand: () => number, index: number): string {
 }
 
 /**
- * Build a deterministic stress document of at least `targetBytes` UTF-8 bytes
- * (overshoot is bounded by one section, ~2-4 kB). Sections are numbered from 1;
- * footnote definitions referenced by sections are appended after the body.
+ * Build a deterministic stress document of at least `targetBytes` UTF-8 bytes.
+ * Overshoot is bounded by one section plus one footnote definition (under
+ * 8 kB): the trailing "## Notes" block is counted toward the target as its
+ * definitions accumulate, not only when appended. Sections are numbered from 1.
  */
 export function generateLargeDoc(targetBytes: number, seed = 20260926): string {
   if (!Number.isInteger(targetBytes) || targetBytes <= 0) {
@@ -158,11 +159,21 @@ export function generateLargeDoc(targetBytes: number, seed = 20260926): string {
   const footnoteDefs: string[] = [];
   let index = 0;
   let bytes = Buffer.byteLength(chunks.join("\n"), "utf8");
-  while (bytes < targetBytes) {
+  // Byte size the trailing "## Notes" block will add once joined: its content
+  // plus one "\n" separator per pushed element.
+  let pendingNotes = 0;
+  while (bytes + pendingNotes < targetBytes) {
     index += 1;
     const body = section(rand, index);
     chunks.push(body);
-    if (index % 5 === 1) footnoteDefs.push(`[^fn${index}]: ${sentence(rand, 10)}`);
+    if (index % 5 === 1) {
+      if (footnoteDefs.length === 0) {
+        pendingNotes += Buffer.byteLength("## Notes", "utf8") + 3;
+      }
+      const def = `[^fn${index}]: ${sentence(rand, 10)}`;
+      footnoteDefs.push(def);
+      pendingNotes += Buffer.byteLength(def, "utf8") + 1;
+    }
     bytes += Buffer.byteLength(body, "utf8") + 1;
   }
   if (footnoteDefs.length > 0) chunks.push("## Notes", "", ...footnoteDefs, "");

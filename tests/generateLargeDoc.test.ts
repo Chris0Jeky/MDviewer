@@ -21,10 +21,12 @@ describe("generateLargeDoc", () => {
   });
 
   it("meets the target size with bounded overshoot", () => {
-    const doc = generateLargeDoc(100_000, 7);
-    const bytes = Buffer.byteLength(doc, "utf8");
-    expect(bytes).toBeGreaterThanOrEqual(100_000);
-    expect(bytes).toBeLessThan(100_000 + 8_192);
+    for (const target of [100_000, 2_000_000]) {
+      const doc = generateLargeDoc(target, 7);
+      const bytes = Buffer.byteLength(doc, "utf8");
+      expect(bytes).toBeGreaterThanOrEqual(target);
+      expect(bytes).toBeLessThan(target + 8_192);
+    }
   });
 
   it("contains the representative block mix", () => {
