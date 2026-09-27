@@ -3,23 +3,34 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-27 (perf budget + SDK 3.3 shipped):**
-> PR **#110** (large-doc performance budget: deterministic generator, opt-in
-> 5-rung ladder with longtask/heap/node signals, 250 kB confirm gate on file,
-> window-paste and editor-paste/drop paths) merged as `a56b2f5` (post-merge
-> `main` CI run `36289158995` green). Twelve review threads across seven rounds
-> (six Codex + one headless Grok), all fixed in-PR with finding-to-commit evidence.
-> Owner PRs #111 (SDK version from lock) and #112 (SDK 3.3.0 sync) merged
-> concurrently and were reviewed retrospectively: CI-green, threads triaged,
-> 3.3.0 behavior-neutral for mdviewer. Production is now deployment
-> **`c3509120`** from `main` **`a56b2f5`** (immutable URL
-> `https://c3509120.mdviewer-c9r.pages.dev/`, id
-> `c3509120-1de1-4f67-8c26-27de441830b5`), smoke-verified live: identical
-> bytes/headers, SDK 3.3.0 byte-matching the lock, clean Chromium boot. No
-> open PRs except this deploy-record PR, no open issues. Standing orders
-> update: no more Codex review requests — self-review or headless Grok only.
+> **▶ CURRENT CHECKPOINT — 2026-09-27 (MD3 egress proof shipped, live as f97778db):**
+> PR **#114** (offline export proofs + two-part production-egress proof, MD3
+> closed) merged as `df50e7a` with exact-head CI green. One Codex P2
+> (setup-only egress assertion) fixed in-PR with reply evidence; self-review
+> caught a vacuous-probe gap and reworked the proof (SDK is inert under
+> automation by design, so `tests/pulse-egress.test.ts` pins the vendored
+> artifact to collector-only fetch in CI while `scripts/smoke-egress.mjs`
+> proves per-deploy the app phones nowhere). Headless Grok review attempted 3×
+> — the CLI hangs on any tool-using invocation in this environment (trivial
+> no-tool prompt works); merge proceeded on self-review + Codex + green CI per
+> the standing no-Codex-requests order. Production is now deployment
+> **`f97778db`** from `main` **`df50e7a`** (immutable URL
+> `https://f97778db.mdviewer-c9r.pages.dev/`, id
+> `f97778db-22ac-4637-b40c-758ecd96885e`), smoke-verified live: identical
+> bytes/headers, SDK 3.3.0 byte-matching the lock, clean Chromium boot
+> (6 sheets, zero errors), egress probe PASS (498 requests, all same-origin).
+> No open PRs except this deploy-record PR, no open issues.
 > Next: merge this record, then restart the loop on the next roadmap slice.
 > **Three OPEN human items: AI-8 (Beta bar), AI-7 (steps 4–8), and AI-6.**
+>
+> **▶ PREVIOUS CHECKPOINT — 2026-09-27 (perf budget + SDK 3.3 shipped):**
+> PR **#110** (large-doc performance budget: deterministic generator, opt-in
+> 5-rung ladder with longtask/heap/node signals, 250 kB confirm gate on file,
+> window-paste and editor-paste/drop paths) merged as `a56b2f5`. Owner PRs #111
+> (SDK version from lock) and #112 (SDK 3.3.0 sync) merged concurrently, reviewed
+> retrospectively. Production was deployment **`c3509120`** from `a56b2f5`,
+> smoke-verified live. Standing orders update: no more Codex review requests —
+> self-review or headless Grok only. Superseded by the f97778db deploy above.
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
 > Owner report: `HUMAN_TODO.pdf` (610 lines, 30 long task items) paginated with
