@@ -73,9 +73,10 @@ Git-integrated Pages project and plan the URL or custom-domain migration explici
 `.github/workflows/deploy.yml` is the reviewed CI-compatible direct-upload path. It is
 deliberately manual-only: run it from the Actions tab on `main` (or `gh workflow run
 deploy.yml --ref main`, with `-f dry_run=true` to exercise everything except the
-upload). Each run first proves the exact bytes in Chromium (the full E2E suite on
+upload). Each run first proves the SHA in Chromium (the full E2E suite on
 the production bundle — the credentials are not touched until that gate is green),
-then re-verifies statically (`agent:check`), builds, proves `SOURCE.txt` names the
+then re-verifies statically (`agent:check`), rebuilds from the same SHA and lockfile,
+proves `SOURCE.txt` names the
 SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
 deployment for that SHA. The post-deploy live smoke below still applies to every
 automated deploy — the workflow uploads; the runbook verifies.
@@ -86,13 +87,18 @@ One-time operator setup (the credentials gate stays human — never commit these
    Cloudflare Pages / Edit on this account only (the **Edit Cloudflare Workers**
    template also works for Wrangler Pages uploads — prefer the narrower custom
    token).
-2. Repository → Settings → Secrets and variables → Actions → New repository secret:
-   `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (Manage Account →
-   Account ID).
-3. Recommended: Environments → `production` (auto-created by the first run) →
-   Required reviewers → yourself, so a dispatch waits for your approval — the
-   promotion gate. Until then, the manual dispatch itself is the only gate.
-4. Prove it: dispatch once with `dry_run=true` (no secrets needed), then once live.
+2. Repository → Settings → Environments → New environment `production` (or open
+   the one the first dry run auto-created), then:
+   - Deployment branches and tags → Selected branches → add `main` only. This is the
+     real branch control: a dispatch runs the workflow file from its own ref, so the
+     in-workflow "Refuse non-main refs" step can be edited away on any branch.
+   - Required reviewers → yourself, so a live dispatch waits for your approval (the
+     promotion gate). Dry runs use the same environment, so they wait too.
+   - Environment secrets → add `CLOUDFLARE_API_TOKEN` (the token) and
+     `CLOUDFLARE_ACCOUNT_ID` (Manage Account → Account ID). Keep them out of
+     repository secrets: those are readable by a workflow on any branch, which the
+     two controls above do not cover.
+3. Prove it: dispatch once with `dry_run=true` (no secrets needed), then once live.
 
 Upgrade the pinned Wrangler as a single reviewed change spanning the workflow and
 this runbook. Keep the direct-upload notes below: they remain the fallback when

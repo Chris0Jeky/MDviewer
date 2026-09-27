@@ -4,14 +4,14 @@ name: Deploy (Pages direct upload)
 #
 # Deliberately manual-only (`workflow_dispatch`): merging to main never deploys by
 # itself — production promotion stays a human decision, and the Cloudflare
-# credentials (repo/environment secrets) are a separate operator gate. Until the
+# credentials (`production` environment secrets) are a separate operator gate. Until the
 # operator creates them, every run fails fast with a setup pointer instead of a
 # cryptic auth error. See docs/DEPLOYMENT.md "Automated deploy".
 #
-# What a run does: prove the exact bytes in Chromium (the full E2E suite on the
+# What a run does: prove this SHA in Chromium (the full E2E suite on the
 # production bundle, including the no-slice guarantee) BEFORE the Cloudflare
-# credentials are touched, then re-verify statically (agent:check), build, upload
-# `dist/` with the pinned Wrangler, and confirm Cloudflare recorded the deployment
+# credentials are touched, then re-verify statically (agent:check), rebuild from
+# the same SHA and lockfile, upload that `dist/` with the pinned Wrangler, and confirm Cloudflare recorded the deployment
 # for this SHA. Depending on `main` CI instead would race: a dispatch straight
 # after a merge could upload a SHA whose E2E is still pending or red. The
 # post-deploy live smoke (headers, SDK bytes, Chromium boot, egress probe) stays
@@ -29,9 +29,10 @@ on:
 permissions:
   contents: read
 
-# Deploys are serial and never cancel each other: two overlapping uploads would
-# race for the stable URL, and cancelling mid-upload leaves ambiguity about
-# what is live.
+# Deploys are serial and a running one is never cancelled: two overlapping
+# uploads would race for the stable URL, and cancelling mid-upload leaves
+# ambiguity about what is live. GitHub keeps at most one run pending per group,
+# so a third dispatch replaces a queued (not yet started) second one.
 concurrency:
   group: pages-direct-upload
   cancel-in-progress: false
@@ -47,8 +48,13 @@ jobs:
     steps:
       - name: Refuse non-main refs
         if: ${{ github.ref != 'refs/heads/main' }}
+        # The ref reaches the shell only through the environment: a branch name may
+        # contain quotes, `$` and `;`, so splicing it into the script would let a
+        # crafted name run commands and skip the refusal.
+        env:
+          REF: ${{ github.ref }}
         run: |
-          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
+          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on $REF)."
           exit 1
 
       - uses: actions/checkout@v7
@@ -98,15 +104,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The first run auto-creates an unprotected `production` environment; the
-    # operator hardens it (required reviewers) as the promotion gate — see
-    # docs/DEPLOYMENT.md. Runs from any branch can select this environment, so
-    # the branch guard below keeps deploys on main only.
+    # operator hardens it (required reviewers, main-only deployment branches, the
+    # Cloudflare secrets scoped to it) as the promotion gate — see
+    # docs/DEPLOYMENT.md. The branch guard below is a fast, readable refusal, not
+    # the control: a dispatch runs the workflow file from its own ref, which can
+    # drop the guard, so only the environment's branch policy binds.
     environment: production
     steps:
       - name: Refuse non-main refs
         if: ${{ github.ref != 'refs/heads/main' }}
+        # The ref reaches the shell only through the environment: a branch name may
+        # contain quotes, `$` and `;`, so splicing it into the script would let a
+        # crafted name run commands and skip the refusal.
+        env:
+          REF: ${{ github.ref }}
         run: |
-          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
+          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on $REF)."
           exit 1
 
       - uses: actions/checkout@v7
@@ -141,11 +154,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || {
-            echo "::error::Missing repo/environment secret CLOUDFLARE_API_TOKEN. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
+            echo "::error::Missing production environment secret CLOUDFLARE_API_TOKEN. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
             exit 1
           }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || {
-            echo "::error::Missing repo/environment secret CLOUDFLARE_ACCOUNT_ID. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
+            echo "::error::Missing production environment secret CLOUDFLARE_ACCOUNT_ID. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
             exit 1
           }
 
