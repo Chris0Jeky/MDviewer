@@ -198,6 +198,7 @@ export class App {
       codeTheme: this.settings.codeTheme,
       onInput: (text) => this.onEditorInput(text),
       largeInsertBytes: SIZE_SOFT_BYTES,
+      hardLimitBytes: SIZE_HARD_BYTES,
       confirmLargeInsert: (bytes) => this.confirmLargeInsert(bytes),
     });
     this.splitter = mountSplitter(this.workspaceEl, {

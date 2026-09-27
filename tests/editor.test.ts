@@ -347,13 +347,17 @@ describe("Editor: large-insert gate", () => {
     return evt;
   }
 
-  function remountWithGate(confirmLargeInsert: (bytes: number) => Promise<boolean>): void {
+  function remountWithGate(
+    confirmLargeInsert: (bytes: number) => Promise<boolean>,
+    hardLimitBytes?: number,
+  ): void {
     editor.destroy();
     onInput.mockClear();
     editor = mountEditor(root, {
       codeTheme: "github",
       onInput,
       largeInsertBytes: 100,
+      hardLimitBytes,
       confirmLargeInsert,
     });
   }
@@ -389,6 +393,49 @@ describe("Editor: large-insert gate", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(editor.input.value).toBe("existing" + "y".repeat(200));
     expect(onInput).toHaveBeenLastCalledWith("existing" + "y".repeat(200));
+  });
+
+  it("lets a small paste into an already-large document insert natively", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(150);
+    editor.input.selectionStart = editor.input.selectionEnd = 150;
+    const evt = fakePaste("a");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+
+  it("lets a small text drop into an already-large document insert natively", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(150);
+    const evt = fakeDrag("drop", ["text/plain"], "a");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+
+  it("still gates an over-threshold paste into an already-large document", () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(150);
+    editor.input.selectionStart = editor.input.selectionEnd = 150;
+    const evt = fakePaste("y".repeat(101));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledWith(251);
+  });
+
+  it("routes a small paste past the hard limit to the confirmer for refusal", () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert, 200);
+    editor.input.value = "x".repeat(199);
+    editor.input.selectionStart = editor.input.selectionEnd = 199;
+    const evt = fakePaste("ab");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledWith(201);
   });
 
   it("admits text drags on dragover but leaves file drags for the window handler", () => {
