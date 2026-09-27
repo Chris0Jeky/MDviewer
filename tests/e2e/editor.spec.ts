@@ -332,3 +332,45 @@ test.describe("split workspace: the editing surface never reaches paper", () => 
     await expect(page.locator(EDITOR)).toBeVisible();
   });
 });
+
+test.describe("split workspace: large-insert gate", () => {
+  /** Dispatch a synthetic paste at the caret; returns whether the app intercepted it. */
+  async function paste(page: import("@playwright/test").Page, text: string): Promise<boolean> {
+    return page.locator(INPUT).evaluate((el, t) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", t);
+      const evt = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      el.dispatchEvent(evt);
+      return evt.defaultPrevented;
+    }, text);
+  }
+
+  test("confirms a paste that crosses 250 kB, not small pastes into an accepted large doc", async ({
+    page,
+  }) => {
+    const dialogs: string[] = [];
+    page.on("dialog", (dialog) => {
+      dialogs.push(dialog.message());
+      void dialog.dismiss();
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
+
+    // Grow the document past the gate the way typing does (no dialog by design).
+    await page.locator(INPUT).evaluate((el) => {
+      const input = el as HTMLTextAreaElement;
+      input.value = "word ".repeat(60_000);
+      input.selectionStart = input.selectionEnd = input.value.length;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(await paste(page, "a")).toBe(false);
+    expect(dialogs).toEqual([]);
+
+    // An insert that is itself over the gate still asks, and a dismissal drops it.
+    expect(await paste(page, "x".repeat(260_000))).toBe(true);
+    await expect.poll(() => dialogs.length).toBe(1);
+    expect(dialogs[0]).toContain("Insert it anyway?");
+    expect(await page.locator(INPUT).inputValue()).toHaveLength(300_000);
+  });
+});
