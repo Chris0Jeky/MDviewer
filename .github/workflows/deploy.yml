@@ -8,10 +8,14 @@ name: Deploy (Pages direct upload)
 # operator creates them, every run fails fast with a setup pointer instead of a
 # cryptic auth error. See docs/DEPLOYMENT.md "Automated deploy".
 #
-# What a run does: re-verify the exact bytes (agent:check), build, upload `dist/`
-# with the pinned Wrangler, then confirm Cloudflare recorded the deployment for
-# this SHA. The post-deploy live smoke (headers, SDK bytes, Chromium boot, egress
-# probe) stays in the runbook — it needs judgment, not automation.
+# What a run does: prove the exact bytes in Chromium (the full E2E suite on the
+# production bundle, including the no-slice guarantee) BEFORE the Cloudflare
+# credentials are touched, then re-verify statically (agent:check), build, upload
+# `dist/` with the pinned Wrangler, and confirm Cloudflare recorded the deployment
+# for this SHA. Depending on `main` CI instead would race: a dispatch straight
+# after a merge could upload a SHA whose E2E is still pending or red. The
+# post-deploy live smoke (headers, SDK bytes, Chromium boot, egress probe) stays
+# in the runbook — it needs judgment, not automation.
 
 on:
   workflow_dispatch:
@@ -33,8 +37,64 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Chromium proof first, as its own job: the deploy job (which holds the
+  # Cloudflare credentials) cannot start until this is green. Mirrors the E2E job
+  # in ci.yml step for step; keep the two in sync.
+  e2e:
+    name: E2E gate (Playwright · Chromium · production build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Refuse non-main refs
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright Chromium (+ OS deps)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E tests (real Chromium, production bundle, incl. no-slice guarantee)
+        run: npm run test:e2e
+        env:
+          E2E_TARGET: preview
+
+      - name: Upload Playwright browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-deploy
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   deploy:
     name: Verify · Build · Upload to Pages
+    needs: [e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The first run auto-creates an unprotected `production` environment; the

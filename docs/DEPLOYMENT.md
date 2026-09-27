@@ -72,9 +72,11 @@ Git-integrated Pages project and plan the URL or custom-domain migration explici
 
 `.github/workflows/deploy.yml` is the reviewed CI-compatible direct-upload path. It is
 deliberately manual-only: run it from the Actions tab on `main` (or `gh workflow run
-Deploy --ref main`, with `-f dry_run=true` to exercise everything except the upload).
-Each run re-verifies the exact bytes (`agent:check`), builds, proves `SOURCE.txt`
-names the SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
+deploy.yml --ref main`, with `-f dry_run=true` to exercise everything except the
+upload). Each run first proves the exact bytes in Chromium (the full E2E suite on
+the production bundle — the credentials are not touched until that gate is green),
+then re-verifies statically (`agent:check`), builds, proves `SOURCE.txt` names the
+SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
 deployment for that SHA. The post-deploy live smoke below still applies to every
 automated deploy — the workflow uploads; the runbook verifies.
 
