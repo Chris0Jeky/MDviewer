@@ -26,6 +26,7 @@
     "agent:ledger:render": "node scripts/run-python.mjs scripts/agent_hooks/render_failure_ledger.py",
     "agent:observatory:check": "node observatory/check.mjs",
     "test:serve": "node --test scripts/serve.test.mjs",
+    "smoke:egress": "node scripts/smoke-egress.mjs",
     "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve && npm run agent:observatory:check"
   },
   "dependencies": {

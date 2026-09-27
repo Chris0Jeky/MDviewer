@@ -60,6 +60,15 @@ test.describe("offline: the built app works with the network cut", () => {
       .toBe(true);
     await expect(page.locator("#app")).toBeVisible();
 
+    // Positive proof the network is actually cut (not merely a controller present):
+    // an uncached path resolves online but rejects offline.
+    const netState = await page.evaluate(() =>
+      fetch(`/__offline-probe-${Date.now()}`)
+        .then((r) => `online-${r.status}`)
+        .catch(() => "offline"),
+    );
+    expect(netState).toBe("offline");
+
     // The bundled sample is a string constant in the entry chunk, but rendering it pulls in
     // Shiki grammars, KaTeX (fonts included), Mermaid and finally Paged.js — the four lazy
     // paths that a shell-only precache would break.

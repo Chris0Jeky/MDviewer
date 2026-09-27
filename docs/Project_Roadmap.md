@@ -112,15 +112,23 @@ export paths.
   (`tests/e2e/large-doc-perf.spec.ts`, `MDVIEWER_PERF=1`) measuring 67–1206
   pages in 2.3 s–3.7 min on the reference machine, with per-band wall-time,
   responsiveness (longtask) and memory (JS heap, DOM nodes) budgets. The soft
-  gate drops 2 MB → 250 kB and now guards file, window-paste and editor-paste
-  ingestion, so the confirm dialog covers the minutes-scale band the ladder
-  revealed.
+  gate drops 2 MB → 250 kB and now guards file, window-paste and editor
+  paste/drop ingestion, so the confirm dialog covers the minutes-scale band
+  the ladder revealed.
 - **Open (MD1):** prepare a reviewed CI-compatible direct-upload path for the existing Pages project;
   production promotion and credentials remain separate gates.
 - **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
   has been selected and ownership verified.
-- **Open (MD3):** keep hosting browser-only by re-proving render/export and runtime-egress contracts;
-  no document upload, converter backend or new runtime network path is authorized.
+- **Done (2026-09-27):** render/export and runtime-egress contracts re-proven —
+  `offline.spec.ts` (render + paginate with the network cut, zero cross-origin
+  requests, positive offline proof) and `export-offline.spec.ts` (both export paths
+  with the network cut, egress re-asserted after each export) in CI, plus a two-part
+  production-egress proof: `tests/pulse-egress.test.ts` pins the vendored SDK to
+  collector-only fetch in CI (the SDK is inert under automation by design, so no live
+  probe can observe its beacons), while `scripts/smoke-egress.mjs` proves per-deploy
+  against the immutable URL that the app itself requests nothing cross-origin, with
+  the verdict recorded in `docs/DEPLOYMENT.md`. No document upload, converter backend
+  or new runtime network path exists.
 
 ### P4 — Stretch — `DEFERRED`
 
