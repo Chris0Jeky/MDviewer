@@ -18,7 +18,7 @@ anyone. This is enforced in code: every usage call goes through one module
 it reaches a usage call.
 
 **What is sent.** The live site (https://mdviewer-c9r.pages.dev only; local runs, previews and
-self-hosted copies send nothing) loads the Pulseboard SDK 3.2 from its own origin
+self-hosted copies send nothing) loads the Pulseboard SDK 3.3 from its own origin
 (`/pulseboard.js`) and sends data only to `https://pulseboard-observatory.commit-atlas.workers.dev`,
 the owner's first-party collector. A one-line **Beta** bar at the top of the page explains it and
 offers **Choose** and **OK**. There are three categories:
