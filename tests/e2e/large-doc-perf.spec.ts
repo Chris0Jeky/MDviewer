@@ -39,19 +39,16 @@ async function heapMB(page: Page): Promise<string> {
 /**
  * Collect garbage through CDP so heap samples measure retained memory rather
  * than whatever V8 has not gotten around to freeing. Without this, GC timing
- * alone moves the readings rung to rung. Best-effort: runtimes without CDP
- * (non-Chromium) fall back to a raw sample.
+ * alone moves the readings rung to rung. Failures propagate: this spec runs
+ * only under perf-chromium, so a failed collection must fail the rung rather
+ * than silently record a garbage-inflated sample as retained memory.
  */
 async function collectGarbage(page: Page): Promise<void> {
+  const session = await page.context().newCDPSession(page);
   try {
-    const session = await page.context().newCDPSession(page);
-    try {
-      await session.send("HeapProfiler.collectGarbage");
-    } finally {
-      await session.detach();
-    }
-  } catch {
-    // No CDP — the sample below still runs, just with live garbage included.
+    await session.send("HeapProfiler.collectGarbage");
+  } finally {
+    await session.detach();
   }
 }
 
