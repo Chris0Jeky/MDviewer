@@ -245,7 +245,7 @@ describe("input: installInputHandlers", () => {
     uninstall();
   });
 
-  it("refuses a dropped markdown file over the hard cap with a size notice", async () => {
+  it("reports a hard-cap refusal with the type rejections of the same drop, in one call", async () => {
     const store = new DocStore();
     const onReject = vi.fn();
     const onTooLarge = vi.fn();
@@ -260,8 +260,9 @@ describe("input: installInputHandlers", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(onLargeFile).not.toHaveBeenCalled();
-    expect(onTooLarge).toHaveBeenCalledWith("huge.md");
-    expect(onReject).toHaveBeenCalledWith(["image.png"]);
+    expect(onTooLarge).not.toHaveBeenCalled();
+    expect(onReject).toHaveBeenCalledTimes(1);
+    expect(onReject).toHaveBeenCalledWith(["image.png"], ["huge.md"]);
     expect(store.openDocs.length).toBe(0);
     uninstall();
   });

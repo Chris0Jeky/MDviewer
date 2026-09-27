@@ -137,7 +137,7 @@ export class App {
 
     // Ingestion → store. The store's "change" event triggers a content render.
     app.detachInput = installInputHandlers(app.store, {
-      onReject: (names) => app.onReject(names),
+      onReject: (names, tooLarge) => app.onReject(names, tooLarge),
       onLargeFile: (bytes) => app.confirmLargeFile(bytes),
       onTooLarge: (name) => app.onTooLarge(name),
     });
@@ -618,17 +618,8 @@ export class App {
     }
   }
 
-  private onReject(names: string[]): void {
-    const list = names.join(", ");
-    this.banner.warn([
-      {
-        kind: "lang",
-        message:
-          names.length === 1
-            ? `Skipped “${list}” — only .md and .markdown files are supported.`
-            : `Skipped ${names.length} files (${list}) — only .md and .markdown are supported.`,
-      },
-    ]);
+  private onReject(names: string[], tooLarge: string[] = []): void {
+    this.banner.warn(skippedFileWarnings(names, tooLarge));
   }
 
   private async confirmLargeFile(bytes: number): Promise<boolean> {
@@ -656,12 +647,7 @@ export class App {
 
   /** Size refusal (not a file-type rejection): the content never enters the store. */
   private onTooLarge(name: string): void {
-    this.banner.warn([
-      {
-        kind: "content",
-        message: `Skipped “${name}” — over the 25 MB limit.`,
-      },
-    ]);
+    this.banner.warn(skippedFileWarnings([], [name]));
   }
 
   private announce(message: string): void {
@@ -695,6 +681,32 @@ export class App {
 }
 
 /** Append a synthesized diagram warning when Mermaid blocks failed. */
+/**
+ * One banner's worth of skip notices for a batch: file-type rejections and size
+ * refusals side by side, since a second `banner.warn` would replace the first.
+ */
+export function skippedFileWarnings(rejected: string[], tooLarge: string[]): RenderWarning[] {
+  const warnings: RenderWarning[] = [];
+  if (rejected.length > 0) {
+    const list = rejected.join(", ");
+    warnings.push({
+      kind: "lang",
+      message:
+        rejected.length === 1
+          ? `Skipped “${list}” — only .md and .markdown files are supported.`
+          : `Skipped ${rejected.length} files (${list}) — only .md and .markdown are supported.`,
+    });
+  }
+  if (tooLarge.length > 0) {
+    const subject =
+      tooLarge.length === 1
+        ? `Skipped “${tooLarge[0]}”`
+        : `Skipped ${tooLarge.length} files (${tooLarge.join(", ")})`;
+    warnings.push({ kind: "content", message: `${subject} — over the 25 MB limit.` });
+  }
+  return warnings;
+}
+
 function withMermaidWarnings(warnings: RenderWarning[], failed: number): RenderWarning[] {
   if (failed <= 0) return warnings;
   return [

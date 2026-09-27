@@ -168,12 +168,14 @@ async function readFiles(
 export function installInputHandlers(
   store: DocStore,
   opts: {
-    onReject(names: string[]): void;
-    onLargeFile(bytes: number): Promise<boolean>;
     /**
-     * Size refusal feedback for pastes and files over the hard cap (a file-type
-     * rejection would mislabel it). Without it, oversized files fall back to onReject.
+     * Files skipped from one pick or drop, reported together so the host can show
+     * one notice: `names` were not Markdown (or unreadable), `tooLarge` were over
+     * the hard cap. Called once per batch when either list is non-empty.
      */
+    onReject(names: string[], tooLarge: string[]): void;
+    onLargeFile(bytes: number): Promise<boolean>;
+    /** Size refusal feedback for pastes (a file-type rejection would mislabel it). */
     onTooLarge?(name: string): void;
   },
 ): () => void {
@@ -197,12 +199,10 @@ export function installInputHandlers(
       store.add(doc.name, doc.text);
       pulseDocOpened("file", doc.text.length);
     }
-    if (batch.rejected.length > 0) opts.onReject(batch.rejected);
-    // One notice per batch: the banner shows a single message, so a later call
-    // would replace an earlier one.
-    if (batch.tooLarge.length > 0) {
-      if (opts.onTooLarge) opts.onTooLarge(batch.tooLarge.join(", "));
-      else opts.onReject(batch.tooLarge);
+    // One call per batch: the banner holds a single message, so separate calls
+    // for type and size refusals would overwrite each other.
+    if (batch.rejected.length > 0 || batch.tooLarge.length > 0) {
+      opts.onReject(batch.rejected, batch.tooLarge);
     }
   };
 
