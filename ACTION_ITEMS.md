@@ -15,6 +15,12 @@
 
 ## Current State (snapshot)
 
+- **2026-09-27 (deploy workflow hardening)** — post-merge review of PRs #106 to #116
+  found a shell injection in `deploy.yml`'s main-only guard and that the guard is not
+  the real control. The fix PR passes the ref via `env` and documents the
+  `production` environment hardening; new operator item **AI-9** tracks it before the
+  first live automated deploy. OPEN AI-6/AI-7/AI-8/AI-9.
+
 - **2026-09-27 (MD3 egress proof shipped)** — PR #114 (offline export proofs +
   two-part production-egress proof) merged as `df50e7a` with green exact-head CI;
   one Codex P2 fixed in-PR and a self-review vacuous-probe gap reworked into the

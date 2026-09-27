@@ -11,8 +11,8 @@ name: Deploy (Pages direct upload)
 # What a run does: prove this SHA in Chromium (the full E2E suite on the
 # production bundle, including the no-slice guarantee) BEFORE the Cloudflare
 # credentials are touched, then re-verify statically (agent:check), rebuild from
-# the same SHA and lockfile, upload that `dist/` with the pinned Wrangler, and confirm Cloudflare recorded the deployment
-# for this SHA. Depending on `main` CI instead would race: a dispatch straight
+# the same SHA and lockfile, upload that `dist/` with the pinned Wrangler, and
+# confirm Cloudflare recorded the deployment for this SHA. Depending on `main` CI instead would race: a dispatch straight
 # after a merge could upload a SHA whose E2E is still pending or red. The
 # post-deploy live smoke (headers, SDK bytes, Chromium boot, egress probe) stays
 # in the runbook — it needs judgment, not automation.

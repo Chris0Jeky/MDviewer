@@ -119,9 +119,10 @@ export paths.
   project — `.github/workflows/deploy.yml` (manual dispatch from `main` only, `dry_run`
   mode, exact-bytes re-verification, pinned Wrangler 4.114.0, post-upload SHA
   confirmation), documented in `docs/DEPLOYMENT.md` "Automated deploy". Production
-  promotion (the dispatch itself, plus a recommended `production` environment
-  reviewer rule) and credentials (operator-created secrets) remain separate human
-  gates; the first live run is the operator's proof step.
+  promotion (the dispatch itself, plus the `production` environment's required
+  reviewers and main-only branch policy) and credentials (Cloudflare secrets scoped
+  to that environment) remain separate human gates, tracked as AI-9; the first live
+  run is the operator's proof step.
 - **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
   has been selected and ownership verified.
 - **Done (2026-09-27):** render/export and runtime-egress contracts re-proven —

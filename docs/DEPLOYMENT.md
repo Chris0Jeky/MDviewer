@@ -75,9 +75,8 @@ deliberately manual-only: run it from the Actions tab on `main` (or `gh workflow
 deploy.yml --ref main`, with `-f dry_run=true` to exercise everything except the
 upload). Each run first proves the SHA in Chromium (the full E2E suite on
 the production bundle — the credentials are not touched until that gate is green),
-then re-verifies statically (`agent:check`), rebuilds from the same SHA and lockfile,
-proves `SOURCE.txt` names the
-SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
+then re-verifies statically (`agent:check`), rebuilds from the same SHA and
+lockfile, proves `SOURCE.txt` names the SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
 deployment for that SHA. The post-deploy live smoke below still applies to every
 automated deploy — the workflow uploads; the runbook verifies.
 
@@ -91,7 +90,9 @@ One-time operator setup (the credentials gate stays human — never commit these
    the one the first dry run auto-created), then:
    - Deployment branches and tags → Selected branches → add `main` only. This is the
      real branch control: a dispatch runs the workflow file from its own ref, so the
-     in-workflow "Refuse non-main refs" step can be edited away on any branch.
+     in-workflow "Refuse non-main refs" step can be edited away on any branch. It
+     binds only while `main` itself stays protected (merge protection, AI-5): a
+     workflow pushed straight to `main` passes the policy.
    - Required reviewers → yourself, so a live dispatch waits for your approval (the
      promotion gate). Dry runs use the same environment, so they wait too.
    - Environment secrets → add `CLOUDFLARE_API_TOKEN` (the token) and
