@@ -41,6 +41,20 @@ export default defineConfig({
     timeout: 120_000,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: "**/large-doc-perf.spec.ts",
+    },
+    // The profiling ladder needs precise heap readings: without the flag,
+    // performance.memory is coarsened and every rung reports the same flat MB.
+    {
+      name: "perf-chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: { args: ["--enable-precise-memory-info"] },
+      },
+      testMatch: "**/large-doc-perf.spec.ts",
+    },
   ],
 });

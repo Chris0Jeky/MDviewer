@@ -49,7 +49,7 @@ import { loadSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
-import { installInputHandlers } from "./input";
+import { installInputHandlers, SIZE_HARD_BYTES, SIZE_SOFT_BYTES } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
 import {
@@ -139,6 +139,7 @@ export class App {
     app.detachInput = installInputHandlers(app.store, {
       onReject: (names) => app.onReject(names),
       onLargeFile: (bytes) => app.confirmLargeFile(bytes),
+      onTooLarge: (name) => app.onTooLarge(name),
     });
 
     // "change" = a different document is active → re-seed the editor and re-render.
@@ -196,6 +197,8 @@ export class App {
     this.editor = mountEditor(this.workspaceEl, {
       codeTheme: this.settings.codeTheme,
       onInput: (text) => this.onEditorInput(text),
+      largeInsertBytes: SIZE_SOFT_BYTES,
+      confirmLargeInsert: (bytes) => this.confirmLargeInsert(bytes),
     });
     this.splitter = mountSplitter(this.workspaceEl, {
       track: this.workspaceEl,
@@ -634,6 +637,30 @@ export class App {
         `This document is about ${mb} MB. Pagination may briefly freeze the page. Open it anyway?`,
       ),
     );
+  }
+
+  /** Editor-insert twin of the file gate: refuse past the hard cap, else confirm. */
+  private async confirmLargeInsert(bytes: number): Promise<boolean> {
+    if (bytes > SIZE_HARD_BYTES) {
+      this.onTooLarge("Inserted text");
+      return false;
+    }
+    const mb = (bytes / 1_000_000).toFixed(1);
+    return Promise.resolve(
+      window.confirm(
+        `Inserting this would grow the document to about ${mb} MB. Pagination may briefly freeze the page. Insert it anyway?`,
+      ),
+    );
+  }
+
+  /** Size refusal (not a file-type rejection): the content never enters the store. */
+  private onTooLarge(name: string): void {
+    this.banner.warn([
+      {
+        kind: "content",
+        message: `Skipped “${name}” — over the 25 MB limit.`,
+      },
+    ]);
   }
 
   private announce(message: string): void {

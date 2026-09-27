@@ -27,6 +27,12 @@ describe("input: constants", () => {
     expect(SIZE_SOFT_BYTES).toBeLessThanOrEqual(5_000_000);
     expect(SIZE_HARD_BYTES).toBeGreaterThanOrEqual(10_000_000);
   });
+
+  it("pins the soft gate where the measured wait stops being negligible", () => {
+    // docs/PERF_BUDGET.md: 250 kB paginates in ~7-11 s, 500 kB in ~25 s on
+    // the reference machine. Move this only with a re-measured ladder.
+    expect(SIZE_SOFT_BYTES).toBe(250_000);
+  });
 });
 
 describe("input: isMarkdownFile", () => {
@@ -151,6 +157,54 @@ describe("input: installInputHandlers", () => {
     });
     window.dispatchEvent(fakeClipboardEvent("   \n\t  "));
     await new Promise((r) => setTimeout(r, 0));
+    expect(store.openDocs.length).toBe(0);
+    uninstall();
+  });
+
+  it("confirms a window paste over the soft gate and opens on accept", async () => {
+    const store = new DocStore();
+    const onLargeFile = vi.fn(async () => true);
+    const uninstall = installInputHandlers(store, {
+      onReject: vi.fn(),
+      onLargeFile,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_SOFT_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLargeFile).toHaveBeenCalledTimes(1);
+    expect(store.openDocs.length).toBe(1);
+    uninstall();
+  });
+
+  it("drops a window paste over the soft gate on decline", async () => {
+    const store = new DocStore();
+    const onReject = vi.fn();
+    const uninstall = installInputHandlers(store, {
+      onReject,
+      onLargeFile: async () => false,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_SOFT_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.openDocs.length).toBe(0);
+    expect(onReject).not.toHaveBeenCalled();
+    uninstall();
+  });
+
+  it("refuses a window paste over the hard cap with a size notice", async () => {
+    const store = new DocStore();
+    const onLargeFile = vi.fn(async () => true);
+    const onTooLarge = vi.fn();
+    const uninstall = installInputHandlers(store, {
+      onReject: vi.fn(),
+      onLargeFile,
+      onTooLarge,
+    });
+    window.dispatchEvent(fakeClipboardEvent("x".repeat(SIZE_HARD_BYTES + 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLargeFile).not.toHaveBeenCalled();
+    expect(onTooLarge).toHaveBeenCalledWith("Pasted.md");
     expect(store.openDocs.length).toBe(0);
     uninstall();
   });

@@ -330,6 +330,100 @@ describe("Editor: teardown", () => {
   });
 });
 
+describe("Editor: large-insert gate", () => {
+  function fakePaste(text: string): Event {
+    const evt = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, "clipboardData", {
+      value: { getData: (type: string) => (type === "text/plain" ? text : "") },
+    });
+    return evt;
+  }
+
+  function fakeDrag(kind: "drop" | "dragover", types: string[], text: string): Event {
+    const evt = new Event(kind, { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, "dataTransfer", {
+      value: { types, getData: (type: string) => (type === "text/plain" ? text : "") },
+    });
+    return evt;
+  }
+
+  function remountWithGate(confirmLargeInsert: (bytes: number) => Promise<boolean>): void {
+    editor.destroy();
+    onInput.mockClear();
+    editor = mountEditor(root, {
+      codeTheme: "github",
+      onInput,
+      largeInsertBytes: 100,
+      confirmLargeInsert,
+    });
+  }
+
+  it("lets an under-threshold paste insert natively without confirming", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    const evt = fakePaste("small");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+
+  it("drops an over-threshold paste on decline without touching the text", async () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "existing";
+    const evt = fakePaste("x".repeat(200));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledWith(expect.any(Number));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.input.value).toBe("existing");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("inserts an over-threshold paste on accept and reports the edit", async () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "existing";
+    editor.input.selectionStart = editor.input.selectionEnd = 8;
+    editor.input.dispatchEvent(fakePaste("y".repeat(200)));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.input.value).toBe("existing" + "y".repeat(200));
+    expect(onInput).toHaveBeenLastCalledWith("existing" + "y".repeat(200));
+  });
+
+  it("admits text drags on dragover but leaves file drags for the window handler", () => {
+    remountWithGate(async () => true);
+    const textDrag = fakeDrag("dragover", ["text/plain"], "");
+    editor.input.dispatchEvent(textDrag);
+    expect(textDrag.defaultPrevented).toBe(true);
+    const fileDrag = fakeDrag("dragover", ["Files"], "");
+    editor.input.dispatchEvent(fileDrag);
+    expect(fileDrag.defaultPrevented).toBe(false);
+  });
+
+  it("gates an over-threshold text drop like a paste", async () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "existing";
+    const evt = fakeDrag("drop", ["text/plain"], "z".repeat(200));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(editor.input.value).toBe("existing");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("ignores file drops for the window handler to process", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    const evt = fakeDrag("drop", ["Files"], "z".repeat(200));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+});
+
 describe("Editor: header helpers", () => {
   it("countWords counts whitespace-separated runs", () => {
     expect(countWords("")).toBe(0);

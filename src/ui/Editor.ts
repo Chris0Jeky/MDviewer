@@ -51,6 +51,19 @@ export interface EditorOptions {
   codeTheme: CodeThemeId;
   /** Placeholder shown while the editor is empty. */
   placeholder?: string;
+  /**
+   * Byte size above which a paste or text drop is intercepted for
+   * confirmation. Inserts that keep the document at or below this proceed
+   * natively with no async hop, so the native undo entry is untouched in the
+   * common case.
+   */
+  largeInsertBytes?: number;
+  /**
+   * Confirm an insert that would grow the document past `largeInsertBytes`.
+   * Resolve false to drop it, true to insert it (via execCommand, so the
+   * native undo entry survives where the command exists).
+   */
+  confirmLargeInsert?(bytes: number): Promise<boolean>;
 }
 
 /**
@@ -329,9 +342,75 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     onInputEvent();
   };
 
+  /** Insert text preserving the native undo entry where execCommand exists. */
+  const insertTextPreservingUndo = (text: string): void => {
+    let inserted: boolean;
+    try {
+      input.focus();
+      inserted = document.execCommand("insertText", false, text);
+    } catch {
+      inserted = false;
+    }
+    if (inserted) return;
+    const current = input.value;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    input.value = `${current.slice(0, start)}${text}${current.slice(end)}`;
+    input.selectionStart = input.selectionEnd = start + text.length;
+    onInputEvent();
+  };
+
+  /**
+   * Large-insert gate shared by paste and text drop. A megabytes insert would
+   * otherwise start a minutes-long frozen render with no warning
+   * (docs/PERF_BUDGET.md). Only over-threshold inserts are intercepted;
+   * everything else proceeds natively.
+   */
+  const gateLargeInsert = (text: string, event: { preventDefault(): void }): void => {
+    const threshold = opts.largeInsertBytes ?? 0;
+    const confirmer = opts.confirmLargeInsert;
+    if (!confirmer || threshold <= 0 || !text) return;
+    const { selectionStart, selectionEnd, value } = input;
+    const nextBytes = new TextEncoder().encode(
+      value.slice(0, selectionStart) + text + value.slice(selectionEnd),
+    ).length;
+    if (nextBytes <= threshold) return;
+    event.preventDefault();
+    void confirmer(nextBytes).then((proceed) => {
+      if (proceed) insertTextPreservingUndo(text);
+    });
+  };
+
+  const onPasteEvent = (event: ClipboardEvent): void => {
+    gateLargeInsert(event.clipboardData?.getData("text/plain") ?? "", event);
+  };
+
+  const onDragOverEvent = (event: DragEvent): void => {
+    // Text drags must cancel dragover or the drop event never fires (size is
+    // unknowable until drop time — getData is forbidden during dragover — so
+    // all text drags are admitted and gated at drop). File drags are left
+    // alone for the window handler's overlay logic.
+    const dt = event.dataTransfer;
+    if (!dt || Array.from(dt.types).includes("Files")) return;
+    event.preventDefault();
+  };
+
+  const onDropEvent = (event: DragEvent): void => {
+    // Text drags carry no files, so the window drop handler ignores them; without
+    // this the textarea would insert them natively with no size gate. File drags
+    // are left alone for the window handler. Accepted drops insert at the caret
+    // (preventDefault loses the drop point) rather than the drop position.
+    const dt = event.dataTransfer;
+    if (!dt || Array.from(dt.types).includes("Files")) return;
+    gateLargeInsert(dt.getData("text/plain"), event);
+  };
+
   input.addEventListener("input", onInputEvent);
   input.addEventListener("scroll", onScroll);
   input.addEventListener("keydown", onKeyDown);
+  input.addEventListener("paste", onPasteEvent);
+  input.addEventListener("dragover", onDragOverEvent);
+  input.addEventListener("drop", onDropEvent);
 
   syncSize("");
 
@@ -372,6 +451,9 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       input.removeEventListener("input", onInputEvent);
       input.removeEventListener("scroll", onScroll);
       input.removeEventListener("keydown", onKeyDown);
+      input.removeEventListener("paste", onPasteEvent);
+      input.removeEventListener("dragover", onDragOverEvent);
+      input.removeEventListener("drop", onDropEvent);
       pane.remove();
     },
   };

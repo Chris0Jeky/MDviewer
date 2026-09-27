@@ -255,7 +255,7 @@ export function createRenderScheduler(run: (r: RenderReason) => Promise<void>): 
 
 // src/app/input.ts
 export const MD_EXTENSIONS: readonly string[];    // ['.md','.markdown']
-export const SIZE_SOFT_BYTES: number;             // ~2_000_000
+export const SIZE_SOFT_BYTES: number;             // ~250_000 (measured: docs/PERF_BUDGET.md)
 export const SIZE_HARD_BYTES: number;             // ~25_000_000
 export interface OpenResult { opened: Doc[]; skipped: string[]; }
 export function isMarkdownFile(name: string, mime: string): boolean;

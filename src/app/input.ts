@@ -19,8 +19,11 @@ export const MD_EXTENSIONS: readonly string[] = [".md", ".markdown"];
 /**
  * Soft cap: above this we ask the user to confirm before paginating, because a very
  * large document can freeze the main thread during Paged.js layout (Section 11).
+ * Set from measurement (docs/PERF_BUDGET.md): 250 kB paginates in ~7–11 s on
+ * the reference machine while 500 kB takes ~25 s, so the gate sits where the
+ * wait stops being negligible.
  */
-export const SIZE_SOFT_BYTES = 2_000_000;
+export const SIZE_SOFT_BYTES = 250_000;
 
 /** Hard cap: above this we refuse outright — pagination would be unusable. */
 export const SIZE_HARD_BYTES = 25_000_000;
@@ -165,6 +168,8 @@ export function installInputHandlers(
   opts: {
     onReject(names: string[]): void;
     onLargeFile(bytes: number): Promise<boolean>;
+    /** Size refusal feedback for pastes (a file-type rejection would mislabel it). */
+    onTooLarge?(name: string): void;
   },
 ): () => void {
   const overlay = document.getElementById(IDS.dragOverlay);
@@ -224,10 +229,22 @@ export function installInputHandlers(
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text.trim()) return;
     e.preventDefault();
-    void openMarkdown(text, "Pasted.md").then((doc) => {
+    // Pastes are ingestion like a file drop: the same gates apply, or a megabytes
+    // clipboard would start a minutes-long frozen render with no warning.
+    void (async () => {
+      const bytes = new TextEncoder().encode(text).length;
+      if (bytes > SIZE_HARD_BYTES) {
+        opts.onTooLarge?.("Pasted.md");
+        return;
+      }
+      if (bytes > SIZE_SOFT_BYTES) {
+        const proceed = await opts.onLargeFile(bytes);
+        if (!proceed) return;
+      }
+      const doc = await openMarkdown(text, "Pasted.md");
       store.add(doc.name, doc.text);
       pulseDocOpened("paste", doc.text.length);
-    });
+    })();
   };
 
   const onFileInputChange = (e: Event): void => {
