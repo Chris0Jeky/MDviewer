@@ -77,6 +77,18 @@ After a deployment, smoke both the stable and immutable URLs, inspect the entry 
 asset response, and confirm the `_headers` policy. Do not record Wrangler tokens or Cloudflare account
 identifiers in the repository.
 
+Run the live egress probe against the immutable URL and record its verdict in the deploy record:
+
+```powershell
+npm run smoke:egress -- https://<deployment-id>.mdviewer-c9r.pages.dev/
+```
+
+It renders the sample, runs both export paths, and fails on any request outside the page origin —
+proof the app itself phones nowhere. (The SDK is inert under automation by design, so the probe
+observes the app alone; the SDK's collector-only destinations are pinned by
+`tests/pulse-egress.test.ts` in CI, and the `/pulseboard.js` byte-identity check below extends that
+proof to the served bytes.)
+
 Building from a downloaded source archive (no `.git`) is supported: `npm run build`
 still produces a distribution, and `dist/SOURCE.txt` says so honestly. Such a tree
 carries no revision on its own, so whoever produced the archive can identify it with

@@ -119,12 +119,16 @@ export paths.
   production promotion and credentials remain separate gates.
 - **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
   has been selected and ownership verified.
-- **Done (2026-09-27):** render/export and runtime-egress contracts re-proven in CI —
+- **Done (2026-09-27):** render/export and runtime-egress contracts re-proven —
   `offline.spec.ts` (render + paginate with the network cut, zero cross-origin
   requests, positive offline proof) and `export-offline.spec.ts` (both export paths
-  with the network cut). Production-origin egress (SDK talks only to the first-party
-  collector) is proven per-deploy by live probes recorded in `docs/DEPLOYMENT.md`,
-  not CI. No document upload, converter backend or new runtime network path exists.
+  with the network cut, egress re-asserted after each export) in CI, plus a two-part
+  production-egress proof: `tests/pulse-egress.test.ts` pins the vendored SDK to
+  collector-only fetch in CI (the SDK is inert under automation by design, so no live
+  probe can observe its beacons), while `scripts/smoke-egress.mjs` proves per-deploy
+  against the immutable URL that the app itself requests nothing cross-origin, with
+  the verdict recorded in `docs/DEPLOYMENT.md`. No document upload, converter backend
+  or new runtime network path exists.
 
 ### P4 — Stretch — `DEFERRED`
 
