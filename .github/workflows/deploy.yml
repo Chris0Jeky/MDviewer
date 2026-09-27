@@ -1,0 +1,187 @@
+name: Deploy (Pages direct upload)
+
+# MD1: a reviewed, CI-compatible direct-upload path for the existing Pages project.
+#
+# Deliberately manual-only (`workflow_dispatch`): merging to main never deploys by
+# itself — production promotion stays a human decision, and the Cloudflare
+# credentials (repo/environment secrets) are a separate operator gate. Until the
+# operator creates them, every run fails fast with a setup pointer instead of a
+# cryptic auth error. See docs/DEPLOYMENT.md "Automated deploy".
+#
+# What a run does: prove the exact bytes in Chromium (the full E2E suite on the
+# production bundle, including the no-slice guarantee) BEFORE the Cloudflare
+# credentials are touched, then re-verify statically (agent:check), build, upload
+# `dist/` with the pinned Wrangler, and confirm Cloudflare recorded the deployment
+# for this SHA. Depending on `main` CI instead would race: a dispatch straight
+# after a merge could upload a SHA whose E2E is still pending or red. The
+# post-deploy live smoke (headers, SDK bytes, Chromium boot, egress probe) stays
+# in the runbook — it needs judgment, not automation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify only; upload nothing (exercises the path without credentials)."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# Deploys are serial and never cancel each other: two overlapping uploads would
+# race for the stable URL, and cancelling mid-upload leaves ambiguity about
+# what is live.
+concurrency:
+  group: pages-direct-upload
+  cancel-in-progress: false
+
+jobs:
+  # Chromium proof first, as its own job: the deploy job (which holds the
+  # Cloudflare credentials) cannot start until this is green. Mirrors the E2E job
+  # in ci.yml step for step; keep the two in sync.
+  e2e:
+    name: E2E gate (Playwright · Chromium · production build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Refuse non-main refs
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright Chromium (+ OS deps)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E tests (real Chromium, production bundle, incl. no-slice guarantee)
+        run: npm run test:e2e
+        env:
+          E2E_TARGET: preview
+
+      - name: Upload Playwright browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-deploy
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  deploy:
+    name: Verify · Build · Upload to Pages
+    needs: [e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The first run auto-creates an unprotected `production` environment; the
+    # operator hardens it (required reviewers) as the promotion gate — see
+    # docs/DEPLOYMENT.md. Runs from any branch can select this environment, so
+    # the branch guard below keeps deploys on main only.
+    environment: production
+    steps:
+      - name: Refuse non-main refs
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Deploys run from main only. Re-run this workflow from the main branch (HEAD $GITHUB_SHA is on ${{ github.ref }})."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Re-verify the exact bytes (typecheck · lint · unit · serve · observatory)
+        run: npm run agent:check
+
+      - name: Build
+        run: npm run build
+
+      - name: Prove SOURCE.txt names this SHA
+        run: |
+          SHA="${{ github.sha }}"
+          grep -q "$SHA" dist/SOURCE.txt || {
+            echo "::error::dist/SOURCE.txt does not name $SHA — refusing to upload an unidentified build."
+            exit 1
+          }
+
+      - name: Check Cloudflare credentials (skipped for dry runs)
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || {
+            echo "::error::Missing repo/environment secret CLOUDFLARE_API_TOKEN. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
+            exit 1
+          }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || {
+            echo "::error::Missing repo/environment secret CLOUDFLARE_ACCOUNT_ID. Setup: docs/DEPLOYMENT.md 'Automated deploy'."
+            exit 1
+          }
+
+      - name: Upload dist/ to the mdviewer Pages project
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Pinned Wrangler: 4.114.0 is the exact version used and reviewed for the
+        # first deployment (docs/DEPLOYMENT.md). Upgrade it as a separate reviewed
+        # change — here and in the runbook together.
+        run: npm exec --yes wrangler@4.114.0 -- pages deploy dist --project-name mdviewer --branch main
+
+      - name: Confirm Cloudflare recorded this SHA as the newest main deployment
+        if: ${{ !inputs.dry_run }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          npm exec --yes wrangler@4.114.0 -- pages deployment list --project-name mdviewer --json \
+            | node -e "
+              let text = '';
+              process.stdin.on('data', (chunk) => (text += chunk)).on('end', () => {
+                const deployments = JSON.parse(text);
+                const newest = deployments[0];
+                if (!newest || newest.Branch !== 'main' || newest.Source !== '$SHORT_SHA') {
+                  console.error('Newest main deployment is not this SHA:', JSON.stringify(newest));
+                  process.exit(1);
+                }
+                console.log('Live: ' + newest.Deployment + ' from ' + newest.Source);
+              });
+            "
+
+      - name: Dry-run verdict
+        if: ${{ inputs.dry_run }}
+        run: >-
+          echo "Dry run passed: the exact bytes verify, build, and identify
+          this SHA. Set dry_run=false with credentials configured to upload."

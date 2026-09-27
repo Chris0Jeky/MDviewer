@@ -64,9 +64,40 @@ npm exec --yes wrangler@4.114.0 -- pages deploy dist --project-name mdviewer --b
 `4.114.0` is the exact Wrangler version used and reviewed for the first deployment; upgrade it as a
 separate reviewed change. Direct upload does not automatically deploy later Git pushes, and Cloudflare
 does not allow an existing Direct Upload project to switch to Git integration. To preserve the current
-project and stable URL while automating deployments, use a GitHub Actions workflow with this pinned
+project and stable URL while automating deployments, use the reviewed workflow below with this pinned
 Wrangler version and scoped Cloudflare API-token/account-id secrets. Alternatively, create a new
 Git-integrated Pages project and plan the URL or custom-domain migration explicitly.
+
+### Automated deploy (MD1)
+
+`.github/workflows/deploy.yml` is the reviewed CI-compatible direct-upload path. It is
+deliberately manual-only: run it from the Actions tab on `main` (or `gh workflow run
+deploy.yml --ref main`, with `-f dry_run=true` to exercise everything except the
+upload). Each run first proves the exact bytes in Chromium (the full E2E suite on
+the production bundle — the credentials are not touched until that gate is green),
+then re-verifies statically (`agent:check`), builds, proves `SOURCE.txt` names the
+SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
+deployment for that SHA. The post-deploy live smoke below still applies to every
+automated deploy — the workflow uploads; the runbook verifies.
+
+One-time operator setup (the credentials gate stays human — never commit these):
+
+1. Cloudflare dashboard → Manage Account → API tokens → Create Token with Account /
+   Cloudflare Pages / Edit on this account only (the **Edit Cloudflare Workers**
+   template also works for Wrangler Pages uploads — prefer the narrower custom
+   token).
+2. Repository → Settings → Secrets and variables → Actions → New repository secret:
+   `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID` (Manage Account →
+   Account ID).
+3. Recommended: Environments → `production` (auto-created by the first run) →
+   Required reviewers → yourself, so a dispatch waits for your approval — the
+   promotion gate. Until then, the manual dispatch itself is the only gate.
+4. Prove it: dispatch once with `dry_run=true` (no secrets needed), then once live.
+
+Upgrade the pinned Wrangler as a single reviewed change spanning the workflow and
+this runbook. Keep the direct-upload notes below: they remain the fallback when
+Actions is unavailable.
+
 Confirm what is actually live rather than inferring it from GitHub:
 
 ```powershell
