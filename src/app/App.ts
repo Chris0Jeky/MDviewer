@@ -618,7 +618,7 @@ export class App {
     }
   }
 
-  private onReject(names: string[], tooLarge: string[] = []): void {
+  private onReject(names: string[], tooLarge: string[]): void {
     this.banner.warn(skippedFileWarnings(names, tooLarge));
   }
 
@@ -680,7 +680,6 @@ export class App {
   }
 }
 
-/** Append a synthesized diagram warning when Mermaid blocks failed. */
 /**
  * One banner's worth of skip notices for a batch: file-type rejections and size
  * refusals side by side, since a second `banner.warn` would replace the first.
@@ -707,6 +706,7 @@ export function skippedFileWarnings(rejected: string[], tooLarge: string[]): Ren
   return warnings;
 }
 
+/** Append a synthesized diagram warning when Mermaid blocks failed. */
 function withMermaidWarnings(warnings: RenderWarning[], failed: number): RenderWarning[] {
   if (failed <= 0) return warnings;
   return [

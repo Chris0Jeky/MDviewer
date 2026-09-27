@@ -16,6 +16,12 @@ describe("skippedFileWarnings", () => {
     ]);
   });
 
+  it("keeps the plural type-rejection wording", () => {
+    expect(skippedFileWarnings(["a.png", "b.txt"], []).map((w) => w.message)).toEqual([
+      "Skipped 2 files (a.png, b.txt) — only .md and .markdown are supported.",
+    ]);
+  });
+
   it("returns nothing for an empty batch", () => {
     expect(skippedFileWarnings([], [])).toEqual([]);
   });
