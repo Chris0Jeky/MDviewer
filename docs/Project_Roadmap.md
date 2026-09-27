@@ -115,8 +115,13 @@ export paths.
   gate drops 2 MB → 250 kB and now guards file, window-paste and editor
   paste/drop ingestion, so the confirm dialog covers the minutes-scale band
   the ladder revealed.
-- **Open (MD1):** prepare a reviewed CI-compatible direct-upload path for the existing Pages project;
-  production promotion and credentials remain separate gates.
+- **Done (2026-09-27):** reviewed CI-compatible direct-upload path for the existing Pages
+  project — `.github/workflows/deploy.yml` (manual dispatch from `main` only, `dry_run`
+  mode, exact-bytes re-verification, pinned Wrangler 4.114.0, post-upload SHA
+  confirmation), documented in `docs/DEPLOYMENT.md` "Automated deploy". Production
+  promotion (the dispatch itself, plus a recommended `production` environment
+  reviewer rule) and credentials (operator-created secrets) remain separate human
+  gates; the first live run is the operator's proof step.
 - **Blocked (MD2):** prepare canonical-origin metadata and base-path acceptance only after a hostname
   has been selected and ownership verified.
 - **Done (2026-09-27):** render/export and runtime-egress contracts re-proven —
