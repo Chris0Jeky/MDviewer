@@ -3,21 +3,22 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-26 (SDK 3.2 shipped to production):**
-> PR **#107** (Pulseboard SDK 3.2.0 rebuild: campaign allowlist, preview-pane scroll
-> depth, no cross-tab focus steal) merged as `b566e23` (post-merge `main` CI run
-> `36278869189` green). Owner merged concurrently after a completed Codex Cloud review
-> at the exact head plus a coordinator gate (no CRIT/HIGH/MED; two LOWs noted). My
-> independent pass: line-by-line artifact diff, guard + URL audit, and a Grok
-> adversarial review (claims hold; one real P2 on scrollMax latching for an upstream
-> ledger entry, one ledger-hygiene P2 to fix forward). Production is now deployment
-> **`f73c4f85`** from `main` **`b566e23`** (immutable URL
-> `https://f73c4f85.mdviewer-c9r.pages.dev/`, id
-> `f73c4f85-e62f-4060-9360-6fb602f5798b`), smoke-verified live: masked-automation probe
-> shows SDK 3.2.0, `campaign: "other"`, no verbatim `utm_campaign` leak. No open PRs
-> except this deploy-record PR, no open issues.
-> Next: merge this record, then the review-follow-ups slice (Grok P2s + scroll-attr
-> test), then very-large-document budgets.
+> **▶ CURRENT CHECKPOINT — 2026-09-27 (perf budget + SDK 3.3 shipped):**
+> PR **#110** (large-doc performance budget: deterministic generator, opt-in
+> 5-rung ladder with longtask/heap/node signals, 250 kB confirm gate on file,
+> window-paste and editor-paste/drop paths) merged as `a56b2f5` (post-merge
+> `main` CI run `36289158995` green). Twelve review threads across seven rounds
+> (six Codex + one headless Grok), all fixed in-PR with finding-to-commit evidence.
+> Owner PRs #111 (SDK version from lock) and #112 (SDK 3.3.0 sync) merged
+> concurrently and were reviewed retrospectively: CI-green, threads triaged,
+> 3.3.0 behavior-neutral for mdviewer. Production is now deployment
+> **`c3509120`** from `main` **`a56b2f5`** (immutable URL
+> `https://c3509120.mdviewer-c9r.pages.dev/`, id
+> `c3509120-1de1-4f67-8c26-27de441830b5`), smoke-verified live: identical
+> bytes/headers, SDK 3.3.0 byte-matching the lock, clean Chromium boot. No
+> open PRs except this deploy-record PR, no open issues. Standing orders
+> update: no more Codex review requests — self-review or headless Grok only.
+> Next: merge this record, then restart the loop on the next roadmap slice.
 > **Three OPEN human items: AI-8 (Beta bar), AI-7 (steps 4–8), and AI-6.**
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
@@ -214,19 +215,20 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   PR #28 / `7f4eedf`; production Pages smoke recorded in C16.
 - **Goal:** Drive real, shippable improvements end-to-end (discover → plan → implement → review → verify → merge), keeping a durable resumable record.
 - **Current cycle:** 5 — improvement loop (owner-authorized: fix/improve → PR → review →
-  merge → repeat, then redeploy). Loop shipped (#100–#103), SDK #105 merged, SDK 3.2
-  #107 merged; production is `f73c4f85` from `b566e23`. Next slice: review
-  follow-ups, then very-large-document budgets. Longer backlog plus operator-owned
-  AI-6/AI-7/AI-8.
-- **Last updated:** 2026-09-26
-- **Live GitHub queue snapshot (2026-09-26):** no open PRs except this deploy-record
-  PR, no open issues; production is `f73c4f85` from `b566e23` (fresh).
+  merge → repeat, then redeploy). Loop shipped (#100–#103), SDK #105/#107 merged,
+  records #106/#108, follow-ups #109, SDK version #111 + SDK 3.3 #112 (owner),
+  perf budget #110 merged; production is `c3509120` from `a56b2f5`. Next slice:
+  next roadmap item after the P3 budget. Longer backlog plus operator-owned
+  AI-6/AI-7/AI-8. Standing orders: no Codex review requests (self/Grok only).
+- **Last updated:** 2026-09-27
+- **Live GitHub queue snapshot (2026-09-27):** no open PRs except this deploy-record
+  PR, no open issues; production is `c3509120` from `a56b2f5` (fresh).
   Refresh before use — snapshots expire at the next head change.
-- **Verified `main` anchor:** `b566e234cf6b09f57e5f4c69612c215b87bc31b8` (PR #107 merge).
-- **PRs merged to `main`:** 62 PR merges, most recently #107 (SDK 3.2.0 rebuild),
-  #106 (deploy record), #105 (Pulseboard SDK 3.1), #104 (deploy record).
-- **Current main verification (`b566e23`):** hosted Node 22/24 and production Chromium
-  CI run `36278869189` green. Production serves `f73c4f85` from this anchor (see the
+- **Verified `main` anchor:** `a56b2f55aca2c96bb16ce77dc7bca6d4d086032c` (PR #110 merge).
+- **PRs merged to `main`:** 67 PR merges, most recently #110 (perf budget),
+  #112 (SDK 3.3.0 sync), #111 (SDK version from lock), #109 (review follow-ups).
+- **Current main verification (`a56b2f5`):** hosted Node 22/24 and production Chromium
+  CI run `36289158995` green. Production serves `c3509120` from this anchor (see the
   current checkpoint).
 
 ## Environment / verification commands
@@ -519,3 +521,12 @@ If dependency maintenance is intentionally deferred, the highest-value product c
   no verbatim leak. Scroll/focus ledger entries closed by the PR; Grok review adds
   one upstream P2 (scrollMax latch) and one ledger-hygiene P2, both queued as the
   review-follow-ups slice.
+- **C28 (2026-09-27) — PERF BUDGET + SDK 3.3 SHIPPED TO PRODUCTION:** PR **#110**
+  → `a56b2f5`, post-merge `main` CI run `36289158995` green. Perf budget slice:
+  generator + 5-rung ladder (wall/longtask/precise-heap/nodes), 250 kB gate on
+  all ingestion paths; twelve threads over seven review rounds (Codex + Grok),
+  all fixed in-PR. Owner #111/#112 rode along and were reviewed
+  retrospectively (3.3.0 behavior-neutral for mdviewer). Production is now
+  **`c3509120`** from `a56b2f5`: identical bytes/headers, SDK 3.3.0
+  byte-matching the lock, clean Chromium boot. Standing orders: no more Codex
+  review requests (self/Grok only).

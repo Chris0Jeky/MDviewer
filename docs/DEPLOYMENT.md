@@ -26,27 +26,31 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
-- Current production deployment: `f73c4f85` from merge commit `b566e23` (2026-09-26 —
+- Current production deployment: `c3509120` from merge commit `a56b2f5` (2026-09-27 —
+  performance budget + 250 kB confirm gate on all ingestion paths, Pulseboard
+  SDK 3.3.0) —
+  immutable URL **https://c3509120.mdviewer-c9r.pages.dev/**, deployment id
+  `c3509120-1de1-4f67-8c26-27de441830b5`
+- Previous production deployment: `f73c4f85` from merge commit `b566e23` (2026-09-26,
   Pulseboard SDK 3.2.0 rebuild: campaign allowlist, preview-pane scroll depth, no
   cross-tab focus steal) —
-  immutable URL **https://f73c4f85.mdviewer-c9r.pages.dev/**, deployment id
-  `f73c4f85-e62f-4060-9360-6fb602f5798b`
-- Previous production deployment: `cdc831b1` from merge commit `0da2e26` (2026-09-26,
-  Pulseboard SDK 3.1 install with the consented Beta bar) —
-  immutable URL **https://cdc831b1.mdviewer-c9r.pages.dev/**
-- Earlier production deployments: `c3dee6ad` from `578590c` (2026-09-26), `f353480c`
-  from `4e7d99a` (2026-09-26) and `3378378d` from `8a9c942` (2026-08-16, QA-sweep +
+  immutable URL **https://f73c4f85.mdviewer-c9r.pages.dev/**
+- Earlier production deployments: `cdc831b1` from `0da2e26` (2026-09-26),
+  `c3dee6ad` from `578590c` (2026-09-26), `f353480c` from `4e7d99a`
+  (2026-09-26) and `3378378d` from `8a9c942` (2026-08-16, QA-sweep +
   PWA release).
-- Last operator verification: 2026-09-26 — stable/immutable URLs return HTTP 200 with
+- Last operator verification: 2026-09-27 — stable/immutable URLs return HTTP 200 with
   identical bytes (5331) and the entry title; hashed assets immutable; security headers
   (`Cross-Origin-Opener-Policy: same-origin`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) present;
   `/sw.js` and `/manifest.webmanifest` return `max-age=0, must-revalidate`;
-  `/pulseboard.js` serves SDK 3.2.0; `/SOURCE.txt` names `b566e23`; a masked-automation
-  probe of the stable origin shows SDK `3.2.0` unblocked with region `eea`, six collector
-  requests carrying `campaign: "other"` and no verbatim `alice_smith`, plus a
-  non-degenerate `page.engaged` scroll value — the crafted-`utm_campaign` leak in the
-  3.1 artifact is closed. Real-browser install, the update-toast flow, and the full
+  `/pulseboard.js` serves SDK 3.3.0 byte-identical to the repo artifact and the
+  lock hash; `/SOURCE.txt` names `a56b2f5`; the immutable URL boots clean in
+  real Chromium (SDK 3.3.0, zero console/page errors). Owner PRs #111 (SDK
+  version from lock) and #112 (SDK 3.3.0 sync) merged concurrently and were
+  reviewed retrospectively: both CI-green with triaged threads, and 3.3.0 is
+  behavior-neutral for mdviewer (releasePattern inert, campaigns/events/routes
+  unchanged). Real-browser install, the update-toast flow, and the full
   Beta-bar acceptance remain operator work (AI-7 step 5, AI-8).
 
 The current project uses Wrangler direct upload. To publish a new verified `main` build from an
