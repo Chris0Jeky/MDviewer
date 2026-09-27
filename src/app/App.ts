@@ -649,7 +649,7 @@ export class App {
     const mb = (bytes / 1_000_000).toFixed(1);
     return Promise.resolve(
       window.confirm(
-        `Inserting this would grow the document to about ${mb} MB. Pagination may briefly freeze the page. Insert it anyway?`,
+        `Inserting this would make the document about ${mb} MB. Pagination may briefly freeze the page. Insert it anyway?`,
       ),
     );
   }

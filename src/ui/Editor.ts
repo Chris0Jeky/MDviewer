@@ -62,6 +62,7 @@ export interface EditorOptions {
   /**
    * Byte size past which any insert, however small, is routed to
    * `confirmLargeInsert` so the host can refuse it. Unset means no hard limit.
+   * Only enforced while `largeInsertBytes` and `confirmLargeInsert` are set.
    */
   hardLimitBytes?: number;
   /**
@@ -382,10 +383,9 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     const { selectionStart, selectionEnd, value } = input;
     const currentBytes = encoder.encode(value).length;
     const textBytes = encoder.encode(text).length;
-    const nextBytes =
-      currentBytes -
-      encoder.encode(value.slice(selectionStart, selectionEnd)).length +
-      textBytes;
+    const nextBytes = encoder.encode(
+      value.slice(0, selectionStart) + text + value.slice(selectionEnd),
+    ).length;
     const crossesGate = nextBytes > threshold && currentBytes <= threshold;
     const passesHardLimit = hardLimit > 0 && nextBytes > hardLimit;
     if (!crossesGate && textBytes <= threshold && !passesHardLimit) return;

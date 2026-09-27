@@ -427,6 +427,52 @@ describe("Editor: large-insert gate", () => {
     expect(confirmLargeInsert).toHaveBeenCalledWith(251);
   });
 
+  it("gates a small paste that pushes the document across the threshold", () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(99);
+    editor.input.selectionStart = editor.input.selectionEnd = 99;
+    const evt = fakePaste("ab");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledWith(101);
+  });
+
+  it("lets a paste that lands exactly on the threshold insert natively", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(99);
+    editor.input.selectionStart = editor.input.selectionEnd = 99;
+    const evt = fakePaste("a");
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+
+  it("counts UTF-8 bytes, not characters, when checking the crossing", () => {
+    const confirmLargeInsert = vi.fn(async () => false);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(90);
+    editor.input.selectionStart = editor.input.selectionEnd = 90;
+    // Three 4-byte emoji: 6 UTF-16 units (96 chars total) but 102 bytes.
+    const evt = fakePaste("\u{1F600}".repeat(3));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+    expect(confirmLargeInsert).toHaveBeenCalledWith(102);
+  });
+
+  it("subtracts the replaced selection before checking the crossing", () => {
+    const confirmLargeInsert = vi.fn(async () => true);
+    remountWithGate(confirmLargeInsert);
+    editor.input.value = "x".repeat(99);
+    editor.input.selectionStart = 0;
+    editor.input.selectionEnd = 10;
+    const evt = fakePaste("y".repeat(10));
+    editor.input.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(false);
+    expect(confirmLargeInsert).not.toHaveBeenCalled();
+  });
+
   it("routes a small paste past the hard limit to the confirmer for refusal", () => {
     const confirmLargeInsert = vi.fn(async () => false);
     remountWithGate(confirmLargeInsert, 200);
