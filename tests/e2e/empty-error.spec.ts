@@ -86,6 +86,55 @@ test.describe("empty and error states", () => {
     }
   });
 
+  test("mixed picker skip notices survive completed rendering and stay out of exported pages", async ({ page }) => {
+    await page.goto("/");
+    await loadFilesIntoApp(page, [
+      { name: "valid.md", content: "# Valid document\n\nLocal content.", type: "text/markdown" },
+      { name: "photo.png", content: "image", type: "image/png" },
+    ]);
+    await waitForPagination(page);
+    const banner = page.locator("#warning-banner");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("photo.png");
+    await expect(page.locator("#paged-output")).toContainText("Valid document");
+    await expect(page.locator("#paged-output")).not.toContainText("photo.png");
+    await banner.getByRole("button", { name: /dismiss/i }).click();
+    await page.locator("#paged-output .pagedjs_page").first().evaluate((el) => {
+      el.setAttribute("data-before-reflow", "");
+    });
+    await page.evaluate(() => {
+      const app = window.__mdviewer;
+      if (!app) throw new Error("Missing App test hook");
+      app.updateSettings({ fontSizePt: 13 });
+    });
+    await expect(page.locator("[data-before-reflow]")).toHaveCount(0);
+    await waitForPagination(page);
+    await expect(banner).toBeHidden();
+  });
+
+  test("mixed drops distinguish unreadable Markdown, oversized files and unsupported types", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const valid = new File(["# Valid drop"], "valid.md", { type: "text/markdown" });
+      const unreadable = new File(["x"], "unreadable.md", { type: "text/markdown" });
+      Object.defineProperty(unreadable, "text", { value: async () => { throw new Error("Synthetic read failure"); } });
+      const huge = new File(["x"], "huge.md", { type: "text/markdown" });
+      Object.defineProperty(huge, "size", { value: 25_000_001 });
+      const transfer = new DataTransfer();
+      for (const file of [valid, unreadable, huge, new File(["x"], "photo.png", { type: "image/png" })]) transfer.items.add(file);
+      window.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true }));
+    });
+    await waitForPagination(page);
+    const banner = page.locator("#warning-banner");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("unreadable.md");
+    await expect(banner).toContainText("could not be read");
+    await expect(banner).toContainText("25 MB");
+    await expect(banner).toContainText("photo.png");
+    await expect(page.locator("#paged-output")).toContainText("Valid drop");
+    await expect(page.locator("#paged-output")).not.toContainText("Skipped");
+  });
+
   test("loading valid markdown after an error clears the empty/error state", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#empty-state")).toBeVisible();

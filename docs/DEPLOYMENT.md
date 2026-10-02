@@ -141,9 +141,21 @@ npm run smoke:egress -- https://<deployment-id>.mdviewer-c9r.pages.dev/
 
 It renders the sample, runs both export paths, and fails on any request outside the page origin —
 proof the app itself phones nowhere. (The SDK is inert under automation by design, so the probe
-observes the app alone; the SDK's collector-only destinations are pinned by
-`tests/pulse-egress.test.ts` in CI, and the `/pulseboard.js` byte-identity check below extends that
-proof to the served bytes.)
+observes the app alone.) In CI, `tests/pulse-egress.test.ts` executes the vendored SDK in isolated
+jsdom realms at the registered HTTPS origin. Automation, GPC and DNT must suppress all observed
+egress after explicit opt-in, event calls, queued timers and lifecycle flushes. A control without
+privacy signals must send the region hint and both event lanes only to the collector. The test
+intercepts fetch, beacon, XHR, WebSocket/EventSource, worker/importScripts and resource-element
+destinations, supplies synthetic responses, and refuses any resource request that bypasses its
+interceptor. Element `innerHTML`, `outerHTML` and `insertAdjacentHTML` hooks inspect parsed
+resource attributes synchronously, including detached subtrees and images that jsdom does not
+load. DOM observation also inspects inserted/removed nodes and changed attributes. CSS
+background URLs, navigation, dynamic imports and other parsing APIs remain outside these
+behavioral observers. Guard inversions and synthetic alternate sinks are exercised in memory
+to verify that these assertions detect regressions; no fixture contacts a live service. Static
+source allow-lists supplement this behavior coverage. The `/pulseboard.js` byte-identity check below
+extends the checked artifact identity to the served bytes; jsdom does not replace the live
+browser probe or the manual Beta-bar acceptance gate.
 
 Building from a downloaded source archive (no `.git`) is supported: `npm run build`
 still produces a distribution, and `dist/SOURCE.txt` says so honestly. Such a tree

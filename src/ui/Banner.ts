@@ -21,11 +21,13 @@ import { CLASSES, IDS, el } from "../app/dom";
 import type { RenderWarning } from "../render/markdown";
 
 export interface BannerController {
-  /** Show an aggregated summary of non-fatal render warnings (clears if empty). */
+  /** Replace render warnings (empty clears them), preserving ingestion notices. */
   warn(warnings: RenderWarning[]): void;
+  /** Replace the latest ingestion notice; retained until dismissed or replaced. */
+  notice(warnings: RenderWarning[]): void;
   /** Show the fatal error card with `msg` and a Reload action. */
   fatal(msg: string): void;
-  /** Hide both the warning banner and the error card. */
+  /** Clear render warnings and the error card, preserving ingestion notices. */
   clear(): void;
 }
 
@@ -143,7 +145,26 @@ export function mountBanner(root: HTMLElement): BannerController {
     errorMessage.textContent = "";
   }
 
-  dismissBtn.addEventListener("click", hideWarning);
+  let renderWarnings: RenderWarning[] = [];
+  let ingestionNotices: RenderWarning[] = [];
+
+  function renderWarningText(): void {
+    // Summarize long render-warning lists, but always retain actionable skip details.
+    const messages = renderWarnings.map((w) => w.message).filter((m) => m.length > 0);
+    const renderText = messages.length > 0 && messages.length <= 3
+      ? messages.join(" · ")
+      : (summarize(renderWarnings) ?? "");
+    const text = [...ingestionNotices.map((w) => w.message), renderText].filter(Boolean).join(" · ");
+    if (!text) { hideWarning(); return; }
+    warningText.textContent = text;
+    warningBanner.hidden = false;
+  }
+
+  dismissBtn.addEventListener("click", () => {
+    renderWarnings = [];
+    ingestionNotices = [];
+    hideWarning();
+  });
   reloadBtn.addEventListener("click", () => {
     // Full reload is the deliberate recovery action for an unrecoverable render.
     location.reload();
@@ -156,31 +177,20 @@ export function mountBanner(root: HTMLElement): BannerController {
 
   return {
     warn(warnings: RenderWarning[]): void {
-      if (warnings.length === 0) {
-        hideWarning();
-        return;
-      }
-      // Prefer the specific, already user-phrased messages — they name the rejected file
-      // or the failing expression. For a long run of render warnings, the aggregate count
-      // reads better, so fall back to the summary past a small threshold.
-      const messages = warnings.map((w) => w.message).filter((m) => m.length > 0);
-      const text =
-        messages.length > 0 && messages.length <= 3
-          ? messages.join(" · ")
-          : (summarize(warnings) ?? messages.join(" · "));
-      if (!text) {
-        hideWarning();
-        return;
-      }
-      warningText.textContent = text;
-      warningBanner.hidden = false;
+      renderWarnings = warnings;
+      renderWarningText();
+    },
+    notice(warnings: RenderWarning[]): void {
+      ingestionNotices = warnings;
+      renderWarningText();
     },
     fatal(msg: string): void {
       errorMessage.textContent = msg;
       errorCard.hidden = false;
     },
     clear(): void {
-      hideWarning();
+      renderWarnings = [];
+      renderWarningText();
       hideError();
     },
   };
