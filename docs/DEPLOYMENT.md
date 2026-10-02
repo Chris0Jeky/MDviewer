@@ -71,14 +71,29 @@ Git-integrated Pages project and plan the URL or custom-domain migration explici
 ### Automated deploy (MD1)
 
 `.github/workflows/deploy.yml` is the reviewed CI-compatible direct-upload path. It is
-deliberately manual-only: run it from the Actions tab on `main` (or `gh workflow run
-deploy.yml --ref main`, with `-f dry_run=true` to exercise everything except the
-upload). Each run first proves the SHA in Chromium (the full E2E suite on
-the production bundle — the credentials are not touched until that gate is green),
-then re-verifies statically (`agent:check`), rebuilds from the same SHA and
-lockfile, proves `SOURCE.txt` names the SHA, uploads with Wrangler `4.114.0`, and confirms Cloudflare recorded the
-deployment for that SHA. The post-deploy live smoke below still applies to every
-automated deploy — the workflow uploads; the runbook verifies.
+deliberately manual-only. Live uploads run from `main`; a dry run can verify a reviewed branch
+before merge (`gh workflow run deploy.yml --ref <reviewed-branch> -f dry_run=true`). Both paths
+first run `agent:check`, build once and run the full Chromium E2E suite against that production
+bundle. `scripts/deployment-artifact.mjs` records a sorted file/SHA-256 inventory before E2E,
+requires `SOURCE.txt` to identify the exact full revision URL, and rechecks the inventory after
+E2E. Only a successful gate uploads `dist/` and the manifest as one immutable Actions artifact.
+
+The separate dry and live jobs download that producer's exact artifact ID in the same run;
+download digest mismatches fail, and the manifest verifier rejects changed, missing or extra
+files and a different source SHA. The manifest stays outside the Pages upload directory.
+Neither consumer rebuilds. The dry job references no GitHub environment or Cloudflare secrets,
+so it needs no production approval and creates no GitHub deployment. The live job uses
+`production`, verifies the downloaded bytes before reading credentials, uploads those bytes
+with Wrangler `4.114.0`, and confirms Cloudflare recorded this SHA. The post-deploy live smoke
+below still applies to every automated deploy — the workflow uploads; the runbook verifies.
+
+Real dispatch acceptance remains required; static tests do not prove hosted job behavior:
+
+1. Dispatch the reviewed branch with `dry_run=true` and record the run URL and actual head SHA.
+2. Confirm the build/E2E and dry jobs pass, the live job is skipped, and the downloaded
+   artifact ID, file inventory and `SOURCE.txt` identify that run's SHA.
+3. Confirm the run has no pending environment approvals and creates no new `production`
+   deployment record. Keep AI-9 open: a dry run does not satisfy its live-promotion gate.
 
 One-time operator setup (the credentials gate stays human — never commit these):
 
@@ -94,12 +109,15 @@ One-time operator setup (the credentials gate stays human — never commit these
      binds only while `main` itself stays protected (merge protection, AI-5): a
      workflow pushed straight to `main` passes the policy.
    - Required reviewers → yourself, so a live dispatch waits for your approval (the
-     promotion gate). Dry runs use the same environment, so they wait too.
+     promotion gate). The separate dry job uses no environment and does not wait.
    - Environment secrets → add `CLOUDFLARE_API_TOKEN` (the token) and
      `CLOUDFLARE_ACCOUNT_ID` (Manage Account → Account ID). Keep them out of
      repository secrets: those are readable by a workflow on any branch, which the
      two controls above do not cover.
-3. Prove it: dispatch once with `dry_run=true` (no secrets needed), then once live.
+3. Prove the dry path above (no secrets needed), then dispatch once live from `main`, approve
+   production and run the live smoke. AI-9 holds the first live automated upload until this
+   operator setup is complete; the established authenticated-maintainer direct-upload
+   fallback above remains available for an approved, verified build.
 
 Upgrade the pinned Wrangler as a single reviewed change spanning the workflow and
 this runbook. Keep the direct-upload notes below: they remain the fallback when
