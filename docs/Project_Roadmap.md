@@ -116,9 +116,11 @@ export paths.
   paste/drop ingestion, so the confirm dialog covers the minutes-scale band
   the ladder revealed.
 - **Done (2026-09-27):** reviewed CI-compatible direct-upload path for the existing Pages
-  project — `.github/workflows/deploy.yml` (manual dispatch from `main` only, `dry_run`
-  mode, exact-bytes re-verification, pinned Wrangler 4.114.0, post-upload SHA
-  confirmation), documented in `docs/DEPLOYMENT.md` "Automated deploy". Production
+  project — `.github/workflows/deploy.yml` keeps live dispatch main-only and uses a separate,
+  credential-free dry job for reviewed branches. The producer builds once and hands the exact
+  Chromium-tested artifact plus checked file manifest to each consumer. Real dry dispatch
+  acceptance of this handoff remains required. Wrangler 4.114.0 and post-upload SHA confirmation
+  remain pinned/documented in `docs/DEPLOYMENT.md` "Automated deploy". Production
   promotion (the dispatch itself, plus the `production` environment's required
   reviewers and main-only branch policy) and credentials (Cloudflare secrets scoped
   to that environment) remain separate human gates, tracked as AI-9; the first live

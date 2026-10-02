@@ -36,6 +36,7 @@ Export click → capture document id/name/text and settings NOW
 | Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
 | Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts` |
 | Pulseboard SDK seam (content-free events, error shield) and locked artifact | `src/app/pulse.ts`, `public/pulseboard.js`, `observatory.lock.json`, `observatory/check.mjs` | `tests/pulse.test.ts`, `npm run agent:observatory:check`; spec §1 |
+| Manual Pages promotion of the exact E2E-tested artifact; dry path without production environment | `.github/workflows/deploy.yml`, `scripts/deployment-artifact.mjs` | `tests/deployment-artifact.test.ts`; `docs/DEPLOYMENT.md`, AI-9 remains open |
 | DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |

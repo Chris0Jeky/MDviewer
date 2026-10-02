@@ -169,11 +169,12 @@
   steps: docs/DEPLOYMENT.md "Automated deploy".
   1. GitHub → Settings → Environments → `production` (create it if no dry run has yet).
   2. Deployment branches and tags → Selected branches → add `main` only.
-  3. Required reviewers → add yourself (dry runs will then wait for approval too).
+  3. Required reviewers → add yourself (live runs wait; the separate dry job has no environment).
   4. Environment secrets → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
      If you already added them as repository secrets, delete those copies.
-  5. Actions → Deploy → Run workflow on `main` with `dry_run=true`; approve it; confirm
-     it goes green. Then run once live, approve, and run the live smoke in
+  5. Actions → Deploy → Run workflow on a reviewed branch or `main` with `dry_run=true`;
+     confirm it goes green without production approval or a new deployment record.
+     Then run once live from `main`, approve, and run the live smoke in
      docs/DEPLOYMENT.md.
   6. Reply "AI-9 is done" (or report what failed).
 
