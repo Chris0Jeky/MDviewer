@@ -28,6 +28,10 @@
 > **AI-6/7/8/9 remain OPEN**: manual workspace/second-engine, live PWA/toast,
 > Beta-bar acceptance and production-environment hardening/live automated proof.
 > Next: owner acceptance/setup; MD2 hostname selection remains blocked on ownership.
+> Late Dependabot #127 patched both Moderate development-only brace-expansion
+> alerts (55/56); GitHub marks both fixed. Independent exact-head review verified
+> patched versions/registry integrity and all three checks passed. No runtime or
+> SDK changes; this later development-lock update does not relabel the deployed build.
 > No unclaimed open code issue remains from this review batch. This record updates
 > repository metadata; the deployed application/source anchor remains 51b9758.
 
