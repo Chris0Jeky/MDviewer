@@ -9,6 +9,7 @@ import {
   installInputHandlers,
 } from "../src/app/input";
 import { DocStore } from "../src/app/state";
+import { IDS } from "../src/app/dom";
 
 /** Build a File with a given name, type, and byte length. */
 function fileOf(name: string, type: string, bytes = 16): File {
@@ -262,9 +263,36 @@ describe("input: installInputHandlers", () => {
     expect(onLargeFile).not.toHaveBeenCalled();
     expect(onTooLarge).not.toHaveBeenCalled();
     expect(onReject).toHaveBeenCalledTimes(1);
-    expect(onReject).toHaveBeenCalledWith(["image.png"], ["huge.md"]);
+    expect(onReject).toHaveBeenCalledWith(["image.png"], ["huge.md"], []);
     expect(store.openDocs.length).toBe(0);
     uninstall();
+  });
+
+  it.each(["drop", "picker"])("separates unreadable Markdown from type and size refusals via %s", async (path) => {
+    const store = new DocStore();
+    const onReject = vi.fn();
+    const input = document.createElement("input");
+    input.id = IDS.fileInput;
+    document.body.append(input);
+    const uninstall = installInputHandlers(store, { onReject, onLargeFile: async () => true });
+    try {
+      const broken = new File(["x"], "broken.md", { type: "text/markdown" });
+      Object.defineProperty(broken, "text", { value: async () => { throw new Error("Read failed"); } });
+      const valid = new File(["# Valid"], "valid.md", { type: "text/markdown" });
+      Object.defineProperty(valid, "text", { value: async () => "# Valid" });
+      const huge = new File(["x"], "huge.md", { type: "text/markdown" });
+      Object.defineProperty(huge, "size", { value: SIZE_HARD_BYTES + 1 });
+      const files = [valid, broken, huge, fileOf("image.png", "image/png")];
+      if (path === "drop") window.dispatchEvent(fakeFileDrop(files));
+      else {
+        Object.defineProperty(input, "files", { value: files });
+        input.dispatchEvent(new Event("change"));
+      }
+      await vi.waitFor(() => expect(store.active?.name).toBe("valid.md"));
+      expect(onReject).toHaveBeenCalledTimes(1);
+      expect(onReject).toHaveBeenCalledWith(["image.png"], ["huge.md"], ["broken.md"]);
+      expect(store.openDocs).toHaveLength(1);
+    } finally { uninstall(); input.remove(); }
   });
 
   it("opens a dropped markdown file into the store", async () => {

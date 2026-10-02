@@ -125,11 +125,33 @@ export const THEME_COLORS: Record<ScreenTheme, string>;
 export function themeColorFor(theme: ScreenTheme): string;
 export function syncThemeColor(theme: ScreenTheme): void;
 
+// Replacement for the foundation's input rejection callback: one call per batch.
+export function installInputHandlers(store: DocStore, opts: {
+  onReject(names: string[], tooLarge: string[], unreadable: string[]): void;
+  onLargeFile(bytes: number): Promise<boolean>;
+  onTooLarge?(name: string): void;
+}): () => void;
+
+// src/ui/Banner.ts: render warnings and ingestion notices have separate lifetimes.
+export interface BannerController {
+  warn(warnings: RenderWarning[]): void;
+  notice(warnings: RenderWarning[]): void;
+  fatal(msg: string): void;
+  clear(): void;
+}
+
+// src/app/App.ts: category-specific messages for one skipped-file batch.
+export function skippedFileWarnings(
+  rejected: string[], tooLarge: string[], unreadable?: string[],
+): RenderWarning[];
+
 // src/app/App.ts: additional public method; other public signatures unchanged
 // App.reloadForUpdate(): boolean
 ```
 
 `paginate(source, css, host): Promise<PagedFlow>` retains its signature; it now calls `repairFootnoteLinks` between awaited preview and returning the flow. `CanvasController` signatures are unchanged. Snapshot capture and export preparation are private App details, not new global hooks.
+
+File picks/drops report unsupported types, hard-cap refusals and failed local reads separately in one callback. Declined soft-cap confirmations remain silent. App sends these messages (and paste/editor hard-cap refusals) to `BannerController.notice`. The latest ingestion batch stays visible across render completion, reflow and closing the last document until the user dismisses it or another ingestion notice replaces it. `warn` replaces only render warnings; `clear` clears render warnings and fatal errors while retaining ingestion notices. Dismiss clears both warning categories, including notices dismissed during an asynchronous render. Long render-warning lists may be summarized, but ingestion details always remain explicit. Feedback stays outside the paginated/exported document. Cover: `tests/input.test.ts`, `tests/app-ingestion-notices.test.ts`, `tests/e2e/empty-error.spec.ts`.
 
 ## 8. DOM IDs and CSS cascade
 

@@ -34,7 +34,7 @@ Export click → capture document id/name/text and settings NOW
 | Document memory and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
 | Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
-| Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts` |
+| Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts`; spec §7 separates unsupported, oversized and unreadable files |
 | Pulseboard SDK seam (content-free events, error shield) and locked artifact | `src/app/pulse.ts`, `public/pulseboard.js`, `observatory.lock.json`, `observatory/check.mjs` | `tests/pulse.test.ts`, `tests/pulse-egress.test.ts` (isolated privacy/egress behavior and mutation controls), `npm run agent:observatory:check`; spec §1 |
 | DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
@@ -51,7 +51,7 @@ Export click → capture document id/name/text and settings NOW
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
 | Preview zoom envelope, horizontal reach, pinned feedback | `src/ui/Canvas.ts`, `src/styles/{preview,workspace}.css` | `tests/e2e/workspace-design.spec.ts` and canvas E2E |
 | Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
-| Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts` | `tests/e2e/empty-error.spec.ts` |
+| Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts`, `src/app/App.ts` | `tests/app-ingestion-notices.test.ts`, `tests/e2e/empty-error.spec.ts`; spec §7 pins dismissible ingestion notices independent of render warnings |
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
 | Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 22/24 verification and production Chromium |
 
