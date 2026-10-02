@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-09-26.
+> Last updated: 2026-10-02.
 
 ## Status legend
 
@@ -119,7 +119,11 @@ export paths.
   project — `.github/workflows/deploy.yml` keeps live dispatch main-only and uses a separate,
   credential-free dry job for reviewed branches. The producer builds once and hands the exact
   Chromium-tested artifact plus checked file manifest to each consumer. Real dry dispatch
-  acceptance of this handoff remains required. Wrangler 4.114.0 and post-upload SHA confirmation
+  acceptance passed on 2026-10-02 at `25d3cca` in runs
+  [37075799089](https://github.com/Chris0Jeky/MDviewer/actions/runs/37075799089) and
+  [37076144920](https://github.com/Chris0Jeky/MDviewer/actions/runs/37076144920): live skipped,
+  no approvals or new production records, same producer artifact ID/digest verified.
+  Wrangler 4.114.0 and post-upload SHA confirmation
   remain pinned/documented in `docs/DEPLOYMENT.md` "Automated deploy". Production
   promotion (the dispatch itself, plus the `production` environment's required
   reviewers and main-only branch policy) and credentials (Cloudflare secrets scoped

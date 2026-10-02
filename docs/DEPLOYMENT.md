@@ -26,11 +26,17 @@ URL should remain private or when you specifically want this machine to be the h
 - Cloudflare Pages project: `mdviewer`
 - Production branch: `main`
 - First production deployment: `e3bd9770` from merge commit `7f4eedf`
-- Current production deployment: `f97778db` from merge commit `df50e7a` (2026-09-27 —
-  offline export proofs + two-part production-egress proof, MD3 closed) —
-  immutable URL **https://f97778db.mdviewer-c9r.pages.dev/**, deployment id
-  `f97778db-22ac-4637-b40c-758ecd96885e`
-- Previous production deployment: `c3509120` from merge commit `a56b2f5` (2026-09-27,
+- Current production deployment: `bf04155f` from merge commit
+  `51b9758fa4e6b265f4376edf02d3f56821b9de8e` (2026-10-02 — persistent ingestion
+  notices, privacy regression coverage, SDK 3.3.1 and tested-artifact deployment) —
+  immutable URL **https://bf04155f.mdviewer-c9r.pages.dev/**, deployment id
+  `bf04155f-f343-4f8a-b5cd-9bc78fff2977`
+- Previous production deployment / rollback target: `f97778db` from `df50e7a` —
+  **https://f97778db.mdviewer-c9r.pages.dev/**, id
+  `f97778db-22ac-4637-b40c-758ecd96885e`. Rollback is available through Pages →
+  `mdviewer` → Deployments → All deployments → this target's actions →
+  “Rollback to this deployment”; it was not exercised.
+- Earlier production deployment: `c3509120` from merge commit `a56b2f5` (2026-09-27,
   performance budget + 250 kB confirm gate on all ingestion paths, Pulseboard
   SDK 3.3.0) —
   immutable URL **https://c3509120.mdviewer-c9r.pages.dev/**
@@ -38,18 +44,25 @@ URL should remain private or when you specifically want this machine to be the h
   `cdc831b1` from `0da2e26` (2026-09-26), `c3dee6ad` from `578590c`
   (2026-09-26), `f353480c` from `4e7d99a` (2026-09-26) and `3378378d` from
   `8a9c942` (2026-08-16, QA-sweep + PWA release).
-- Last operator verification: 2026-09-27 — stable/immutable URLs return HTTP 200 with
-  identical bytes (5331) and the entry title; security headers
+- Last automated verification: 2026-10-02 — stable/immutable URLs return HTTP 200 with
+  bytes matching the qualified directory and the entry title; security headers
   (`Cross-Origin-Opener-Policy: same-origin`, `Referrer-Policy: no-referrer`,
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) present;
   `/sw.js` and `/manifest.webmanifest` return `max-age=0, must-revalidate`;
-  `/pulseboard.js` serves SDK 3.3.0 byte-identical to the repo artifact
-  (SHA-256 `889EB618…B454BA9B4D`) and the lock hash; `/SOURCE.txt` names
-  `df50e7a`; the immutable URL boots clean in real Chromium (SDK 3.3.0, 6
-  sample sheets, zero console/page errors); `npm run smoke:egress` against the
+  hashed Workbox is immutable. `/pulseboard.js` serves SDK 3.3.1 byte-identical
+  to the artifact/lock (SHA-256
+  `da773b93631ce3439aeb74446d0018972d9c1e23a05ea7c2d6d895f3a4c4a2c4`);
+  `/SOURCE.txt` names the full `51b9758` revision. Stable-site Chromium boot
+  rendered 7 sample sheets with zero console/page errors; `npm run smoke:egress` against the
   immutable URL passes (498 requests, all same-origin — the app phones
-  nowhere). Only 1 file uploaded (228 already uploaded): this deploy changes
-  tests/docs only, no application bytes. Real-browser install, the
+  nowhere), exercising both export paths. Before direct upload, exact-main Windows
+  `agent:check` passed 529 unit tests plus four server tests, typecheck/lint/artifact
+  guard; build and all 109 preview Chromium tests passed (one worker, zero retries,
+  skips or flakes). All three hosted checks passed in
+  [run 37076417364](https://github.com/Chris0Jeky/MDviewer/actions/runs/37076417364).
+  The 230-file manifest matched before/after E2E and before cached Wrangler 4.114.0
+  uploaded 103 files (126 already uploaded). Hooks and all 14 skills validated.
+  Real-browser install, the
   update-toast flow, and the full Beta-bar acceptance remain operator work
   (AI-7 step 5, AI-8).
 
@@ -87,7 +100,18 @@ so it needs no production approval and creates no GitHub deployment. The live jo
 with Wrangler `4.114.0`, and confirms Cloudflare recorded this SHA. The post-deploy live smoke
 below still applies to every automated deploy — the workflow uploads; the runbook verifies.
 
-Real dispatch acceptance remains required; static tests do not prove hosted job behavior:
+Real dispatch acceptance is required; static tests do not prove hosted job behavior:
+
+Acceptance passed on reviewed head `25d3cca6a84d15824f6d8bfec3fc917c67d29f4e`
+in [dry run 37075799089](https://github.com/Chris0Jeky/MDviewer/actions/runs/37075799089):
+producer and dry consumer passed, live job skipped, no pending approval and no new
+production deployment record. The consumer downloaded the producer's exact artifact
+ID `11256367413` (SHA-256
+`e6c959cf5abe1169f65505c9492269a3750cd4dda929a0c1c30fb1a64146b031`) and verified
+all 230 files and full SOURCE revision. A second dry dispatch,
+[37076144920](https://github.com/Chris0Jeky/MDviewer/actions/runs/37076144920), also
+passed with live skipped and unchanged records; no live dispatch was made. This
+closes #120's dry-path acceptance, while AI-9 remains OPEN.
 
 1. Dispatch the reviewed branch with `dry_run=true` and record the run URL and actual head SHA.
 2. Confirm the build/E2E and dry jobs pass, the live job is skipped, and the downloaded

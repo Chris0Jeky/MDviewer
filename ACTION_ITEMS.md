@@ -162,12 +162,15 @@
 ## OPEN items
 
 - **AI-9 — Harden the `production` environment before the first live automated deploy.**
-  `.github/workflows/deploy.yml` (PR #116) has only run as `dry_run`, and the first run
-  auto-creates an **unprotected** `production` environment. The in-workflow main-only
+  `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path
+  created an **unprotected** `production` environment; PR #126 now isolates dry runs
+  from environments/credentials and transfers the exact tested artifact. Real dry
+  acceptance passed on 2026-10-02 (runs 37075799089 and 37076144920), with live jobs
+  skipped, no pending approvals or new production records. The in-workflow main-only
   guard is not a control (a dispatch runs the workflow file from its own branch), so the
   environment settings are what keep the Cloudflare token off other branches. Full
   steps: docs/DEPLOYMENT.md "Automated deploy".
-  1. GitHub → Settings → Environments → `production` (create it if no dry run has yet).
+  1. GitHub → Settings → Environments → `production` (create it if absent).
   2. Deployment branches and tags → Selected branches → add `main` only.
   3. Required reviewers → add yourself (live runs wait; the separate dry job has no environment).
   4. Environment secrets → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
