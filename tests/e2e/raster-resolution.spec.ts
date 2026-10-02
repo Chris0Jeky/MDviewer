@@ -1,9 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
 
-interface Capture { width: number; height: number; ink: number; png?: string }
+interface Capture {
+  width: number;
+  height: number;
+  ink: number;
+  png?: string;
+  difference?: { pixels: number; maxChannelDelta: number };
+}
 
 test("raster pages retain natural resolution and content independently of preview state", async ({ page }) => {
   await page.goto("/");
@@ -13,7 +18,10 @@ test("raster pages retain natural resolution and content independently of previe
   const sizes = await page.locator("#paged-output .pagedjs_page").evaluateAll((pages) =>
     pages.map((sheet) => ({ width: (sheet as HTMLElement).offsetWidth, height: (sheet as HTMLElement).offsetHeight })));
   await page.evaluate(() => {
-    const win = window as unknown as { __rasterSizes: Capture[] };
+    const win = window as unknown as {
+      __rasterSizes: Capture[];
+      __rasterBaselinePixels?: Uint8ClampedArray;
+    };
     win.__rasterSizes = [];
     const original = HTMLCanvasElement.prototype.toDataURL;
     HTMLCanvasElement.prototype.toDataURL = function (this: HTMLCanvasElement, type?: string, quality?: number): string {
@@ -24,8 +32,27 @@ test("raster pages retain natural resolution and content independently of previe
         for (let i = 0; i < pixels.length; i += 4) {
           if (pixels[i + 3]! > 0 && Math.min(pixels[i]!, pixels[i + 1]!, pixels[i + 2]!) < 220) ink++;
         }
+        let difference: Capture["difference"];
+        const firstPage = win.__rasterSizes.length === 0;
+        if (firstPage) {
+          const baseline = win.__rasterBaselinePixels ??= pixels;
+          if (pixels.length !== baseline.length) {
+            throw new Error("Raster dimensions differ from the baseline capture");
+          }
+          let differentPixels = 0;
+          let maxChannelDelta = 0;
+          for (let i = 0; i < pixels.length; i += 4) {
+            let pixelDelta = 0;
+            for (let channel = 0; channel < 4; channel++) {
+              pixelDelta = Math.max(pixelDelta, Math.abs(pixels[i + channel]! - baseline[i + channel]!));
+            }
+            if (pixelDelta > 0) differentPixels++;
+            maxChannelDelta = Math.max(maxChannelDelta, pixelDelta);
+          }
+          difference = { pixels: differentPixels, maxChannelDelta };
+        }
         win.__rasterSizes.push({ width: this.width, height: this.height, ink,
-          ...(win.__rasterSizes.length === 0 ? { png } : {}) });
+          ...(firstPage ? { png, difference } : {}) });
       }
       return png;
     };
@@ -75,10 +102,28 @@ test("raster pages retain natural resolution and content independently of previe
     }
     expect(await page.locator(".pagedjs_pages").evaluate((el) => getComputedStyle(el).transform)).toBe(previewStyle);
     await writeFile(test.info().outputPath(`raster-${index}.png`), Buffer.from(captured[0]!.png!.split(",")[1]!, "base64"));
-    // This static, same-browser document must also retain its small generated
-    // TOC leader/page number. A broad ink ratio alone cannot detect their loss.
-    const digest = (png: string): string => createHash("sha256").update(png).digest("hex");
-    expect(digest(captured[0]!.png!), `${label}: generated page furniture is preserved`)
-      .toBe(digest(baseline[0]!.png!));
+    // Compare decoded pixels, retaining the small generated TOC furniture.
+    // Windows Chromium can vary two antialiased pixels by 1/255 between these
+    // captures. Permit only four such pixels; a missing glyph still fails.
+    expect(captured[0]!.difference!.maxChannelDelta, `${label}: page colors are preserved`).toBeLessThanOrEqual(1);
+    expect(captured[0]!.difference!.pixels, `${label}: generated page furniture is preserved`).toBeLessThanOrEqual(4);
+  }
+
+  // Prove that the same comparison rejects the loss the former whole-PNG hash
+  // tried to guard, rather than merely accepting all nonblank page captures.
+  await expect(page.locator("#paged-output .pagedjs_page").first().locator("a.toc-link")).not.toHaveCount(0);
+  const suppressFurniture = await page.addStyleTag({ content:
+    "#paged-output a.toc-link::before, #paged-output a.toc-link::after { content: none !important; }" });
+  try {
+    await page.evaluate(() => { (window as unknown as { __rasterSizes: Capture[] }).__rasterSizes = []; });
+    const downloading = page.waitForEvent("download", { timeout: 60000 });
+    await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+    await downloading;
+    await expect(page.getByRole("button", { name: "Download PDF", exact: true })).toBeEnabled();
+    const damaged = await page.evaluate(() => (window as unknown as { __rasterSizes: Capture[] }).__rasterSizes[0]!);
+    expect(damaged.difference!.maxChannelDelta, "missing TOC furniture exceeds the color tolerance").toBeGreaterThan(1);
+    expect(damaged.difference!.pixels, "missing TOC furniture exceeds the pixel budget").toBeGreaterThan(4);
+  } finally {
+    await suppressFurniture.evaluate((style) => style.parentNode?.removeChild(style));
   }
 });
