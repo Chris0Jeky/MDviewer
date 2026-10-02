@@ -300,6 +300,12 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
+- **AI-9 — Harden production before the first live automated deployment.** The operator
+  must configure main-only environment branches, required reviewers and environment-scoped
+  Cloudflare credentials, then approve/prove the first live dispatch. Dry acceptance has
+  passed without production approval or records; it does not clear this live-promotion hold.
+  The established authenticated-maintainer direct upload remains the fallback. See
+  `ACTION_ITEMS.md` and `docs/DEPLOYMENT.md`; only the maintainer may close AI-9.
 - **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate).** Opened 2026-09-26
   with PR #105. The SDK is inert under automation and off-origin, so only the live site shows
   the real bar: bar/pill/panel behavior, payload enums, print exclusion, GPC silence.
