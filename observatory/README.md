@@ -1,8 +1,8 @@
 # Pulseboard SDK integration
 
-MDviewer serves the Pulseboard SDK 3.3 artifact `public/pulseboard.js` (Chris0Jeky/Pulseboard#105),
+MDviewer serves the Pulseboard SDK 3.3.1 artifact `public/pulseboard.js`,
 built by Pulseboard's `observatory/adapters/build-sdk.mjs` for project `mdviewer` and pinned by
-`observatory.lock.json` (`"sdk": "3.3.0"`, SHA-256 per target). Never edit the artifact; rebuild it
+`observatory.lock.json` (`"sdk": "3.3.1"`, SHA-256 per target). Never edit the artifact; rebuild it
 from a Pulseboard checkout and update the lock:
 
 ```sh
@@ -11,7 +11,7 @@ node adapters/build-sdk.mjs mdviewer <MDviewer checkout> public/pulseboard.js
 ```
 
 `node observatory/check.mjs` (`npm run agent:observatory:check`, part of `npm run agent:check` and
-CI) verifies the hash against the lock, the `pulseboard-sdk 3.3.0` header, the collector origin
+CI) verifies the hash against the lock, the `pulseboard-sdk 3.3.1` header, the collector origin
 `https://pulseboard-observatory.commit-atlas.workers.dev`, the absence of server constants, and that
 the file defines `window.Pulseboard` in a vm without any request before mount or off the registered
 origin.
