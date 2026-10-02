@@ -113,10 +113,12 @@ function dragHasFiles(dt: DataTransfer | null): boolean {
 
 interface ReadBatch {
   opened: Doc[];
-  /** Not Markdown, or unreadable: reported as a file-type rejection. */
+  /** Not Markdown: reported as a file-type rejection. */
   rejected: string[];
   /** Over the hard cap: reported as a size refusal, never as a type rejection. */
   tooLarge: string[];
+  /** Accepted Markdown whose local file read failed. */
+  unreadable: string[];
 }
 
 /**
@@ -133,6 +135,7 @@ async function readFiles(
   const opened: Doc[] = [];
   const rejected = [...reject];
   const tooLarge: string[] = [];
+  const unreadable: string[] = [];
 
   for (const file of accept) {
     if (file.size > SIZE_HARD_BYTES) {
@@ -147,12 +150,12 @@ async function readFiles(
     try {
       text = await file.text();
     } catch {
-      rejected.push(file.name);
+      unreadable.push(file.name);
       continue;
     }
     opened.push(await openMarkdown(text, file.name));
   }
-  return { opened, rejected, tooLarge };
+  return { opened, rejected, tooLarge, unreadable };
 }
 
 /**
@@ -170,10 +173,10 @@ export function installInputHandlers(
   opts: {
     /**
      * Files skipped from one pick or drop, reported together so the host can show
-     * one notice: `names` were not Markdown (or unreadable), `tooLarge` were over
-     * the hard cap. Called once per batch when either list is non-empty.
+     * one notice: `names` were not Markdown, `tooLarge` were over the hard cap,
+     * and `unreadable` failed to read. Called once when any list is non-empty.
      */
-    onReject(names: string[], tooLarge: string[]): void;
+    onReject(names: string[], tooLarge: string[], unreadable: string[]): void;
     onLargeFile(bytes: number): Promise<boolean>;
     /** Size refusal feedback for pastes (a file-type rejection would mislabel it). */
     onTooLarge?(name: string): void;
@@ -200,9 +203,9 @@ export function installInputHandlers(
       pulseDocOpened("file", doc.text.length);
     }
     // One call per batch: the banner holds a single message, so separate calls
-    // for type and size refusals would overwrite each other.
-    if (batch.rejected.length > 0 || batch.tooLarge.length > 0) {
-      opts.onReject(batch.rejected, batch.tooLarge);
+    // for type, size and read refusals would overwrite each other.
+    if (batch.rejected.length > 0 || batch.tooLarge.length > 0 || batch.unreadable.length > 0) {
+      opts.onReject(batch.rejected, batch.tooLarge, batch.unreadable);
     }
   };
 

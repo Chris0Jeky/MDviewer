@@ -42,6 +42,7 @@ import { mountSplitter } from "../ui/Splitter";
 import type { SplitterController } from "../ui/Splitter";
 import { mountEmptyState } from "../ui/EmptyState";
 import { mountBanner } from "../ui/Banner";
+import type { BannerController } from "../ui/Banner";
 import { DocStore, hasProtectableWork } from "./state";
 import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
@@ -102,7 +103,7 @@ export class App {
   private editor!: EditorController;
   private splitter!: SplitterController;
   private emptyState!: { destroy(): void };
-  private banner!: { warn(w: RenderWarning[]): void; fatal(msg: string): void; clear(): void };
+  private banner!: BannerController;
 
   private workspaceEl!: HTMLElement;
   private emptyEl!: HTMLElement;
@@ -137,7 +138,7 @@ export class App {
 
     // Ingestion → store. The store's "change" event triggers a content render.
     app.detachInput = installInputHandlers(app.store, {
-      onReject: (names, tooLarge) => app.onReject(names, tooLarge),
+      onReject: (names, tooLarge, unreadable) => app.onReject(names, tooLarge, unreadable),
       onLargeFile: (bytes) => app.confirmLargeFile(bytes),
       onTooLarge: (name) => app.onTooLarge(name),
     });
@@ -618,8 +619,8 @@ export class App {
     }
   }
 
-  private onReject(names: string[], tooLarge: string[]): void {
-    this.banner.warn(skippedFileWarnings(names, tooLarge));
+  private onReject(names: string[], tooLarge: string[], unreadable: string[] = []): void {
+    this.banner.notice(skippedFileWarnings(names, tooLarge, unreadable));
   }
 
   private async confirmLargeFile(bytes: number): Promise<boolean> {
@@ -647,7 +648,7 @@ export class App {
 
   /** Size refusal (not a file-type rejection): the content never enters the store. */
   private onTooLarge(name: string): void {
-    this.banner.warn(skippedFileWarnings([], [name]));
+    this.banner.notice(skippedFileWarnings([], [name]));
   }
 
   private announce(message: string): void {
@@ -681,10 +682,11 @@ export class App {
 }
 
 /**
- * One banner's worth of skip notices for a batch: file-type rejections and size
- * refusals side by side, since a second `banner.warn` would replace the first.
+ * One batch's skip notices: unsupported types, size refusals and local read errors.
  */
-export function skippedFileWarnings(rejected: string[], tooLarge: string[]): RenderWarning[] {
+export function skippedFileWarnings(
+  rejected: string[], tooLarge: string[], unreadable: string[] = [],
+): RenderWarning[] {
   const warnings: RenderWarning[] = [];
   if (rejected.length > 0) {
     const list = rejected.join(", ");
@@ -702,6 +704,13 @@ export function skippedFileWarnings(rejected: string[], tooLarge: string[]): Ren
         ? `Skipped “${tooLarge[0]}”`
         : `Skipped ${tooLarge.length} files (${tooLarge.join(", ")})`;
     warnings.push({ kind: "content", message: `${subject} — over the 25 MB limit.` });
+  }
+  if (unreadable.length > 0) {
+    const subject =
+      unreadable.length === 1
+        ? `Skipped "${unreadable[0]}"`
+        : `Skipped ${unreadable.length} files (${unreadable.join(", ")})`;
+    warnings.push({ kind: "content", message: `${subject} — could not be read. Try opening the file again.` });
   }
   return warnings;
 }
