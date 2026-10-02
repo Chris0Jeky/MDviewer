@@ -3,7 +3,39 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **▶ CURRENT CHECKPOINT — 2026-09-27 (MD3 egress proof shipped, live as f97778db):**
+> **CURRENT CHECKPOINT — 2026-10-02 (reviewed fixes live as bf04155f):**
+> #122 preserves ingestion notices and distinguishes unreadable Markdown, closing #121.
+> #123 adds behavioral privacy/egress regression coverage with mutation controls,
+> closing #119. #125 fixes the two-pixel raster antialias false positive without
+> losing its actual TOC-removal control. Owner SDK sync #124 was reconciled by fixing
+> stale README version literals and resolving the addressed conversation; no policy
+> bypass or SDK rewrite. #126 uploads the tested artifact and isolates dry runs,
+> closing #120 after real dry-dispatch proof. All were independently reviewed on
+> final heads, passed all three required checks and merged with merge commits.
+> Production is **bf04155f** from main **51b9758fa4e6b265f4376edf02d3f56821b9de8e**:
+> `https://bf04155f.mdviewer-c9r.pages.dev/`, id
+> `bf04155f-f343-4f8a-b5cd-9bc78fff2977`. Exact-main Windows agent gate passed
+> 529 unit/four server tests; build, hooks/14 skills and 109 preview Chromium tests
+> passed (one worker, no retries/skips/flakes). Hosted main CI run 37076417364 is green.
+> The 230-file manifest matched before/after browser tests and before direct upload.
+> Stable/immutable HTTP bytes, source/SDK 3.3.1 identity, security/cache headers passed;
+> stable Chromium boot rendered seven sheets with zero errors. Live egress smoke
+> exercised both exports: 498 requests, all same-origin. See `docs/DEPLOYMENT.md`.
+> Dry runs 37075799089 and 37076144920 passed on reviewed head 25d3cca: producer/dry
+> consumer green, live skipped, no approvals or new production records. No live
+> automated dispatch; direct upload used existing cached Wrangler 4.114.0 auth.
+> Previous production f97778db/df50e7a is the recorded rollback target (not exercised).
+> **AI-6/7/8/9 remain OPEN**: manual workspace/second-engine, live PWA/toast,
+> Beta-bar acceptance and production-environment hardening/live automated proof.
+> Next: owner acceptance/setup; MD2 hostname selection remains blocked on ownership.
+> Late Dependabot #127 patched both Moderate development-only brace-expansion
+> alerts (55/56); GitHub marks both fixed. Independent exact-head review verified
+> patched versions/registry integrity and all three checks passed. No runtime or
+> SDK changes; this later development-lock update does not relabel the deployed build.
+> No unclaimed open code issue remains from this review batch. This record updates
+> repository metadata; the deployed application/source anchor remains 51b9758.
+
+> **▶ PREVIOUS CHECKPOINT — 2026-09-27 (MD3 egress proof shipped, live as f97778db):**
 > PR **#114** (offline export proofs + two-part production-egress proof, MD3
 > closed) merged as `df50e7a` with exact-head CI green. One Codex P2
 > (setup-only egress assertion) fixed in-PR with reply evidence; self-review
@@ -268,6 +300,12 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 
 ## OPEN human action items (from ACTION_ITEMS.md — always surface these)
 
+- **AI-9 — Harden production before the first live automated deployment.** The operator
+  must configure main-only environment branches, required reviewers and environment-scoped
+  Cloudflare credentials, then approve/prove the first live dispatch. Dry acceptance has
+  passed without production approval or records; it does not clear this live-promotion hold.
+  The established authenticated-maintainer direct upload remains the fallback. See
+  `ACTION_ITEMS.md` and `docs/DEPLOYMENT.md`; only the maintainer may close AI-9.
 - **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate).** Opened 2026-09-26
   with PR #105. The SDK is inert under automation and off-origin, so only the live site shows
   the real bar: bar/pill/panel behavior, payload enums, print exclusion, GPC silence.

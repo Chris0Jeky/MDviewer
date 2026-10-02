@@ -15,6 +15,20 @@
 
 ## Current State (snapshot)
 
+- **2026-10-02 (reviewed fixes deployed)** — application source
+  `51b9758fa4e6b265f4376edf02d3f56821b9de8e` is live as `bf04155f`
+  (`https://bf04155f.mdviewer-c9r.pages.dev/`, id
+  `bf04155f-f343-4f8a-b5cd-9bc78fff2977`). Exact-main Windows 529 unit/four
+  server tests, build and 109 one-worker Chromium cases passed, as did all three
+  hosted checks. Stable/immutable bytes, full SOURCE, SDK 3.3.1 hash, headers,
+  seven-sheet clean boot and both-export egress smoke passed (498 same-origin
+  requests). #119/#120/#121 are closed; both late development-only dependency
+  alerts are fixed via #127. The prior `f97778db`/`df50e7a` is the rollback and
+  pending stable-origin update-toast predecessor. Real dry runs passed without
+  approval or production records; AI-9 still holds the first live automated
+  promotion. **AI-6/AI-7/AI-8/AI-9 remain OPEN.** Later development-lock and
+  record commits do not change the deployed application's source anchor.
+
 - **2026-09-27 (deploy workflow hardening)** — post-merge review of PRs #106 to #116
   found a shell injection in `deploy.yml`'s main-only guard and that the guard is not
   the real control. The fix PR passes the ref via `env` and documents the
@@ -25,10 +39,11 @@
   two-part production-egress proof) merged as `df50e7a` with green exact-head CI;
   one Codex P2 fixed in-PR and a self-review vacuous-probe gap reworked into the
   split proof (`tests/pulse-egress.test.ts` in CI + `scripts/smoke-egress.mjs`
-  per-deploy). Production is now deployment `f97778db` from that anchor
+  per-deploy). Production was deployment `f97778db` from that anchor
   (immutable URL `https://f97778db.mdviewer-c9r.pages.dev`), smoke-verified live
   with SDK 3.3.0 byte-matching the lock, a clean Chromium boot, and an egress
-  probe PASS (498 requests, all same-origin). OPEN AI-6/AI-7/AI-8 unchanged.
+  probe PASS (498 requests, all same-origin). Superseded by `bf04155f` above.
+  OPEN AI-6/AI-7/AI-8 unchanged.
 
 - **2026-09-27 (perf budget + SDK 3.3 shipped)** — PR #110 (large-doc performance
   budget, 250 kB confirm gate on all ingestion paths) merged with green exact-head
@@ -162,12 +177,15 @@
 ## OPEN items
 
 - **AI-9 — Harden the `production` environment before the first live automated deploy.**
-  `.github/workflows/deploy.yml` (PR #116) has only run as `dry_run`, and the first run
-  auto-creates an **unprotected** `production` environment. The in-workflow main-only
+  `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path
+  created an **unprotected** `production` environment; PR #126 now isolates dry runs
+  from environments/credentials and transfers the exact tested artifact. Real dry
+  acceptance passed on 2026-10-02 (runs 37075799089 and 37076144920), with live jobs
+  skipped, no pending approvals or new production records. The in-workflow main-only
   guard is not a control (a dispatch runs the workflow file from its own branch), so the
   environment settings are what keep the Cloudflare token off other branches. Full
   steps: docs/DEPLOYMENT.md "Automated deploy".
-  1. GitHub → Settings → Environments → `production` (create it if no dry run has yet).
+  1. GitHub → Settings → Environments → `production` (create it if absent).
   2. Deployment branches and tags → Selected branches → add `main` only.
   3. Required reviewers → add yourself (live runs wait; the separate dry job has no environment).
   4. Environment secrets → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
@@ -198,16 +216,18 @@
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
-  again for the current deployment (2026-09-27): `main` `df50e7a` (PR #114, MD3 egress
-  proof) merged with CI green; deployed via `wrangler pages deploy` (immutable URL
-  `https://f97778db.mdviewer-c9r.pages.dev`, id `f97778db-22ac-4637-b40c-758ecd96885e`);
-  smoke checks passed — identical stable/immutable bytes (5331), entry title,
+  again for the current deployment (2026-10-02): application `main` `51b9758`
+  passed exact-head hosted CI and Windows qualification; deployed via the existing
+  direct-upload path (immutable URL `https://bf04155f.mdviewer-c9r.pages.dev/`,
+  id `bf04155f-f343-4f8a-b5cd-9bc78fff2977`);
+  smoke checks passed — stable/immutable bytes match the qualified directory, entry title,
   security headers, `Cache-Control: max-age=0, must-revalidate` on both
-  `/sw.js` and `/manifest.webmanifest`, `/pulseboard.js` serving SDK 3.3.0
-  byte-identical to the lock hash, `/SOURCE.txt` naming `df50e7a`, a clean
-  Chromium boot (6 sample sheets, zero console/page errors), and an egress probe
+  `/sw.js` and `/manifest.webmanifest`, immutable hashed Workbox, `/pulseboard.js`
+  serving SDK 3.3.1 byte-identical to the lock hash, `/SOURCE.txt` naming the full
+  `51b9758` revision, a clean Chromium boot (7 sample sheets, zero console/page
+  errors), and an egress probe
   PASS (498 requests, all same-origin).
-  (The `a56b2f5`/`c3509120`, `b566e23`/`f73c4f85`, `0da2e26`/`cdc831b1`,
+  (The `df50e7a`/`f97778db`, `a56b2f5`/`c3509120`, `b566e23`/`f73c4f85`, `0da2e26`/`cdc831b1`,
   `578590c`/`c3dee6ad`, `4e7d99a`/`f353480c`, and `8a9c942`/`3378378d` records
   are superseded but retained in `docs/DEPLOYMENT.md` history.)
   Remaining manual steps on **https://mdviewer-c9r.pages.dev/**:
@@ -218,9 +238,11 @@
      its TOC after the H1 with dotted leaders ending at right-aligned numbers; task-list checks
      are clearly visible; an empty `.md` shows the "document is empty" notice.
   5. PWA: install from the address bar (icon + name correct), DevTools → Network → Offline →
-     reload → load the sample → Print/Save-as-PDF still produces page sheets. This `f97778db`
-     deploy is the second version the update-toast check needs: with the app open from the
-     previous (`c3509120`) deployment, confirm the update toast appears and Reload applies it.
+     reload → load the sample → Print/Save-as-PDF still produces page sheets. For the update-toast
+     check, use a stable-origin session still running previous `f97778db`, then confirm the
+     `bf04155f` update toast appears and Reload applies it. Immutable URLs have separate origins
+     and cannot prove this stable-origin transition. If no older session remains, leave this
+     step OPEN for the next operator-controlled upgrade.
   6. Theme/WYSIWYG: switch the app to the Dark screen theme — code on the page sheets must
      stay light (print-accurate), and a Download PDF taken in dark theme must contain light
      code. The theme control is now labelled "Screen" and sits at the right, before Export.
