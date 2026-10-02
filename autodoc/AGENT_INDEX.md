@@ -46,7 +46,7 @@ Export click → capture document id/name/text and settings NOW
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
 | Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
 | Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
-| Vector / raster PDF | `src/export/{print,download}.ts` | `tests/export-download.test.ts`, `tests/e2e/export.spec.ts` |
+| Vector / raster PDF | `src/export/{print,download}.ts` | `tests/export-download.test.ts`, `tests/e2e/export.spec.ts`, `tests/e2e/raster-resolution.spec.ts` (natural resolution, tight RGBA comparison and actual TOC-furniture removal control) |
 | Exact source download and filename | `src/export/markdown.ts` | `tests/markdown-download.test.ts`, `tests/e2e/workspace-design.spec.ts` |
 | Local Open/Save keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
