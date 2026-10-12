@@ -1,5 +1,7 @@
 # MDviewer
 
+<p align="center"><img src="docs/assets/mdviewer-loop.svg" alt="MDviewer workflow, animated" width="100%"></p>
+
 A browser-only Markdown → PDF tool whose one hard rule is that no code block, figure, table, or callout is ever sliced across a page.
 
 [![CI](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml)
