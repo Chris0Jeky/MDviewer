@@ -1,12 +1,47 @@
 # MDviewer
 
+A browser-only Markdown → PDF tool whose one hard rule is that no code block, figure, table, or callout is ever sliced across a page.
+
+[![CI](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml)
+[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white)](package.json)
+[![Node](https://img.shields.io/badge/node-22%20%7C%2024%20%7C%2026%2B-339933?logo=nodedotjs&logoColor=white)](package.json)
+
 **Live app:** https://mdviewer-c9r.pages.dev/
 
-**Write Markdown, or drag a file in — get a beautiful PDF out, with no code block, figure, table, or callout ever sliced across a page boundary.**
-
-MDviewer is a browser-based Markdown → PDF tool built for **research papers and code-heavy technical docs**. Write in the built-in source pane and watch the paginated preview rebuild as you type, or drop a file in and edit it in place. It runs 100% in your browser: your documents are never uploaded, never stored on a server, and never sent anywhere. Same-origin application assets may load lazily as features run. The app itself persists only a small settings object in `localStorage`. The public site also sends pseudonymous, content-free usage data to the owner's own Pulseboard collector (never document text, file names or exports) — see [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
+- [What it is](#what-it-is)
+- [Why it exists](#why-it-exists)
+- [Privacy and usage data](#privacy-and-usage-data)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [How export works](#how-export-works)
+- [Tech stack](#tech-stack)
+- [Status and roadmap](#status-and-roadmap)
+- [Security](#security)
+- [For contributors and agents](#for-contributors-and-agents)
+- [License](#license)
+- [Links](#links)
 
 ![MDviewer rendering its bundled sample as a seven-page, print-ready document.](docs/assets/mdviewer-preview.png)
+
+## What it is
+
+MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
+
+It runs entirely in the browser. Document text, file names, headings, URLs and exports never leave the device. The only thing the app persists is a small settings object in `localStorage` (`mdviewer.settings.v1`). There is no conversion API, no document storage, and no account.
+
+The public site also sends pseudonymous, content-free usage data to the owner's first-party Pulseboard collector — never document text, file names or exports. See [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
+
+Same-origin application assets (Paged.js, Mermaid, extra Shiki grammars, KaTeX fonts) may load lazily as features run. The production build is an installable PWA and works offline once those assets are cached.
+
+## Why it exists
+
+Typical Markdown-to-PDF converters render HTML and let the print engine break pages wherever it likes. A listing gets cut in half. A table header is stranded. A diagram is sliced down the middle. Fine for a grocery list. Not fine for a paper or a code-heavy design note.
+
+MDviewer is built around the opposite contract: **atomic blocks stay whole**. When a block is genuinely taller than one page, it degrades on purpose — repeated table headers, continuous frames, a tight shrink-to-fit (≤ 1.15× page height), then a clean forced split — instead of being chopped. That tiered rule is specified in [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md) §4 and asserted in [`tests/e2e/nocutoff.spec.ts`](tests/e2e/nocutoff.spec.ts).
+
+The full rationale is in [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md).
 
 ## Privacy and usage data
 
@@ -18,7 +53,7 @@ anyone. This is enforced in code: every usage call goes through one module
 it reaches a usage call.
 
 **What is sent.** The live site (https://mdviewer-c9r.pages.dev only; local runs, previews and
-self-hosted copies send nothing) loads the Pulseboard SDK 3.3 from its own origin
+self-hosted copies send nothing) loads the Pulseboard SDK 3.3.1 from its own origin
 (`/pulseboard.js`) and sends data only to `https://pulseboard-observatory.commit-atlas.workers.dev`,
 the owner's first-party collector. A one-line **Beta** bar at the top of the page explains it and
 offers **Choose** and **OK**. There are three categories:
@@ -53,86 +88,180 @@ is written in the EEA until you click OK), a region hint (`pulseboard:region:mdv
 the tab closes), and the per-tab session record in `sessionStorage`. Details of the SDK and collector:
 [Pulseboard `observatory/docs/SDK.md`](https://github.com/Chris0Jeky/Pulseboard/blob/main/observatory/docs/SDK.md).
 
-## Why MDviewer exists
+## Features
 
-Typical online Markdown-to-PDF converters slice a code listing in half at the page break, orphan a table header, or cut a diagram down the middle. For a paper or a technical doc, that is unacceptable. MDviewer's **#1 value proposition** is the **no-slice guarantee**: atomic blocks stay whole, and when a block is genuinely taller than a page, it splits cleanly (repeated table headers, continuous frames, shrink-to-fit) instead of being chopped.
+Only what the code actually does:
 
-See [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md) for the full rationale.
+- **No-slice pagination.** Code blocks, figures, tables and callouts stay on one page when they fit. Oversize blocks shrink slightly (≤ 1.15×) or split cleanly; tables repeat their header. List items fragment like paragraphs so a long checklist does not leave half-blank sheets.
+- **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
+- **Two PDF paths from one layout.** [Print / Save as PDF](#how-export-works) is the vector path. Download PDF is the raster fallback. Both consume the same already-broken page DOM. The PDF is always dark-on-white, whatever screen theme you are using.
+- **Syntax-highlighted code** via [Shiki](https://shiki.style/) — TextMate grammars, six theme families (GitHub, VS Code, Nord, Min, One, Catppuccin), each a light/dark pair. Print forces the light side. Optional CSS line numbers. Unknown fence languages fall back to plain text and surface a warning.
+- **Math** via [KaTeX](https://katex.org/) (inline and display). Bad TeX renders as a red inline error instead of aborting the document.
+- **Diagrams** via [Mermaid](https://mermaid.js.org/) — rendered to a fixed-size SVG *before* pagination measures heights, then sanitized again. Print stays on the light diagram theme.
+- **Callouts** — `:::note`, `:::tip`, `:::warning`, `:::danger`.
+- **Footnotes** collected at the foot of the page that cites them (Paged.js `float: footnote`), with citation hrefs repaired after preview.
+- **Table of contents** with real `target-counter` page numbers. An author-placed `[[toc]]` stays put; otherwise a TOC is synthesized after the first `h1`.
+- **Task lists**, block quotes, and markdown-it's typographer (quotes, dashes). Pipe tables in the sample and fixtures render as real `<table>`s and are treated as atomic blocks.
+- **Page furniture.** A4 or US Letter; narrow / normal / wide margins (12.7 / 20 / 30 mm); body font serif / sans / slab; 10–13 pt; optional running header, page numbers, title-page (blank header and folio on page 1), and code line numbers.
+- **Screen chrome only:** light / dark / sepia. Does not recolour the page sheets or the PDF.
+- **Preview zoom** — Fit / 100% / 50%. Paint-only (`transform: scale`); it never changes page breaks. A pinned page chip tracks which sheet you are on.
+- **Ingestion.** Drag-and-drop, paste, file picker, or **Open Markdown** (`Ctrl/Cmd+O`). Non-Markdown files are skipped with a banner; reads that fail are reported as unreadable, not as the wrong type. Soft confirm at 250 kB; hard refuse at 25 MB.
+- **Source download.** **Save Markdown** (`Ctrl/Cmd+S`) writes the exact in-memory text to a file. It does not persist the document in the app.
+- **Close recovery.** Undo the latest close in this tab. Reload or closing the tab clears it. No history store.
+- **Installable PWA** with a prompt-based update (never an unattended swap under a live document) and a Workbox precache of the lazy feature chunks and KaTeX fonts, so Print and math still work offline.
+- **Sanitized HTML.** `markdown-it` runs with `html: true` for KaTeX/Mermaid output; every fragment is run through DOMPurify and a second pass that strips automatic remote-resource loads. Embedded raster data URLs are the only images allowed.
+
+## Architecture
+
+Pagination measures real, laid-out heights. Anything that still has to load — a grammar, a diagram, a font — changes those heights. So the pipeline is strict, and **pagination runs last**.
+
+```mermaid
+flowchart TD
+  ingest["Editor / drop / paste / picker<br/>ui/Editor.ts · app/input.ts"]
+  store["DocStore + Settings<br/>app/state.ts · settings.ts"]
+  appNode["App.runPipeline<br/>app/App.ts"]
+  hl["Shiki + curated grammars<br/>render/highlight.ts"]
+  md["markdown-it + KaTeX<br/>render/markdown.ts · math.ts"]
+  san["DOMPurify + remote-URL strip<br/>render/sanitize.ts"]
+  src["TOC + inline footnote floats<br/>render/buildSource.ts"]
+  mer["Mermaid fixed-size SVG<br/>render/mermaid.ts"]
+  wait["await fonts and images"]
+  page["Paged.js paginate LAST<br/>paginate/paginate.ts · handler.ts<br/>cssBuilder.ts · shrinkToFit.ts"]
+  repair["href-only footnote repair<br/>paginate/footnoteLinks.ts"]
+  print["print.ts · vector window.print"]
+  raster["download.ts · html2canvas-pro + jsPDF"]
+  save["export/markdown.ts · source download"]
+
+  ingest --> store --> appNode
+  appNode --> hl --> md --> san --> src --> mer --> wait --> page --> repair
+  repair --> print
+  repair --> raster
+  store --> save
+```
+
+Re-pagination (paper, margins, font, TOC, headers, line numbers) reuses a pristine clone taken after Mermaid and fonts settle. It does not re-run Markdown. Screen theme, zoom, view mode and split ratio are CSS-only and are not reflow keys.
+
+Renders are **serialized**, not just debounced: two overlapping pipeline runs would share one Paged.js host and page counter. Both export paths capture the document and settings at click time and `await` a render lock, so an export mid-keystroke cannot ship the previous pages.
+
+```
+src/
+  main.ts          Vite entry — boots the app, wires drag/drop/paste, PWA prompt
+  app/             App controller, DocStore, settings, input, Pulseboard seam
+  ui/              toolbar, source editor, splitter, canvas, empty state, banner
+  render/          markdown-it + Shiki + KaTeX + Mermaid + sanitize + source builder
+  paginate/        Paged.js engine, @page CSS, measure, shrink-to-fit, footnote hrefs
+  export/          print (vector), download (raster), Markdown source save
+  styles/          app / workspace / editor / preview / document / print / shiki / PWA
+  types/           local ambient shims
+tests/             Vitest unit + Playwright Chromium e2e (incl. no-cutoff)
+docs/              vision, architecture, roadmap, design contract
+```
+
+Deeper map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`autodoc/AGENT_INDEX.md`](autodoc/AGENT_INDEX.md).
 
 ## Quick start
 
+Requires Node `^22.22.2 || ^24.15.0 || >=26` ([`package.json` `engines`](package.json)).
+
 ```bash
 npm install      # install dependencies
-npm run dev      # start the Vite dev server, then open the printed localhost URL
-npm run build    # produce a production bundle in dist/
+npm run dev      # Vite dev server (default http://localhost:5180 — use the URL it prints)
+npm run build    # typecheck + production bundle in dist/ + licence bundle
+npm start        # build, then serve dist/ on 127.0.0.1:4173 and open it
 ```
 
-The app opens in **Split** view: a Markdown source pane on the left, the paginated preview on the
-right. Start typing and the preview repaginates as you go. You can also drag a `.md` / `.markdown`
-file onto the window, paste Markdown, or use the file picker — a file you open appears in the source
-pane and is editable exactly like text you typed.
+`npm run serve` serves an already-built `dist/` (default `127.0.0.1:4173`) without rebuilding. On Windows, `Start MDviewer.cmd` is a double-click wrapper around `npm start`.
 
-The toolbar's **View** group switches between three layouts — **Markdown** (source only), **Split**,
-and **Preview** (the paginated pages only) — and the divider between the panes can be dragged or
-resized with the arrow keys.
+The app opens in **Split**: source on the left, paginated preview on the right. Type, or drop a `.md` / `.markdown` file. **View** switches Markdown / Split / Preview. **Document layout** holds typography, paper and page furniture. **Print / Save as PDF** is the quality path — in the browser dialog, set the destination to **Save as PDF**.
 
-For a production-style local launch, run `npm start` (builds, serves, and opens the app) or
-double-click `Start MDviewer.cmd` on Windows. For permanent public hosting, private access through
-this PC, and temporary share links, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+For public hosting, Tailscale, and tunnels, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). A git push does not deploy; production is a reviewed promotion of a tested `dist/`.
+
+Useful checks (what CI runs on Node 22 and 24, plus Chromium against the production bundle):
+
+```bash
+npm run typecheck
+npm run lint
+npm run test          # Vitest
+npm run test:e2e      # Playwright Chromium, including tests/e2e/nocutoff.spec.ts
+npm run agent:check   # typecheck + lint + unit + serve tests + observatory guard
+```
 
 ## How export works
 
 MDviewer paginates once with [Paged.js](https://pagedjs.org/) and feeds that single, already-broken page layout to **two** export paths:
 
-1. **Print / Save as PDF (primary, recommended).** Uses `window.print()` with print-media CSS. The output is **vector** — selectable text, crisp code, smallest file — and the page breaks you see in the preview are exactly what you get. In the browser print dialog, choose **"Save as PDF"** as the destination.
-2. **Download PDF (fallback).** Rasterizes each already-paginated page to a canvas and assembles a PDF with jsPDF. The text is not selectable and the file is larger, but it inherits the same page-break safety and works when the print path is inconvenient. Best-effort; the primary path is preferred for quality.
+1. **Print / Save as PDF (primary).** `window.print()` plus print-media CSS. Vector: selectable text, crisp code, smallest file. The breaks in the preview are the breaks in the PDF. In the browser print dialog, choose **Save as PDF**.
+2. **Download PDF (fallback).** Rasterizes each already-paginated page with html2canvas-pro and assembles a PDF with jsPDF. Text is not selectable and the file is larger. Same page-break safety. Best-effort; use the print path when you can.
 
-The exported PDF is **always dark-on-white**, regardless of the screen theme you preview in.
+The exported PDF is **always dark-on-white**, regardless of the screen theme. Closing the last document tears down injected Paged.js styles so a later print cannot pick up stale sheets.
 
-## Features
+## Tech stack
 
-- **Syntax-highlighted code** via [Shiki](https://shiki.style/) (TextMate-grade, dual light/dark themes; print forces the light side for clean PDFs).
-- **Math** via KaTeX (inline and display; bad TeX renders red inline instead of breaking the document).
-- **Diagrams** via Mermaid (fixed-size SVG so pagination measures them correctly).
-- **Callouts** — `note` / `tip` / `warning` / `danger` admonition blocks.
-- **Footnotes** that float to the bottom of the page they are referenced on.
-- **Auto table of contents** with real, Paged.js-generated page numbers.
-- **Live source editing** — a syntax-highlighted Markdown pane beside the preview, with three view
-  modes and a resizable divider. The editing surface never appears in the exported PDF.
-- **Themes** — light / dark / sepia screen themes, six code-theme families (the source pane follows
-  the same theme).
-- **Paper sizes** — A4 and US Letter, with narrow / normal / wide margins.
-- Optional running header, page numbers, and code line numbers.
+Versions from [`package.json`](package.json) at this commit. CI (`.github/workflows/ci.yml`) runs the verify job on Node 22 and 24, and Playwright Chromium against `vite preview` of the production bundle.
 
-## Project layout
+| Layer | What |
+| --- | --- |
+| Language / build | TypeScript 6, Vite 8, ESLint 10, `engines.node` `^22.22.2 \|\| ^24.15.0 \|\| >=26` |
+| UI | Vanilla TypeScript. No React/Vue/Svelte. Toolbar, editor, splitter and canvas are small DOM builders. |
+| Markdown | markdown-it 15 + footnote, anchor, toc-done-right, container, attrs, task-lists. `html: true`, then DOMPurify. |
+| Highlight / math / diagrams | Shiki 4 (fine-grained core + Oniguruma WASM; extra grammars on demand), KaTeX 0.19, Mermaid 12 |
+| Pagination | Paged.js 0.4.3 — the only pagination engine |
+| Export | `window.print()`; html2canvas-pro + jsPDF 4 as fallback; Blob download for source `.md` |
+| Tests | Vitest 5 + jsdom; Playwright Chromium e2e, including the no-cutoff geometry check |
+| PWA | `vite-plugin-pwa`, Workbox precache, prompt-based updates |
+| Hosting | Static files on Cloudflare Pages. No document backend. |
 
-```
-src/
-  main.ts          Vite entry — boots the app, wires global drag/drop/paste, imports CSS
-  app/             controller, document store, settings, DOM-name constants
-  ui/              toolbar, source editor, splitter, canvas/preview, empty state, banner
-  render/          markdown-it + Shiki + KaTeX + Mermaid + pagination-source builder
-  paginate/        Paged.js engine, @page stylesheet builder, measure, shrink-to-fit
-  export/          print (vector) and download (rasterized) paths
-  styles/          app/editor/preview chrome CSS + document/print/shiki document CSS
-  types/           local ambient shims (no upstream @types)
-tests/             Vitest unit tests + Playwright E2E (incl. the no-cutoff guarantee)
-docs/              product vision, architecture, roadmap, and the design specs
-```
+## Status and roadmap
+
+From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) (last updated 2026-10-02) and the open GitHub issue list.
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| P0 Scaffolding | Done | Repo, Vite/Vitest/Playwright, pinned design specs |
+| P1 Core pipeline | Done | Render → paginate → both export paths; no-slice e2e; Gate 3 (manual Chrome PDF inspection) accepted |
+| P2 UX polish | In progress | Split workspace, QA-sweep fixes, responsive toolbar, screen-theme / title-page / header work shipped. Remaining polish is tracked as issues, not a second product. |
+| P3 Hardening and distribution | In progress | Sanitization, PWA/offline, large-doc budget + 250 kB confirm gate, production-egress proofs shipped. Live app is at the URL above. Automated Pages promotion is written; the first live dispatch still needs the `production` environment hardened. Canonical custom hostname is blocked until a name is owned. |
+| P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
+
+**Open issue:** [#131](https://github.com/Chris0Jeky/MDviewer/issues/131) — a late `file.text()` completion can steal focus from a newer document. P2, unscheduled.
+
+Operator-only live-site and deploy gates (split-workspace feel, PWA update toast, Beta-bar acceptance, first automated promotion) live in [`ACTION_ITEMS.md`](ACTION_ITEMS.md). They are not product gaps in the code path above.
+
+## Security
+
+- **Documents do not leave the device.** No document `fetch` / XHR / WebSocket. No document persistence. The one runtime network exception is the Pulseboard SDK on the production origin, reached only through [`src/app/pulse.ts`](src/app/pulse.ts) with closed enums, size buckets and counts. [`tests/pulse.test.ts`](tests/pulse.test.ts) and [`tests/pulse-egress.test.ts`](tests/pulse-egress.test.ts) guard that seam.
+- **Untrusted Markdown is sanitized** before it hits the DOM (`src/render/sanitize.ts`). Executable tags, event handlers and automatic remote resource URLs are stripped; Mermaid SVG is sanitized again. User-initiated `https:` links remain clickable.
+- **Error messages are kept off telemetry.** `installErrorShield` stops `error` / `unhandledrejection` reaching the SDK so a KaTeX or Mermaid parse error cannot leak document text.
+- **Production `dist/` carries the GPL text**, the exact corresponding-source link, the project notice, and installed dependency licence texts (`THIRD_PARTY_NOTICES.md`; written by `npm run build`). Preserve those files when you redistribute a build.
+- There is no `SECURITY.md` in this repo. Report a document-exfiltration or XSS path to the owner rather than in a public issue.
 
 ## For contributors and agents
 
-For current operational state, begin with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) and the resumable
-[`ORCHESTRATOR.md`](ORCHESTRATOR.md). Then use the design docs as the implementation source of truth:
+Start with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) (human-only gates + current-state snapshot) and the resumable [`ORCHESTRATOR.md`](ORCHESTRATOR.md). Repo-wide rules: [`AGENTS.md`](AGENTS.md). Then the design contract:
 
-- [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md) — file tree, pinned module signatures, the load-bearing render order, CSS/DOM names, no-slice tiers, and testing strategy.
-- [`docs/design/LIBRARY_NOTES.md`](docs/design/LIBRARY_NOTES.md) — verified, version-correct integration snippets for every library.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the pipeline, module responsibilities, and CSS architecture.
-- [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) — phase status and the active gates.
-- [`autodoc/AGENT_INDEX.md`](autodoc/AGENT_INDEX.md) — fast code-seam map for finding where to edit.
+- [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md) — pinned signatures, the load-bearing render order, CSS/DOM names, no-slice tiers.
+- [`docs/design/LIBRARY_NOTES.md`](docs/design/LIBRARY_NOTES.md) — version-correct integration notes for each library.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — pipeline, module responsibilities, CSS split.
+- [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) — phase status and gates.
+- [`autodoc/AGENT_INDEX.md`](autodoc/AGENT_INDEX.md) — code-seam map.
+
+Do not reorder the render pipeline. Do not add a document network call or persist document bytes. PRs merge with a merge commit (no squash). `main` is protected: no rebase, force-push, or history rewrite.
 
 ## License
 
-GNU General Public License version 3 only (`GPL-3.0-only`). See `LICENSE` and
-`RELICENSING.md`. Versions published before 12 August 2026 remain available
-under their existing MIT grant.
+GNU General Public License version 3 only (`GPL-3.0-only`). See [`LICENSE`](LICENSE) and
+[`RELICENSING.md`](RELICENSING.md). Versions published before 12 August 2026 remain available
+under their existing MIT grant ([`LICENSES/MIT.txt`](LICENSES/MIT.txt)). Dependencies keep their
+own licences; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## Links
+
+- Live app: https://mdviewer-c9r.pages.dev/
+- Product vision: [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Implementation spec: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md)
+- Roadmap: [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md)
+- Deployment: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- Performance budget: [`docs/PERF_BUDGET.md`](docs/PERF_BUDGET.md)
+- CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+- License: [`LICENSE`](LICENSE)
