@@ -130,6 +130,7 @@ interface ReadBatch {
 async function readFiles(
   files: File[],
   onLargeFile: (bytes: number) => Promise<boolean>,
+  signal: AbortSignal,
 ): Promise<ReadBatch> {
   const { accept, reject } = classifyFiles(files);
   const opened: Doc[] = [];
@@ -138,13 +139,14 @@ async function readFiles(
   const unreadable: string[] = [];
 
   for (const file of accept) {
+    if (signal.aborted) break;
     if (file.size > SIZE_HARD_BYTES) {
       tooLarge.push(file.name);
       continue;
     }
     if (file.size > SIZE_SOFT_BYTES) {
       const proceed = await onLargeFile(file.size);
-      if (!proceed) continue;
+      if (!proceed || signal.aborted) continue;
     }
     let text: string;
     try {
@@ -184,6 +186,16 @@ export function installInputHandlers(
 ): () => void {
   const overlay = document.getElementById(IDS.dragOverlay);
   const fileInput = document.getElementById(IDS.fileInput) as HTMLInputElement | null;
+  const lifetime = new AbortController();
+  let requestId = 0;
+  let activeId = store.activeId;
+  const offChange = store.on("change", () => {
+    // Passive imports change the open set, but must not supersede a pending request.
+    if (activeId === store.activeId) return;
+    activeId = store.activeId;
+    requestId += 1;
+  });
+  const offText = store.on("text", () => { requestId += 1; });
 
   // Depth counter: nested dragenter/leave events fire per child element; only hide the
   // overlay when the cursor has truly left the window.
@@ -197,9 +209,10 @@ export function installInputHandlers(
     if (overlay) overlay.hidden = true;
   };
 
-  const commit = (batch: ReadBatch): void => {
+  const commit = (batch: ReadBatch, request: number): void => {
+    if (lifetime.signal.aborted) return;
+    store.addBatch(batch.opened, request === requestId);
     for (const doc of batch.opened) {
-      store.add(doc.name, doc.text);
       pulseDocOpened("file", doc.text.length);
     }
     // One call per batch: the banner holds a single message, so separate calls
@@ -207,6 +220,11 @@ export function installInputHandlers(
     if (batch.rejected.length > 0 || batch.tooLarge.length > 0 || batch.unreadable.length > 0) {
       opts.onReject(batch.rejected, batch.tooLarge, batch.unreadable);
     }
+  };
+
+  const ingestFiles = (files: File[]): void => {
+    const request = ++requestId;
+    void readFiles(files, opts.onLargeFile, lifetime.signal).then((batch) => commit(batch, request));
   };
 
   const onDragEnter = (e: DragEvent): void => {
@@ -235,7 +253,7 @@ export function installInputHandlers(
     hideOverlay();
     const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
     if (files.length === 0) return;
-    void readFiles(files, opts.onLargeFile).then(commit);
+    ingestFiles(files);
   };
 
   const onPaste = (e: ClipboardEvent): void => {
@@ -243,6 +261,7 @@ export function installInputHandlers(
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text.trim()) return;
     e.preventDefault();
+    const request = ++requestId;
     // Pastes are ingestion like a file drop: the same gates apply, or a megabytes
     // clipboard would start a minutes-long frozen render with no warning.
     void (async () => {
@@ -253,10 +272,11 @@ export function installInputHandlers(
       }
       if (bytes > SIZE_SOFT_BYTES) {
         const proceed = await opts.onLargeFile(bytes);
-        if (!proceed) return;
+        if (!proceed || lifetime.signal.aborted) return;
       }
       const doc = await openMarkdown(text, "Pasted.md");
-      store.add(doc.name, doc.text);
+      if (lifetime.signal.aborted) return;
+      store.addBatch([doc], request === requestId);
       pulseDocOpened("paste", doc.text.length);
     })();
   };
@@ -267,7 +287,7 @@ export function installInputHandlers(
     // Reset so picking the same file again re-fires change.
     input.value = "";
     if (files.length === 0) return;
-    void readFiles(files, opts.onLargeFile).then(commit);
+    ingestFiles(files);
   };
 
   window.addEventListener("dragenter", onDragEnter);
@@ -278,6 +298,9 @@ export function installInputHandlers(
   fileInput?.addEventListener("change", onFileInputChange);
 
   return () => {
+    lifetime.abort();
+    offChange();
+    offText();
     window.removeEventListener("dragenter", onDragEnter);
     window.removeEventListener("dragover", onDragOver);
     window.removeEventListener("dragleave", onDragLeave);
