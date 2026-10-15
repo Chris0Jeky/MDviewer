@@ -3,7 +3,41 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-02 (reviewed fixes live as bf04155f):**
+> **LOCAL CHECKPOINT — 2026-10-15 (issue #131, uncommitted):**
+> Worktree `C:/Users/jekyt/source/mdv-131`, branch `fix/late-file-read-focus-131`,
+> base HEAD `2822ad0428135ce23c049b5b569ff5f50f399bd2`. No commit, push or deployment.
+> File/paste requests now carry a monotonic focus generation; newer requests,
+> active-document changes and edits invalidate older selection rights. Stale reads
+> append passively through `DocStore.addBatch`; eligible batches select their first
+> accepted file with one change notification. Teardown aborts subsequent batch work
+> and ignores late reads, confirmations and notices. Editor's existing equal-text
+> guard preserves caret/native undo for passive imports; render order is unchanged.
+> Test-first evidence: baseline `npm run test` 529/529; two deferred drop/picker
+> races failed on activeId before the fix. Two further teardown tests failed on late
+> prompts/reads before adding lifetime cancellation. Final 546/546 unit tests pass
+> (17 added), as do typecheck, lint, four server tests, Observatory guard, hook smoke
+> and all 14 skill validations. Production Chromium: 110/110, no retries/skips,
+> including the new focus/selection/native-undo regression, all three no-cutoff
+> cases and both exports. The browser test uses one native typed character because
+> Chromium need not group multiple characters into a single undo entry.
+> `npm run build` passed in byte-matching source snapshot
+> `C:/Users/Public/codex-shell-home/mdv-131-source-check`, labelled
+> `MDVIEWER_SOURCE_ID=issue-131-uncommitted-source-snapshot`; the dirty-tree provenance
+> guard was preserved. E2E used that build with `E2E_TARGET=preview`, `E2E_PORT=5195`,
+> `PLAYWRIGHT_BROWSERS_PATH=C:/Users/Public/codex-shell-home/mdv-131-browsers`,
+> `npm run test:e2e -- --project=chromium --workers=1`.
+> Environment: per-command Git safe.directory override for sandbox ownership;
+> matching Playwright revision 1248 installed in scratch after the initial missing
+> executable refusal. All 110 assertions passed before Windows preview-server
+> wrapper shutdown hung; stopping this run's wrapper PID 27044 let the runner
+> finish with `110 passed` and exit 0. Logs: scratch `mdv-131-build.log` and
+> `mdv-131-e2e.log`. Spec/API index synced; phase status unchanged.
+> NOT verified: hosted CI, second browser engine, subjective/manual acceptance or
+> live deployment. `ACTION_ITEMS.md` AI-6/7/8/9 remain OPEN. Already-started
+> `File.text()` cannot be cancelled, but its late result is inert after teardown.
+> Resume: inspect the working-tree diff; publish/review only when requested.
+>
+> **PREVIOUS CHECKPOINT — 2026-10-02 (reviewed fixes live as bf04155f):**
 > #122 preserves ingestion notices and distinguishes unreadable Markdown, closing #121.
 > #123 adds behavioral privacy/egress regression coverage with mutation controls,
 > closing #119. #125 fixes the two-pixel raster antialias false positive without

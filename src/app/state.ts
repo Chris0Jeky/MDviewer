@@ -42,11 +42,17 @@ export class DocStore {
   }
 
   add(name: string, text: string): Doc {
-    const doc: Doc = { id: nextId(), name, text };
-    this.openDocs.push(doc);
-    this.activeId = doc.id;
+    return this.addBatch([{ name, text }])[0]!;
+  }
+
+  /** Append once, selecting only the first document when this import still owns focus. */
+  addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate = true): Doc[] {
+    const added = docs.map(({ name, text }) => ({ id: nextId(), name, text }));
+    if (added.length === 0) return added;
+    this.openDocs.push(...added);
+    if (activate) this.activeId = added[0]!.id;
     this.emit("change");
-    return doc;
+    return added;
   }
 
   setActive(id: string): void {

@@ -2,6 +2,28 @@ import { describe, it, expect, vi } from "vitest";
 import { DocStore, createRenderScheduler, hasProtectableWork } from "../src/app/state";
 
 describe("DocStore: open, switch, close", () => {
+  it("appends passive batches atomically without changing the active document", () => {
+    const store = new DocStore();
+    const current = store.add("current.md", "Current");
+    const snapshots: string[][] = [];
+    store.on("change", () => snapshots.push(store.openDocs.map((doc) => doc.name)));
+    const added = store.addBatch([{ name: "a.md", text: "A" }, { name: "b.md", text: "B" }], false);
+    expect(snapshots).toEqual([["current.md", "a.md", "b.md"]]);
+    expect(store.active).toBe(current);
+    expect(new Set(store.openDocs.map((doc) => doc.id)).size).toBe(3);
+    expect(added).toEqual(store.openDocs.slice(1));
+    expect(store.addBatch([])).toEqual([]);
+    expect(snapshots).toHaveLength(1);
+    expect(store.active).toBe(current);
+  });
+
+  it("keeps an empty selection for a passive batch", () => {
+    const store = new DocStore();
+    store.addBatch([{ name: "a.md", text: "A" }], false);
+    expect(store.openDocs).toHaveLength(1);
+    expect(store.activeId).toBeNull();
+  });
+
   it("add() makes the new document active and emits change", () => {
     const store = new DocStore();
     const onChange = vi.fn();

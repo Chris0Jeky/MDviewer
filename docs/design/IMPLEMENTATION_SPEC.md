@@ -78,6 +78,10 @@ The foundation section 6 tree remains the map for unchanged modules. These curre
 Unchanged exports retain the signatures in foundation section 7 and its section 12 workspace additions. The following are the current additions/replacements. `Settings`, `Doc`, `App` and imported library types mean their actual project types.
 
 ```typescript
+// src/app/state.ts: DocStore additionally supports atomic imports
+addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate?: boolean): Doc[];
+// Defaults to selecting the first added document; false preserves the current selection.
+
 // src/app/state.ts: adds to the existing scheduler surface
 export interface RenderScheduler {
   schedule(reason: RenderReason): void;
@@ -152,6 +156,8 @@ export function skippedFileWarnings(
 `paginate(source, css, host): Promise<PagedFlow>` retains its signature; it now calls `repairFootnoteLinks` between awaited preview and returning the flow. `CanvasController` signatures are unchanged. Snapshot capture and export preparation are private App details, not new global hooks.
 
 File picks/drops report unsupported types, hard-cap refusals and failed local reads separately in one callback. Declined soft-cap confirmations remain silent. App sends these messages (and paste/editor hard-cap refusals) to `BannerController.notice`. The latest ingestion batch stays visible across render completion, reflow and closing the last document until the user dismisses it or another ingestion notice replaces it. `warn` replaces only render warnings; `clear` clears render warnings and fatal errors while retaining ingestion notices. Dismiss clears both warning categories, including notices dismissed during an asynchronous render. Long render-warning lists may be summarized, but ingestion details always remain explicit. Feedback stays outside the paginated/exported document. Cover: `tests/input.test.ts`, `tests/app-ingestion-notices.test.ts`, `tests/e2e/empty-error.spec.ts`.
+
+Each file pick/drop appends its accepted documents in one store notification and selects the first accepted file only while that request still owns the editor context. Newer file/paste requests, active-document changes (including switching away and back) and text edits invalidate that selection right. Superseded reads still append documents passively; unchanged active text leaves the editor's caret, focus and native undo intact. Teardown aborts further reads/confirmations in a batch and ignores pending file/paste completions and notices. An already-started `File.text()` may settle without mutating the destroyed app. Coverage: `tests/input-race.test.ts`, `tests/state.test.ts`, `tests/e2e/input-race.spec.ts`.
 
 ## 8. DOM IDs and CSS cascade
 

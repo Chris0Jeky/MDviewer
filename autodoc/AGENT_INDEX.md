@@ -31,10 +31,10 @@ Export click → capture document id/name/text and settings NOW
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
 | App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
-| Document memory and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
+| Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
 | Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
-| Input picker/drop/paste validation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts`; spec §7 separates unsupported, oversized and unreadable files |
+| Input picker/drop/paste validation, request focus ownership, teardown cancellation and sample | `src/app/input.ts`, `src/app/sampleDoc.ts` | `tests/input.test.ts`, `tests/input-race.test.ts`, `tests/e2e/input-race.spec.ts`; spec §7 pins passive imports and first-file batch selection |
 | Pulseboard SDK seam (content-free events, error shield) and locked artifact | `src/app/pulse.ts`, `public/pulseboard.js`, `observatory.lock.json`, `observatory/check.mjs` | `tests/pulse.test.ts`, `tests/pulse-egress.test.ts` (isolated privacy/egress behavior and mutation controls), `npm run agent:observatory:check`; spec §1 |
 | Manual Pages promotion of the exact E2E-tested artifact; dry path without production environment | `.github/workflows/deploy.yml`, `scripts/deployment-artifact.mjs` | `tests/deployment-artifact.test.ts`; `docs/DEPLOYMENT.md`, AI-9 remains open |
 | DOM IDs/classes and factories | `src/app/dom.ts` | `tests/dom-contract.test.ts`; spec §8 |
