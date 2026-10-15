@@ -80,8 +80,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
 - Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
   draft PRs after relevant local checks. A PR is aged once an independent adversarial review has
-  examined its latest head, exact-head CI has completed green, and every comment is triaged; no
-  time-based wait is required in this relaxed T1 repo. Actionable findings require finding → commit
+  examined its latest head, exact-head CI has completed green, every comment is triaged, and the
+  head has aged at least three minutes (global law 2f). The repository is T2 with push and merge free
+  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Actionable findings require finding → commit
   evidence, while informational/bot notices require an explicit non-finding triage. Any head change
   resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.

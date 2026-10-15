@@ -1,0 +1,17 @@
+{
+  "tier": 2,
+  "name": "daily-driver",
+  "authority": {
+    "push": "free",
+    "merge": "free"
+  },
+  "flags": {
+    "sensitive_data": false,
+    "wave_mode": false,
+    "dormant_production": false,
+    "relaxed_work_loss_guards": false
+  },
+  "human_todo": "ACTION_ITEMS.md",
+  "last_reviewed": "2026-10-15",
+  "notes": "Declared T2 by the owner on 2026-10-15 (agent-hq decision mdviewer-tier-20261015, option a: 'T2, merge free'). Public browser Markdown-to-PDF editor deployed to Cloudflare Pages by direct upload. Push and merge are free within the proving, review and aging gates; CI (typecheck, lint, unit, build on Node 22 and 24, Playwright E2E) must be green at the head. Merging is not deploying: live deploys run from main only and stay owner-held under ACTION_ITEMS AI-9 until production reviewers and environment-scoped credentials exist. Reassess before accounts, server-side user data or automatic deploys."
+}
