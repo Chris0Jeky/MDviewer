@@ -101,6 +101,18 @@ describe("async ingestion focus", () => {
     expect(t.store.openDocs.at(-1)?.name).toBe("slow.md");
   });
 
+  it("activates a late file when the user closed the only open document during the read", async () => {
+    const t = fixture();
+    const only = t.store.add("only.md", "Only");
+    const slow = deferred<string>();
+    t.ingest("picker", [file("slow.md", slow.promise)]);
+    t.store.remove(only.id);
+    expect(t.store.activeId).toBeNull();
+    slow.resolve("Slow");
+    await settle();
+    expect(t.store.active?.name).toBe("slow.md");
+  });
+
   it("does not let an older passive completion cancel the newer pending selection", async () => {
     const t = fixture();
     const current = t.store.add("current.md", "Current");

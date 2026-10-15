@@ -211,7 +211,8 @@ export function installInputHandlers(
 
   const commit = (batch: ReadBatch, request: number): void => {
     if (lifetime.signal.aborted) return;
-    store.addBatch(batch.opened, request === requestId);
+    // A newer request keeps focus, but a late read must not leave documents open with none active.
+    store.addBatch(batch.opened, request === requestId || store.activeId === null);
     for (const doc of batch.opened) {
       pulseDocOpened("file", doc.text.length);
     }
