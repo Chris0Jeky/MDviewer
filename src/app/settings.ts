@@ -100,6 +100,20 @@ export function clampSplitRatio(value: unknown): number {
   return Math.min(SPLIT_RATIO_MAX, Math.max(SPLIT_RATIO_MIN, value));
 }
 
+const SCREEN_THEMES: readonly ScreenTheme[] = ["light", "dark", "sepia"];
+const CODE_THEMES: readonly CodeThemeId[] = [
+  "github",
+  "vscode",
+  "nord",
+  "min",
+  "one",
+  "catppuccin",
+];
+const DOC_FONTS: readonly DocFont[] = ["serif", "sans", "slab"];
+const FONT_SIZES_PT: readonly FontSizePt[] = [10, 11, 12, 13];
+const PAPER_SIZES: readonly PaperSize[] = ["a4", "letter"];
+const MARGIN_PRESETS: readonly MarginPreset[] = ["narrow", "normal", "wide"];
+
 /**
  * Coerce arbitrary parsed JSON into a valid Settings by merging over the defaults.
  * Unknown/extra keys are dropped; missing keys fall back to defaults. Always returns
@@ -109,15 +123,52 @@ export function migrateSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_SETTINGS };
   const r = raw as Partial<Settings>;
   return {
-    ...DEFAULT_SETTINGS,
-    ...r,
     // Pin known-shape fields so a malformed value can't poison the type.
     schemaVersion: 1,
+    // Every enum/boolean/number field is whitelisted: a hostile or hand-edited
+    // store value falls back to the default instead of reaching consumers like
+    // CODE_THEME_PAIRS, MARGIN_MM, or DOC_FONT_STACKS as undefined/NaN.
+    screenTheme: SCREEN_THEMES.includes(r.screenTheme as ScreenTheme)
+      ? (r.screenTheme as ScreenTheme)
+      : DEFAULT_SETTINGS.screenTheme,
+    codeTheme: CODE_THEMES.includes(r.codeTheme as CodeThemeId)
+      ? (r.codeTheme as CodeThemeId)
+      : DEFAULT_SETTINGS.codeTheme,
+    docFont: DOC_FONTS.includes(r.docFont as DocFont)
+      ? (r.docFont as DocFont)
+      : DEFAULT_SETTINGS.docFont,
+    fontSizePt: FONT_SIZES_PT.includes(r.fontSizePt as FontSizePt)
+      ? (r.fontSizePt as FontSizePt)
+      : DEFAULT_SETTINGS.fontSizePt,
+    paperSize: PAPER_SIZES.includes(r.paperSize as PaperSize)
+      ? (r.paperSize as PaperSize)
+      : DEFAULT_SETTINGS.paperSize,
+    margins: MARGIN_PRESETS.includes(r.margins as MarginPreset)
+      ? (r.margins as MarginPreset)
+      : DEFAULT_SETTINGS.margins,
+    showToc:
+      typeof r.showToc === "boolean" ? r.showToc : DEFAULT_SETTINGS.showToc,
+    showPageNumbers:
+      typeof r.showPageNumbers === "boolean"
+        ? r.showPageNumbers
+        : DEFAULT_SETTINGS.showPageNumbers,
     // `titlePage` feeds a CSS branch in buildStylesheet, so a truthy non-boolean from a
     // hand-edited store would emit an `@page :first` block on a value that never round-
     // trips through the toggle. Validate rather than trust the spread.
     titlePage:
       typeof r.titlePage === "boolean" ? r.titlePage : DEFAULT_SETTINGS.titlePage,
+    showLineNumbers:
+      typeof r.showLineNumbers === "boolean"
+        ? r.showLineNumbers
+        : DEFAULT_SETTINGS.showLineNumbers,
+    zoom:
+      r.zoom === "fit" || r.zoom === 1 || r.zoom === 0.5
+        ? r.zoom
+        : DEFAULT_SETTINGS.zoom,
+    runningHeader:
+      typeof r.runningHeader === "string"
+        ? r.runningHeader
+        : DEFAULT_SETTINGS.runningHeader,
     // Layout fields drive CSS geometry directly: a bogus persisted value would
     // collapse a pane with no way back, so coerce both onto their valid domain.
     viewMode: VIEW_MODES.includes(r.viewMode as ViewMode)
