@@ -29,8 +29,8 @@ const MARGIN_BOX_FONT = "font: 9pt/1 system-ui, sans-serif; color: #6b7280;";
 
 /** CSS string-escape a user-provided running-header value for use in `content:`. */
 function cssString(value: string): string {
-  // Escape backslashes and double-quotes so the header can't break out of the string.
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  // Escape CSS string delimiters and line breaks; the space terminates the hex escape.
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r\n|[\n\r]/g, "\\A ");
 }
 
 export function buildStylesheet(settings: Settings): string {
