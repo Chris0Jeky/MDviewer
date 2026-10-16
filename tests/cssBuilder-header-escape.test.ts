@@ -7,6 +7,12 @@ import { DEFAULT_SETTINGS } from "../src/app/settings";
 const HEADER = 'Say "hi" done \\ end';
 
 describe("cssBuilder: running-header CSS escaping", () => {
+  it.each(["\n", "\r", "\r\n"])("escapes line breaks %j as CSS newlines", (newline) => {
+    const out = buildStylesheet({ ...DEFAULT_SETTINGS, runningHeader: `first${newline}aftermath` });
+    expect(out).toContain('content: "first\\A aftermath";');
+    expect(out).not.toContain(`first${newline}aftermath`);
+  });
+
   it("escapes embedded quotes/backslashes without breaking the stylesheet", () => {
     const out = buildStylesheet({ ...DEFAULT_SETTINGS, runningHeader: HEADER });
 
