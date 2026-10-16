@@ -126,7 +126,10 @@ export function findFenceLanguages(src: string): string[] {
 export function getHighlighter(): Promise<HighlighterCore> {
   if (highlighter) return Promise.resolve(highlighter);
   if (creating) return creating;
-  creating = create();
+  creating = create().catch((err) => {
+    creating = null;
+    throw err;
+  });
   return creating;
 }
 
