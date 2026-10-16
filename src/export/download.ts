@@ -95,7 +95,14 @@ export async function exportPaginatedToPdf(
     format: settings.paperSize,
   });
 
-  const scale = opts.scale ?? 2;
+  const DEFAULT_SCALE = 2;
+  const MIN_SCALE = 0.5;
+  const MAX_SCALE = 4;
+  const requestedScale = opts.scale ?? DEFAULT_SCALE;
+  const scale =
+    Number.isFinite(requestedScale) && requestedScale >= MIN_SCALE && requestedScale <= MAX_SCALE
+      ? requestedScale
+      : DEFAULT_SCALE;
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
