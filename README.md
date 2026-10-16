@@ -141,7 +141,7 @@ flowchart TD
   store --> save
 ```
 
-Re-pagination (paper, margins, font, TOC, headers, line numbers) reuses a pristine clone taken after Mermaid and fonts settle. It does not re-run Markdown. Screen theme, zoom, view mode and split ratio are CSS-only and are not reflow keys.
+Re-pagination (paper, margins, font, TOC, headers, line numbers) re-runs the full render pipeline: Markdown, Mermaid, fonts and images, then pagination. Screen theme, zoom, view mode and split ratio are CSS-only and are not reflow keys.
 
 Renders are **serialized**, not just debounced: two overlapping pipeline runs would share one Paged.js host and page counter. Both export paths capture the document and settings at click time and `await` a render lock, so an export mid-keystroke cannot ship the previous pages.
 
@@ -184,7 +184,8 @@ Useful checks (what CI runs on Node 22 and 24, plus Chromium against the product
 npm run typecheck
 npm run lint
 npm run test          # Vitest
-npm run test:e2e      # Playwright Chromium, including tests/e2e/nocutoff.spec.ts
+npm run build         # production dist/, which the preview e2e target serves
+E2E_TARGET=preview npm run test:e2e  # Playwright Chromium against the production bundle, incl. tests/e2e/nocutoff.spec.ts
 npm run agent:check   # typecheck + lint + unit + serve tests + observatory guard
 ```
 
