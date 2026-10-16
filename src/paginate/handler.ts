@@ -125,7 +125,12 @@ export function fillTocPageNumbers(host: HTMLElement): void {
   for (const link of links) {
     const href = link.getAttribute("href");
     if (!href || !href.startsWith("#")) continue;
-    const id = decodeURIComponent(href.slice(1));
+    let id: string;
+    try {
+      id = decodeURIComponent(href.slice(1));
+    } catch {
+      continue;
+    }
     if (!id) continue;
 
     // Resolve the target by id (escape for use in a CSS selector when available).
