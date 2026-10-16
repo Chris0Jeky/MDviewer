@@ -123,6 +123,30 @@ describe("exportPaginatedToPdf: options", () => {
     expect(opts?.scale).toBe(1.5);
   });
 
+  it.each([0.5, 1, 1.5, 2, 4])("passes through valid scale %s", async (scale) => {
+    const host = hostWithPages(1);
+    await exportPaginatedToPdf(host, settings(), { scale });
+    const opts = html2canvas.mock.calls[0]?.[1] as { scale?: number } | undefined;
+    expect(opts?.scale).toBe(scale);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0.25, 4.1, 1000])(
+    "falls back to default scale 2 for invalid scale %s",
+    async (scale) => {
+      const host = hostWithPages(1);
+      await exportPaginatedToPdf(host, settings(), { scale });
+      const opts = html2canvas.mock.calls[0]?.[1] as { scale?: number } | undefined;
+      expect(opts?.scale).toBe(2);
+    },
+  );
+
+  it("uses default scale 2 when scale is omitted", async () => {
+    const host = hostWithPages(1);
+    await exportPaginatedToPdf(host, settings());
+    const opts = html2canvas.mock.calls[0]?.[1] as { scale?: number } | undefined;
+    expect(opts?.scale).toBe(2);
+  });
+
   it("constructs jsPDF with the format matching the paper size", async () => {
     const host = hostWithPages(1);
     await exportPaginatedToPdf(host, settings({ paperSize: "letter" }));
