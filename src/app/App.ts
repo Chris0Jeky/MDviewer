@@ -46,7 +46,7 @@ import type { BannerController } from "../ui/Banner";
 import { DocStore, hasProtectableWork } from "./state";
 import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
-import { loadSettings, saveSettings } from "./settings";
+import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
@@ -310,7 +310,7 @@ export class App {
    */
   updateSettings(patch: Partial<Settings>): void {
     const prev = this.settings;
-    const next: Settings = { ...prev, ...patch };
+    const next = migrateSettings({ ...prev, ...patch });
     this.settings = next;
     saveSettings(next);
     for (const listener of this.settingsListeners) listener(next);
