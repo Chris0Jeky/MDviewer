@@ -3,7 +3,36 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader integration):**
+> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader ownership and native verification):**
+> All original open issues/PRs are resolved: #155/#156/#157/#159/#160 merged;
+> #136 closed after the PDF readiness/footnote and dependency fixes. Main at this
+> checkpoint is 22435ce. Windows reader PR #158 remains the active feature review.
+> Its final review found retained closed source text and an Undo Close admission
+> bypass. The reader now releases its old sources after a safe workspace handoff;
+> workspace baselines follow current document IDs and are cleared on successful
+> return. Undo checks current document count and UTF-8 bytes before consuming its
+> one retained recovery offer. Unknown restored identities remain dirty. Failed
+> return validation preserves the workspace; failed teardown restores the same
+> document objects, selection and baselines. Inert workspace controls and captured
+> shortcut clicks prevent last-moment actions racing that ownership transaction.
+> The frozen correction passed 624 unit tests, four server tests, typecheck/lint,
+> Observatory, both production builds, all 15 desktop browser scenarios, and six
+> existing web Undo Close scenarios. Independent review verified all eleven file
+> hashes and reran 21 focused ownership/recovery/session tests successfully.
+> Windows runs at 24716610 and 734c64ef verified actual first-file rendering,
+> Unicode/UTF-16 second-instance forwarding, one retained host, the editing workspace
+> and a native Save dialog. Its filename-control lookup remains under test; bounded
+> UIA result/phase metadata and screenshots distinguish test-helper failures from
+> product failures. Native tests/builds pass; native saved-file verification remains
+> required before merge. Exact-head CI, independent final review and the actual
+> Windows smoke are the merge contract; consult PR #158's latest checks/artifacts.
+> No comparative RAM claim, signed-release claim or live deployment is made.
+> Human Windows install/uninstall, default handler, print-driver and owner-hardware
+> comparison remain open, as do AI-6/AI-7/AI-8/AI-9. A separate prepared follow-up
+> defers reader code-engine initialization for ordinary notes; it is not included
+> in this ownership correction.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (Windows reader integration):**
 > Owner requested all-open-issue/PR review plus a lightweight Windows desktop direction.
 > Production dependencies #155 merged as 7b6f527; development dependencies #156 as
 > f22308b; Node 24/dependency hardening #159 as 3c4f09c. Both npm audits are clean.

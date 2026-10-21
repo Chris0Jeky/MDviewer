@@ -20,12 +20,23 @@ are available in the reader. The Edit & PDF action imports the existing App lazi
 and transfers documents in memory. Returning to reading flushes pending edits,
 clears the pagination host and destroys the workspace. Unsaved work requires an
 explicit discard confirmation when closing. Documents never persist automatically.
+The old reader source list is released once the workspace safely owns its documents
+and dirty baselines. Closed-document baselines are pruned; successful return clears
+them. Failed return validation keeps the workspace intact, and a failed teardown
+flush restores its original document identities, edits and selection for retry.
+Workspace input is paused during return so a late edit or Save shortcut cannot race
+that ownership transfer; a failed return restores interaction as well as source.
 
 Native file reads come only from the OS launch arguments or a native picker. The
 renderer cannot request arbitrary paths. The host validates extensions, encodings,
 local paths and bounded reads; batches and the reader session are capped at 32 files
 and 25,000,000 bytes. Explicit web links may open the default browser. Other schemes
 and navigation away from the bundled application are blocked.
+Undo Close checks the same open-document count and current UTF-8-byte totals before
+consuming recovery. A refusal preserves the latest closed source and offer; reducing
+another document's size can allow retry. A new explicit close replaces that offer.
+Restored sources retain unsaved-work protection on return to reading. The one-close
+snapshot remains memory-only and is cleared by Discard or workspace teardown.
 
 ## Verification and distribution
 

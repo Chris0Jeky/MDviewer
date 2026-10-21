@@ -35,6 +35,7 @@ import { exportViaPrint } from "../export/print";
 import { exportPaginatedToPdf } from "../export/download";
 import { SaveCanceled } from "../export/destination";
 import { mountToolbar } from "../ui/Toolbar";
+import type { RestoreAdmission } from "../ui/DocumentRecovery";
 import { mountCanvas } from "../ui/Canvas";
 import type { CanvasController, CanvasPosition } from "../ui/Canvas";
 import { mountEditor } from "../ui/Editor";
@@ -135,10 +136,14 @@ export class App {
     this.store = new DocStore();
   }
 
-  static init(root: HTMLElement, options: { inputHandlers?: boolean; openFilePicker?: () => void } = {}): App {
+  static init(root: HTMLElement, options: {
+    inputHandlers?: boolean;
+    openFilePicker?: () => void;
+    canRestoreDocument?: RestoreAdmission;
+  } = {}): App {
     const app = new App(root);
     app.filePicker = options.openFilePicker ?? null;
-    app.buildShell();
+    app.buildShell(options.canRestoreDocument);
     app.applyThemeAttributes();
     app.applyViewMode();
 
@@ -193,9 +198,9 @@ export class App {
    * `data-view-mode` on #workspace decides which of the three columns are shown; the
    * panes are always mounted so switching modes never rebuilds or re-renders anything.
    */
-  private buildShell(): void {
+  private buildShell(canRestoreDocument?: RestoreAdmission): void {
     // Row 1 then row 2 — append order defines the grid rows.
-    this.toolbar = mountToolbar(this.root, this);
+    this.toolbar = mountToolbar(this.root, this, canRestoreDocument);
 
     this.workspaceEl = el("div", { id: IDS.workspace, class: "workspace" });
     this.root.append(this.workspaceEl);

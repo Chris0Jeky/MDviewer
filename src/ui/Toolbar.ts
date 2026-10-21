@@ -18,7 +18,7 @@ import type {
 import type { App } from "../app/App";
 import { downloadMarkdown } from "../export/markdown";
 import { SaveCanceled, getDownloadDestination } from "../export/destination";
-import { mountDocumentRecovery } from "./DocumentRecovery";
+import { mountDocumentRecovery, type RestoreAdmission } from "./DocumentRecovery";
 
 export interface ToolbarController {
   destroy(): void;
@@ -218,7 +218,7 @@ function divider(): HTMLElement {
  * Mount the toolbar into `root` and wire every control to the App. Returns a
  * controller whose `destroy()` removes the DOM and unsubscribes from the store.
  */
-export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
+export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: RestoreAdmission): ToolbarController {
   const s: Settings = app.settings;
 
   const bar = el("div", {
@@ -482,7 +482,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     if (!app.store.active) openBtn.focus();
     else if (app.settings.viewMode === "preview") docSelect.focus();
     else root.querySelector<HTMLTextAreaElement>(`#${IDS.editorInput}`)?.focus();
-  });
+  }, canRestoreDocument);
 
   // ---- Keep the document switcher and stateful controls in sync ----
   function syncDocSwitcher(): void {

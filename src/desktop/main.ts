@@ -5,6 +5,7 @@ import { loadSettings, saveSettings } from "../app/settings";
 import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
+import type { Doc } from "../app/state";
 import { native, type OpenBatch } from "./native";
 import { ReaderSession, decodeMarkdown, drainSerially } from "./session";
 import { renderReaderDocument } from "./render";
@@ -59,17 +60,24 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function workspaceDirty(doc: Doc): boolean {
+  const original = workspaceOriginals.get(doc.id);
+  return !original || original.dirty || original.text !== doc.text || original.name !== doc.name;
+}
+
 function syncDocuments(): void {
-  select.replaceChildren(...session.documents.map(doc => {
+  const docs = app ? app.store.openDocs.map(doc => ({ ...doc, dirty: workspaceDirty(doc) })) : session.documents;
+  const active = app ? app.store.active : session.active;
+  select.replaceChildren(...docs.map(doc => {
     const option = new Option(`${doc.dirty ? "• " : ""}${doc.name}`, doc.id);
-    option.selected = doc.id === session.activeId;
+    option.selected = doc.id === active?.id;
     return option;
   }));
-  if (!session.documents.length) select.append(new Option("No document open", ""));
-  select.disabled = !session.documents.length;
-  closeButton.disabled = !session.active;
-  workspaceButton.disabled = !session.active || changingMode;
-  document.title = session.active ? `${session.active.name} — MDviewer` : "MDviewer";
+  if (!docs.length) select.append(new Option("No document open", ""));
+  select.disabled = !docs.length;
+  closeButton.disabled = !active;
+  workspaceButton.disabled = !active || changingMode;
+  document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
 function render(): Promise<void> {
@@ -129,11 +137,21 @@ function commitBatch(batch: OpenBatch, request: number): void {
     errors.push(...bounded.append(batch.documents));
     const added = app.store.addBatch(bounded.documents.slice(count), request === generation || app.store.activeId === null);
     for (const doc of added) workspaceOriginals.set(doc.id, { ...doc, dirty: false });
+    syncDocuments(); // addBatch emits before the imported clean baselines are recorded.
   } else {
     errors.push(...session.append(batch.documents, request === generation));
     if (batch.documents.length) void render();
   }
   if (errors.length) report(errors.join(" "));
+}
+
+function canRestoreDocument(doc: Readonly<Pick<Doc, "name" | "text">>): boolean {
+  if (!app || changingMode) return false;
+  const bounded = new ReaderSession();
+  bounded.documents.push(...app.store.openDocs.map(openDoc => ({ ...openDoc, dirty: false })));
+  const errors = bounded.append([doc]);
+  report(errors.join(" "));
+  return errors.length === 0;
 }
 
 async function readFiles(files: File[]): Promise<void> {
@@ -179,7 +197,7 @@ async function enterWorkspace(): Promise<void> {
     document.body.classList.add("desktop-editing");
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
-    const mounted = startWorkspace(appRoot, () => { void open(); });
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument);
     app = mounted.app;
     const selected = session.documents.findIndex(doc => doc.id === session.activeId);
     const added = app.store.addBatch(session.documents);
@@ -188,10 +206,18 @@ async function enterWorkspace(): Promise<void> {
     const offText = app.store.on("text", () => { generation += 1; });
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
-      if (app && app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
+      if (!app) return;
+      const openIds = new Set(app.store.openDocs.map(doc => doc.id));
+      for (const id of workspaceOriginals.keys()) if (!openIds.has(id)) workspaceOriginals.delete(id);
+      if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
+      syncDocuments();
     });
     const offExport = app.onExportStateChange(state => { returnButton.disabled = state.busy || nativeSaveBusy; });
     detachWorkspace = () => { mounted.detachShortcuts(); offText(); offChange(); offExport(); };
+    // The App, selection and dirty baselines now own every transferred source.
+    // Keep the old session intact until that handoff succeeds, then release it.
+    session.documents.length = 0;
+    session.activeId = null;
     content.replaceChildren(); // Release the reader DOM while the PDF workspace owns the document.
     await app.flushRender();
     app.focusEditor();
@@ -208,20 +234,35 @@ async function returnToReader(): Promise<void> {
   if (!app || changingMode || app.exportState.busy || nativeSaveBusy) return;
   changingMode = true; ++generation;
   returnButton.disabled = true;
+  appRoot.inert = true; // No edits or sample actions may race the ownership snapshot.
   try {
     await app.flushRender();
     const next = new ReaderSession();
     const errors = next.append(app.store.openDocs.map(doc => ({
       name: doc.name, text: doc.text,
-      dirty: workspaceOriginals.get(doc.id)?.text !== doc.text || !!workspaceOriginals.get(doc.id)?.dirty,
+      dirty: workspaceDirty(doc),
     })));
     if (errors.length) throw new Error(errors.join(" "));
     const index = app.store.openDocs.findIndex(doc => doc.id === app!.store.activeId);
     next.activeId = next.documents[index]?.id ?? next.activeId;
-    for (const doc of [...app.store.openDocs]) app.store.remove(doc.id);
-    await app.flushRender(); // Tear down Paged.js while its canvas still exists.
+    const previousDocs = [...app.store.openDocs];
+    const previousActive = app.store.activeId;
+    const previousOriginals = new Map(workspaceOriginals);
+    try {
+      for (const doc of previousDocs) app.store.remove(doc.id);
+      await app.flushRender(); // Tear down Paged.js while its canvas still exists.
+    } catch (error) {
+      // Roll back with the same identities, including unknown/Undo-restored docs.
+      // This snapshot is local to the transition and is released after success.
+      const previousIds = new Set(previousDocs.map(doc => doc.id));
+      app.store.openDocs = [...previousDocs, ...app.store.openDocs.filter(doc => !previousIds.has(doc.id))];
+      for (const [id, original] of previousOriginals) workspaceOriginals.set(id, original);
+      if (previousActive) app.store.setActive(previousActive);
+      throw error;
+    }
     detachWorkspace?.(); detachWorkspace = null;
     app.destroy(); app = null;
+    workspaceOriginals.clear();
     appRoot.replaceChildren();
     workspace.hidden = true; shell.hidden = false;
     document.body.classList.remove("desktop-editing");
@@ -233,7 +274,7 @@ async function returnToReader(): Promise<void> {
     await render();
     content.focus();
   } catch (error) { report(`Could not return to reading: ${errorText(error)}`); }
-  finally { returnButton.disabled = false; finishMode(); }
+  finally { appRoot.inert = false; returnButton.disabled = false; finishMode(); }
 }
 
 function finishMode(): void {
@@ -261,12 +302,12 @@ for (const input of [fileInput, element<HTMLInputElement>("file-input")]) {
   });
 }
 appRoot.addEventListener("click", event => {
+  // Inert blocks physical input; shortcuts also dispatch programmatic clicks.
+  if (changingMode) { event.preventDefault(); event.stopImmediatePropagation(); return; }
   const button = (event.target as Element | null)?.closest("button.doc-close");
   const doc = app?.store.active;
   if (!button || !doc) return;
-  const original = workspaceOriginals.get(doc.id);
-  const dirty = !original || original.dirty || original.text !== doc.text || original.name !== doc.name;
-  if (dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
+  if (workspaceDirty(doc) && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
@@ -320,10 +361,7 @@ document.addEventListener("click", event => {
 
 function hasUnsavedWork(): boolean {
   if (!app) return session.documents.some(doc => doc.dirty);
-  return app.store.openDocs.some(doc => {
-    const original = workspaceOriginals.get(doc.id);
-    return !original || original.dirty || original.text !== doc.text || original.name !== doc.name;
-  });
+  return app.store.openDocs.some(workspaceDirty);
 }
 window.addEventListener("beforeunload", event => {
   if (!changingMode && !nativeSaveBusy && !app?.exportState.busy && !hasUnsavedWork()) return;

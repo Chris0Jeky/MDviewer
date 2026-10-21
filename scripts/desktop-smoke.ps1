@@ -67,7 +67,7 @@ if ($Probe) {
                 [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true))
         return $Parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
-    function Get-ControlMetadata($Element) {
+    function Get-ControlMetadata($Element, [switch]$IncludePatterns) {
         $current = $Element.Current
         $name = [string]$current.Name
         $id = [string]$current.AutomationId
@@ -76,7 +76,7 @@ if ($Probe) {
         $labelName = $(if ($null -ne $label) { [string]$label.Current.Name } else { '' })
         $value = $null
         $hasValue = $Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$value)
-        return [pscustomobject]@{
+        $metadata = [ordered]@{
             name = $name.Substring(0, [Math]::Min(160, $name.Length))
             automationId = $id.Substring(0, [Math]::Min(160, $id.Length))
             controlType = $current.ControlType.ProgrammaticName
@@ -87,6 +87,12 @@ if ($Probe) {
             hasValuePattern = $hasValue
             isReadOnly = $(if ($hasValue) { $value.Current.IsReadOnly } else { $null })
         }
+        if ($IncludePatterns) {
+            try {
+                $metadata.supportedPatterns = @($Element.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName } | Select-Object -First 12)
+            } catch { $metadata.patternMetadataError = $_.Exception.GetType().Name }
+        }
+        return [pscustomobject]$metadata
     }
     function Test-FilenameLabel([string]$Text) {
         $normalized = ($Text.Replace('&', '').Trim() -replace '\s+', ' ').TrimEnd(':').Trim()
@@ -114,10 +120,15 @@ if ($Probe) {
         }
         $result.filenameHost = $(if ($null -ne $filenameHost) { Get-ControlMetadata $filenameHost } else { $null })
         $candidates = [System.Collections.Generic.List[object]]::new()
+        $hostChildren = @()
         if ($null -ne $filenameHost) {
             $candidates.Add($filenameHost)
-            $children = $filenameHost.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
-            for ($i = 0; $i -lt [Math]::Min(16, $children.Count); $i++) { $candidates.Add($children[$i]) }
+            # The observed Windows 11 filename host is an AppControlHost Pane;
+            # its hosted controls need not advertise legacy Edit/ComboBox types.
+            # This wider type query remains confined to the exact filename host.
+            $hostChildren = $filenameHost.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.Condition]::TrueCondition)
+            for ($i = 0; $i -lt [Math]::Min(32, $hostChildren.Count); $i++) { $candidates.Add($hostChildren[$i]) }
         } else {
             $editCondition = [System.Windows.Automation.AndCondition]::new(
                 [System.Windows.Automation.OrCondition]::new(
@@ -155,6 +166,16 @@ if ($Probe) {
         # File-list cells also advertise Edit, and can consume the diagnostic
         # budget before the filename row. Exclude the observed System.* columns;
         # retain only bounded control metadata, never their values or list items.
+        if ($null -ne $filenameHost) {
+            try {
+                $result.filenameHost = Get-ControlMetadata $filenameHost -IncludePatterns
+                $result.filenameHostChildCount = $hostChildren.Count
+                $result.filenameHostChildren = @()
+                for ($i = 0; $i -lt [Math]::Min(32, $hostChildren.Count); $i++) {
+                    $result.filenameHostChildren += Get-ControlMetadata $hostChildren[$i] -IncludePatterns
+                }
+            } catch { $result.filenameHostMetadataError = $_.Exception.GetType().Name }
+        }
         $result.filenameControls = @()
         for ($i = 0; $i -lt $controls.Count -and $result.filenameControls.Count -lt 24; $i++) {
             if ([string]$controls[$i].Current.AutomationId -like 'System.*') { continue }

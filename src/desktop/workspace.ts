@@ -5,11 +5,12 @@ import "../styles/preview.css";
 import "../styles/workspace.css";
 import "../styles/print.css";
 import { App } from "../app/App";
+import type { RestoreAdmission } from "../ui/DocumentRecovery";
 import { mountDocumentShortcuts } from "../ui/DocumentShortcuts";
 
-export function startWorkspace(root: HTMLElement, openFilePicker: () => void): { app: App; detachShortcuts: () => void } {
+export function startWorkspace(root: HTMLElement, openFilePicker: () => void, canRestoreDocument: RestoreAdmission): { app: App; detachShortcuts: () => void } {
   // The desktop host keeps one bounded input adapter alive across both modes.
-  const app = App.init(root, { inputHandlers: false, openFilePicker });
+  const app = App.init(root, { inputHandlers: false, openFilePicker, canRestoreDocument });
   const detachShortcuts = mountDocumentShortcuts(root);
   return { app, detachShortcuts };
 }

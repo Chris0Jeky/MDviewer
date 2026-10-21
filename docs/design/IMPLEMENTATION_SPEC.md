@@ -219,18 +219,26 @@ export interface DocumentRecoveryController {
   closeActive(): void;
   destroy(): void;
 }
+export type RestoreAdmission = (doc: Readonly<Pick<Doc, "name" | "text">>) => boolean;
 export function mountDocumentRecovery(
   root: HTMLElement,
   store: DocStore,
   returnFocus: () => void,
+  canRestore?: RestoreAdmission,
 ): DocumentRecoveryController;
 ```
 
 Toolbar mounts it in its own bar, delegates its Close button, and destroys it during toolbar teardown. The controller keeps only the latest explicitly closed name and exact text in memory. Another real close replaces that snapshot. Undo consumes it once and calls `DocStore.add`, yielding a fresh identity and appending to the open set without overwriting another document. Discard and teardown clear both the snapshot and filename DOM text/title. Detached or destroyed controls cannot act. No disk/browser storage, automatic reload recovery, timer or global listener is added. Explicitly closed content is not part of the open-document navigation guard; the recovery row warns that reload or tab close clears it.
 
+An optional synchronous admission callback runs before Undo consumes its snapshot.
+Refusal leaves the source, filename and offer available for retry; a later explicit
+close still replaces the offer. The ordinary web entry supplies no callback and
+retains its existing restoration behavior. Desktop supplies the same open-document
+count/UTF-8-byte gate used by its importer, including current edited source sizes.
+
 The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not use the unique Open/Save `.workspace-action` selector. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
 
-Store notifications continue through App's existing render scheduler and export leases. The pipeline and all App/DocStore public signatures are unchanged. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
+Store notifications continue through App's existing render scheduler and export leases. The pipeline and DocStore signatures are unchanged; App's optional desktop admission hook is described in section 14. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
 
 
 ## 14. Experimental Windows reader
@@ -245,19 +253,39 @@ not re-entrant, and generation checks prevent late results replacing newer selec
 `ReaderSession` keeps up to 32 documents / 25,000,000 UTF-8 bytes in memory. Browser
 file pickers and drops, native picker results and second-instance launch batches all
 pass through that session gate, including when the editing workspace is active.
+Undo Close also checks the gate before consuming recovery; refusal retains the
+latest offer. Editing an open document can free bytes for a later retry. Closing
+another document replaces recovery, as in the web workspace.
 Native reads also bound disk bytes, decoded bytes and queue length. A mode transition
 queues incoming batches and preserves their focus generation. Returning from Edit &
 PDF transfers exact current text, preserves dirty state and selection, flushes the
 render scheduler, clears the Paged.js host and tears down the App. If edits exceed the
 reader bound, the workspace remains open with a useful error so nothing is discarded.
 
-`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void })` retains the
+After all documents, dirty baselines and active selection transfer successfully,
+the old reader session releases its sources. Workspace baselines are pruned against
+the current store on each document-set change, and cleared after successful teardown.
+An unknown identity (including Undo's fresh ID) stays conservatively dirty. Title
+and hidden reader document-picker metadata follow the workspace while it owns the
+documents, including queued imports. Return admission runs before any removal;
+a failed teardown flush restores the same document objects, IDs, selection and
+baselines so the user can retry. The temporary rollback snapshot ends with that
+transition. The separate one-close recovery source is released by Discard, a later
+close or workspace teardown. These ownership rules do not claim a total heap cap.
+The App subtree is inert during return, and desktop captures action clicks during
+mode changes (including shortcut-generated clicks), so new edits, sample loads or
+native saves cannot race the handoff. The interaction guard is released in `finally`.
+
+`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission })` retains the
 ordinary web defaults. Desktop disables App's second input adapter and supplies its
 own picker; both modes use one bounded importer. The web fallback caches the genuine
 body file input before authored IDs can collide with it. The desktop passes its
 cached application root explicitly and clears the reading DOM before App mounts its
 canonical IDs. Dirty document close requires confirmation; native window close and
 mode return are blocked during an export or mode transition.
+`tests/desktop-lifetime.test.ts` exercises real entry-point ownership with rendering
+and host boundaries stubbed; `tests/desktop-e2e/recovery.spec.ts` drives actual
+production controls for count/UTF-8-byte refusal, retry and dirty round trips.
 
 The optional `src/export/destination.ts` Blob destination is installed only by the
 native entry. The web build retains browser source downloads and jsPDF save. Source
