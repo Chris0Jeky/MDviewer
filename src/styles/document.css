@@ -251,11 +251,13 @@
 }
 
 /* Checked: an inked box with a white tick knocked out of it. The tick is an inline
- * (data:) SVG, so nothing is fetched at runtime and the local-first rule holds. */
+ * (data:) SVG, so nothing is fetched at runtime and the local-first rule holds.
+ * Intrinsic width/height are required by the fallback renderer's nine-argument
+ * drawImage resize; a viewBox-only SVG can decode yet paint an empty image. */
 .doc .task-list-item input[type="checkbox"]:checked {
   border-color: var(--doc-link);
   background-color: var(--doc-link);
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 L6.5 11.5 L12.5 5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 L6.5 11.5 L12.5 5'/%3E%3C/svg%3E");
 }
 
 .doc .task-list-item label {

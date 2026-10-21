@@ -34,7 +34,7 @@ const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
  * ancestor scaling/clipping there, not on the live preview. Do not touch any
  * transform inside a sheet: those can be part of the no-slice layout itself.
  */
-function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement): void {
+function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement, sourceSheet: HTMLElement): void {
   const stack = sheet.closest<HTMLElement>(`.${PAGEDJS.pagesClass}`);
   if (stack) {
     stack.style.setProperty("transform", "none", "important");
@@ -58,8 +58,39 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement): void {
   // covered by real-raster regressions when that dependency changes.
   const view = cloneDocument.defaultView;
   if (!view) return;
+
+  // SVG nodes, unlike ordinary HTML nodes, have every computed style inlined by
+  // the cloner. Restore the authored visibility declaration so the now-visible
+  // sheet can supply inheritance again. Preserve explicit inline/CSS/attribute
+  // hiding; forcing every SVG visible would expose intentionally hidden content.
+  const svgNodes = (root: HTMLElement) => Array.from(root.querySelectorAll<SVGElement>("svg, svg *"))
+    .filter((node) => node.namespaceURI === "http://www.w3.org/2000/svg");
+  const sourceSvg = svgNodes(sourceSheet);
+  const copiedSvg = svgNodes(sheet);
+  if (sourceSvg.length !== copiedSvg.length || sourceSvg.some((node, i) => node.localName !== copiedSvg[i]!.localName)) {
+    throw new Error("The PDF capture clone changed the SVG structure. Try Print / Save as PDF.");
+  }
+  copiedSvg.forEach((node, i) => {
+    const original = sourceSvg[i]!.style;
+    const visibility = original.getPropertyValue("visibility");
+    if (visibility) node.style.setProperty("visibility", visibility, original.getPropertyPriority("visibility"));
+    else node.style.removeProperty("visibility");
+  });
+
+  // html2canvas's native checkbox painter ignores appearance:none and replaces
+  // our background/border/tick with a grey control. Preserve the already-laid-out
+  // static paint in the clone; the real disabled checkbox stays untouched.
+  for (const checkbox of sheet.querySelectorAll<HTMLInputElement>("input.task-list-item-checkbox")) {
+    const paint = cloneDocument.createElement("span");
+    paint.className = checkbox.className;
+    const style = view.getComputedStyle(checkbox);
+    for (let i = 0; i < style.length; i++) {
+      const property = style.item(i);
+      paint.style.setProperty(property, style.getPropertyValue(property));
+    }
+    checkbox.replaceWith(paint);
+  }
   for (const generated of sheet.querySelectorAll<HTMLElement>("html2canvaspseudoelement")) {
-    if (generated.style.visibility !== "hidden") continue;
     const parent = generated.parentElement;
     if (!parent) continue;
     const before = parent.classList.contains("___html2canvas___pseudoelement_before");
@@ -74,7 +105,13 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement): void {
     if (before && index === 0) pseudo = "::before";
     else if (after && index === (before ? 1 : 0)) pseudo = "::after";
     else continue;
-    generated.style.visibility = view.getComputedStyle(parent, pseudo).visibility;
+    // The dotted TOC leader grows into the space left by the title. The cloner
+    // copies its *used* width, turning it into a competing flex basis; rounding
+    // can then shrink the title just enough to wrap it and reflow the whole page.
+    if (pseudo === "::before" && parent.matches("a.toc-link")) generated.style.width = "auto";
+    if (generated.style.visibility === "hidden") {
+      generated.style.visibility = view.getComputedStyle(parent, pseudo).visibility;
+    }
   }
 }
 
@@ -111,7 +148,7 @@ export async function exportPaginatedToPdf(
       scale,
       backgroundColor: "#ffffff",
       useCORS: true,
-      onclone: prepareRasterClone,
+      onclone: (cloneDocument, sheet) => prepareRasterClone(cloneDocument, sheet, page),
       // Progress is surfaced by onProgress, not per-element console chatter.
       logging: false,
     });
