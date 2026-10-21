@@ -230,6 +230,7 @@ $out = [System.IO.Path]::GetFullPath($OutputDirectory)
 [void][System.IO.Directory]::CreateDirectory($out)
 $workerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $owned = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
+$workerOutput = @{}
 $observed = @{}
 $app = $null
 $fixtureDirectory = $null
@@ -258,15 +259,25 @@ $metrics = [ordered]@{
     cleanupErrors = @()
 }
 
-function Start-OwnedProcess([string]$File, [string[]]$Arguments, [string]$WorkingDirectory) {
+function Start-OwnedProcess([string]$File, [string[]]$Arguments, [string]$WorkingDirectory, [switch]$CaptureOutput) {
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $File
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
     $info.WorkingDirectory = $WorkingDirectory
+    $info.RedirectStandardOutput = $CaptureOutput.IsPresent
+    $info.RedirectStandardError = $CaptureOutput.IsPresent
     foreach ($argument in $Arguments) { $info.ArgumentList.Add($argument) }
     $process = [System.Diagnostics.Process]::Start($info)
     $owned.Add($process)
+    if ($CaptureOutput) {
+        # Drain both pipes concurrently so a parser/parameter error cannot block
+        # on a full output pipe. Only the bounded diagnostic excerpts are saved.
+        $workerOutput[$process.Id] = @{
+            stdout = $process.StandardOutput.ReadToEndAsync()
+            stderr = $process.StandardError.ReadToEndAsync()
+        }
+    }
     return $process
 }
 
@@ -355,11 +366,33 @@ function Get-MemorySample([string]$Stage) {
     }
 }
 
-function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut) {
+function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnostics.Process]$Worker) {
     $progressPath = $ProbeFile + '.progress.json'
     $evidence = [ordered]@{
         timedOut = $TimedOut; lastPhase = 'worker-not-started'; progress = $null
         file = [System.IO.Path]::GetFileName($progressPath)
+        exitCode = $null; stdout = $null; stderr = $null
+    }
+    if ($Worker.HasExited) {
+        $evidence.exitCode = $Worker.ExitCode
+        $streams = $workerOutput[$Worker.Id]
+        if ($null -ne $streams) {
+            foreach ($streamName in @('stdout', 'stderr')) {
+                $read = $streams[$streamName]
+                if ($read.Wait(1000)) {
+                    $text = $read.GetAwaiter().GetResult()
+                    if ($text.Length -gt 0) {
+                        $text = $text.Substring(0, [Math]::Min(16384, $text.Length))
+                        $path = $ProbeFile + '.' + $streamName + '.txt'
+                        [System.IO.File]::WriteAllText($path, $text, [System.Text.UTF8Encoding]::new($false))
+                        $evidence[$streamName] = [pscustomobject]@{
+                            file = [System.IO.Path]::GetFileName($path)
+                            preview = $text.Substring(0, [Math]::Min(2048, $text.Length))
+                        }
+                    }
+                }
+            }
+        }
     }
     if ([System.IO.File]::Exists($progressPath)) {
         try {
@@ -382,10 +415,10 @@ function Capture-FailedWindow {
         '-Probe', '-ProbeAction', 'screenshot', '-WindowHandle', $app.MainWindowHandle.ToInt64().ToString(),
         '-OwnerProcessId', $app.Id.ToString(), '-ProbeOutput', $probeFile,
         '-ScreenshotPath', (Join-Path $out 'failure-window.png'))
-    $worker = Start-OwnedProcess $workerShell $arguments $out
+    $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
     $timedOut = -not $worker.WaitForExit(8000)
     if ($timedOut) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
-    $metrics.probes += Get-ProbeEvidence $probeFile $timedOut
+    $metrics.probes += Get-ProbeEvidence $probeFile $timedOut $worker
     if ([System.IO.File]::Exists($probeFile)) {
         $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
         $metrics.failureScreenshot = $result.screenshot
@@ -405,14 +438,14 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
             '-OwnerProcessId', $app.Id.ToString(),
             '-ExpectedHeading', $Heading, '-ProbeOutput', $probeFile)
         if (-not $NoScreenshot) { $arguments += @('-ScreenshotPath', (Join-Path $out $ScreenshotName)) }
-        $worker = Start-OwnedProcess $workerShell $arguments $out
+        $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
         $remaining = [Math]::Max(1, [int](($TimeoutSeconds - $watch.Elapsed.TotalSeconds) * 1000))
         $timedOut = -not $worker.WaitForExit([Math]::Min(8000, $remaining))
         if ($timedOut) {
             $worker.Kill($true)
             [void]$worker.WaitForExit(2000)
         }
-        $evidence = Get-ProbeEvidence $probeFile $timedOut
+        $evidence = Get-ProbeEvidence $probeFile $timedOut $worker
         $metrics.probes += $evidence
         if ($timedOut) {
             $lastReason = 'The UI Automation worker timed out at phase: ' + $evidence.lastPhase
@@ -421,6 +454,8 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
             Remove-Item -LiteralPath $probeFile
             if ($result.found) { return $result }
             $lastReason = $result.reason
+        } else {
+            throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
         }
         Start-Sleep -Milliseconds 200
     }
@@ -439,7 +474,7 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
             '-OwnerProcessId', $app.Id.ToString(), '-ProbeOutput', $probeFile)
         if ($Name) { $arguments += @('-ButtonName', $Name) }
         if ($Destination) { $arguments += @('-SavePath', $Destination) }
-        $worker = Start-OwnedProcess $workerShell $arguments $out
+        $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
         $attempt = [System.Diagnostics.Stopwatch]::StartNew()
         while (-not (Test-Path -LiteralPath $probeFile) -and -not $worker.HasExited -and
             $attempt.Elapsed.TotalSeconds -lt 8 -and $watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
@@ -448,10 +483,14 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
             Remove-Item -LiteralPath $probeFile
-            $metrics.probes += Get-ProbeEvidence $probeFile $false
+            $metrics.probes += Get-ProbeEvidence $probeFile $false $worker
             if ($result.found) { return }
         } else {
-            $metrics.probes += Get-ProbeEvidence $probeFile (-not $worker.HasExited)
+            $evidence = Get-ProbeEvidence $probeFile (-not $worker.HasExited) $worker
+            $metrics.probes += $evidence
+            if ($worker.HasExited) {
+                throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
+            }
         }
         if (-not $worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
         Start-Sleep -Milliseconds 200
