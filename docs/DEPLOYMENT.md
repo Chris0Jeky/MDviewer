@@ -86,7 +86,7 @@ Git-integrated Pages project and plan the URL or custom-domain migration explici
 `.github/workflows/deploy.yml` is the reviewed CI-compatible direct-upload path. It is
 deliberately manual-only. Live uploads run from `main`; a dry run can verify a reviewed branch
 before merge (`gh workflow run deploy.yml --ref <reviewed-branch> -f dry_run=true`). Both paths
-first run `agent:check`, build once and run the full Chromium E2E suite against that production
+use Node 24, install with strict engine checks, run `agent:check`, build once and run the full Chromium E2E suite against that production
 bundle. `scripts/deployment-artifact.mjs` records a sorted file/SHA-256 inventory before E2E,
 requires `SOURCE.txt` to identify the exact full revision URL, and rechecks the inventory after
 E2E. Only a successful gate uploads `dist/` and the manifest as one immutable Actions artifact.
@@ -217,7 +217,7 @@ build artifacts — nothing to configure at deploy time.
 
 ## One command or one click on this PC
 
-Install Node.js once, clone the repository, then run:
+Install Node.js 24.15.0 or newer within the 24.x line (or Node 26+), clone the repository, then run:
 
 ```powershell
 npm install

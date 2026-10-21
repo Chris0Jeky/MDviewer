@@ -3,6 +3,27 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
+> **CURRENT CHECKPOINT — 2026-10-21 (dependency/PDF merges; hardening in progress):**
+> Production dependency PR #155 merged as `7b6f5278aef96bdb9d6cfd0a4d62bfb6f076e5c6`;
+> raster PDF regression PR #157 merged as `e81f785907a1f87b67d80db51c152e9b46ccd7e2`;
+> development dependency PR #156 merged as current main
+> `f22308bab178794ca3029c81d38ea4dcb48f1fef`. Each passed all three required
+> checks on its reviewed head. #156 incorporated the preceding merges without a
+> rebase; its final head `76c4e2ab730c307e9294e70ee94fabcdaf80e05b` passed 589
+> unit tests on each Node lane and 111 production Chromium tests.
+> Follow-up hardening from that main tree raises supported Node to
+> `^24.15.0 || >=26`, uses strict Node 24 installs for production verification,
+> and retains the existing Node 22 required-check context as a legacy compatibility
+> probe pending branch-protection updates. A narrow `$katex` override shares the
+> direct 0.19 renderer with the Markdown wrapper; `fast-uri` is locked to 3.1.9.
+> Two behavioral security regressions failed on the baseline and pass after these
+> fixes. Local Node 24.19 strict install, typecheck/lint, 591 unit/four server tests,
+> Observatory guard, build, hook smoke and 14 skill validations passed; full and
+> production-only npm audits report zero findings. The local build uses the honest
+> archive label `dependency-hardening-from-f22308`. Hosted exact-head CI and final
+> independent review remain required for the hardening PR. No deployment was made;
+> production identity and AI-6/7/8/9 acceptance gates remain as recorded below.
+
 > **LOCAL CHECKPOINT — 2026-10-15 (issue #131, uncommitted):**
 > Worktree `C:/Users/jekyt/source/mdv-131`, branch `fix/late-file-read-focus-131`,
 > base HEAD `2822ad0428135ce23c049b5b569ff5f50f399bd2`. No commit, push or deployment.

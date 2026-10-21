@@ -43,9 +43,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
+        env:
+          npm_config_engine_strict: 'true'
       - name: Static verification (typecheck, lint, unit, serve, observatory)
         run: npm run agent:check
 
@@ -101,7 +103,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: actions/download-artifact@v8
         with:
           artifact-ids: ${{ needs.e2e.outputs.artifact-id }}
@@ -128,7 +130,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: actions/download-artifact@v8
         with:
           artifact-ids: ${{ needs.e2e.outputs.artifact-id }}
