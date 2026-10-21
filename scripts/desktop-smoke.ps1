@@ -71,16 +71,26 @@ if ($Probe) {
         $current = $Element.Current
         $name = [string]$current.Name
         $id = [string]$current.AutomationId
+        $class = [string]$current.ClassName
+        $label = $current.LabeledBy
+        $labelName = $(if ($null -ne $label) { [string]$label.Current.Name } else { '' })
         $value = $null
         $hasValue = $Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$value)
         return [pscustomobject]@{
             name = $name.Substring(0, [Math]::Min(160, $name.Length))
             automationId = $id.Substring(0, [Math]::Min(160, $id.Length))
             controlType = $current.ControlType.ProgrammaticName
+            className = $class.Substring(0, [Math]::Min(160, $class.Length))
+            labeledByName = $labelName.Substring(0, [Math]::Min(160, $labelName.Length))
+            nativeWindowHandle = $current.NativeWindowHandle
             isEnabled = $current.IsEnabled
             hasValuePattern = $hasValue
             isReadOnly = $(if ($hasValue) { $value.Current.IsReadOnly } else { $null })
         }
+    }
+    function Test-FilenameLabel([string]$Text) {
+        $normalized = ($Text.Replace('&', '').Trim() -replace '\s+', ' ').TrimEnd(':').Trim()
+        return $normalized -ieq 'File name'
     }
     function Find-FilenameValueTarget($Dialog) {
         $editableCondition = [System.Windows.Automation.OrCondition]::new(
@@ -102,6 +112,7 @@ if ($Probe) {
                     [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ComboBox))
             $filenameHost = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $hostCondition)
         }
+        $result.filenameHost = $(if ($null -ne $filenameHost) { Get-ControlMetadata $filenameHost } else { $null })
         $candidates = [System.Collections.Generic.List[object]]::new()
         if ($null -ne $filenameHost) {
             $candidates.Add($filenameHost)
@@ -119,6 +130,20 @@ if ($Probe) {
             $legacyEdit = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
             if ($null -ne $legacyEdit) { $candidates.Add($legacyEdit) }
         }
+        $controls = $Dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
+        foreach ($control in $controls) {
+            $current = $control.Current
+            if ([string]$current.AutomationId -like 'System.*') { continue }
+            $label = $current.LabeledBy
+            $labelName = $(if ($null -ne $label) { [string]$label.Current.Name } else { '' })
+            if ((Test-FilenameLabel $current.Name) -or (Test-FilenameLabel $labelName)) {
+                $candidates.Add($control)
+                if ($current.ControlType -eq [System.Windows.Automation.ControlType]::ComboBox) {
+                    $children = $control.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
+                    for ($i = 0; $i -lt [Math]::Min(16, $children.Count); $i++) { $candidates.Add($children[$i]) }
+                }
+            }
+        }
         foreach ($candidate in $candidates) {
             $pattern = $null
             if ($candidate.Current.IsEnabled -and
@@ -127,10 +152,12 @@ if ($Probe) {
                 return [pscustomobject]@{ element = $candidate; pattern = $pattern }
             }
         }
-        # Bounded metadata from this owned dialog only; no values or file-list items.
-        $controls = $Dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
+        # File-list cells also advertise Edit, and can consume the diagnostic
+        # budget before the filename row. Exclude the observed System.* columns;
+        # retain only bounded control metadata, never their values or list items.
         $result.filenameControls = @()
-        for ($i = 0; $i -lt [Math]::Min(12, $controls.Count); $i++) {
+        for ($i = 0; $i -lt $controls.Count -and $result.filenameControls.Count -lt 24; $i++) {
+            if ([string]$controls[$i].Current.AutomationId -like 'System.*') { continue }
             $result.filenameControls += Get-ControlMetadata $controls[$i]
         }
         return $null
@@ -173,6 +200,7 @@ if ($Probe) {
                         [System.Windows.Automation.TreeScope]::Children, $condition)
                 }
                 if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
+                $result.saveDialog = Get-ControlMetadata $dialog
                 Write-ProbePhase 'finding-filename-field'
                 $filename = Find-FilenameValueTarget $dialog
                 if ($null -eq $filename) { throw 'The Save dialog filename control has no enabled writable ValuePattern.' }
