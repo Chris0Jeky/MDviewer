@@ -27,7 +27,13 @@
     "agent:observatory:check": "node observatory/check.mjs",
     "test:serve": "node --test scripts/serve.test.mjs",
     "smoke:egress": "node scripts/smoke-egress.mjs",
-    "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve && npm run agent:observatory:check"
+    "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve && npm run agent:observatory:check",
+    "desktop:dev:web": "vite --config vite.desktop.config.ts --port 5182 --strictPort",
+    "desktop:build:web": "tsc --noEmit && vite build --config vite.desktop.config.ts && node scripts/generate-license-bundle.mjs dist-desktop",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build --ci -- --locked",
+    "desktop:test": "playwright test --config playwright.desktop.config.ts",
+    "desktop:licenses": "node scripts/desktop-native-licenses.mjs --out desktop-artifacts/NATIVE_THIRD_PARTY_NOTICES.txt"
   },
   "dependencies": {
     "@shikijs/core": "^4.5.0",
@@ -35,6 +41,7 @@
     "@shikijs/markdown-it": "^4.5.0",
     "@shikijs/themes": "^4.3.1",
     "@shikijs/transformers": "^4.5.0",
+    "@tauri-apps/api": "2.12.4",
     "@vscode/markdown-it-katex": "^1.1.0",
     "dompurify": "^3.4.17",
     "html2canvas-pro": "^2.5.2",
@@ -57,6 +64,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.64.0",
+    "@tauri-apps/cli": "2.12.3",
     "@types/katex": "^0.16.7",
     "@types/markdown-it-container": "^4.0.1",
     "@types/markdown-it-footnote": "^3.0.4",

@@ -1,0 +1,108 @@
+name: Windows Desktop
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reader:
+    name: Desktop reader (production Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --engine-strict
+      - run: npx playwright install --with-deps chromium
+      - run: npm run desktop:build:web
+      - run: npm run desktop:test
+      - name: Upload reader browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-browser-evidence
+          path: test-results/desktop/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows:
+    name: Windows build and native smoke
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: '1.99.1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --engine-strict
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+      - name: Cache native build dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-desktop-rust-1.99.1-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Build the frontend and distribution notices
+        run: |
+          npm run desktop:build:web
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run desktop:licenses
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test native file, URL and export policies
+        working-directory: src-tauri
+        run: cargo test --release --locked
+      - name: Build Windows executable and per-user installer
+        run: npm run desktop:build
+      - name: Launch the real Windows app and measure its process tree
+        timeout-minutes: 5
+        run: pwsh -File scripts/desktop-smoke.ps1 -Executable src-tauri/target/release/mdviewer.exe -OutputDirectory desktop-artifacts/smoke
+      - name: Prepare the portable app with notices
+        run: |
+          $portable = 'desktop-artifacts/portable'
+          New-Item -ItemType Directory -Force $portable | Out-Null
+          Copy-Item src-tauri/target/release/mdviewer.exe $portable
+          Copy-Item dist-desktop/LICENSE.txt,dist-desktop/SOURCE.txt,dist-desktop/THIRD_PARTY_NOTICES.md,dist-desktop/THIRD_PARTY_LICENSES.txt $portable
+          Copy-Item desktop-artifacts/NATIVE_THIRD_PARTY_NOTICES.txt,desktop-artifacts/RUST_STDLIB_NOTICES.html $portable
+          Copy-Item docs/WINDOWS_DESKTOP.md "$portable/README.md"
+      - name: Upload Windows app and installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: mdviewer-windows-x64
+          path: |
+            desktop-artifacts/portable/
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-desktop-smoke
+          path: desktop-artifacts/smoke/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -30,6 +30,8 @@ Export click → capture document id/name/text and settings NOW
 
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
+| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-session.test.ts`, `tests/desktop-e2e/`, spec §14; `docs/WINDOWS_DESKTOP.md` |
+| Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |

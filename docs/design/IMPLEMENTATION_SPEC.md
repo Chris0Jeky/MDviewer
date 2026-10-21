@@ -97,7 +97,7 @@ export function repairFootnoteLinks(host: ParentNode): void;
 
 // src/export/markdown.ts
 export function markdownFilename(name: string): string;
-export function downloadMarkdown(name: string, text: string): void;
+export function downloadMarkdown(name: string, text: string): void | Promise<void>;
 
 // src/app/reloadGuard.ts
 export interface ReloadGuard {
@@ -224,3 +224,52 @@ Toolbar mounts it in its own bar, delegates its Close button, and destroys it du
 The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not use the unique Open/Save `.workspace-action` selector. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
 
 Store notifications continue through App's existing render scheduler and export leases. The pipeline and all App/DocStore public signatures are unchanged. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
+
+
+## 14. Experimental Windows reader
+
+`desktop.html` and `vite.desktop.config.ts` build a separate `dist-desktop` entry.
+`src/desktop/main.ts` starts a continuous, sanitized reader with no editor, Paged.js,
+service worker or Pulseboard SDK. Rich rendering shares highlighter/Markdown/KaTeX
+and sanitized Mermaid preparation, but does not call the pagination source builder;
+footnotes remain natural endnotes. Reader renders are serialized because Mermaid is
+not re-entrant, and generation checks prevent late results replacing newer selection.
+
+`ReaderSession` keeps up to 32 documents / 25,000,000 UTF-8 bytes in memory. Browser
+file pickers and drops, native picker results and second-instance launch batches all
+pass through that session gate, including when the editing workspace is active.
+Native reads also bound disk bytes, decoded bytes and queue length. A mode transition
+queues incoming batches and preserves their focus generation. Returning from Edit &
+PDF transfers exact current text, preserves dirty state and selection, flushes the
+render scheduler, clears the Paged.js host and tears down the App. If edits exceed the
+reader bound, the workspace remains open with a useful error so nothing is discarded.
+
+`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void })` retains the
+ordinary web defaults. Desktop disables App's second input adapter and supplies its
+own picker; both modes use one bounded importer. The web fallback caches the genuine
+body file input before authored IDs can collide with it. The desktop passes its
+cached application root explicitly and clears the reading DOM before App mounts its
+canonical IDs. Dirty document close requires confirmation; native window close and
+mode return are blocked during an export or mode transition.
+
+The optional `src/export/destination.ts` Blob destination is installed only by the
+native entry. The web build retains browser source downloads and jsPDF save. Source
+save awaits the native result; PDF export holds its existing render lease until that
+result settles. `SaveCanceled` releases the lease and reports cancellation without a
+fatal error or successful-export event. The Windows host accepts bounded raw bytes
+and a safe basename through `save_export`, opens a native dialog off the WebView2
+callback thread, and writes only its explicitly selected path via atomic replacement.
+It never accepts a write path from JavaScript. Cancel and failed writes preserve any
+existing destination. Exports over 128 MiB fail before the frontend IPC allocation;
+Rust independently enforces the same cap. Generic browser downloads are denied in
+the native host, avoiding modal UI inside WebView2's synchronous download callback.
+
+Tauri capabilities expose only selected-file input, pending launch input, explicit
+HTTP(S) link opening, explicit export saving, event listening and guarded window
+close. There is no general filesystem, shell or network API. The host denies external
+navigation and new windows; production CSP permits bundled assets, IPC and required
+print blobs only. Source/Cargo locks and versioned license provenance accompany both
+the per-user installer and portable artifact. Windows CI tests the actual executable
+and records the complete associated WebView2 process tree. This does not establish a
+comparative RAM target, install/default-app acceptance or signed-release readiness.
+See `../WINDOWS_DESKTOP.md`, `WINDOWS_READER.md` and `../../src-tauri/README.md`.

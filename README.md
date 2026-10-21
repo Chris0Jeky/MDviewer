@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/assets/mdviewer-loop.svg" alt="MDviewer workflow, animated" width="100%"></p>
 
-A browser-only Markdown → PDF tool whose one hard rule is that no code block, figure, table, or callout is ever sliced across a page.
+A local Markdown reader and Markdown → PDF tool whose one hard rule is that no code block, figure, table, or callout is ever sliced across a page.
 
 [![CI](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
@@ -10,6 +10,10 @@ A browser-only Markdown → PDF tool whose one hard rule is that no code block, 
 [![Node](https://img.shields.io/badge/node-22%20%7C%2024%20%7C%2026%2B-339933?logo=nodedotjs&logoColor=white)](package.json)
 
 **Live app:** https://mdviewer-c9r.pages.dev/
+
+**Windows desktop preview:** a separate reading window with Explorer file opening,
+multiple documents, themes and an optional editing/PDF workspace. The editor and
+pagination load only when requested. [Download/build instructions and current limits](docs/WINDOWS_DESKTOP.md).
 
 - [What it is](#what-it-is)
 - [Why it exists](#why-it-exists)
@@ -31,7 +35,7 @@ A browser-only Markdown → PDF tool whose one hard rule is that no code block, 
 
 MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
 
-It runs entirely in the browser. Document text, file names, headings, URLs and exports never leave the device. The only thing the app persists is a small settings object in `localStorage` (`mdviewer.settings.v1`). There is no conversion API, no document storage, and no account.
+The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. The only thing the app persists is a small settings object in `localStorage` (`mdviewer.settings.v1`). There is no conversion API, no automatic document storage, and no account.
 
 The public site also sends pseudonymous, content-free usage data to the owner's first-party Pulseboard collector — never document text, file names or exports. See [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
 
@@ -226,7 +230,7 @@ From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) (last updated 2026-10-
 | P3 Hardening and distribution | In progress | Sanitization, PWA/offline, large-doc budget + 250 kB confirm gate, production-egress proofs shipped. Live app is at the URL above. Automated Pages promotion is written; the first live dispatch still needs the `production` environment hardened. Canonical custom hostname is blocked until a name is owned. |
 | P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
 
-**Open issue:** [#131](https://github.com/Chris0Jeky/MDviewer/issues/131) — a late `file.text()` completion can steal focus from a newer document. P2, unscheduled.
+**Windows direction:** the standalone reading path and CI-built installer are an experimental P3 distribution. Native desktop acceptance and measured memory work are described in [the Windows guide](docs/WINDOWS_DESKTOP.md). The live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) is authoritative for remaining work; the late-file focus race in #131 is already fixed.
 
 Operator-only live-site and deploy gates (split-workspace feel, PWA update toast, Beta-bar acceptance, first automated promotion) live in [`ACTION_ITEMS.md`](ACTION_ITEMS.md). They are not product gaps in the code path above.
 

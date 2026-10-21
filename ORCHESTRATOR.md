@@ -3,6 +3,29 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
+> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader branch):**
+> Owner requested all-open-issue/PR review plus a lightweight Windows desktop direction.
+> Uploaded source archive was reconciled byte-for-byte with main 12817b5 before work;
+> all remote reads/writes use the connected GitHub API. Production dependency PR #155
+> merged as 7b6f527; PDF visual fixes #157 merged as e81f785 after exact-head CI with
+> 589 unit tests and 111 production Chromium passes (five existing opt-in perf skips).
+> #157 fixes missing SVG/checkmarks and TOC capture reflow; #136's remaining Node
+> engine concern is tracked with dependency hardening. Development-dependency #156
+> is being integrated against updated main before its final review.
+> This branch adds a separate continuous Windows reader, Tauri/WebView2 host,
+> bounded native input, single-instance forwarding, explicit native exports and
+> CI-built portable/NSIS artifacts. Desktop browser tests cover lazy workspace entry,
+> repeated teardown, input limits, dirty-close protection, hostile HTML/IDs and both
+> PDF paths. Native tests and the Windows smoke/metrics workflow are the integration
+> gates; local Linux cannot establish the complete Windows result. Source documents
+> remain memory-only until explicitly saved; no SDK or service worker is loaded by
+> the native entry. No comparative RAM claim, signed release or live web deployment
+> is made. AI-6/AI-7/AI-8/AI-9 remain OPEN. Current contracts and commands are in
+> `docs/WINDOWS_DESKTOP.md`, implementation spec §14 and `src-tauri/README.md`.
+> Remaining acceptance: ordinary Windows install/default-file-handler behavior,
+> print-driver experience and comparison on the owner's hardware. Use exact PR-head
+> Actions logs and uploaded Windows smoke evidence before merging this branch.
+>
 > **LOCAL CHECKPOINT — 2026-10-15 (issue #131, uncommitted):**
 > Worktree `C:/Users/jekyt/source/mdv-131`, branch `fix/late-file-read-focus-131`,
 > base HEAD `2822ad0428135ce23c049b5b569ff5f50f399bd2`. No commit, push or deployment.

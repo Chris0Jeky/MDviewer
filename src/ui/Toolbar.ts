@@ -17,6 +17,7 @@ import type {
 } from "../app/settings";
 import type { App } from "../app/App";
 import { downloadMarkdown } from "../export/markdown";
+import { SaveCanceled, getDownloadDestination } from "../export/destination";
 import { mountDocumentRecovery } from "./DocumentRecovery";
 
 export interface ToolbarController {
@@ -263,11 +264,15 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   const saveBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
     title: "Download the current source. Documents are not saved by this app." }, "Save Markdown");
   const sessionStatus = el("span", { class: "workspace-session-status", attrs: { role: "status" } });
-  saveBtn.addEventListener("click", () => {
+  saveBtn.addEventListener("click", async () => {
     const doc = app.store.active;
     if (!doc) return;
-    try { downloadMarkdown(doc.name, doc.text); sessionStatus.textContent = "Markdown download requested."; }
-    catch { sessionStatus.textContent = "Download failed. Copy your Markdown before closing."; }
+    const nativeSave = getDownloadDestination() !== null;
+    saveBtn.disabled = true;
+    try { await downloadMarkdown(doc.name, doc.text); sessionStatus.textContent = nativeSave ? "Markdown saved." : "Markdown download requested."; }
+    catch (error) { sessionStatus.textContent = error instanceof SaveCanceled
+      ? "Save canceled. Your document is still open." : "Download failed. Copy your Markdown before closing."; }
+    finally { saveBtn.disabled = !app.store.active; }
   });
 
   // ---- Group A2: which panes are visible (screen layout only) ----

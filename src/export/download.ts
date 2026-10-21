@@ -15,6 +15,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas-pro";
 import type { Settings } from "../app/settings";
 import { IDS, PAGEDJS } from "../app/dom";
+import { getDownloadDestination } from "./destination";
 
 export interface FallbackPdfOptions {
   scale?: number;
@@ -28,6 +29,58 @@ const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
   a4: [210, 297],
   letter: [215.9, 279.4],
 };
+
+/**
+ * html2canvas-pro closes its iframe before adopting the cloned DOM. The iframe's
+ * load/readyState check can therefore finish before newly adopted CSS links load.
+ * A capture with missing document/KaTeX styles is valid PDF data but wrong output.
+ */
+async function waitForClonedStyles(document: Document, deadline: number): Promise<void> {
+  const links = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]'))
+    .filter(link => !link.disabled && !link.sheet);
+  if (!links.length) return;
+  await new Promise<void>((resolve, reject) => {
+    const pending = new Set(links);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      for (const link of links) {
+        link.removeEventListener("load", onLoad);
+        link.removeEventListener("error", onError);
+      }
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error("The PDF capture stylesheet could not load. Try Print / Save as PDF."));
+    };
+    const onLoad = (event: Event) => {
+      const link = event.currentTarget as HTMLLinkElement;
+      if (!link.sheet) { onError(); return; }
+      pending.delete(link);
+      if (!pending.size) { cleanup(); resolve(); }
+    };
+    const timeout = window.setTimeout(onError, Math.max(0, deadline - Date.now()));
+    for (const link of links) {
+      link.addEventListener("load", onLoad);
+      link.addEventListener("error", onError);
+    }
+  });
+}
+
+async function waitForClonedFonts(document: Document, deadline: number): Promise<void> {
+  if (!document.fonts) return;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error("The PDF capture fonts did not finish loading. Try Print / Save as PDF."));
+    }, Math.max(0, deadline - Date.now()));
+    document.fonts.ready.then(() => {
+      window.clearTimeout(timeout);
+      resolve();
+    }, error => {
+      window.clearTimeout(timeout);
+      reject(error);
+    });
+  });
+}
 
 /**
  * html2canvas measures its cloned target after onclone. Remove screen-only
@@ -148,7 +201,22 @@ export async function exportPaginatedToPdf(
       scale,
       backgroundColor: "#ffffff",
       useCORS: true,
-      onclone: (cloneDocument, sheet) => prepareRasterClone(cloneDocument, sheet, page),
+      onclone: async (cloneDocument, sheet) => {
+        try {
+          const deadline = Date.now() + 10_000;
+          await waitForClonedStyles(cloneDocument, deadline);
+          prepareRasterClone(cloneDocument, sheet, page);
+          // Loading CSS may introduce fonts after html2canvas's own fonts.ready
+          // wait. Resolve layout first so newly used faces are included here.
+          sheet.getBoundingClientRect();
+          await waitForClonedFonts(cloneDocument, deadline);
+        } catch (error) {
+          // The library's container cleanup begins only after onclone resolves.
+          // Do not retain a failed full-document capture in the live workspace.
+          cloneDocument.defaultView?.frameElement?.remove();
+          throw error;
+        }
+      },
       // Progress is surfaced by onProgress, not per-element console chatter.
       logging: false,
     });
@@ -157,5 +225,8 @@ export async function exportPaginatedToPdf(
     opts.onProgress?.(i + 1, pages.length);
   }
 
-  pdf.save(opts.fileName ?? "document.pdf");
+  const filename = opts.fileName ?? "document.pdf";
+  const destination = getDownloadDestination();
+  if (destination) await destination(pdf.output("blob"), filename);
+  else pdf.save(filename);
 }

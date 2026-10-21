@@ -18,7 +18,7 @@ describe("generated raster content visibility", () => {
     document.body.append(host);
     const original = host.outerHTML;
     await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-    const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): void };
+    const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
     const copy = document.implementation.createHTMLDocument("capture");
     // jsdom has no browsing context for createHTMLDocument. Only this test
     // supplies a style reader; real-iframe pseudo styles are covered by E2E.
@@ -35,7 +35,7 @@ describe("generated raster content visibility", () => {
       return style;
     });
     const sheet = copy.querySelector<HTMLElement>(".pagedjs_page")!;
-    onclone(copy, sheet);
+    await onclone(copy, sheet);
     const pseudos = Array.from(copy.querySelectorAll<HTMLElement>("html2canvaspseudoelement"));
     expect(pseudos.map((el) => el.style.visibility)).toEqual(["visible", "visible", "hidden", "hidden", "hidden"]);
     expect(readStyle.mock.calls.map(([element, pseudo]) => [element.id, pseudo])).toEqual([

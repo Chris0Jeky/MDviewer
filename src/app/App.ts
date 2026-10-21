@@ -33,6 +33,7 @@ import { registerHandlersOnce, setPaginationProgress } from "../paginate/handler
 import { measurePageArea } from "../paginate/measure";
 import { exportViaPrint } from "../export/print";
 import { exportPaginatedToPdf } from "../export/download";
+import { SaveCanceled } from "../export/destination";
 import { mountToolbar } from "../ui/Toolbar";
 import { mountCanvas } from "../ui/Canvas";
 import type { CanvasController, CanvasPosition } from "../ui/Canvas";
@@ -110,6 +111,8 @@ export class App {
 
   private scheduler!: RenderScheduler;
   private detachInput: (() => void) | null = null;
+  private filePicker: (() => void) | null = null;
+  private fileInput: HTMLInputElement | null = null;
   private settingsListeners = new Set<(settings: Readonly<Settings>) => void>();
   private exportListeners = new Set<(state: ExportState) => void>();
   private reloadGuard: ReloadGuard | null = null;
@@ -126,18 +129,21 @@ export class App {
 
   private constructor(root: HTMLElement) {
     this.root = root;
+    // Retain the real control before any authored Markdown IDs enter the page.
+    this.fileInput = root.ownerDocument.querySelector<HTMLInputElement>(`body > input#${IDS.fileInput}`);
     this.settings = loadSettings();
     this.store = new DocStore();
   }
 
-  static init(root: HTMLElement): App {
+  static init(root: HTMLElement, options: { inputHandlers?: boolean; openFilePicker?: () => void } = {}): App {
     const app = new App(root);
+    app.filePicker = options.openFilePicker ?? null;
     app.buildShell();
     app.applyThemeAttributes();
     app.applyViewMode();
 
     // Ingestion → store. The store's "change" event triggers a content render.
-    app.detachInput = installInputHandlers(app.store, {
+    if (options.inputHandlers !== false) app.detachInput = installInputHandlers(app.store, {
       onReject: (names, tooLarge, unreadable) => app.onReject(names, tooLarge, unreadable),
       onLargeFile: (bytes) => app.confirmLargeFile(bytes),
       onTooLarge: (name) => app.onTooLarge(name),
@@ -380,8 +386,8 @@ export class App {
 
   /** Open the hidden file input dialog. */
   openFilePicker(): void {
-    const input = document.getElementById(IDS.fileInput) as HTMLInputElement | null;
-    input?.click();
+    if (this.filePicker) { this.filePicker(); return; }
+    this.fileInput?.click();
   }
 
   /** Explicit update acceptance; never abandon an in-flight export. */
@@ -453,7 +459,8 @@ export class App {
         }
       });
     } catch (err) {
-      this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
+      if (err instanceof SaveCanceled) this.announce("PDF save canceled. Your document is still open.");
+      else this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
     } finally {
       this.setExportBusy(false);
     }
