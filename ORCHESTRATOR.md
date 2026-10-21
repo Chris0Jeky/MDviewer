@@ -3,7 +3,30 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-21 (dependency/PDF merges; hardening in progress):**
+> **CURRENT CHECKPOINT — 2026-10-21 (PDF capture readiness and footnote numerals, prepared):**
+> Standalone follow-up based on main `3c4f09c8d7befb6fcd7a5a739efa72bd71cf90a2`
+> after hardening #159 merged. The package pair and workflows are unchanged from
+> that main. Capture now waits for cloned CSS and newly used fonts under one
+> ten-second onclone readiness budget, releases a failed iframe, and paints the
+> missing default Paged.js footnote numerals only in the disposable clone.
+> Linked citation numbers preserve repeats/generated IDs; temporary baseline
+> probes handle tall inline content and are removed before capture. Geometry
+> guards reject probing or paint that would move original note content.
+> Red evidence: all twelve numeral regions were blank in an actual two-page PDF;
+> review also exposed top-edge placement failing for a tall inline image. Both
+> are now green, with a second downloaded PDF hiding only numeral paint failing
+> every marker region. Production Chromium 156.0.8078.47: 12/12 focused tests pass,
+> including double digits, ID collisions, a block-first note, delayed CSS pixels,
+> failure/retry cleanup, resolution and all three no-cutoff cases. Local Node
+> 24.19 agent check passes typecheck/lint, 602 unit/four server tests and Observatory
+> guard. Production build passes with archive label `pdf-followup-3c4f09c-uncommitted`.
+> Independent review found the baseline issue, re-reviewed its correction and ran
+> 11 marker/readiness units successfully. Poppler-rendered Print and downloaded
+> pages were visually checked. This is not a total-export timeout or arbitrary
+> CSS-counter implementation. No native save adapter is included. Remote exact-head
+> CI/review and AI-6/7/8/9 remain required; no deployment or human acceptance claimed.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (dependency/PDF merges; hardening in progress):**
 > Production dependency PR #155 merged as `7b6f5278aef96bdb9d6cfd0a4d62bfb6f076e5c6`;
 > raster PDF regression PR #157 merged as `e81f785907a1f87b67d80db51c152e9b46ccd7e2`;
 > development dependency PR #156 merged as current main

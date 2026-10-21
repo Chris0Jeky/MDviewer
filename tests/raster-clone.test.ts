@@ -21,14 +21,14 @@ describe("raster capture clone isolation", () => {
     document.body.append(host);
     const before = host.outerHTML;
     await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-    const options = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): void };
+    const options = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
     const clone = document.implementation.createHTMLDocument("capture");
     clone.body.innerHTML = before + `<div class="pagedjs_pages" id="unrelated" style="transform: scale(.25)"></div>`;
     const sheet = clone.querySelector<HTMLElement>(".pagedjs_page")!;
     const documentTransform = sheet.querySelector("figure")!.style.transform;
     const unrelated = clone.querySelector<HTMLElement>("#unrelated")!;
     const unrelatedTransform = unrelated.style.transform;
-    options.onclone(clone, sheet);
+    await options.onclone(clone, sheet);
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.height).toBe("auto");
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.width).toBe("auto");
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.overflow).toBe("visible");

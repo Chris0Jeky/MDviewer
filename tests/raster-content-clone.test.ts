@@ -21,7 +21,7 @@ it("removes copied SVG hiding but preserves authored visibility and the live SVG
   document.body.append(host);
   const original = host.outerHTML;
   await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): void };
+  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
   const copy = document.implementation.createHTMLDocument("capture");
   Object.defineProperty(copy, "defaultView", { value: window });
   copy.body.innerHTML = original;
@@ -29,7 +29,7 @@ it("removes copied SVG hiding but preserves authored visibility and the live SVG
   // html2canvas inlines these inherited values from the parked preview before
   // calling onclone; the owning stylesheet cannot override that inline copy.
   nodes.forEach((node) => { node.style.visibility = "hidden"; });
-  onclone(copy, copy.querySelector<HTMLElement>(".pagedjs_page")!);
+  await onclone(copy, copy.querySelector<HTMLElement>(".pagedjs_page")!);
   expect(nodes.map((node) => node.style.visibility)).toEqual(["", "", "hidden", ""]);
   expect(nodes[2]!.style.getPropertyPriority("visibility")).toBe("important");
   expect(nodes[3]!.getAttribute("visibility")).toBe("hidden");
@@ -43,11 +43,11 @@ it("captures styled task checkboxes as static paint without changing live contro
   document.body.append(host);
   const original = host.outerHTML;
   await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): void };
+  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
   const copy = document.implementation.createHTMLDocument("capture");
   Object.defineProperty(copy, "defaultView", { value: window });
   copy.body.innerHTML = original;
-  onclone(copy, copy.querySelector<HTMLElement>(".pagedjs_page")!);
+  await onclone(copy, copy.querySelector<HTMLElement>(".pagedjs_page")!);
   expect(copy.querySelector("input")).toBeNull();
   const paint = copy.querySelector<HTMLElement>("span.task-list-item-checkbox")!;
   expect(paint).not.toBeNull();

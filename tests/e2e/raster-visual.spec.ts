@@ -137,7 +137,20 @@ test("downloaded PDF preserves colors, SVG transforms and rich content", async (
   // The fixed-paper geometry captured above remains the expected PDF geometry.
   await page.getByRole("button", { name: "Dark", exact: true }).click();
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  // Only the capture iframe's linked CSS is delayed. Its live source is already
+  // styled, so a valid but unstyled PDF demonstrates the clone-readiness race.
+  let delayedStyles = 0;
+  await page.route("**/assets/*.css", async route => {
+    if (route.request().frame().parentFrame()) {
+      delayedStyles++;
+      await new Promise(resolve => setTimeout(resolve, 350));
+    }
+    await route.continue();
+  });
   const evidence = await inspectPdf(page, "fallback-visual", boxes);
+  if (process.env.E2E_TARGET === "preview") {
+    expect(delayedStyles, "the production regression must actually delay clone CSS").toBeGreaterThanOrEqual(1);
+  }
   await writeFile(test.info().outputPath("pixel-evidence.json"), JSON.stringify(evidence, null, 2));
   expect(visualFailures(evidence), JSON.stringify(evidence)).toEqual([]);
 
