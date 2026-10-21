@@ -16,6 +16,7 @@ import html2canvas from "html2canvas-pro";
 import type { Settings } from "../app/settings";
 import { IDS, PAGEDJS } from "../app/dom";
 import { getDownloadDestination } from "./destination";
+import { paintFootnoteMarkers } from "./footnoteMarkers";
 
 export interface FallbackPdfOptions {
   scale?: number;
@@ -210,6 +211,7 @@ export async function exportPaginatedToPdf(
           // wait. Resolve layout first so newly used faces are included here.
           sheet.getBoundingClientRect();
           await waitForClonedFonts(cloneDocument, deadline);
+          paintFootnoteMarkers(sheet, page);
         } catch (error) {
           // The library's container cleanup begins only after onclone resolves.
           // Do not retain a failed full-document capture in the live workspace.

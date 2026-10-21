@@ -13,7 +13,7 @@ processes. Use a job timeout as an additional CI watchdog (for example, five min
 [CmdletBinding()]
 param(
     [string]$Executable,
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '../artifacts/desktop-smoke'),
+    [string]$OutputDirectory,
     [ValidateRange(5, 120)][int]$TimeoutSeconds = 45,
     [ValidateRange(60, 600)][int]$OverallTimeoutSeconds = 180,
     [ValidateRange(0, 30)][int]$SettleSeconds = 2,
@@ -224,6 +224,9 @@ if ($PSVersionTable.PSVersion.Major -lt 7 -or -not $IsWindows) {
     throw 'Run this harness using PowerShell 7 on Windows.'
 }
 if (-not $Executable) { throw 'Pass -Executable with the built mdviewer.exe path.' }
+# Windows PowerShell 5.1 can bind parameter defaults before PSScriptRoot is
+# initialized. Only the parent harness needs this path; probe workers return above.
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot '../artifacts/desktop-smoke' }
 $exe = (Resolve-Path -LiteralPath $Executable).Path
 if ([System.IO.Path]::GetExtension($exe) -ine '.exe') { throw 'Executable must be a Windows .exe file.' }
 $out = [System.IO.Path]::GetFullPath($OutputDirectory)

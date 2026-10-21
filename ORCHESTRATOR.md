@@ -3,37 +3,82 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader branch):**
+> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader integration):**
 > Owner requested all-open-issue/PR review plus a lightweight Windows desktop direction.
-> Uploaded source archive was reconciled byte-for-byte with main 12817b5 before work;
-> all remote reads/writes use the connected GitHub API. Production dependency PR #155
-> merged as 7b6f527; PDF visual fixes #157 merged as e81f785 after exact-head CI with
-> 589 unit tests and 111 production Chromium passes (five existing opt-in perf skips).
-> #157 fixes missing SVG/checkmarks and TOC capture reflow. Development-dependency
-> #156 merged as f22308b after exact-head CI. Node 24/dependency hardening #159
-> merged as 3c4f09c after 591 unit tests and 111 production Chromium passes;
-> both dependency audits report zero vulnerabilities. The Node 22 required context
-> remains an explicitly unsupported legacy probe. #136's remaining PDF work covers
-> clone stylesheet readiness and visible footnote numerals in downloaded PDFs.
+> Production dependencies #155 merged as 7b6f527; development dependencies #156 as
+> f22308b; Node 24/dependency hardening #159 as 3c4f09c. Both npm audits are clean.
+> PDF fixes #157 and #160 merged as e81f785 and 22435ce, closing #136 after actual
+> downloaded-PDF pixel regressions and independent review. #160's exact-head CI
+> passed 602 unit tests and 113 production Chromium tests (five existing opt-in
+> performance skips). Its clone stylesheet readiness, cleanup and footnote numeral
+> fixes are integrated here with the native export destination preserved.
 > This branch adds a separate continuous Windows reader, Tauri/WebView2 host,
 > bounded native input, single-instance forwarding, explicit native exports and
-> CI-built portable/NSIS artifacts. Desktop browser tests cover lazy workspace entry,
-> repeated teardown, input limits, dirty-close protection, hostile HTML/IDs and both
-> PDF paths. Native tests and the Windows smoke/metrics workflow are the integration
-> gates; local Linux cannot establish the complete Windows result. The first Windows
-> run passed 22 Rust tests and built the executable plus a 4.75 MiB NSIS installer,
-> but its UI Automation heading probe timed out before establishing render/export
-> success. Bounded phase diagnostics and an independent window screenshot are now
-> included; native acceptance and measured process-tree memory remain pending.
-> Source documents
-> remain memory-only until explicitly saved; no SDK or service worker is loaded by
-> the native entry. No comparative RAM claim, signed release or live web deployment
-> is made. AI-6/AI-7/AI-8/AI-9 remain OPEN. Current contracts and commands are in
-> `docs/WINDOWS_DESKTOP.md`, implementation spec §14 and `src-tauri/README.md`.
-> Remaining acceptance: ordinary Windows install/default-file-handler behavior,
-> print-driver experience and comparison on the owner's hardware. Use exact PR-head
-> Actions logs and uploaded Windows smoke evidence before merging this branch.
->
+> CI-built portable/NSIS artifacts. Documents remain memory-only until saved;
+> the native entry loads neither the SDK nor a service worker. Editing and paginated
+> PDF tools load on demand. The reviewed integration passed 58 focused units and
+> all 13 desktop production browser tests, including actual PDF/CSP pixels.
+> Windows CI passed 22 native tests and built the executable and a 4.75 MiB installer.
+> Diagnostics traced the first smoke failure to Windows PowerShell 5.1 evaluating
+> a script-directory-dependent parameter default before that directory was available.
+> The default is now initialized only in the parent PowerShell 7 branch; worker exit
+> codes, bounded stdout/stderr and phase records are retained for diagnosis.
+> A 2026-10-21 live OSV scan covered all 253 resolved Windows dependency crates,
+> including release features, with no advisory matches. Linux/BSD-only lock entries
+> have separate GTK/D-Bus findings; no Linux/BSD distribution is provided here.
+> All required web checks, desktop Chromium, real Windows launch/forward/native
+> save smoke and independent exact-head review remain the merge contract. Consult
+> the latest PR Actions logs and Windows smoke artifact for authoritative results.
+> No comparative RAM claim, signed release or live web deployment is made.
+> AI-6/AI-7/AI-8/AI-9 remain OPEN. Ordinary Windows install/uninstall, default-file
+> handler, preferred print driver and owner-hardware comparison remain acceptance
+> work. Usage/contracts are in `docs/WINDOWS_DESKTOP.md`, spec §14 and
+> `src-tauri/README.md`.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (PDF capture readiness and footnote numerals, prepared):**
+> Standalone follow-up based on main `3c4f09c8d7befb6fcd7a5a739efa72bd71cf90a2`
+> after hardening #159 merged. The package pair and workflows are unchanged from
+> that main. Capture now waits for cloned CSS and newly used fonts under one
+> ten-second onclone readiness budget, releases a failed iframe, and paints the
+> missing default Paged.js footnote numerals only in the disposable clone.
+> Linked citation numbers preserve repeats/generated IDs; temporary baseline
+> probes handle tall inline content and are removed before capture. Geometry
+> guards reject probing or paint that would move original note content.
+> Red evidence: all twelve numeral regions were blank in an actual two-page PDF;
+> review also exposed top-edge placement failing for a tall inline image. Both
+> are now green, with a second downloaded PDF hiding only numeral paint failing
+> every marker region. Production Chromium 156.0.8078.47: 12/12 focused tests pass,
+> including double digits, ID collisions, a block-first note, delayed CSS pixels,
+> failure/retry cleanup, resolution and all three no-cutoff cases. Local Node
+> 24.19 agent check passes typecheck/lint, 602 unit/four server tests and Observatory
+> guard. Production build passes with archive label `pdf-followup-3c4f09c-uncommitted`.
+> Independent review found the baseline issue, re-reviewed its correction and ran
+> 11 marker/readiness units successfully. Poppler-rendered Print and downloaded
+> pages were visually checked. This is not a total-export timeout or arbitrary
+> CSS-counter implementation. No native save adapter is included. Remote exact-head
+> CI/review and AI-6/7/8/9 remain required; no deployment or human acceptance claimed.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (dependency/PDF merges; hardening in progress):**
+> Production dependency PR #155 merged as `7b6f5278aef96bdb9d6cfd0a4d62bfb6f076e5c6`;
+> raster PDF regression PR #157 merged as `e81f785907a1f87b67d80db51c152e9b46ccd7e2`;
+> development dependency PR #156 merged as current main
+> `f22308bab178794ca3029c81d38ea4dcb48f1fef`. Each passed all three required
+> checks on its reviewed head. #156 incorporated the preceding merges without a
+> rebase; its final head `76c4e2ab730c307e9294e70ee94fabcdaf80e05b` passed 589
+> unit tests on each Node lane and 111 production Chromium tests.
+> Follow-up hardening from that main tree raises supported Node to
+> `^24.15.0 || >=26`, uses strict Node 24 installs for production verification,
+> and retains the existing Node 22 required-check context as a legacy compatibility
+> probe pending branch-protection updates. A narrow `$katex` override shares the
+> direct 0.19 renderer with the Markdown wrapper; `fast-uri` is locked to 3.1.9.
+> Two behavioral security regressions failed on the baseline and pass after these
+> fixes. Local Node 24.19 strict install, typecheck/lint, 591 unit/four server tests,
+> Observatory guard, build, hook smoke and 14 skill validations passed; full and
+> production-only npm audits report zero findings. The local build uses the honest
+> archive label `dependency-hardening-from-f22308`. Hosted exact-head CI and final
+> independent review remain required for the hardening PR. No deployment was made;
+> production identity and AI-6/7/8/9 acceptance gates remain as recorded below.
+
 > **LOCAL CHECKPOINT — 2026-10-15 (issue #131, uncommitted):**
 > Worktree `C:/Users/jekyt/source/mdv-131`, branch `fix/late-file-read-focus-131`,
 > base HEAD `2822ad0428135ce23c049b5b569ff5f50f399bd2`. No commit, push or deployment.
