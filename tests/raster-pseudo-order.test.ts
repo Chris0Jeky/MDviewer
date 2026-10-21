@@ -12,7 +12,7 @@ it.each([false, true])("maps pseudos when the cloner places after before ordinar
   host.innerHTML = '<div class="pagedjs_page">Live</div>';
   document.body.append(host);
   await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): void };
+  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
   const copy = document.implementation.createHTMLDocument("capture");
   Object.defineProperty(copy, "defaultView", { value: window });
   const before = '<html2canvaspseudoelement style="visibility:hidden">Leader</html2canvaspseudoelement>';
@@ -25,7 +25,7 @@ it.each([false, true])("maps pseudos when the cloner places after before ordinar
     return style;
   });
   const sheet = copy.querySelector<HTMLElement>(".pagedjs_page")!;
-  onclone(copy, sheet);
+  await onclone(copy, sheet);
   expect(Array.from(sheet.querySelectorAll<HTMLElement>("html2canvaspseudoelement"), (node) => node.style.visibility)).toEqual(["hidden", "visible"]);
   expect(styleReader.mock.calls.map((call) => call[1])).toEqual(["::before", "::after"]);
 });

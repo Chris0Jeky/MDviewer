@@ -12,7 +12,7 @@ pass that comparison.
 npm ci
 npx playwright install chromium
 npm run build
-E2E_TARGET=preview npm run test:e2e -- tests/e2e/raster-visual.spec.ts
+E2E_TARGET=preview npm run test:e2e -- tests/e2e/raster-visual.spec.ts tests/e2e/raster-footnotes.spec.ts tests/e2e/raster-styles-ready.spec.ts
 ```
 
 The fixture passes through the real file-input, Markdown/sanitization and Paged.js
@@ -37,6 +37,22 @@ Pixel expectations are independent of earlier html2canvas captures:
   counts interior pixels to allow its necessary antialiasing.
 - A second real download deliberately removes one color patch, code and the tick.
   The same visual criteria must identify those losses.
+- The production run delays linked stylesheets only inside the capture iframe.
+  Its live preview is already styled; the test verifies the delay actually
+  occurred before checking the saved page's pixels.
+- A separate two-page fixture checks all twelve footnote numerals, including
+  double digits, repeats and a heading ID collision. The regions exclude note
+  text, and require the first-line baseline for tall inline content. A block-first
+  note retains its native marker's existing separate line. The live note geometry
+  and generated IDs must be identical after export. A second actual PDF hides
+  only the added numeral paint and must fail every numeral region.
+
+The production failure/retry check aborts capture CSS on two attempts, verifies
+no PDF was saved and no capture iframe remains, then allows a successful retry.
+Unit tests exercise stylesheet errors/timeouts, sibling-listener cleanup and the
+shared readiness budget, including CSS taking nine seconds and fonts receiving
+only the remaining second. The ten-second bound is for this onclone CSS/font
+readiness wait; it does not bound earlier html2canvas work or the whole export.
 
 `test-results/` retains the PDF, extracted page PNG, native browser reference,
 pixel measurements and damaged-control PDF/PNG. The existing CI browser-artifact
@@ -45,7 +61,7 @@ dependency is required for this check.
 
 ## Defects found while adding the check
 
-All three were reproduced against the production bundle using html2canvas-pro
+The following were reproduced against the production bundle using html2canvas-pro
 2.5.2 before the relevant fix. This does not establish which dependency release
 first introduced each behavior.
 
@@ -62,11 +78,27 @@ first introduced each behavior.
    intrinsic SVG width/height: an independent canvas probe drew zero nontransparent
    pixels with the renderer's nine-argument resize of the viewBox-only SVG, and
    21 pixels at 8×8 after adding `width="16" height="16"`.
+4. The capture iframe can report loaded before its newly adopted stylesheet links
+   finish loading. A controlled 350 ms clone-only CSS delay produced a valid but
+   unstyled PDF. Capture now waits for those links, resolves layout, then waits
+   for fonts introduced by that CSS. Failures abort saving and release the clone;
+   html2canvas's own cleanup starts only after its onclone callback succeeds.
+5. Paged.js uses native `::marker` content for footnote numerals. The browser
+   reserves the correct width, but html2canvas does not paint that content: the
+   initial twelve-note downloaded PDF had zero ink in every numeral region.
+   Clone-only absolute text now fills that existing space using the number from
+   the linked citation. An initial top-edge placement also failed for a tall
+   inline image; temporary baseline probes corrected it. Probes are removed
+   before capture, and any change to the note or original content geometry
+   aborts the export instead of accepting reflow.
 
 All normalization remains in the disposable capture clone. The live page, real
 checkboxes, source, pagination and primary vector export keep their existing
-contracts. Unit coverage checks clone isolation and preservation of explicit SVG
-hiding; the production browser test proves the saved pixels.
+contracts. Unit coverage checks clone isolation, readiness cleanup, marker
+identity/continuations/baseline alignment and preservation of explicit hiding;
+the production browser tests prove the saved pixels. Marker normalization is
+limited to Paged.js's default decimal marker; it does not implement arbitrary
+authored CSS counter styles.
 
 ## Scope of the evidence
 
