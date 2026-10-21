@@ -67,6 +67,74 @@ if ($Probe) {
                 [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true))
         return $Parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
+    function Get-ControlMetadata($Element) {
+        $current = $Element.Current
+        $name = [string]$current.Name
+        $id = [string]$current.AutomationId
+        $value = $null
+        $hasValue = $Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$value)
+        return [pscustomobject]@{
+            name = $name.Substring(0, [Math]::Min(160, $name.Length))
+            automationId = $id.Substring(0, [Math]::Min(160, $id.Length))
+            controlType = $current.ControlType.ProgrammaticName
+            isEnabled = $current.IsEnabled
+            hasValuePattern = $hasValue
+            isReadOnly = $(if ($hasValue) { $value.Current.IsReadOnly } else { $null })
+        }
+    }
+    function Find-FilenameValueTarget($Dialog) {
+        $editableCondition = [System.Windows.Automation.OrCondition]::new(
+            [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit),
+            [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ComboBox))
+        # Modern Common Item Dialogs expose FileNameControlHost, or the labeled
+        # editable combo box. Its ValuePattern can live on the host or child Edit.
+        # Never select an arbitrary Edit elsewhere in the dialog (for example Search).
+        $hostCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'FileNameControlHost')
+        $filenameHost = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $hostCondition)
+        if ($null -eq $filenameHost) {
+            $hostCondition = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:'),
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ComboBox))
+            $filenameHost = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $hostCondition)
+        }
+        $candidates = [System.Collections.Generic.List[object]]::new()
+        if ($null -ne $filenameHost) {
+            $candidates.Add($filenameHost)
+            $children = $filenameHost.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
+            for ($i = 0; $i -lt [Math]::Min(16, $children.Count); $i++) { $candidates.Add($children[$i]) }
+        } else {
+            $editCondition = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.OrCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1001'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:')),
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
+            $legacyEdit = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
+            if ($null -ne $legacyEdit) { $candidates.Add($legacyEdit) }
+        }
+        foreach ($candidate in $candidates) {
+            $pattern = $null
+            if ($candidate.Current.IsEnabled -and
+                $candidate.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern) -and
+                -not $pattern.Current.IsReadOnly) {
+                return [pscustomobject]@{ element = $candidate; pattern = $pattern }
+            }
+        }
+        # Bounded metadata from this owned dialog only; no values or file-list items.
+        $controls = $Dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
+        $result.filenameControls = @()
+        for ($i = 0; $i -lt [Math]::Min(12, $controls.Count); $i++) {
+            $result.filenameControls += Get-ControlMetadata $controls[$i]
+        }
+        return $null
+    }
     try {
         Write-ProbePhase 'worker-started'
         if ($ProbeAction -ne 'screenshot') {
@@ -106,24 +174,11 @@ if ($Probe) {
                 }
                 if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
                 Write-ProbePhase 'finding-filename-field'
-                $editCondition = [System.Windows.Automation.AndCondition]::new(
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1001'),
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
-                $filename = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
-                if ($null -eq $filename) {
-                    $editCondition = [System.Windows.Automation.AndCondition]::new(
-                        [System.Windows.Automation.PropertyCondition]::new(
-                            [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:'),
-                        [System.Windows.Automation.PropertyCondition]::new(
-                            [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
-                    $filename = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
-                }
-                if ($null -eq $filename) { throw 'The Save dialog filename field is unavailable.' }
+                $filename = Find-FilenameValueTarget $dialog
+                if ($null -eq $filename) { throw 'The Save dialog filename control has no enabled writable ValuePattern.' }
+                $result.filenameControl = Get-ControlMetadata $filename.element
                 Write-ProbePhase 'setting-filename'
-                $valuePattern = $filename.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-                $valuePattern.SetValue($SavePath)
+                $filename.pattern.SetValue($SavePath)
                 $saveCondition = [System.Windows.Automation.AndCondition]::new(
                     [System.Windows.Automation.PropertyCondition]::new(
                         [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1'),
@@ -213,7 +268,9 @@ public static class SmokeWindow {
             }
         }
     } catch {
-        $result.reason = 'UI Automation probe failed: ' + $_.Exception.GetType().Name
+        $message = [string]$_.Exception.Message
+        $result.reason = 'UI Automation probe failed: ' + $_.Exception.GetType().Name + ': ' +
+            $message.Substring(0, [Math]::Min(1024, $message.Length))
     }
     Write-ProbePhase 'worker-complete'
     Write-ProbeResult
@@ -374,7 +431,7 @@ function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnost
     $evidence = [ordered]@{
         timedOut = $TimedOut; lastPhase = 'worker-not-started'; progress = $null
         file = [System.IO.Path]::GetFileName($progressPath)
-        exitCode = $null; stdout = $null; stderr = $null
+        exitCode = $null; stdout = $null; stderr = $null; result = $null
     }
     if ($Worker.HasExited) {
         $evidence.exitCode = $Worker.ExitCode
@@ -403,6 +460,9 @@ function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnost
             $evidence.lastPhase = $progress.lastPhase
             $evidence.progress = $progress
         } catch { $evidence.lastPhase = 'progress-read-unavailable' }
+    }
+    if ([System.IO.File]::Exists($ProbeFile)) {
+        try { $evidence.result = Get-Content -Raw -LiteralPath $ProbeFile | ConvertFrom-Json } catch { }
     }
     return [pscustomobject]$evidence
 }
@@ -454,7 +514,6 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
             $lastReason = 'The UI Automation worker timed out at phase: ' + $evidence.lastPhase
         } elseif (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
-            Remove-Item -LiteralPath $probeFile
             if ($result.found) { return $result }
             $lastReason = $result.reason
         } else {
@@ -467,6 +526,7 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
 
 function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destination = '') {
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastReason = 'No accessibility result was returned.'
     while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         Assert-SmokeDeadline
         $app.Refresh()
@@ -485,9 +545,9 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         }
         if (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
-            Remove-Item -LiteralPath $probeFile
             $metrics.probes += Get-ProbeEvidence $probeFile $false $worker
             if ($result.found) { return }
+            $lastReason = $result.reason
         } else {
             $evidence = Get-ProbeEvidence $probeFile (-not $worker.HasExited) $worker
             $metrics.probes += $evidence
@@ -498,7 +558,7 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if (-not $worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
         Start-Sleep -Milliseconds 200
     }
-    throw "Native UI action '$Action' ('$Name') did not become available before the timeout."
+    throw "Native UI action '$Action' ('$Name') did not become available before the timeout. $lastReason"
 }
 
 function Wait-ExportFile([string]$Path, [scriptblock]$Validate) {
