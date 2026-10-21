@@ -56,8 +56,9 @@ jobs:
       - run: npm ci --engine-strict
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
-      - name: Cache native build dependencies
-        uses: actions/cache@v6
+      - name: Restore native build dependencies
+        id: native-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
@@ -78,6 +79,15 @@ jobs:
         run: cargo test --release --locked
       - name: Build Windows executable and per-user installer
         run: npm run desktop:build
+      - name: Save the verified native build cache
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Launch the real Windows app and measure its process tree
         timeout-minutes: 5
         run: pwsh -File scripts/desktop-smoke.ps1 -Executable src-tauri/target/release/mdviewer.exe -OutputDirectory desktop-artifacts/smoke

@@ -213,7 +213,7 @@ test("failed capture styles save no PDF, release their iframe and permit a retry
   const exportButton = page.getByRole("button", { name: "Download PDF", exact: true });
   for (let attempt = 0; attempt < 2; attempt++) {
     await exportButton.click();
-    await expect(page.getByRole("alert")).toContainText("stylesheet could not load. Try Print / Save as PDF.");
+    await expect(page.getByRole("alertdialog", { name: "Rendering failed" })).toContainText("stylesheet could not load. Try Print / Save as PDF.");
     await expect(exportButton).toBeEnabled();
     await expect(page.locator("iframe.html2canvas-container")).toHaveCount(0);
     await expect(page.locator("#editor-input")).toHaveValue(RICH_MARKDOWN);

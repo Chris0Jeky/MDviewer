@@ -51,7 +51,7 @@ browser; other link schemes and automatic remote resource loads are blocked.
 
 The host accepts local `.md` and `.markdown` files, including names containing spaces
 or Unicode. It reads UTF-8, UTF-8 with a BOM, and UTF-16 LE/BE with a BOM. Malformed
-text is rejected. UNC/network and device paths are not accepted. File batches and
+text is rejected. Explicit UNC and device paths are not accepted. File batches and
 open-document imports are bounded to 32 documents and 25,000,000 bytes. Large
 browser-picker/drop imports ask before rendering; native reads remain hard-bounded.
 Editing a document can increase its size; returning to reading reports any exceeded

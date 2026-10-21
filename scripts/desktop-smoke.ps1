@@ -21,7 +21,7 @@ param(
     # Internal out-of-process UIA worker. It uses Windows PowerShell's framework UIA.
     [switch]$Probe,
     [long]$WindowHandle,
-    [ValidateSet('heading', 'button', 'save-dialog')][string]$ProbeAction = 'heading',
+    [ValidateSet('heading', 'button', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
     [string]$ButtonName,
     [string]$SavePath,
     [int]$OwnerProcessId,
@@ -35,6 +35,22 @@ Set-StrictMode -Version Latest
 
 if ($Probe) {
     $result = [ordered]@{ found = $false; reason = $null; screenshot = $null }
+    $probeClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $phases = [System.Collections.Generic.List[object]]::new()
+    function Write-ProbePhase([string]$Phase) {
+        $phases.Add([pscustomobject]@{ phase = $Phase; elapsedMs = [Math]::Round($probeClock.Elapsed.TotalMilliseconds, 2) })
+        $progress = [ordered]@{
+            action = $ProbeAction; lastPhase = $Phase; phases = $phases.ToArray()
+            powershellVersion = $PSVersionTable.PSVersion.ToString()
+            apartment = [System.Threading.Thread]::CurrentThread.GetApartmentState().ToString()
+            sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+        }
+        $path = $ProbeOutput + '.progress.json'
+        $pending = $path + '.writing'
+        [System.IO.File]::WriteAllText($pending, ($progress | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
+        if ([System.IO.File]::Exists($path)) { [System.IO.File]::Delete($path) }
+        [System.IO.File]::Move($pending, $path)
+    }
     function Write-ProbeResult {
         $pending = $ProbeOutput + '.writing'
         [System.IO.File]::WriteAllText($pending, ($result | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
@@ -52,82 +68,105 @@ if ($Probe) {
         return $Parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
     try {
-        Add-Type -AssemblyName UIAutomationClient
-        Add-Type -AssemblyName UIAutomationTypes
-        $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$WindowHandle)
-        if ($ProbeAction -eq 'button') {
-            $button = Find-Button $window $ButtonName
-            if ($null -eq $button) { throw 'The requested button is not enabled yet.' }
-            $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-            $result.found = $true
-            # Invoke can remain blocked while a modal dialog is visible. Publish
-            # the attempt first; the next worker verifies the resulting state.
-            Write-ProbeResult
-            $pattern.Invoke()
-            exit 0
-        }
-        if ($ProbeAction -eq 'save-dialog') {
-            $condition = [System.Windows.Automation.AndCondition]::new(
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::NameProperty, 'Save export'),
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $OwnerProcessId))
-            $dialog = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
-            if ($null -eq $dialog) {
-                $dialog = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
-                    [System.Windows.Automation.TreeScope]::Children, $condition)
+        Write-ProbePhase 'worker-started'
+        if ($ProbeAction -ne 'screenshot') {
+            Write-ProbePhase 'loading-uia-client'
+            Add-Type -AssemblyName UIAutomationClient
+            Write-ProbePhase 'loading-uia-types'
+            Add-Type -AssemblyName UIAutomationTypes
+            Write-ProbePhase 'getting-window-element'
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$WindowHandle)
+            Write-ProbePhase 'window-element-ready'
+            if ($ProbeAction -eq 'button') {
+                Write-ProbePhase 'finding-button'
+                $button = Find-Button $window $ButtonName
+                if ($null -eq $button) { throw 'The requested button is not enabled yet.' }
+                Write-ProbePhase 'getting-button-pattern'
+                $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                $result.found = $true
+                # Invoke can remain blocked while a modal dialog is visible. Publish
+                # the attempt first; the next worker verifies the resulting state.
+                Write-ProbeResult
+                Write-ProbePhase 'invoking-button'
+                $pattern.Invoke()
+                Write-ProbePhase 'button-invoked'
+                exit 0
             }
-            if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
-            $editCondition = [System.Windows.Automation.AndCondition]::new(
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1001'),
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
-            $filename = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
-            if ($null -eq $filename) {
+            if ($ProbeAction -eq 'save-dialog') {
+                $condition = [System.Windows.Automation.AndCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, 'Save export'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $OwnerProcessId))
+                Write-ProbePhase 'finding-save-dialog'
+                $dialog = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+                if ($null -eq $dialog) {
+                    $dialog = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+                        [System.Windows.Automation.TreeScope]::Children, $condition)
+                }
+                if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
+                Write-ProbePhase 'finding-filename-field'
                 $editCondition = [System.Windows.Automation.AndCondition]::new(
                     [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:'),
+                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1001'),
                     [System.Windows.Automation.PropertyCondition]::new(
                         [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
                 $filename = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
+                if ($null -eq $filename) {
+                    $editCondition = [System.Windows.Automation.AndCondition]::new(
+                        [System.Windows.Automation.PropertyCondition]::new(
+                            [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:'),
+                        [System.Windows.Automation.PropertyCondition]::new(
+                            [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
+                    $filename = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
+                }
+                if ($null -eq $filename) { throw 'The Save dialog filename field is unavailable.' }
+                Write-ProbePhase 'setting-filename'
+                $valuePattern = $filename.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                $valuePattern.SetValue($SavePath)
+                $saveCondition = [System.Windows.Automation.AndCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+                Write-ProbePhase 'finding-save-button'
+                $saveButton = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $saveCondition)
+                if ($null -eq $saveButton) { $saveButton = Find-Button $dialog 'Save' }
+                if ($null -eq $saveButton) { throw 'The native Save button is unavailable.' }
+                $savePattern = $saveButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                $result.found = $true
+                Write-ProbeResult
+                Write-ProbePhase 'invoking-save-button'
+                $savePattern.Invoke()
+                Write-ProbePhase 'save-button-invoked'
+                exit 0
             }
-            if ($null -eq $filename) { throw 'The Save dialog filename field is unavailable.' }
-            $valuePattern = $filename.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-            $valuePattern.SetValue($SavePath)
-            $saveCondition = [System.Windows.Automation.AndCondition]::new(
+            $containerCondition = [System.Windows.Automation.OrCondition]::new(
                 [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1'),
+                    [System.Windows.Automation.AutomationElement]::NameProperty, 'Markdown document'),
                 [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
-            $saveButton = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $saveCondition)
-            if ($null -eq $saveButton) { $saveButton = Find-Button $dialog 'Save' }
-            if ($null -eq $saveButton) { throw 'The native Save button is unavailable.' }
-            $savePattern = $saveButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-            $result.found = $true
-            Write-ProbeResult
-            $savePattern.Invoke()
-            exit 0
+                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-document'))
+            Write-ProbePhase 'finding-reader-document'
+            $document = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition)
+            if ($null -eq $document) {
+                $result.reason = 'The reader document is not present in the accessibility tree.'
+            } else {
+                $headingCondition = [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, $ExpectedHeading)
+                Write-ProbePhase 'finding-rendered-heading'
+                $heading = $document.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $headingCondition)
+                $result.found = $null -ne $heading
+                if (-not $result.found) { $result.reason = 'The expected heading has not rendered in the reader.' }
+            }
+            Write-ProbePhase 'heading-query-complete'
         }
-        $containerCondition = [System.Windows.Automation.OrCondition]::new(
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::NameProperty, 'Markdown document'),
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-document'))
-        $document = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition)
-        if ($null -eq $document) {
-            $result.reason = 'The reader document is not present in the accessibility tree.'
-        } else {
-            $headingCondition = [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::NameProperty, $ExpectedHeading)
-            $heading = $document.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $headingCondition)
-            $result.found = $null -ne $heading
-            if (-not $result.found) { $result.reason = 'The expected heading has not rendered in the reader.' }
-        }
-        if ($result.found -and $ScreenshotPath) {
+        if (($result.found -or $ProbeAction -eq 'screenshot') -and $ScreenshotPath) {
             try {
+                Write-ProbePhase 'loading-screenshot-drawing'
                 Add-Type -AssemblyName System.Drawing
+                Write-ProbePhase 'loading-screenshot-forms'
                 Add-Type -AssemblyName System.Windows.Forms
+                Write-ProbePhase 'compiling-screenshot-helper'
                 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -138,8 +177,15 @@ public static class SmokeWindow {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 }
 '@
+                Write-ProbePhase 'capturing-owned-window'
+                [uint32]$windowOwner = 0
+                [void][SmokeWindow]::GetWindowThreadProcessId([IntPtr]$WindowHandle, [ref]$windowOwner)
+                if ($OwnerProcessId -le 0 -or $windowOwner -ne $OwnerProcessId) {
+                    throw 'The capture window no longer belongs to the smoke application.'
+                }
                 [void][SmokeWindow]::SetProcessDPIAware()
                 [void][SmokeWindow]::SetForegroundWindow([IntPtr]$WindowHandle)
                 Start-Sleep -Milliseconds 150
@@ -161,6 +207,7 @@ public static class SmokeWindow {
                     $bitmap.Save($ScreenshotPath, [System.Drawing.Imaging.ImageFormat]::Png)
                 } finally { $graphics.Dispose(); $bitmap.Dispose() }
                 $result.screenshot = @{ saved = $true; file = [System.IO.Path]::GetFileName($ScreenshotPath) }
+                Write-ProbePhase 'screenshot-complete'
             } catch {
                 $result.screenshot = @{ saved = $false; reason = $_.Exception.Message }
             }
@@ -168,6 +215,7 @@ public static class SmokeWindow {
     } catch {
         $result.reason = 'UI Automation probe failed: ' + $_.Exception.GetType().Name
     }
+    Write-ProbePhase 'worker-complete'
     Write-ProbeResult
     exit 0
 }
@@ -195,9 +243,11 @@ $metrics = [ordered]@{
     executableSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
     osVersion = [Environment]::OSVersion.VersionString
     powershellVersion = $PSVersionTable.PSVersion.ToString()
+    runnerSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
     firstLaunch = $null
     secondLaunch = $null
     samples = @()
+    probes = @()
     notes = @(
         'Startup timings are upper bounds observed by polling and UI Automation, not cache-controlled benchmarks.',
         'Samples include the app and its observed descendants; UI Automation worker processes are excluded.',
@@ -305,6 +355,43 @@ function Get-MemorySample([string]$Stage) {
     }
 }
 
+function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut) {
+    $progressPath = $ProbeFile + '.progress.json'
+    $evidence = [ordered]@{
+        timedOut = $TimedOut; lastPhase = 'worker-not-started'; progress = $null
+        file = [System.IO.Path]::GetFileName($progressPath)
+    }
+    if ([System.IO.File]::Exists($progressPath)) {
+        try {
+            $progress = Get-Content -Raw -LiteralPath $progressPath | ConvertFrom-Json
+            $evidence.lastPhase = $progress.lastPhase
+            $evidence.progress = $progress
+        } catch { $evidence.lastPhase = 'progress-read-unavailable' }
+    }
+    return [pscustomobject]$evidence
+}
+
+function Capture-FailedWindow {
+    if ($NoScreenshot -or $null -eq $app) { return }
+    $app.Refresh()
+    if ($app.HasExited -or $app.MainWindowHandle -eq [IntPtr]::Zero) { return }
+    # Independent of UIA: an accessibility-provider hang must not hide the
+    # visible app state. This worker still verifies the window's owning PID.
+    $probeFile = Join-Path $out 'failure-window-probe.json'
+    $arguments = @('-NoProfile', '-NonInteractive', '-MTA', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
+        '-Probe', '-ProbeAction', 'screenshot', '-WindowHandle', $app.MainWindowHandle.ToInt64().ToString(),
+        '-OwnerProcessId', $app.Id.ToString(), '-ProbeOutput', $probeFile,
+        '-ScreenshotPath', (Join-Path $out 'failure-window.png'))
+    $worker = Start-OwnedProcess $workerShell $arguments $out
+    $timedOut = -not $worker.WaitForExit(8000)
+    if ($timedOut) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
+    $metrics.probes += Get-ProbeEvidence $probeFile $timedOut
+    if ([System.IO.File]::Exists($probeFile)) {
+        $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
+        $metrics.failureScreenshot = $result.screenshot
+    }
+}
+
 function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     $lastReason = 'No accessibility result was returned.'
@@ -315,14 +402,20 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
         $probeFile = Join-Path $out ('probe-' + [Guid]::NewGuid().ToString('N') + '.json')
         $arguments = @('-NoProfile', '-NonInteractive', '-MTA', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
             '-Probe', '-WindowHandle', $app.MainWindowHandle.ToInt64().ToString(),
+            '-OwnerProcessId', $app.Id.ToString(),
             '-ExpectedHeading', $Heading, '-ProbeOutput', $probeFile)
         if (-not $NoScreenshot) { $arguments += @('-ScreenshotPath', (Join-Path $out $ScreenshotName)) }
         $worker = Start-OwnedProcess $workerShell $arguments $out
         $remaining = [Math]::Max(1, [int](($TimeoutSeconds - $watch.Elapsed.TotalSeconds) * 1000))
-        if (-not $worker.WaitForExit([Math]::Min(8000, $remaining))) {
+        $timedOut = -not $worker.WaitForExit([Math]::Min(8000, $remaining))
+        if ($timedOut) {
             $worker.Kill($true)
             [void]$worker.WaitForExit(2000)
-            $lastReason = 'The UI Automation worker timed out.'
+        }
+        $evidence = Get-ProbeEvidence $probeFile $timedOut
+        $metrics.probes += $evidence
+        if ($timedOut) {
+            $lastReason = 'The UI Automation worker timed out at phase: ' + $evidence.lastPhase
         } elseif (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
             Remove-Item -LiteralPath $probeFile
@@ -355,7 +448,10 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
             Remove-Item -LiteralPath $probeFile
+            $metrics.probes += Get-ProbeEvidence $probeFile $false
             if ($result.found) { return }
+        } else {
+            $metrics.probes += Get-ProbeEvidence $probeFile (-not $worker.HasExited)
         }
         if (-not $worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
         Start-Sleep -Milliseconds 200
@@ -410,9 +506,14 @@ try {
     }
     if ($app.MainWindowHandle -eq [IntPtr]::Zero) { throw 'The application did not create a main window before the timeout.' }
     $windowMs = [Math]::Round($launch.Elapsed.TotalMilliseconds, 2)
+    $metrics.firstLaunch = [ordered]@{
+        windowCreated = $true; headingVerified = $false; pid = $app.Id
+        sessionId = $app.SessionId; launchToWindowMs = $windowMs
+    }
     $firstProbe = Wait-ForHeading $firstHeading 'first-document.png'
     $metrics.firstLaunch = [ordered]@{
         windowCreated = $true; headingVerified = $true; pid = $app.Id
+        sessionId = $app.SessionId
         argumentKind = 'absolute Unicode path with spaces; UTF-8 document'
         launchToWindowMs = $windowMs
         launchToVerifiedHeadingMs = [Math]::Round($launch.Elapsed.TotalMilliseconds, 2)
@@ -479,6 +580,9 @@ try {
     $failure = $_.Exception.Message
     $metrics.status = 'failed'
     $metrics.failure = $failure
+    try { Capture-FailedWindow } catch {
+        $metrics.failureScreenshot = @{ saved = $false; reason = 'The owned-window diagnostic could not complete.' }
+    }
 } finally {
     # Refresh ownership while the host is still alive, then terminate its complete tree.
     if ($null -ne $app) {
