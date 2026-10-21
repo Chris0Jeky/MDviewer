@@ -195,6 +195,42 @@ test("both PDF exports work under the production CSP and use the latest edit", a
   await readyReader(page, "Latest export revision");
 });
 
+test("failed capture styles save no PDF, release their iframe and permit a retry", async ({ page }) => {
+  await openFiles(page, [{ name: "export.md", text: RICH_MARKDOWN }]);
+  await readyReader(page, "Desktop field notes");
+  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await readyWorkspace(page, RICH_MARKDOWN);
+  let downloads = 0;
+  let rejectedStyles = 0;
+  page.on("download", () => { downloads++; });
+  await page.route("**/assets/*.css", async route => {
+    if (route.request().frame().parentFrame()) {
+      rejectedStyles++;
+      await new Promise(resolve => setTimeout(resolve, 350));
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  const exportButton = page.getByRole("button", { name: "Download PDF", exact: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await exportButton.click();
+    await expect(page.getByRole("alert")).toContainText("stylesheet could not load. Try Print / Save as PDF.");
+    await expect(exportButton).toBeEnabled();
+    await expect(page.locator("iframe.html2canvas-container")).toHaveCount(0);
+    await expect(page.locator("#editor-input")).toHaveValue(RICH_MARKDOWN);
+    expect(downloads, "a failed stylesheet must not yield a misleading PDF").toBe(0);
+  }
+  expect(rejectedStyles).toBeGreaterThanOrEqual(4);
+  await page.unroute("**/assets/*.css");
+  const retry = page.waitForEvent("download");
+  await exportButton.click();
+  await retry;
+  await expect(exportButton).toBeEnabled();
+  expect(downloads).toBe(1);
+  await expect(page.locator("iframe.html2canvas-container")).toHaveCount(0);
+  await page.getByRole("button", { name: "← Reading view", exact: true }).click();
+  await readyReader(page, "Desktop field notes");
+});
+
 test("the reader enforces the 32-document session limit across batches", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Document ${index}` })));
   await readyReader(page, "Document 0");
