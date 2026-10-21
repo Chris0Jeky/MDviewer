@@ -7,7 +7,7 @@ A local Markdown reader and Markdown → PDF tool whose one hard rule is that no
 [![CI](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white)](package.json)
-[![Node](https://img.shields.io/badge/node-22%20%7C%2024%20%7C%2026%2B-339933?logo=nodedotjs&logoColor=white)](package.json)
+[![Node](https://img.shields.io/badge/node-24%20%7C%2026%2B-339933?logo=nodedotjs&logoColor=white)](package.json)
 
 **Live app:** https://mdviewer-c9r.pages.dev/
 
@@ -167,7 +167,7 @@ Deeper map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`autodoc/AGENT_I
 
 ## Quick start
 
-Requires Node `^22.22.2 || ^24.15.0 || >=26` ([`package.json` `engines`](package.json)).
+Requires Node `^24.15.0 || >=26` ([`package.json` `engines`](package.json)). Production builds and Chromium verification use Node 24 with strict engine checks. CI retains its existing Node 22 check as a legacy compatibility probe until branch protection is updated; Node 22 is not a supported installation target.
 
 ```bash
 npm install      # install dependencies
@@ -182,7 +182,7 @@ The app opens in **Split**: source on the left, paginated preview on the right. 
 
 For public hosting, Tailscale, and tunnels, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). A git push does not deploy; production is a reviewed promotion of a tested `dist/`.
 
-Useful checks (what CI runs on Node 22 and 24, plus Chromium against the production bundle):
+Useful checks (CI runs these on Node 24, plus the legacy Node 22 probe and Chromium against the production bundle):
 
 ```bash
 npm run typecheck
@@ -204,11 +204,11 @@ The exported PDF is **always dark-on-white**, regardless of the screen theme. Cl
 
 ## Tech stack
 
-Versions from [`package.json`](package.json) at this commit. CI (`.github/workflows/ci.yml`) runs the verify job on Node 22 and 24, and Playwright Chromium against `vite preview` of the production bundle.
+Versions from [`package.json`](package.json) at this commit. CI (`.github/workflows/ci.yml`) verifies Node 24, retains the legacy Node 22 required check, and runs Playwright Chromium against `vite preview` of the production bundle on Node 24.
 
 | Layer | What |
 | --- | --- |
-| Language / build | TypeScript 6, Vite 8, ESLint 10, `engines.node` `^22.22.2 \|\| ^24.15.0 \|\| >=26` |
+| Language / build | TypeScript 6, Vite 8, ESLint 10, `engines.node` `^24.15.0 \|\| >=26` |
 | UI | Vanilla TypeScript. No React/Vue/Svelte. Toolbar, editor, splitter and canvas are small DOM builders. |
 | Markdown | markdown-it 15 + footnote, anchor, toc-done-right, container, attrs, task-lists. `html: true`, then DOMPurify. |
 | Highlight / math / diagrams | Shiki 4 (fine-grained core + Oniguruma WASM; extra grammars on demand), KaTeX 0.19, Mermaid 12 |

@@ -56,7 +56,8 @@ Export click → capture document id/name/text and settings NOW
 | Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
 | Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts`, `src/app/App.ts` | `tests/app-ingestion-notices.test.ts`, `tests/e2e/empty-error.spec.ts`; spec §7 pins dismissible ingestion notices independent of render warnings |
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
-| Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 22/24 verification and production Chromium |
+| Patched transitive dependencies and supported Node floor | `package.json`, `package-lock.json` | `tests/dependency-security.test.ts` checks the wrapper-resolved KaTeX trust boundary and encoded-host normalization; spec §2 |
+| Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 24 verification and production Chromium; retained Node 22 compatibility probe |
 
 ## New or changed public seams
 
@@ -121,7 +122,7 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 
 ## Validation and handoff
 
-Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow runs supported Node 22 and 24 plus Chromium. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
+Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow verifies supported Node 24 with strict engine checks and runs production Chromium on Node 24. The existing Node 22 required-check context remains a legacy compatibility probe until branch protection is updated. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
 No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's contradictory historical deployment receipts still need reconciliation. Record remaining gates and actual commit/run identifiers in handoffs.
 

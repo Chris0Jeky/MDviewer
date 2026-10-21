@@ -27,9 +27,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Validate both the declared engine floor (22.x, the active LTS used by CI's e2e job)
-        # and the current line (24.x). Node 20 reached end of life 2026-04-30 and jsdom 30
-        # dropped it (#60).
+        # Node 24 is the supported production floor. Keep the existing Node 22
+        # required-check context as a legacy compatibility probe until branch
+        # protection is updated; it is not a supported installation target.
         node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v7
@@ -40,6 +40,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
+        env:
+          npm_config_engine_strict: ${{ matrix.node-version == '24' && 'true' || 'false' }}
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -61,9 +63,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
+        env:
+          npm_config_engine_strict: 'true'
       - name: Resolve Playwright version
         id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"

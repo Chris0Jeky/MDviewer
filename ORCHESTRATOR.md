@@ -9,15 +9,23 @@
 > all remote reads/writes use the connected GitHub API. Production dependency PR #155
 > merged as 7b6f527; PDF visual fixes #157 merged as e81f785 after exact-head CI with
 > 589 unit tests and 111 production Chromium passes (five existing opt-in perf skips).
-> #157 fixes missing SVG/checkmarks and TOC capture reflow; #136's remaining Node
-> engine concern is tracked with dependency hardening. Development-dependency #156
-> is being integrated against updated main before its final review.
+> #157 fixes missing SVG/checkmarks and TOC capture reflow. Development-dependency
+> #156 merged as f22308b after exact-head CI. Node 24/dependency hardening #159
+> merged as 3c4f09c after 591 unit tests and 111 production Chromium passes;
+> both dependency audits report zero vulnerabilities. The Node 22 required context
+> remains an explicitly unsupported legacy probe. #136's remaining PDF work covers
+> clone stylesheet readiness and visible footnote numerals in downloaded PDFs.
 > This branch adds a separate continuous Windows reader, Tauri/WebView2 host,
 > bounded native input, single-instance forwarding, explicit native exports and
 > CI-built portable/NSIS artifacts. Desktop browser tests cover lazy workspace entry,
 > repeated teardown, input limits, dirty-close protection, hostile HTML/IDs and both
 > PDF paths. Native tests and the Windows smoke/metrics workflow are the integration
-> gates; local Linux cannot establish the complete Windows result. Source documents
+> gates; local Linux cannot establish the complete Windows result. The first Windows
+> run passed 22 Rust tests and built the executable plus a 4.75 MiB NSIS installer,
+> but its UI Automation heading probe timed out before establishing render/export
+> success. Bounded phase diagnostics and an independent window screenshot are now
+> included; native acceptance and measured process-tree memory remain pending.
+> Source documents
 > remain memory-only until explicitly saved; no SDK or service worker is loaded by
 > the native entry. No comparative RAM claim, signed release or live web deployment
 > is made. AI-6/AI-7/AI-8/AI-9 remain OPEN. Current contracts and commands are in
