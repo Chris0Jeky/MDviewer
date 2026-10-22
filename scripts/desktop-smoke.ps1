@@ -134,7 +134,8 @@ public static class SmokeFilenameEdit {
     }
     private static void CheckScope(IntPtr dialog, IntPtr host, IntPtr edit, uint process) {
         CheckWindow(dialog, process, "#32770");
-        CheckWindow(host, process, "AppControlHost");
+        // UIA calls FileNameControlHost "AppControlHost"; its HWND is a native ComboBox.
+        CheckWindow(host, process, "ComboBox");
         CheckWindow(edit, process, "Edit");
         if (!IsChild(dialog, host) || !IsChild(host, edit) || !IsChild(dialog, edit) || GetDlgCtrlID(edit) != 1001)
             throw new InvalidOperationException("The filename Edit is outside the verified Save dialog host.");

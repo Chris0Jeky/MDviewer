@@ -104,18 +104,7 @@ jobs:
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Launch the real Windows app and measure its process tree
         timeout-minutes: 5
-        run: |
-          $observer = Start-Job -FilePath scripts/desktop-native-windows.ps1 -ArgumentList "$PWD/desktop-artifacts/smoke/native-windows.json"
-          $smokeExit = 1
-          try {
-            pwsh -File scripts/desktop-smoke.ps1 -Executable src-tauri/target/release/mdviewer.exe -OutputDirectory desktop-artifacts/smoke
-            $smokeExit = $LASTEXITCODE
-          } finally {
-            Stop-Job $observer
-            Receive-Job $observer
-            Remove-Job $observer
-          }
-          exit $smokeExit
+        run: pwsh -File scripts/desktop-smoke.ps1 -Executable src-tauri/target/release/mdviewer.exe -OutputDirectory desktop-artifacts/smoke
       - name: Prepare the portable app with notices
         run: |
           $portable = 'desktop-artifacts/portable'
