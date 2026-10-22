@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenBatch } from "../src/desktop/native";
 
-const boundary = vi.hoisted(() => ({ open: vi.fn(), pending: vi.fn(), render: vi.fn(), notify: () => {} }));
+const boundary = vi.hoisted(() => ({ open: vi.fn(), pending: vi.fn(), render: vi.fn(), workspace: vi.fn(), notify: () => {} }));
 vi.mock("../src/desktop/native", () => ({ native: {
   available: true, open: boundary.open, takePending: boundary.pending,
   onPending: vi.fn(async (callback: () => void) => { boundary.notify = callback; return () => {}; }),
   onClose: vi.fn(async () => () => {}),
 } }));
+vi.mock("../src/desktop/workspace", () => ({ startWorkspace: boundary.workspace }));
 vi.mock("../src/desktop/render", () => ({ renderReaderDocument: boundary.render }));
 vi.mock("../src/export/destination", () => ({ SaveCanceled: class extends Error {}, setDownloadDestination: vi.fn() }));
 
@@ -29,6 +30,7 @@ beforeEach(async () => {
   vi.resetModules();
   document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
   localStorage.clear();
+  boundary.workspace.mockReset().mockImplementation(() => { throw new Error("Workspace unavailable"); });
   boundary.open.mockReset().mockResolvedValue(empty());
   boundary.pending.mockReset().mockResolvedValue(empty());
   boundary.render.mockReset().mockImplementation(async (text: string) => rendered(text));
@@ -105,5 +107,35 @@ describe("mixed desktop import and render notices", () => {
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.getAttribute("aria-busy")).toBe("false"));
     expect(message()).toBe("newer.md: Cannot read");
     expect(document.getElementById("workspace-notice")!.textContent).toBe(message());
+  });
+
+  it.each(["warning", "failure"] as const)("preserves workspace-entry failure through a recovery render %s", async outcome => {
+    boundary.pending.mockResolvedValueOnce({ ...empty(), documents: mixed().documents });
+    boundary.notify();
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Good"));
+    if (outcome === "warning") boundary.render.mockResolvedValueOnce(rendered("# Good", ["Document warning"]));
+    else boundary.render.mockRejectedValueOnce(new Error("Rendering unavailable"));
+    document.getElementById("reader-workspace")!.click();
+    await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.getAttribute("aria-busy")).toBe("false"));
+    const detail = outcome === "warning" ? "Document warning" : "Could not render good.md: Rendering unavailable";
+    expect(message()).toBe(`Could not open the editing workspace: Workspace unavailable ${detail}`);
+    expect(document.getElementById("reader-shell")!.hidden).toBe(false);
+    expect(document.getElementById("desktop-workspace")!.hidden).toBe(true);
+  });
+
+  it("retains Sample admission errors alongside the existing document's warning", async () => {
+    boundary.render.mockImplementation(async (text: string) => rendered(text, ["Empty document warning"]));
+    boundary.pending.mockResolvedValueOnce({ ...empty(), documents: Array.from({ length: 32 }, (_, index) => ({
+      name: `empty-${index}.md`, text: "", bytes: 0,
+    })) });
+    boundary.notify();
+    await vi.waitFor(() => expect(message()).toBe("Empty document warning"));
+    document.getElementById("reader-sample")!.click();
+    await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.getAttribute("aria-busy")).toBe("false"));
+    expect(message()).toContain("Close a document first");
+    expect(message()).toContain("Empty document warning");
+    expect(document.querySelectorAll("#reader-documents option")).toHaveLength(32);
   });
 });
