@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Only the bundled reader can receive selected documents and open explicitly clicked web links.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-destroy",
+    "allow-open-files",
+    "allow-take-pending-files",
+    "allow-open-external",
+    "allow-save-export"
+  ]
+}

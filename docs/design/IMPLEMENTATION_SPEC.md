@@ -104,7 +104,7 @@ export function repairFootnoteLinks(host: ParentNode): void;
 
 // src/export/markdown.ts
 export function markdownFilename(name: string): string;
-export function downloadMarkdown(name: string, text: string): void;
+export function downloadMarkdown(name: string, text: string): void | Promise<void>;
 
 // src/app/reloadGuard.ts
 export interface ReloadGuard {
@@ -219,15 +219,117 @@ export interface DocumentRecoveryController {
   closeActive(): void;
   destroy(): void;
 }
+export type RestoreAdmission = (doc: Readonly<Pick<Doc, "name" | "text">>) => boolean;
 export function mountDocumentRecovery(
   root: HTMLElement,
   store: DocStore,
   returnFocus: () => void,
+  canRestore?: RestoreAdmission,
 ): DocumentRecoveryController;
 ```
 
 Toolbar mounts it in its own bar, delegates its Close button, and destroys it during toolbar teardown. The controller keeps only the latest explicitly closed name and exact text in memory. Another real close replaces that snapshot. Undo consumes it once and calls `DocStore.add`, yielding a fresh identity and appending to the open set without overwriting another document. Discard and teardown clear both the snapshot and filename DOM text/title. Detached or destroyed controls cannot act. No disk/browser storage, automatic reload recovery, timer or global listener is added. Explicitly closed content is not part of the open-document navigation guard; the recovery row warns that reload or tab close clears it.
 
+An optional synchronous admission callback runs before Undo consumes its snapshot.
+Refusal leaves the source, filename and offer available for retry; a later explicit
+close still replaces the offer. The ordinary web entry supplies no callback and
+retains its existing restoration behavior. Desktop supplies the same open-document
+count/UTF-8-byte gate used by its importer, including current edited source sizes.
+
 The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not use the unique Open/Save `.workspace-action` selector. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
 
-Store notifications continue through App's existing render scheduler and export leases. The pipeline and all App/DocStore public signatures are unchanged. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
+Store notifications continue through App's existing render scheduler and export leases. The pipeline and DocStore signatures are unchanged; App's optional desktop admission hook is described in section 14. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
+
+
+## 14. Experimental Windows reader
+
+`desktop.html` and `vite.desktop.config.ts` build a separate `dist-desktop` entry.
+`src/desktop/main.ts` starts a continuous, sanitized reader with no editor, Paged.js,
+service worker or Pulseboard SDK. Rich rendering shares highlighter/Markdown/KaTeX
+and sanitized Mermaid preparation, but does not call the pagination source builder;
+footnotes remain natural endnotes. Reader renders are serialized because Mermaid is
+not re-entrant, and generation checks prevent late results replacing newer selection.
+
+`ReaderSession` keeps up to 32 documents / 25,000,000 UTF-8 bytes in memory. Browser
+file pickers and drops, native picker results and second-instance launch batches all
+pass through that session gate, including when the editing workspace is active.
+Undo Close also checks the gate before consuming recovery; refusal retains the
+latest offer. Editing an open document can free bytes for a later retry. Closing
+another document replaces recovery, as in the web workspace.
+Native reads also bound disk bytes, decoded bytes and queue length. A mode transition
+queues incoming batches and preserves their focus generation. Returning from Edit &
+PDF transfers exact current text, preserves dirty state and selection, flushes the
+render scheduler, clears the Paged.js host and tears down the App. If edits exceed the
+reader bound, the workspace remains open with a useful error so nothing is discarded.
+
+After all documents, dirty baselines and active selection transfer successfully,
+the old reader session releases its sources. Workspace baselines are pruned against
+the current store on each document-set change, and cleared after successful teardown.
+An unknown identity (including Undo's fresh ID) stays conservatively dirty. Title
+and hidden reader document-picker metadata follow the workspace while it owns the
+documents, including queued imports. Return admission runs before any removal;
+a failed teardown flush restores the same document objects, IDs, selection and
+baselines so the user can retry. The temporary rollback snapshot ends with that
+transition. The separate one-close recovery source is released by Discard, a later
+close or workspace teardown. These ownership rules do not claim a total heap cap.
+The App subtree is inert during return, and desktop captures action clicks during
+mode changes (including shortcut-generated clicks), so new edits, sample loads or
+native saves cannot race the handoff. The interaction guard is released in `finally`.
+
+`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission })` retains the
+ordinary web defaults. Desktop disables App's second input adapter and supplies its
+own picker; both modes use one bounded importer. The web fallback caches the genuine
+body file input before authored IDs can collide with it. The desktop passes its
+cached application root explicitly and clears the reading DOM before App mounts its
+canonical IDs. Dirty document close requires confirmation; native window close and
+mode return are blocked during an export or mode transition.
+`tests/desktop-lifetime.test.ts` exercises real entry-point ownership with rendering
+and host boundaries stubbed; `tests/desktop-e2e/recovery.spec.ts` drives actual
+production controls for count/UTF-8-byte refusal, retry and dirty round trips.
+
+The optional `src/export/destination.ts` Blob destination is installed only by the
+native entry. The web build retains browser source downloads and jsPDF save. Source
+save awaits the native result; PDF export holds its existing render lease until that
+result settles. `SaveCanceled` releases the lease and reports cancellation without a
+fatal error or successful-export event. The Windows host accepts bounded raw bytes
+and a safe basename through `save_export`, opens a native dialog off the WebView2
+callback thread, and writes only its explicitly selected path via atomic replacement.
+It never accepts a write path from JavaScript. Cancel and failed writes preserve any
+existing destination. Exports over 128 MiB fail before the frontend IPC allocation;
+Rust independently enforces the same cap. Generic browser downloads are denied in
+the native host, avoiding modal UI inside WebView2's synchronous download callback.
+
+Tauri capabilities expose only selected-file input, pending launch input, explicit
+HTTP(S) link opening, explicit export saving, event listening and guarded window
+close. There is no general filesystem, shell or network API. The host denies external
+navigation and new windows; production CSP permits bundled assets, IPC and required
+print blobs only. Source/Cargo locks and versioned license provenance accompany both
+the per-user installer and portable artifact. Windows CI tests the actual executable
+and records the complete associated WebView2 process tree. This does not establish a
+comparative RAM target, install/default-app acceptance or signed-release readiness.
+See `../WINDOWS_DESKTOP.md`, `WINDOWS_READER.md` and `../../src-tauri/README.md`.
+
+
+## 15. Reader-only syntax-engine admission
+
+The continuous reader parses once with `createMarkdown(null, settings)`. It inspects actual
+`fence` tokens (including their nested children), not fence-shaped source lines. Prose,
+math, Mermaid-only documents and ordinary plaintext/unknown fences do not initialize Shiki
+or request its WASM, themes or grammars. Actual supported code fences await the shared
+highlighter and curated language loaders. Explicit line numbering, notation directives or
+fence metadata also enable the existing code transformers, including for plaintext.
+
+`installMarkdownHighlighter(md, hl, settings)` installs the synchronous highlight callback
+on that same parser; it does not parse or replace the structural plugin stack.
+`renderMarkdownTokens(md, tokens, env)` must receive the exact tokens and environment from
+that parser's parse. This retains heading, TOC, footnote and math plugin state and applies
+the same sanitization and warning pass as `renderMarkdown(md, src)`. The latter remains the
+public synchronous web path and delegates to parse plus token rendering. Unknown-language
+warnings now describe real parsed fences, not examples inside code or HTML blocks.
+`parsedFenceLanguages(tokens)` returns distinct normalized labels in parser traversal order.
+
+The paginated workspace still awaits its highlighter and grammar preparation before the
+unchanged no-slice pipeline in section 3. No document tokens are cached or persisted. This
+change proves avoided engine initialization and asset requests, not a measured RAM or
+startup-time improvement. Unit admission/transformer controls and production browser asset
+checks live in `tests/desktop-lazy-highlight.test.ts` and `tests/desktop-e2e/startup.spec.ts`.

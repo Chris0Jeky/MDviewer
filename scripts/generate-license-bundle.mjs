@@ -18,10 +18,12 @@ import {
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const lock = JSON.parse(readFileSync(join(repoRoot, "package-lock.json"), "utf8"));
-const outDir = join(repoRoot, "dist");
+const outputName = process.argv[2] ?? "dist";
+if (!["dist", "dist-desktop"].includes(outputName)) throw new Error("Unknown distribution directory");
+const outDir = join(repoRoot, outputName);
 
 if (!existsSync(outDir)) {
-  throw new Error("dist/ does not exist; run this script after the Vite build");
+  throw new Error(`${outputName}/ does not exist; run this script after the Vite build`);
 }
 
 copyFileSync(join(repoRoot, "LICENSE"), join(outDir, "LICENSE.txt"));
