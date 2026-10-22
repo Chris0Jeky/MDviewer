@@ -95,12 +95,13 @@ const BASE_LANGUAGE_IDS = new Set([
 
 function normalizeLanguageId(lang: string): string {
   const id = lang.toLowerCase().replace(/^language-/, "");
-  return LANGUAGE_ALIASES[id] ?? id;
+  // Fence labels are untrusted strings, never Object.prototype property names.
+  return Object.hasOwn(LANGUAGE_ALIASES, id) ? LANGUAGE_ALIASES[id]! : id;
 }
 
 export function isSupportedLanguage(lang: string): boolean {
   const id = normalizeLanguageId(lang);
-  return BASE_LANGUAGE_IDS.has(id) || id in LAZY_LANGUAGE_LOADERS;
+  return BASE_LANGUAGE_IDS.has(id) || Object.hasOwn(LAZY_LANGUAGE_LOADERS, id);
 }
 
 /** Return distinct fenced-code language ids in source order. */
@@ -181,8 +182,9 @@ async function create(): Promise<HighlighterCore> {
 export async function ensureLang(hl: HighlighterCore, lang: string): Promise<void> {
   const id = normalizeLanguageId(lang);
   if (!id || hl.getLoadedLanguages().includes(id)) return;
+  if (!Object.hasOwn(LAZY_LANGUAGE_LOADERS, id)) return;
   const loader = LAZY_LANGUAGE_LOADERS[id as keyof typeof LAZY_LANGUAGE_LOADERS];
-  if (loader) await hl.loadLanguage(loader());
+  await hl.loadLanguage(loader());
 }
 
 /** Load every supported fenced language before markdown-it's synchronous render. */

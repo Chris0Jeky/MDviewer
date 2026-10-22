@@ -82,6 +82,8 @@ jobs:
       - name: Check Rust formatting
         working-directory: src-tauri
         run: cargo fmt --check
+      - name: Validate native Save-button guards
+        run: pwsh -File scripts/test-desktop-save-button.ps1
       - name: Build the frontend and distribution notices
         run: |
           npm run desktop:build:web

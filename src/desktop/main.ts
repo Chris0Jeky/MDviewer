@@ -382,6 +382,7 @@ if (native.available) {
   });
   const drain = drainSerially(async () => {
     const request = ++generation;
+    report(""); // A forwarded batch owns its notices, just like Open/drop.
     try { commitBatch(await native.takePending(), request); }
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }
   });
