@@ -87,4 +87,23 @@ describe("mixed desktop import and render notices", () => {
     expect(message()).toBe("");
     expect(document.getElementById("reader-notice")!.hidden).toBe(true);
   });
+
+  it.each(["warning", "failure"] as const)("keeps a newer errors-only batch visible after a late render %s", async outcome => {
+    let complete!: () => void;
+    boundary.render.mockReturnValueOnce(new Promise<ReturnType<typeof rendered>>((resolve, reject) => {
+      complete = () => outcome === "warning"
+        ? resolve(rendered("# Good", ["Older warning"]))
+        : reject(new Error("Older render failure"));
+    }));
+    boundary.pending.mockResolvedValueOnce(mixed());
+    boundary.notify();
+    await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledOnce());
+    boundary.pending.mockResolvedValueOnce({ ...empty(), errors: [{ name: "newer.md", message: "Cannot read" }] });
+    boundary.notify();
+    await vi.waitFor(() => expect(message()).toBe("newer.md: Cannot read"));
+    complete();
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.getAttribute("aria-busy")).toBe("false"));
+    expect(message()).toBe("newer.md: Cannot read");
+    expect(document.getElementById("workspace-notice")!.textContent).toBe(message());
+  });
 });

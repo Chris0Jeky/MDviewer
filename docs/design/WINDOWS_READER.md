@@ -38,6 +38,13 @@ another document's size can allow retry. A new explicit close replaces that offe
 Restored sources retain unsaved-work protection on return to reading. The one-close
 snapshot remains memory-only and is cleared by Discard or workspace teardown.
 
+Import failures are reported immediately and remain alongside warnings or a render
+failure for the accepted document in the same batch. A coalesced empty native drain
+does not erase them. Each render captures its notice revision, so a late warning or
+failure cannot overwrite a newer action or errors-only batch. No notice history or
+document text is persisted. Regression coverage includes picker/forwarded batches,
+obsolete renders and the production browser's empty-plus-invalid-file case.
+
 ## Verification and distribution
 
 Unit tests cover ingestion limits, late results and host queue draining. Real
