@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/app/App";
 import { createRenderScheduler, DocStore, type RenderReason } from "../src/app/state";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
+import { SaveCanceled } from "../src/export/destination";
 
 const mocks = vi.hoisted(() => ({
   exportPdf: vi.fn(async (_host: HTMLElement, _settings: unknown, _options: unknown) => {}),
@@ -31,6 +32,16 @@ function fixture() {
 beforeEach(() => { mocks.exportPdf.mockReset().mockResolvedValue(undefined); });
 
 describe("App export ownership and completed-render metadata", () => {
+  it("releases the export lease after native save cancellation without a fatal error", async () => {
+    const t = fixture();
+    mocks.exportPdf.mockRejectedValueOnce(new SaveCanceled());
+    await t.app.exportPdf();
+    expect(t.fatal).not.toHaveBeenCalled();
+    expect(t.app.exportState.busy).toBe(false);
+    t.scheduler.schedule("content");
+    await t.scheduler.flush();
+    expect(t.host.textContent).toBe("");
+  });
   it("keeps pages alive while a close waits and uses their original metadata", async () => {
     const t = fixture();
     let release!: () => void;

@@ -6,11 +6,14 @@ export interface DocumentRecoveryController {
   destroy(): void;
 }
 
+export type RestoreAdmission = (doc: Readonly<Pick<Doc, "name" | "text">>) => boolean;
+
 /** One explicit close can be undone during this toolbar's in-memory lifetime. */
 export function mountDocumentRecovery(
   root: HTMLElement,
   store: DocStore,
   returnFocus: () => void,
+  canRestore?: RestoreAdmission,
 ): DocumentRecoveryController {
   let closed: Pick<Doc, "name" | "text"> | null = null;
   let destroyed = false;
@@ -42,6 +45,8 @@ export function mountDocumentRecovery(
   function restore(): void {
     if (destroyed || !root.isConnected || !closed) return;
     const snapshot = closed;
+    // Refusal must preserve the exact snapshot and its offer for a later retry.
+    if (canRestore && !canRestore(snapshot)) return;
     // Consume once before store events can re-enter. A new identity cannot
     // overwrite another document that was opened or edited after this close.
     clear();

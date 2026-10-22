@@ -4,10 +4,10 @@ import { mountDocumentRecovery } from "../src/ui/DocumentRecovery";
 
 const cleanup: Array<() => void> = [];
 afterEach(() => { cleanup.splice(0).forEach((stop) => stop()); document.body.replaceChildren(); });
-function setup() {
+function setup(canRestore?: (doc: { name: string; text: string }) => boolean) {
   const root = document.createElement("div"); document.body.append(root);
   const store = new DocStore(); const focus = vi.fn();
-  const controller = mountDocumentRecovery(root, store, focus); cleanup.push(() => controller.destroy());
+  const controller = mountDocumentRecovery(root, store, focus, canRestore); cleanup.push(() => controller.destroy());
   const undo = root.querySelector<HTMLButtonElement>("button")!;
   const discard = root.querySelector<HTMLButtonElement>("[aria-label='Discard closed document']")!;
   const row = root.querySelector<HTMLElement>(".document-recovery")!;
@@ -15,6 +15,37 @@ function setup() {
 }
 
 describe("one-close recovery", () => {
+  it("checks admission before consuming recovery and allows a refused snapshot to be retried", () => {
+    const admit = vi.fn(() => false);
+    const t = setup(admit);
+    const original = t.store.add("recover.md", "exact edited source λ");
+    t.controller.closeActive();
+    const remaining = t.store.add("keep.md", "keep this source");
+    t.undo.click();
+    expect(admit).toHaveBeenCalledWith({ name: "recover.md", text: "exact edited source λ" });
+    expect(t.store.openDocs).toEqual([remaining]);
+    expect(t.row.hidden).toBe(false);
+    expect(t.row.querySelector("strong")!.textContent).toBe("recover.md");
+    expect(t.focus).not.toHaveBeenCalled();
+    admit.mockReturnValue(true);
+    t.undo.click(); t.undo.click();
+    expect(t.store.openDocs).toHaveLength(2);
+    expect(t.store.active).toMatchObject({ name: "recover.md", text: "exact edited source λ" });
+    expect(t.store.active!.id).not.toBe(original.id);
+    expect(admit).toHaveBeenCalledTimes(2);
+    expect(t.row.hidden).toBe(true);
+    expect(t.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("a later explicit close replaces even a refused recovery snapshot", () => {
+    const admit = vi.fn(() => false);
+    const t = setup(admit);
+    t.store.add("first.md", "first source"); t.controller.closeActive(); t.undo.click();
+    t.store.add("latest.md", "latest source"); t.controller.closeActive();
+    admit.mockReturnValue(true); t.undo.click();
+    expect(t.store.openDocs.map(doc => doc.name)).toEqual(["latest.md"]);
+  });
+
   it("snapshots current exact source and restores once with a fresh identity", () => {
     const t = setup();
     const doc = t.store.add("café.md", "original");
