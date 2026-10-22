@@ -308,3 +308,28 @@ the per-user installer and portable artifact. Windows CI tests the actual execut
 and records the complete associated WebView2 process tree. This does not establish a
 comparative RAM target, install/default-app acceptance or signed-release readiness.
 See `../WINDOWS_DESKTOP.md`, `WINDOWS_READER.md` and `../../src-tauri/README.md`.
+
+
+## 15. Reader-only syntax-engine admission
+
+The continuous reader parses once with `createMarkdown(null, settings)`. It inspects actual
+`fence` tokens (including their nested children), not fence-shaped source lines. Prose,
+math, Mermaid-only documents and ordinary plaintext/unknown fences do not initialize Shiki
+or request its WASM, themes or grammars. Actual supported code fences await the shared
+highlighter and curated language loaders. Explicit line numbering, notation directives or
+fence metadata also enable the existing code transformers, including for plaintext.
+
+`installMarkdownHighlighter(md, hl, settings)` installs the synchronous highlight callback
+on that same parser; it does not parse or replace the structural plugin stack.
+`renderMarkdownTokens(md, tokens, env)` must receive the exact tokens and environment from
+that parser's parse. This retains heading, TOC, footnote and math plugin state and applies
+the same sanitization and warning pass as `renderMarkdown(md, src)`. The latter remains the
+public synchronous web path and delegates to parse plus token rendering. Unknown-language
+warnings now describe real parsed fences, not examples inside code or HTML blocks.
+`parsedFenceLanguages(tokens)` returns distinct normalized labels in parser traversal order.
+
+The paginated workspace still awaits its highlighter and grammar preparation before the
+unchanged no-slice pipeline in section 3. No document tokens are cached or persisted. This
+change proves avoided engine initialization and asset requests, not a measured RAM or
+startup-time improvement. Unit admission/transformer controls and production browser asset
+checks live in `tests/desktop-lazy-highlight.test.ts` and `tests/desktop-e2e/startup.spec.ts`.

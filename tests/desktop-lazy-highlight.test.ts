@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 import { getHighlighter } from "../src/render/highlight";
 import { renderReaderDocument } from "../src/desktop/render";
+import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 
 // Keep the real renderer and real grammar engine. Observe only the cold-start
 // boundary; asserting the rendered document prevents an inert stub from passing.
@@ -58,7 +59,6 @@ describe("reader syntax highlighting admission", () => {
     expect(result.warnings).toEqual(['Code language "unbundled-example" is not bundled; rendered as plain text.']);
     expect(getHighlighter).not.toHaveBeenCalled();
   });
-
   it("preserves explicitly requested plaintext line numbers", async () => {
     const result = await renderReaderDocument("# Numbered\n\n```text\nalpha\nbeta\n```", { ...DEFAULT_SETTINGS, showLineNumbers: true });
     expect(result.document.querySelectorAll("pre.shiki.with-line-numbers .line")).toHaveLength(2);
@@ -66,7 +66,15 @@ describe("reader syntax highlighting admission", () => {
   });
 
   it("preserves plaintext metadata highlighting", async () => {
-    const result = await renderReaderDocument("# Marked\n\n```text {2}\nalpha\nbeta\n```", DEFAULT_SETTINGS);
+    // A trailing {...} is consumed by markdown-it-attrs before highlighting.
+    // Keep a trailing metadata word so this exercises actual Shiki metadata.
+    const source = "# Marked\n\n```text {2} title=example\nalpha\nbeta\n```";
+    const eager = renderMarkdown(createMarkdown(await getHighlighter(), DEFAULT_SETTINGS), source);
+    const reference = document.createElement("div");
+    reference.innerHTML = eager.html;
+    expect(reference.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
+    vi.mocked(getHighlighter).mockClear();
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
     expect(getHighlighter).toHaveBeenCalledOnce();
   });

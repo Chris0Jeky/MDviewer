@@ -153,3 +153,15 @@ dirty, and a failed teardown flush restores the same identities and baselines. T
 and reader picker metadata follow the current workspace store, including queued input.
 
 Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not reuse `.workspace-action` for these buttons or break the unique keyboard Open/Save selectors. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
+
+
+## Reader-only lazy highlighting
+
+Canonical contract: implementation spec section 15. `createMarkdown` accepts a nullable
+highlighter for the continuous reader. `parsedFenceLanguages(Token[])` reads only real
+parser fences. `installMarkdownHighlighter(md, hl, settings)` enables synchronous Shiki
+without changing parsed structural state. `renderMarkdownTokens(md, tokens, env)` shares
+the sanitizer and warnings with `renderMarkdown(md, src)` and requires the same parser's
+tokens/environment. `src/desktop/render.ts` owns admission; line-number/notation/metadata
+requests retain the existing transformers. The web pagination order is unchanged.
+Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/desktop-e2e/startup.spec.ts`.
