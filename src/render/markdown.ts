@@ -87,10 +87,10 @@ function lineNumbers(): ShikiTransformer {
 
 /**
  * Build a fully-configured MarkdownIt for the given highlighter + settings. The Shiki theme
- * pair and the line-numbers transformer are settings-dependent, so a fresh instance is built
- * whenever the code theme or line-number toggle changes.
+ * pair and the line-numbers transformer are settings-dependent. Passing null keeps
+ * fences escaped/plain; installMarkdownHighlighter can enable code on the same parser.
  */
-export function createMarkdown(hl: HighlighterCore, settings: Settings): MarkdownIt {
+export function createMarkdown(hl: HighlighterCore | null, settings: Settings): MarkdownIt {
   const md = new MarkdownItCtor({
     html: true, // required: KaTeX / Mermaid produce raw HTML
     linkify: true,
@@ -133,6 +133,32 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
 
   registerKatex(md);
 
+  if (hl) installMarkdownHighlighter(md, hl, settings);
+
+  // Mermaid is diagram source, never a syntax-grammar request. The standard
+  // fence rule consults md.options.highlight when Shiki is installed later.
+  const codeFence = md.renderer.rules.fence;
+  if (!codeFence) throw new Error("Markdown fence renderer is unavailable");
+  md.renderer.rules.fence = (tokens, idx, options, env, self): string => {
+    const token = tokens[idx];
+    const language = (token?.info.trim().split(/\s+/, 1)[0] ?? "")
+      .toLowerCase()
+      .replace(/^language-/, "");
+    if (language === "mermaid") {
+      return `<pre><code class="language-mermaid">${md.utils.escapeHtml(token?.content ?? "")}</code></pre>\n`;
+    }
+    return codeFence(tokens, idx, options, env, self);
+  };
+
+  return md;
+}
+
+/** Attach synchronous code highlighting to an existing parser without reparsing. */
+export function installMarkdownHighlighter(
+  md: MarkdownIt,
+  hl: HighlighterCore,
+  settings: Settings,
+): void {
   const pair = CODE_THEME_PAIRS[settings.codeTheme];
   const transformers: ShikiTransformer[] = [
     transformerNotationHighlight(),
@@ -155,24 +181,22 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
       fallbackLanguage: "text" as unknown as BundledLanguage,
     }),
   );
+}
 
-  // Shiki owns the fence rule, but Mermaid fences are diagram source rather than
-  // highlighted code. Override after installing Shiki and delegate every other
-  // language back to its renderer so renderAllMermaid can find the canonical class.
-  const shikiFence = md.renderer.rules.fence;
-  if (!shikiFence) throw new Error("Shiki did not register a Markdown fence renderer");
-  md.renderer.rules.fence = (tokens, idx, options, env, self): string => {
-    const token = tokens[idx];
-    const language = (token?.info.trim().split(/\s+/, 1)[0] ?? "")
-      .toLowerCase()
-      .replace(/^language-/, "");
-    if (language === "mermaid") {
-      return `<pre><code class="language-mermaid">${md.utils.escapeHtml(token?.content ?? "")}</code></pre>\n`;
+/** Actual parser-recognized fences, including nested quotes/lists/footnotes. */
+export function parsedFenceLanguages(tokens: Token[]): string[] {
+  const languages = new Set<string>();
+  const visit = (items: Token[]): void => {
+    for (const token of items) {
+      if (token.type === "fence") {
+        const language = token.info.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
+        if (language) languages.add(language);
+      }
+      if (token.children) visit(token.children);
     }
-    return shikiFence(tokens, idx, options, env, self);
   };
-
-  return md;
+  visit(tokens);
+  return [...languages];
 }
 
 /**
@@ -180,14 +204,24 @@ export function createMarkdown(hl: HighlighterCore, settings: Settings): Markdow
  *
  * markdown-it + the plugins render synchronously and swallow recoverable errors (KaTeX with
  * `throwOnError:false`, Shiki with a text fallback), so we recover warnings by scanning: the
- * source for code-fence language ids we do not bundle, and the rendered HTML for KaTeX's
+ * parsed fences for language ids we do not bundle, and the rendered HTML for KaTeX's
  * error markers. Each distinct issue is reported once.
  */
 export function renderMarkdown(
   md: MarkdownIt,
   src: string,
 ): { html: string; warnings: RenderWarning[] } {
-  const rawHtml = md.render(src);
+  const env = {};
+  return renderMarkdownTokens(md, md.parse(src, env), env);
+}
+
+/** Render the exact tokens and environment from this parser's earlier parse. */
+export function renderMarkdownTokens(
+  md: MarkdownIt,
+  tokens: Token[],
+  env: Parameters<MarkdownIt["parse"]>[1],
+): { html: string; warnings: RenderWarning[] } {
+  const rawHtml = md.renderer.render(tokens, md.options, env);
   const sanitized = sanitizeRenderedHtml(rawHtml);
   // Normalise KaTeX's two failure shapes into one detectable marker (class + title) before
   // anything reads the output. Purely additive markup: no layout step is affected.
@@ -203,15 +237,9 @@ export function renderMarkdown(
     });
   }
 
-  // Unknown fenced-code languages: Shiki silently falls back to plain text. Scan the raw
-  // source for ``` / ~~~ fences with an info string whose first token we do not ship.
-  const seenLangs = new Set<string>();
-  const fenceRe = /^[ \t]*(?:`{3,}|~{3,})[ \t]*([^\s`{]+)/gm;
-  let m: RegExpExecArray | null;
-  while ((m = fenceRe.exec(src)) !== null) {
-    const lang = (m[1] ?? "").toLowerCase().replace(/^language-/, "");
-    if (lang && !isSupportedLanguage(lang) && !seenLangs.has(lang)) {
-      seenLangs.add(lang);
+  // Inspect tokens, not fence-shaped text inside code/HTML examples.
+  for (const lang of parsedFenceLanguages(tokens)) {
+    if (!isSupportedLanguage(lang)) {
       warnings.push({
         kind: "lang",
         message: `Code language "${lang}" is not bundled; rendered as plain text.`,
