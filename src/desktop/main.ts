@@ -382,8 +382,13 @@ if (native.available) {
   });
   const drain = drainSerially(async () => {
     const request = ++generation;
-    report(""); // A forwarded batch owns its notices, just like Open/drop.
-    try { commitBatch(await native.takePending(), request); }
+    try {
+      const batch = await native.takePending();
+      // Coalesced notifications may produce an empty second drain. Only a new
+      // batch replaces notices; an empty queue must not hide a real failure.
+      if (batch.documents.length || batch.errors.length) report("");
+      commitBatch(batch, request);
+    }
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }
   });
   void (async () => {
