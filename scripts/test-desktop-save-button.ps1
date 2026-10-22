@@ -40,6 +40,14 @@ try {
     $button = New-Fixture 'Button' $dialog 1
     if ([SmokeSaveButton]::Validate($dialog, [uint32]$PID) -ne $button) { throw 'Valid native Save button was not returned.' }
     Write-Host 'PASS exact owned dialog/button'
+    Expect-Rejected 'missing filename Edit' { [SmokeSaveButton]::ValidateFilename($dialog, [uint32]$PID) }
+    Expect-Rejected 'filename wrong process' { [SmokeSaveButton]::ValidateFilename($dialog, [uint32]($PID + 1)) }
+    Expect-Rejected 'empty filename' { [SmokeSaveButton]::SetFilename($dialog, [uint32]$PID, '') }
+    Expect-Rejected 'NUL filename' { [SmokeSaveButton]::SetFilename($dialog, [uint32]$PID, "bad`0name") }
+    Expect-Rejected 'oversize filename' { [SmokeSaveButton]::SetFilename($dialog, [uint32]$PID, ('x' * 32761)) }
+    $wrongHostDialog = New-Fixture '#32770'
+    [void](New-Fixture 'Edit' $wrongHostDialog 1001)
+    Expect-Rejected 'filename outside expected host' { [SmokeSaveButton]::ValidateFilename($wrongHostDialog, [uint32]$PID) }
     Expect-Rejected 'zero handle' { [SmokeSaveButton]::Validate([IntPtr]::Zero, [uint32]$PID) }
     Expect-Rejected 'broadcast handle' { [SmokeSaveButton]::Validate([IntPtr]0xffff, [uint32]$PID) }
     Expect-Rejected 'wrong process' { [SmokeSaveButton]::Validate($dialog, [uint32]($PID + 1)) }

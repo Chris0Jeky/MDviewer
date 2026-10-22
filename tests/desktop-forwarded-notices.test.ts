@@ -60,4 +60,23 @@ describe("forwarded-file notice lifetime", () => {
     boundary.pending.mockRejectedValueOnce(new Error("Forwarding failed")); boundary.notify();
     await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toBe("Could not open launched files: Forwarding failed"));
   });
+
+  it("does not erase an existing notice when the native queue is empty", async () => {
+    boundary.notify();
+    await vi.waitFor(() => expect(boundary.pending).toHaveBeenCalledTimes(2));
+    expect(document.getElementById("reader-notice")!.textContent).toBe("Could not open files: Previous picker failure");
+  });
+
+  it("keeps first-pass failures when coalesced notifications cause an empty second pass", async () => {
+    let complete!: (batch: OpenBatch) => void;
+    boundary.pending.mockReturnValueOnce(new Promise<OpenBatch>(resolve => { complete = resolve; }));
+    boundary.notify();
+    await vi.waitFor(() => expect(boundary.pending).toHaveBeenCalledTimes(2));
+    boundary.notify();
+    complete({ ...empty(), errors: [{ name: "bad.md", message: "Invalid encoding" }] });
+    await vi.waitFor(() => expect(boundary.pending).toHaveBeenCalledTimes(3));
+    expect(document.getElementById("reader-notice")!.textContent).toBe("bad.md: Invalid encoding");
+    expect(document.getElementById("reader-notice")!.hidden).toBe(false);
+    expect(document.getElementById("workspace-notice")!.textContent).toBe("bad.md: Invalid encoding");
+  });
 });

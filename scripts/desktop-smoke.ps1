@@ -94,184 +94,6 @@ if ($Probe) {
         }
         return [pscustomobject]$metadata
     }
-    function Test-FilenameLabel([string]$Text) {
-        $normalized = ($Text.Replace('&', '').Trim() -replace '\s+', ' ').TrimEnd(':').Trim()
-        return $normalized -ieq 'File name'
-    }
-    function Set-NativeFilenameText($Dialog, $FilenameHost, $Edit, [string]$Text) {
-        # Windows 11's observed filename Edit (ID 1001) is exposed as a Pane
-        # without ValuePattern by framework UIA. Address only that exact child;
-        # Win32 verifies its identity/ownership again before writing and readback.
-        # WM_SETTEXT/WM_GETTEXT explicitly support Edit contents, and the system
-        # marshals these messages across processes. No keyboard/focus fallback.
-        # https://learn.microsoft.com/windows/win32/winmsg/wm-settext
-        # https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-sendmessagetimeoutw
-        Write-ProbePhase 'compiling-native-filename-helper'
-        Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public static class SmokeFilenameEdit {
-    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] private static extern int GetClassNameW(IntPtr window, StringBuilder name, int count);
-    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr window);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsChild(IntPtr parent, IntPtr child);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowEnabled(IntPtr window);
-    [DllImport("user32.dll", ExactSpelling = true)] private static extern int GetWindowLongW(IntPtr window, int index);
-    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern IntPtr SetTextMessage(IntPtr window, uint message, UIntPtr wParam, string text, uint flags, uint timeout, out UIntPtr result);
-    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode, ExactSpelling = true)]
-    private static extern IntPtr GetTextMessage(IntPtr window, uint message, UIntPtr wParam, StringBuilder text, uint flags, uint timeout, out UIntPtr result);
-    private static void CheckWindow(IntPtr window, uint expectedProcess, string expectedClass) {
-        uint process;
-        if (window == IntPtr.Zero || window == new IntPtr(0xffff) || expectedProcess == 0 ||
-            GetWindowThreadProcessId(window, out process) == 0 || process != expectedProcess)
-            throw new InvalidOperationException("The filename window no longer belongs to the smoke application.");
-        var name = new StringBuilder(128);
-        if (GetClassNameW(window, name, name.Capacity) == 0 ||
-            !String.Equals(name.ToString(), expectedClass, StringComparison.Ordinal) || !IsWindowEnabled(window))
-            throw new InvalidOperationException("The filename window class or enabled state did not match.");
-    }
-    private static void CheckScope(IntPtr dialog, IntPtr host, IntPtr edit, uint process) {
-        CheckWindow(dialog, process, "#32770");
-        // UIA calls FileNameControlHost "AppControlHost"; its HWND is a native ComboBox.
-        CheckWindow(host, process, "ComboBox");
-        CheckWindow(edit, process, "Edit");
-        if (!IsChild(dialog, host) || !IsChild(host, edit) || !IsChild(dialog, edit) || GetDlgCtrlID(edit) != 1001)
-            throw new InvalidOperationException("The filename Edit is outside the verified Save dialog host.");
-        // GWL_STYLE is a 32-bit value on both Windows architectures. ES_READONLY
-        // must be absent; a child Edit has nonzero window style bits.
-        int style = GetWindowLongW(edit, -16);
-        if (style == 0 || (style & 0x0800) != 0)
-            throw new InvalidOperationException("The filename Edit is read-only or its style is unavailable.");
-    }
-    public static void SetVerifiedText(IntPtr dialog, IntPtr host, IntPtr edit, uint process, string text) {
-        if (String.IsNullOrEmpty(text) || text.Length > 32760 || text.IndexOf('\0') >= 0)
-            throw new InvalidOperationException("The smoke export path is empty or exceeds the supported filename-field bound.");
-        CheckScope(dialog, host, edit, process);
-        const uint flags = 0x0001 | 0x0002 | 0x0020; // BLOCK | ABORTIFHUNG | ERRORONEXIT
-        UIntPtr outcome;
-        if (SetTextMessage(edit, 0x000C, UIntPtr.Zero, text, flags, 1500, out outcome) == IntPtr.Zero || outcome == UIntPtr.Zero)
-            throw new InvalidOperationException("The verified filename Edit rejected WM_SETTEXT or timed out.");
-        CheckScope(dialog, host, edit, process);
-        // One extra character beyond the expected text catches a longer value
-        // whose prefix matches. Never record the field contents in diagnostics.
-        var readback = new StringBuilder(text.Length + 2);
-        if (GetTextMessage(edit, 0x000D, new UIntPtr((uint)readback.Capacity), readback, flags, 1500, out outcome) == IntPtr.Zero ||
-            outcome.ToUInt64() != (ulong)text.Length || !String.Equals(readback.ToString(), text, StringComparison.Ordinal))
-            throw new InvalidOperationException("The verified filename Edit did not return the exact requested export path.");
-        CheckScope(dialog, host, edit, process);
-    }
-}
-'@
-        Write-ProbePhase 'setting-native-filename-and-verifying-readback'
-        [SmokeFilenameEdit]::SetVerifiedText([IntPtr]$Dialog.Current.NativeWindowHandle,
-            [IntPtr]$FilenameHost.Current.NativeWindowHandle, [IntPtr]$Edit.Current.NativeWindowHandle,
-            [uint32]$OwnerProcessId, $Text)
-        Write-ProbePhase 'native-filename-readback-verified'
-    }
-    function Find-FilenameValueTarget($Dialog) {
-        $editableCondition = [System.Windows.Automation.OrCondition]::new(
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit),
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ComboBox))
-        # Modern Common Item Dialogs expose FileNameControlHost, or the labeled
-        # editable combo box. Its ValuePattern can live on the host or child Edit.
-        # Never select an arbitrary Edit elsewhere in the dialog (for example Search).
-        $hostCondition = [System.Windows.Automation.PropertyCondition]::new(
-            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'FileNameControlHost')
-        $filenameHost = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $hostCondition)
-        if ($null -eq $filenameHost) {
-            $hostCondition = [System.Windows.Automation.AndCondition]::new(
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:'),
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ComboBox))
-            $filenameHost = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $hostCondition)
-        }
-        $result.filenameHost = $(if ($null -ne $filenameHost) { Get-ControlMetadata $filenameHost } else { $null })
-        $candidates = [System.Collections.Generic.List[object]]::new()
-        $hostChildren = @()
-        if ($null -ne $filenameHost) {
-            $candidates.Add($filenameHost)
-            # The observed Windows 11 filename host is an AppControlHost Pane;
-            # its hosted controls need not advertise legacy Edit/ComboBox types.
-            # This wider type query remains confined to the exact filename host.
-            $hostChildren = $filenameHost.FindAll([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.Condition]::TrueCondition)
-            for ($i = 0; $i -lt [Math]::Min(32, $hostChildren.Count); $i++) { $candidates.Add($hostChildren[$i]) }
-        } else {
-            $editCondition = [System.Windows.Automation.AndCondition]::new(
-                [System.Windows.Automation.OrCondition]::new(
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1001'),
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::NameProperty, 'File name:')),
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))
-            $legacyEdit = $Dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
-            if ($null -ne $legacyEdit) { $candidates.Add($legacyEdit) }
-        }
-        $controls = $Dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
-        foreach ($control in $controls) {
-            $current = $control.Current
-            if ([string]$current.AutomationId -like 'System.*') { continue }
-            $label = $current.LabeledBy
-            $labelName = $(if ($null -ne $label) { [string]$label.Current.Name } else { '' })
-            if ((Test-FilenameLabel $current.Name) -or (Test-FilenameLabel $labelName)) {
-                $candidates.Add($control)
-                if ($current.ControlType -eq [System.Windows.Automation.ControlType]::ComboBox) {
-                    $children = $control.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editableCondition)
-                    for ($i = 0; $i -lt [Math]::Min(16, $children.Count); $i++) { $candidates.Add($children[$i]) }
-                }
-            }
-        }
-        foreach ($candidate in $candidates) {
-            $pattern = $null
-            if ($candidate.Current.IsEnabled -and
-                $candidate.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern) -and
-                -not $pattern.Current.IsReadOnly) {
-                return [pscustomobject]@{ element = $candidate; pattern = $pattern; method = 'uia-value' }
-            }
-        }
-        # Actual runner evidence identifies exactly one native Edit, ID 1001,
-        # beneath FileNameControlHost. Permit only that specific host/child pair
-        # when managed UIA cannot expose its ValuePattern; native checks repeat
-        # the PID, class, enabled/style and ancestry gates immediately before use.
-        if ($null -ne $filenameHost -and $filenameHost.Current.AutomationId -ceq 'FileNameControlHost' -and
-            $filenameHost.Current.ClassName -ceq 'AppControlHost' -and $filenameHost.Current.NativeWindowHandle -ne 0 -and
-            $hostChildren.Count -le 32) {
-            $nativeEdits = @($hostChildren | Where-Object {
-                $nativePattern = $null
-                $_.Current.AutomationId -ceq '1001' -and $_.Current.ClassName -ceq 'Edit' -and
-                $_.Current.IsEnabled -and $_.Current.NativeWindowHandle -ne 0 -and
-                -not $_.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$nativePattern)
-            })
-            if ($nativeEdits.Count -eq 1) {
-                return [pscustomobject]@{ element = $nativeEdits[0]; pattern = $null; method = 'win32-edit'; nativeHost = $filenameHost }
-            }
-        }
-        # File-list cells also advertise Edit, and can consume the diagnostic
-        # budget before the filename row. Exclude the observed System.* columns;
-        # retain only bounded control metadata, never their values or list items.
-        if ($null -ne $filenameHost) {
-            try {
-                $result.filenameHost = Get-ControlMetadata $filenameHost -IncludePatterns
-                $result.filenameHostChildCount = $hostChildren.Count
-                $result.filenameHostChildren = @()
-                for ($i = 0; $i -lt [Math]::Min(32, $hostChildren.Count); $i++) {
-                    $result.filenameHostChildren += Get-ControlMetadata $hostChildren[$i] -IncludePatterns
-                }
-            } catch { $result.filenameHostMetadataError = $_.Exception.GetType().Name }
-        }
-        $result.filenameControls = @()
-        for ($i = 0; $i -lt $controls.Count -and $result.filenameControls.Count -lt 24; $i++) {
-            if ([string]$controls[$i].Current.AutomationId -like 'System.*') { continue }
-            $result.filenameControls += Get-ControlMetadata $controls[$i]
-        }
-        return $null
-    }
     try {
         Write-ProbePhase 'worker-started'
         if ($ProbeAction -ne 'screenshot') {
@@ -311,46 +133,24 @@ public static class SmokeFilenameEdit {
                 }
                 if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
                 $result.saveDialog = Get-ControlMetadata $dialog
-                Write-ProbePhase 'finding-filename-field'
-                $filename = Find-FilenameValueTarget $dialog
-                if ($null -eq $filename) { throw 'The Save dialog has no writable ValuePattern or exact native filename Edit.' }
-                $result.filenameControl = Get-ControlMetadata $filename.element
-                $result.filenameMethod = $filename.method
-                Write-ProbePhase 'setting-filename'
-                if ($filename.method -eq 'win32-edit') {
-                    Set-NativeFilenameText $dialog $filename.nativeHost $filename.element $SavePath
-                    $result.filenameReadbackVerified = $true
-                } else { $filename.pattern.SetValue($SavePath) }
-                $saveCondition = [System.Windows.Automation.AndCondition]::new(
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, '1'),
-                    [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
-                Write-ProbePhase 'finding-save-button'
-                $saveButton = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $saveCondition)
-                if ($null -eq $saveButton) { $saveButton = Find-Button $dialog 'Save' }
-                $savePattern = $null
-                if ($null -ne $saveButton) {
-                    [void]$saveButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$savePattern)
-                }
-                if ($null -eq $savePattern) {
-                    Write-ProbePhase 'validating-native-save-button'
-                    Add-Type -Path (Join-Path $PSScriptRoot 'desktop-save-button.cs')
-                    $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
-                    $saveHandle = [SmokeSaveButton]::Validate($dialogHandle, [uint32]$OwnerProcessId)
-                    $result.saveButtonMethod = 'win32-button'
-                    $result.saveButtonHandle = $saveHandle.ToInt64()
-                    $result.found = $true
-                    Write-ProbeResult
-                    Write-ProbePhase 'invoking-native-save-button'
-                    [SmokeSaveButton]::Click($dialogHandle, [uint32]$OwnerProcessId)
-                } else {
-                    $result.saveButtonMethod = 'uia-invoke'
-                    $result.found = $true
-                    Write-ProbeResult
-                    Write-ProbePhase 'invoking-save-button'
-                    $savePattern.Invoke()
-                }
+                # Framework UIA can expose the dialog but omit all its children
+                # on a second Save. The native bridge addresses only the unique
+                # owned Edit/1001 under ComboBox/FloatNotifySink, then direct Button/1.
+                Write-ProbePhase 'validating-native-save-controls'
+                Add-Type -Path (Join-Path $PSScriptRoot 'desktop-save-button.cs')
+                $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
+                $saveHandle = [SmokeSaveButton]::Validate($dialogHandle, [uint32]$OwnerProcessId)
+                Write-ProbePhase 'setting-and-notifying-native-filename'
+                $editHandle = [SmokeSaveButton]::SetFilename($dialogHandle, [uint32]$OwnerProcessId, $SavePath)
+                $result.filenameMethod = 'win32-dialog-edit'
+                $result.filenameHandle = $editHandle.ToInt64()
+                $result.filenameReadbackVerified = $true
+                $result.saveButtonMethod = 'win32-button'
+                $result.saveButtonHandle = $saveHandle.ToInt64()
+                $result.found = $true
+                Write-ProbeResult
+                Write-ProbePhase 'invoking-native-save-button'
+                [SmokeSaveButton]::Click($dialogHandle, [uint32]$OwnerProcessId)
                 Write-ProbePhase 'save-button-invoked'
                 exit 0
             }
