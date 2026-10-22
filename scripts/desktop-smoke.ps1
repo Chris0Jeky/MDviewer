@@ -329,12 +329,28 @@ public static class SmokeFilenameEdit {
                 Write-ProbePhase 'finding-save-button'
                 $saveButton = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $saveCondition)
                 if ($null -eq $saveButton) { $saveButton = Find-Button $dialog 'Save' }
-                if ($null -eq $saveButton) { throw 'The native Save button is unavailable.' }
-                $savePattern = $saveButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                $result.found = $true
-                Write-ProbeResult
-                Write-ProbePhase 'invoking-save-button'
-                $savePattern.Invoke()
+                $savePattern = $null
+                if ($null -ne $saveButton) {
+                    [void]$saveButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$savePattern)
+                }
+                if ($null -eq $savePattern) {
+                    Write-ProbePhase 'validating-native-save-button'
+                    Add-Type -Path (Join-Path $PSScriptRoot 'desktop-save-button.cs')
+                    $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
+                    $saveHandle = [SmokeSaveButton]::Validate($dialogHandle, [uint32]$OwnerProcessId)
+                    $result.saveButtonMethod = 'win32-button'
+                    $result.saveButtonHandle = $saveHandle.ToInt64()
+                    $result.found = $true
+                    Write-ProbeResult
+                    Write-ProbePhase 'invoking-native-save-button'
+                    [SmokeSaveButton]::Click($dialogHandle, [uint32]$OwnerProcessId)
+                } else {
+                    $result.saveButtonMethod = 'uia-invoke'
+                    $result.found = $true
+                    Write-ProbeResult
+                    Write-ProbePhase 'invoking-save-button'
+                    $savePattern.Invoke()
+                }
                 Write-ProbePhase 'save-button-invoked'
                 exit 0
             }
