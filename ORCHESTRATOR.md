@@ -3,7 +3,78 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-21 (PDF capture readiness and footnote numerals, prepared):**
+> **CURRENT CHECKPOINT - 2026-10-26 (Windows reader action notices):**
+> PR #158 head 2dda4de reproduced three mixed-notice failures locally: workspace-entry
+> errors disappeared after recovery warnings/failures, and Sample admission errors
+> disappeared after retained-document warnings. Both handlers now pass their action
+> errors to the existing render path; notice/render generation fences are unchanged.
+> The existing regressions remain intact. Fresh exact-head CI, production browser
+> checks, Windows native smoke and independent review remain the merge gates; consult
+> PR #158 for their current results. This repair includes no #162 performance work,
+> deployment or human acceptance. AI-6/AI-7/AI-8/AI-9 remain OPEN.
+
+> **PREVIOUS CHECKPOINT - 2026-10-21 (Windows reader ownership and native verification):**
+> All original open issues/PRs are resolved: #155/#156/#157/#159/#160 merged;
+> #136 closed after the PDF readiness/footnote and dependency fixes. Main at this
+> checkpoint is 22435ce. Windows reader PR #158 remains the active feature review.
+> Its final review found retained closed source text and an Undo Close admission
+> bypass. The reader now releases its old sources after a safe workspace handoff;
+> workspace baselines follow current document IDs and are cleared on successful
+> return. Undo checks current document count and UTF-8 bytes before consuming its
+> one retained recovery offer. Unknown restored identities remain dirty. Failed
+> return validation preserves the workspace; failed teardown restores the same
+> document objects, selection and baselines. Inert workspace controls and captured
+> shortcut clicks prevent last-moment actions racing that ownership transaction.
+> The frozen correction passed 624 unit tests, four server tests, typecheck/lint,
+> Observatory, both production builds, all 15 desktop browser scenarios, and six
+> existing web Undo Close scenarios. Independent review verified all eleven file
+> hashes and reran 21 focused ownership/recovery/session tests successfully.
+> Windows runs at 24716610 and 734c64ef verified actual first-file rendering,
+> Unicode/UTF-16 second-instance forwarding, one retained host, the editing workspace
+> and a native Save dialog. Its filename-control lookup remains under test; bounded
+> UIA result/phase metadata and screenshots distinguish test-helper failures from
+> product failures. Native tests/builds pass; native saved-file verification remains
+> required before merge. Exact-head CI, independent final review and the actual
+> Windows smoke are the merge contract; consult PR #158's latest checks/artifacts.
+> No comparative RAM claim, signed-release claim or live deployment is made.
+> Human Windows install/uninstall, default handler, print-driver and owner-hardware
+> comparison remain open, as do AI-6/AI-7/AI-8/AI-9. A separate prepared follow-up
+> defers reader code-engine initialization for ordinary notes; it is not included
+> in this ownership correction.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (Windows reader integration):**
+> Owner requested all-open-issue/PR review plus a lightweight Windows desktop direction.
+> Production dependencies #155 merged as 7b6f527; development dependencies #156 as
+> f22308b; Node 24/dependency hardening #159 as 3c4f09c. Both npm audits are clean.
+> PDF fixes #157 and #160 merged as e81f785 and 22435ce, closing #136 after actual
+> downloaded-PDF pixel regressions and independent review. #160's exact-head CI
+> passed 602 unit tests and 113 production Chromium tests (five existing opt-in
+> performance skips). Its clone stylesheet readiness, cleanup and footnote numeral
+> fixes are integrated here with the native export destination preserved.
+> This branch adds a separate continuous Windows reader, Tauri/WebView2 host,
+> bounded native input, single-instance forwarding, explicit native exports and
+> CI-built portable/NSIS artifacts. Documents remain memory-only until saved;
+> the native entry loads neither the SDK nor a service worker. Editing and paginated
+> PDF tools load on demand. The reviewed integration passed 58 focused units and
+> all 13 desktop production browser tests, including actual PDF/CSP pixels.
+> Windows CI passed 22 native tests and built the executable and a 4.75 MiB installer.
+> Diagnostics traced the first smoke failure to Windows PowerShell 5.1 evaluating
+> a script-directory-dependent parameter default before that directory was available.
+> The default is now initialized only in the parent PowerShell 7 branch; worker exit
+> codes, bounded stdout/stderr and phase records are retained for diagnosis.
+> A 2026-10-21 live OSV scan covered all 253 resolved Windows dependency crates,
+> including release features, with no advisory matches. Linux/BSD-only lock entries
+> have separate GTK/D-Bus findings; no Linux/BSD distribution is provided here.
+> All required web checks, desktop Chromium, real Windows launch/forward/native
+> save smoke and independent exact-head review remain the merge contract. Consult
+> the latest PR Actions logs and Windows smoke artifact for authoritative results.
+> No comparative RAM claim, signed release or live web deployment is made.
+> AI-6/AI-7/AI-8/AI-9 remain OPEN. Ordinary Windows install/uninstall, default-file
+> handler, preferred print driver and owner-hardware comparison remain acceptance
+> work. Usage/contracts are in `docs/WINDOWS_DESKTOP.md`, spec §14 and
+> `src-tauri/README.md`.
+
+> **PREVIOUS CHECKPOINT — 2026-10-21 (PDF capture readiness and footnote numerals, prepared):**
 > Standalone follow-up based on main `3c4f09c8d7befb6fcd7a5a739efa72bd71cf90a2`
 > after hardening #159 merged. The package pair and workflows are unchanged from
 > that main. Capture now waits for cloned CSS and newly used fonts under one

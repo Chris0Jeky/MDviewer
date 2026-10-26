@@ -1,0 +1,33 @@
+[package]
+name = "mdviewer-desktop"
+version = "0.2.0"
+description = "A local Markdown reader with MDviewer's page-safe PDF workspace"
+authors = ["MDviewer contributors"]
+license = "GPL-3.0-only"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+default-run = "mdviewer"
+
+[[bin]]
+name = "mdviewer"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[dependencies]
+percent-encoding = "=2.3.2"
+tempfile = "=3.27.0"
+serde = { version = "=1.0.228", features = ["derive"] }
+tauri = { version = "=2.12.4", features = [] }
+rfd = { version = "=0.16.0", default-features = false, features = ["gtk3", "common-controls-v6"] }
+tauri-plugin-opener = "=2.7.2"
+tauri-plugin-single-instance = "=2.5.4"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+

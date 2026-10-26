@@ -30,6 +30,8 @@ Export click → capture document id/name/text and settings NOW
 
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
+| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
+| Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
@@ -130,13 +132,24 @@ No-slice, vector/raster export, source-download bytes, phone layout and print re
 
 ```typescript
 export interface DocumentRecoveryController { closeActive(): void; destroy(): void; }
+export type RestoreAdmission = (doc: Readonly<Pick<Doc, "name" | "text">>) => boolean;
 export function mountDocumentRecovery(
   root: HTMLElement,
   store: DocStore,
   returnFocus: () => void,
+  canRestore?: RestoreAdmission,
 ): DocumentRecoveryController;
 ```
 
 Toolbar Close delegates to `closeActive`; Undo consumes the copied name/text and calls the existing `DocStore.add` with a fresh identity. Existing App store listeners continue to own rendering/export coordination. A later real close replaces recovery. Discard and toolbar teardown clear it and the displayed filename/title. Nothing persists, no timer/global listener is added, and reload/tab close loses recovery. Closed content is not an open document for navigation protection.
+
+`App.init`'s optional `canRestoreDocument` callback is forwarded through Toolbar to
+the recovery controller. It runs synchronously before consumption. Refusal preserves
+the offer for retry until another explicit close/Discard/teardown. Web defaults stay
+unchanged; desktop reuses the 32-document / 25,000,000 UTF-8-byte admission gate.
+Desktop releases the reader's old source list after successful handoff, prunes closed
+workspace baselines and clears them after successful return. Missing baselines remain
+dirty, and a failed teardown flush restores the same identities and baselines. Title
+and reader picker metadata follow the current workspace store, including queued input.
 
 Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not reuse `.workspace-action` for these buttons or break the unique keyboard Open/Save selectors. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.

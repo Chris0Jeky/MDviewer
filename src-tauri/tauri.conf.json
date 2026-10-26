@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MDviewer",
+  "mainBinaryName": "mdviewer",
+  "version": "0.2.0",
+  "identifier": "dev.chris0jeky.mdviewer",
+  "build": {
+    "beforeDevCommand": "npm run desktop:dev:web",
+    "beforeBuildCommand": "npm run desktop:build:web && npm run desktop:licenses",
+    "devUrl": "http://localhost:5182",
+    "frontendDist": "../dist-desktop"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "MDviewer",
+        "url": "desktop.html",
+        "width": 1120,
+        "height": 800,
+        "minWidth": 560,
+        "minHeight": 420,
+        "dragDropEnabled": false,
+        "useHttpsScheme": true
+      }
+    ],
+    "security": {
+      "capabilities": [
+        "main"
+      ],
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost blob:; object-src 'none'; frame-src 'self' blob:; worker-src 'none'; base-uri 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost blob: ws://localhost:5182 ws://127.0.0.1:5182; object-src 'none'; frame-src 'self' blob:; worker-src 'none'; base-uri 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Read Markdown locally and export page-safe PDFs.",
+    "longDescription": "An offline Markdown reader with syntax highlighting, math and diagrams, plus the MDviewer editing and PDF workspace on demand.",
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown document",
+        "description": "Markdown document",
+        "mimeType": "text/markdown",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": [
+          "English"
+        ]
+      }
+    },
+    "resources": {
+      "../dist-desktop/LICENSE.txt": "LICENSE.txt",
+      "../dist-desktop/SOURCE.txt": "SOURCE.txt",
+      "../dist-desktop/THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../dist-desktop/THIRD_PARTY_LICENSES.txt": "THIRD_PARTY_LICENSES.txt",
+      "../desktop-artifacts/NATIVE_THIRD_PARTY_NOTICES.txt": "NATIVE_THIRD_PARTY_NOTICES.txt",
+      "../desktop-artifacts/RUST_STDLIB_NOTICES.html": "RUST_STDLIB_NOTICES.html"
+    }
+  }
+}
