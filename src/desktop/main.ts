@@ -231,10 +231,11 @@ async function enterWorkspace(): Promise<void> {
     await app.flushRender();
     app.focusEditor();
   } catch (error) {
-    report(`Could not open the editing workspace: ${errorText(error)}`);
+    const failure = `Could not open the editing workspace: ${errorText(error)}`;
+    report(failure);
     if (!app) {
       workspace.hidden = true; shell.hidden = false; document.body.classList.remove("desktop-editing");
-      void render();
+      void render([failure]);
     }
   } finally { finishMode(); }
 }
@@ -326,8 +327,9 @@ workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
 element("reader-sample").addEventListener("click", () => {
   ++generation;
-  report(session.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]).join(" "));
-  void render();
+  const errors = session.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]);
+  report(errors.join(" "));
+  void render(errors);
 });
 theme.addEventListener("change", () => {
   if (!["light", "dark", "sepia"].includes(theme.value)) return;
