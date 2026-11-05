@@ -16,6 +16,16 @@ The product invariant remains page-break-safe output: keep normal-size code bloc
 
 The scoped `@vscode/markdown-it-katex` override uses npm's `$katex` reference to align the wrapper's fallback with the direct renderer and CSS. The app already injects the direct renderer with `trust: false`; removing the old fallback also closes [GHSA-238p-pmpm-9mq7](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7) in the installed graph. `fast-uri` is locked to a patched 3.1.x release for [GHSA-hrr3-gc8f-f4qj](https://github.com/fastify/fast-uri/security/advisories/GHSA-hrr3-gc8f-f4qj). `tests/dependency-security.test.ts` checks inherited KaTeX trust and encoded-host normalization behavior. Reassess the override when the wrapper adopts a patched dependency range.
 
+Development-only parent overrides coordinate minimatch 11.0.4 for ESLint,
+config-array and typescript-estree with glob 14.0.3 for Workbox. Glob 11 cannot
+consume minimatch 11's compiled matcher representation. Preserve the direct
+tooling versions, production dependency graph and unaffected filelist/minimatch 5
+branch. `tests/dev-dependency-compatibility.test.ts` exercises the actual installed
+consumers, filesystem cancellation and precache output. See
+[`DEVELOPMENT_DEPENDENCIES.md`](../DEVELOPMENT_DEPENDENCIES.md) for advisory sources,
+override removal criteria and the primary rejection of deepmerge CVE-2026-93753;
+raw audit results may still contain that invalid development-only residue.
+
 ## 3. The load-bearing render order (NEVER reorder)
 
 ```text
@@ -54,9 +64,7 @@ Vector `exportViaPrint` remains primary. Raster `exportPaginatedToPdf` remains a
 
 Raster normalization changes only html2canvas's disposable clone. Remove the preview's ancestor scale/envelope and reveal the copied sheet. Restore authored SVG visibility declarations after the cloner has inlined computed hiding from Markdown-only mode; explicit author hiding must remain hidden. Materialized TOC leaders retain an automatic flex width so copied used widths cannot wrap titles and reflow the page. Capture styled task checkboxes as static spans with their computed paint, bypassing the renderer's native-control painter. The embedded tick SVG has intrinsic dimensions for canvas resizing. The live sheet, controls, transforms and document source remain untouched.
 
-The raster adapter requires html2canvas-pro 2.6's synchronous mount contract: `html2canvas()` creates the final clone Document in the supplied `iframeContainer` before returning its promise, while resource events and `onclone` run later. Each capture gets a fixed, zero-size container marked `data-html2canvas-ignore`. Immediately after calling the library, the adapter observes load/error events for every enabled, non-alternate linked stylesheet with an `href` in that owned iframe. A non-null `link.sheet` does not prove success: Chromium can retain a sheet after a failed request. Empty CSS and sheets with inaccessible rules remain valid after an observed load; the adapter never reads `cssRules`.
-
-At `onclone`, the adapter verifies the observed Document and required link identities, then awaits their recorded outcomes before normalization. These promises resolve outcomes instead of rejecting early; a recorded failure rejects only inside the awaited callback. The library's stylesheet wait also settles on error, timeout or sheet polling, so its callback can precede a queued load/error event. Pending outcomes retain their ten-second deadline from observation at mount; entering `onclone` never restarts that wait. After CSS succeeds, the adapter normalizes and reveals the clone, forces layout, then starts a fresh ten-second font deadline and awaits `document.fonts.ready`. Upstream font/image waits precede the callback and the whole export has no total timeout. A failure saves no PDF. An outer `finally` removes the owned container, iframe, listeners and timers even if the library fails outside `onclone`; unrelated iframes remain untouched. A missing/unobserved callback fails closed. See `docs/PDF_VISUAL_REGRESSION.md` for the 2.6 compatibility regression and source references.
+Before normalization, await enabled linked stylesheets in the capture document: html2canvas-pro can finish its iframe load check before adopted CSS links finish loading. Then normalize, force layout and await a fresh `document.fonts.ready`, since the CSS may introduce newly used faces. These onclone CSS/font waits share one ten-second deadline. This is not a total export timeout; upstream capture work and waits precede it. A stylesheet error or readiness timeout rejects the export before saving and removes the exact failed clone iframe, clearing pending stylesheet listeners and timers.
 
 The fallback paints Paged.js's default native decimal footnote `::marker` as absolute text inside the cloned note, retaining the space already reserved by the native marker. Numbers come from repaired citation targets across the paginated stack, including repeated references and double digits. Continued fragments and explicit custom/hidden markers are left alone. Temporary zero-size probes measure the actual first-line baseline, including tall inline content, and are removed before capture. Both probing and final paint must preserve the note box and original content rectangles; otherwise capture rejects with the Print fallback. Generated IDs, counters, live footnotes and primary Print output remain unchanged.
 

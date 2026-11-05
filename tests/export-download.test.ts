@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SaveCanceled, setDownloadDestination } from "../src/export/destination";
 import { PAGEDJS } from "../src/app/dom";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
-import { simulateRasterCapture } from "./helpers/rasterCapture";
 
 // vi.mock factories are hoisted above imports, so all mock state lives in vi.hoisted.
 const { addImage, addPage, save, output, jsPDFCtor, html2canvas } = vi.hoisted(() => {
@@ -15,7 +14,7 @@ const { addImage, addPage, save, output, jsPDFCtor, html2canvas } = vi.hoisted((
     return { addImage, addPage, save, output };
   });
   // html2canvas-pro is a default export returning a canvas-like object.
-  const html2canvas = vi.fn(async (_el: HTMLElement, _opts?: unknown) => ({
+  const html2canvas = vi.fn(async (_el: unknown, _opts?: unknown) => ({
     toDataURL: (_type?: string) => "data:image/png;base64,AAAA",
     width: 800,
     height: 1131,
@@ -61,7 +60,11 @@ beforeEach(() => {
   jsPDFCtor.mockReset().mockImplementation(function (this: unknown, _opts?: unknown) {
     return { addImage, addPage, save, output };
   });
-  html2canvas.mockReset().mockImplementation(simulateRasterCapture);
+  html2canvas.mockReset().mockImplementation(async (_el: unknown, _opts?: unknown) => ({
+    toDataURL: (_type?: string) => "data:image/png;base64,AAAA",
+    width: 800,
+    height: 1131,
+  }));
 });
 afterEach(() => { setDownloadDestination(null); });
 

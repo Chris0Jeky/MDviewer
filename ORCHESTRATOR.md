@@ -3,7 +3,28 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (reader grammar preparation, unpublished follow-up):**
+> **CURRENT CHECKPOINT - 2026-11-05 (scoped development dependency advisories, prepared):**
+> Reader grammar PR #172 is merged; this follow-up is based on main
+> e4711f54b4dc3f0fd8fd37711a9cbb4721781b94 and preserves that grammar source,
+> workspace behavior and status documentation. Four parent-scoped overrides
+> coordinate minimatch 11.0.4 for ESLint/config-array/typescript-estree with glob
+> 14.0.3 for Workbox. The production dependency graph and unaffected filelist /
+> minimatch 5 branch are preserved. Five bounded advisory regressions failed on
+> the earlier baseline while three actual-consumer compatibility controls passed;
+> all eight pass after the migration. Checks cover ESLint discovery/ignores,
+> Workbox precache revisions/exclusions/directory links, globstar budgets and
+> cancellation. The primary CVE record rejects deepmerge CVE-2026-93753; retain
+> and explain stale audit residue rather than suppressing it. Sources and override
+> removal criteria are recorded in docs/DEVELOPMENT_DEPENDENCIES.md.
+> Combined local qualification passes typecheck, lint, 686 unit tests, four server
+> tests, Observatory and both production builds. The generated precache contains
+> exactly 181 expected files. A clean engine-strict offline installation passes.
+> The production audit reports zero findings; the full audit retains four low
+> entries from the rejected deepmerge CVE. Independent final review and exact-head
+> hosted CI remain required before merge; this checkpoint claims no publication
+> or deployment. Existing human acceptance items remain open.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (reader grammar preparation, before publication):**
 > Prepared on #162's final tree 4f64b676, now main d09817cd, including its decoding
 > and notation fixes. Reader code prepares requested grammar modules and their bundled
 > dependencies; all existing themes remain ready. A separate workspace readiness

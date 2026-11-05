@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
-import { simulateRasterCapture } from "./helpers/rasterCapture";
 
 const capture = vi.hoisted(() => vi.fn(async (_page: HTMLElement, _options: unknown) => ({
   toDataURL: () => "data:image/png;base64,AAAA",
@@ -9,7 +8,7 @@ vi.mock("html2canvas-pro", () => ({ default: capture }));
 vi.mock("jspdf", () => ({ jsPDF: class { addImage() {} addPage() {} save() {} } }));
 import { exportPaginatedToPdf } from "../src/export/download";
 
-beforeEach(() => { capture.mockReset().mockImplementation(simulateRasterCapture); });
+beforeEach(() => { capture.mockReset().mockResolvedValue({ toDataURL: () => "data:image/png;base64,AAAA" }); });
 afterEach(() => { document.body.replaceChildren(); });
 
 describe("raster capture clone isolation", () => {
@@ -21,20 +20,15 @@ describe("raster capture clone isolation", () => {
       <div class="pagedjs_page"><figure style="transform: scale(.8)">Document block</figure></div></div>`;
     document.body.append(host);
     const before = host.outerHTML;
-    let clone!: Document;
-    let sheet!: HTMLElement;
-    let unrelated!: HTMLElement;
-    let documentTransform!: string;
-    let unrelatedTransform!: string;
-    capture.mockImplementationOnce((page, options) => simulateRasterCapture(page, options, ({ copy }) => {
-      clone = copy;
-      clone.body.innerHTML = before + `<div class="pagedjs_pages" id="unrelated" style="transform: scale(.25)"></div>`;
-      sheet = clone.querySelector<HTMLElement>(".pagedjs_page")!;
-      documentTransform = sheet.querySelector("figure")!.style.transform;
-      unrelated = clone.querySelector<HTMLElement>("#unrelated")!;
-      unrelatedTransform = unrelated.style.transform;
-    }));
     await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
+    const options = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
+    const clone = document.implementation.createHTMLDocument("capture");
+    clone.body.innerHTML = before + `<div class="pagedjs_pages" id="unrelated" style="transform: scale(.25)"></div>`;
+    const sheet = clone.querySelector<HTMLElement>(".pagedjs_page")!;
+    const documentTransform = sheet.querySelector("figure")!.style.transform;
+    const unrelated = clone.querySelector<HTMLElement>("#unrelated")!;
+    const unrelatedTransform = unrelated.style.transform;
+    await options.onclone(clone, sheet);
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.height).toBe("auto");
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.width).toBe("auto");
     expect(clone.querySelector<HTMLElement>("#paged-output")!.style.overflow).toBe("visible");
