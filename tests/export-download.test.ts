@@ -1,15 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { SaveCanceled, setDownloadDestination } from "../src/export/destination";
 import { PAGEDJS } from "../src/app/dom";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
 
 // vi.mock factories are hoisted above imports, so all mock state lives in vi.hoisted.
-const { addImage, addPage, save, jsPDFCtor, html2canvas } = vi.hoisted(() => {
+const { addImage, addPage, save, output, jsPDFCtor, html2canvas } = vi.hoisted(() => {
   const addImage = vi.fn();
   const addPage = vi.fn();
   const save = vi.fn();
+  const output = vi.fn();
   // jsPDF is a named export `{ jsPDF }`; the constructor yields the page API.
   const jsPDFCtor = vi.fn(function (this: unknown, _opts?: unknown) {
-    return { addImage, addPage, save };
+    return { addImage, addPage, save, output };
   });
   // html2canvas-pro is a default export returning a canvas-like object.
   const html2canvas = vi.fn(async (_el: unknown, _opts?: unknown) => ({
@@ -17,7 +19,7 @@ const { addImage, addPage, save, jsPDFCtor, html2canvas } = vi.hoisted(() => {
     width: 800,
     height: 1131,
   }));
-  return { addImage, addPage, save, jsPDFCtor, html2canvas };
+  return { addImage, addPage, save, output, jsPDFCtor, html2canvas };
 });
 
 vi.mock("jspdf", () => ({
@@ -54,14 +56,45 @@ beforeEach(() => {
   addImage.mockReset();
   addPage.mockReset();
   save.mockReset();
+  output.mockReset().mockImplementation(() => new Blob(["%PDF-test"], { type: "application/pdf" }));
   jsPDFCtor.mockReset().mockImplementation(function (this: unknown, _opts?: unknown) {
-    return { addImage, addPage, save };
+    return { addImage, addPage, save, output };
   });
   html2canvas.mockReset().mockImplementation(async (_el: unknown, _opts?: unknown) => ({
     toDataURL: (_type?: string) => "data:image/png;base64,AAAA",
     width: 800,
     height: 1131,
   }));
+});
+afterEach(() => { setDownloadDestination(null); });
+
+it("keeps the export pending until its native destination settles", async () => {
+  let release!: () => void;
+  let started!: () => void;
+  const entered = new Promise<void>(resolve => { started = resolve; });
+  const saving = new Promise<void>(resolve => { release = resolve; });
+  setDownloadDestination(async (blob, name) => {
+    expect(blob.type).toBe("application/pdf");
+    expect(name).toBe("native.pdf");
+    expect(addImage).toHaveBeenCalledTimes(2);
+    started();
+    await saving;
+  });
+  let done = false;
+  const pending = exportPaginatedToPdf(hostWithPages(2), settings(), { fileName: "native.pdf" }).then(() => { done = true; });
+  await entered;
+  expect(done).toBe(false);
+  expect(save).not.toHaveBeenCalled();
+  expect(output).toHaveBeenCalledWith("blob");
+  release();
+  await pending;
+  expect(done).toBe(true);
+});
+
+it("propagates native cancellation without falling through to browser saving", async () => {
+  setDownloadDestination(async () => { throw new SaveCanceled(); });
+  await expect(exportPaginatedToPdf(hostWithPages(1), settings())).rejects.toBeInstanceOf(SaveCanceled);
+  expect(save).not.toHaveBeenCalled();
 });
 
 describe("exportPaginatedToPdf: one canvas per already-broken page", () => {
