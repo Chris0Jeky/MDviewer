@@ -3,7 +3,34 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CANDIDATE SLICE — 2026-11-05, #203:** production Firefox authoring lane and
+> **CURRENT CHECKPOINT — 2026-11-05 (Windows editor follow-up qualified):**
+> Application revision [18afeeb8](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),
+> tree `2ede86cc07caf53a8afb3106716ece69c49d8a41`. #209/#210/#208/#213/#212/#211/#214 are merged.
+> Delivered: compact native-Undo Markdown commands; bounded in-session source,
+> preview and reader positions; document switching; visible PDF progress/save
+> outcomes; production Firefox/accessibility regressions; authored-heading
+> isolation from app CSS and feedback. Native reader startup remains lazy.
+> [CI 42107298155](https://github.com/Chris0Jeky/MDviewer/actions/runs/42107298155)
+> and [Windows 42107298588](https://github.com/Chris0Jeky/MDviewer/actions/runs/42107298588)
+> passed all six jobs: 1,073 units per Node lane, 178 web cases
+> with five existing optional performance skips, 94 Firefox,
+> 36 desktop cases, 22 Rust and 21 probe-policy tests, 117 publication
+> assertions in each PowerShell runtime, and actual native saves. Exact source,
+> binary, saved-output and review receipts are in the
+> [editor follow-up checkpoint](docs/design/2026-11-05-editor-followup-checkpoint.md).
+> **Next:** [Future work](docs/FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+> #196/#197 designs are merged; owned writes require the Windows compare/replace
+> proof, and recovery requires identity/fault/deletion and measured-write evidence.
+> #201 cancellation, #202 profiling, #204 Unicode IDs, #206 upstream accounting
+> and #205 pagination research remain open. Documents stay in memory except
+> explicit Save Copy/PDF operations; no recovery storage was added.
+> **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** The deployment anchor is unchanged.
+> No signing, updater, human acceptance or comparative performance claim follows.
+> Re-read GitHub before starting work; older checkpoints below are historical.
+
+## Historical checkpoints
+
+> **HISTORICAL CANDIDATE SLICE — 2026-11-05, #203:** production Firefox authoring lane and
 > accessible keyboard/contrast/reflow regressions prepared from main `5cb2dbb3`.
 > Local 832 units, four server tests, types/lint/Observatory, both builds and 39
 > Firefox 157.0 cases pass. Forced-colors Find visibility is corrected. Exact-head
@@ -11,7 +38,7 @@
 > and `docs/design/AUTHORING_QUALITY.md`. This does not clear any human gate or
 > change the verified application/deployment anchors below.
 
-> **CURRENT CHECKPOINT — 2026-11-05 (verified application and explicit future backlog):**
+> **HISTORICAL CHECKPOINT — 2026-11-05 (verified application and explicit future backlog):**
 > Application baseline [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
 > tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`. All nine PRs
 > #183/#187/#185/#188/#192/#178/#191/#193/#194 are merged. Postmerge
@@ -34,8 +61,6 @@
 > **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** No live deployment, signed release,
 > automatic updater or comparative RAM/startup claim follows. Older checkpoints below
 > are history, not live queue state; re-read GitHub before starting any issue.
-
-## Historical checkpoints
 
 > **HISTORICAL CHECKPOINT - 2026-11-05 (authoring and offline PDF capture qualified):**
 > Last merged authoring baseline verified for this record:
@@ -605,7 +630,7 @@ above and refresh GitHub state for the current queue, verification and next work
 
 ## Environment / verification commands
 
-- Stack authority: `package.json` and `package-lock.json`. Current toolchain: Vanilla TypeScript + Vite 8, Vitest 5, Playwright Chromium and ESLint 10. Supported Node range: `^24.15.0 || >=26`; Node 24 is the strict-install CI lane.
+- Stack authority: `package.json` and `package-lock.json`. Current toolchain: Vanilla TypeScript + Vite 8, Vitest 5, Playwright Chromium/Firefox and ESLint 10. Supported Node range: `^24.15.0 || >=26`; Node 24 is the strict-install CI lane.
 - Package manager: npm. Default branch: `main` (protected: no force-push/rebase/amend/reset per CLAUDE.md).
 - VCS host: GitHub (`Chris0Jeky/MDviewer`). Verify the active connector/checkout; do not assume a prior session's CLI authentication or native runtimes are present.
 - Verification commands (the merge gate):
@@ -613,10 +638,11 @@ above and refresh GitHub state for the current queue, verification and next work
   - `npm run lint` — eslint src tests
   - `npm run test` — vitest run (unit, jsdom)
   - `npm run test:e2e` — playwright (real Chromium) — **required for render/pagination/export/UI**
+  - `npm run test:authoring` — bounded production Firefox authoring and accessibility lane
   - `npm run build` — tsc + vite build
   - `npm run agent:check` — typecheck + lint + unit in one shot
   - `npm run agent:hooks:smoke` / `npm run agent:skills:validate` — agentic tooling, before handoff
-- `.github/workflows/ci.yml` runs Node 24 supported verification, the retained Node 22 legacy compatibility context and production web Chromium. `.github/workflows/desktop.yml` adds production desktop Chromium and native Windows build/smoke: five required jobs in total. The five opt-in performance cases are reported separately; required checks are not skipped.
+- `.github/workflows/ci.yml` runs Node 24 supported verification, the retained Node 22 legacy compatibility context, production web Chromium and production Firefox authoring. `.github/workflows/desktop.yml` adds production desktop Chromium and native Windows build/smoke: six qualification jobs in total. The branch-protection contexts remain the Node 22/24 and production web Chromium jobs; the broader repository merge gate requires the remaining lanes too. The five opt-in performance cases are reported separately; required checks are not skipped.
 
 ## Baseline (cycle 1 start, commit fe085b0)
 
@@ -700,9 +726,12 @@ above and refresh GitHub state for the current queue, verification and next work
 ### Current backlog pointer
 
 Use [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
-Shiki 4.6 (#193), reader admission/selective grammars (#162/#172), offline capture
-(#178) and active-match visibility (#191) are merged. Their historical task notes
-are retained for design/evidence, not pending implementation. Each new issue records
+Format (#211/#198), session navigation (#212/#199), export feedback (#210/#200),
+authoring quality (#208/#203), heading isolation (#213), Shiki 4.6 (#193), reader
+admission/grammars (#162/#172), offline capture (#178) and active-match visibility
+(#191) are merged. Persistence designs (#209) still require implementation in
+#196/#197. Historical task notes for delivered changes remain as design/evidence;
+the current issue state determines pending work. Each new issue records
 scope, dependency and completion evidence; every open failure-ledger row points to
 one of those issues or its existing AI gate.
 

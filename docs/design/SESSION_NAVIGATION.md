@@ -1,5 +1,7 @@
 # Session document navigation (#199)
 
+Current merged qualification: [editor follow-up checkpoint](2026-11-05-editor-followup-checkpoint.md). Earlier local receipts below describe their own source revisions.
+
 ## Contract
 
 Document positions are volatile coordinates keyed by the stable document ID, never
@@ -66,9 +68,9 @@ handled events, and held-key repeats do not navigate.
 No history stack, persistent storage, source mutation, new renderer, or new
 reader-startup dependency is introduced.
 
-## Verification (2026-11-05)
+## Historical isolated verification (2026-11-05)
 
-The final runtime revision `9aaf0cd` passed TypeScript, ESLint, both production
+The isolated navigation revision `9aaf0cd` passed TypeScript, ESLint, both production
 builds, and all 846 Vitest tests across 73 files. The hook smoke check and
 14-skill validation also passed. The new unit coverage includes bounded LRU
 eviction, close/removal, Unicode clamping, latest-close position transfer,
@@ -92,8 +94,9 @@ production-preview run served bundled assets and passed without that dev-server
 limitation. A first dirty-tree build correctly refused to stamp license
 provenance; clean committed builds subsequently passed.
 
-Locked Chromium, packaged Windows behavior, hosted exact-head CI, and independent
-review remain the publishing agent's gates. Apple modifier behavior is covered
+At that isolated checkpoint, locked Chromium, packaged Windows behavior, hosted
+exact-head CI and independent review remained publishing gates. Their subsequent
+receipts are in #212 and the linked follow-up checkpoint. Apple modifier behavior is covered
 by a platform-stubbed unit test; no native Mac browser claim is made.
 
 ### Pending preparation regression

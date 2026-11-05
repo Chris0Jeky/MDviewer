@@ -1,5 +1,7 @@
 # Markdown writing commands (#198)
 
+Current merged qualification: [editor follow-up checkpoint](2026-11-05-editor-followup-checkpoint.md). Earlier local receipts below describe their own source revisions.
+
 ## Design and boundaries
 
 The source pane offers a collapsed **Format** disclosure beside Find. Opening it
@@ -17,6 +19,12 @@ preview. Its bounded, wrapping row scrolls when the pane or window is small.
 In a short Split window, an open Find or Format panel temporarily gives source
 the available workspace; closing both restores the chosen split. The preview
 stays measurable while parked, following the existing Find behavior.
+
+At viewport heights up to 600px, Format temporarily hides the toolbar key legend.
+Shortcut titles and `aria-keyshortcuts`, the memory warning and Save remain available.
+The 560×420 desktop regression opens Find and Format together and requires at least
+60px of source, 30px command targets, reachable controls, stable textarea/page
+identity and a measurable parked canvas.
 
 ## Command behavior
 
@@ -126,7 +134,7 @@ Local execution uses the installed locked Firefox engine with
 restriction. Exact locked Chromium coverage is delegated to repository CI; a
 local environment restriction is not evidence that Chromium passed.
 
-### Local verification
+### Historical isolated local verification
 
 Feature code commit `019cff9a735fcdb3851c105cfe2ca58c551a2052` passes typecheck,
 lint, all **908 unit tests**, the clean production build including source/license
@@ -136,7 +144,5 @@ regressions. The authored-heading test first failed against the unscoped styles
 because the preview became hidden with both panels closed; it passes after the
 styles and parking selectors are scoped to the actual editor children.
 
-Chromium, native Windows, and the integrated final branch remain CI gates owned
-by the parent integration task. These local results do not claim those gates.
-
-At viewport heights up to 600px, the toolbar key legend temporarily hides while Format is open. Shortcut titles and `aria-keyshortcuts` remain available, and the memory warning and Save action stay visible. The desktop 560×420 regression opens Find and Format together and requires at least 60px of editable source, 30px command targets, reachable controls, stable textarea/page identity, and a measurable parked canvas.
+This isolated result did not establish Chromium, native Windows or final combined
+qualification. Those later receipts are in the linked follow-up checkpoint.

@@ -35,8 +35,9 @@ target before editing.
 The issue-backed queue is [Future work](docs/FUTURE_WORK.md) and
 [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Proposed native Save/Save As
 [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery
-[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) require reviewed designs and
-coordinated contract/privacy updates before implementation; they do not change today's
+[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs merged in #209.
+Their implementation still requires the native proof/measurement gates in those designs
+and coordinated contract/privacy updates; they do not change today's
 Save Copy or memory-only session behavior.
 
 ## Project Structure
