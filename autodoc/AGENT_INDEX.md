@@ -151,6 +151,13 @@ Desktop releases the reader's old source list after successful handoff, prunes c
 workspace baselines and clears them after successful return. Missing baselines remain
 dirty, and a failed teardown flush restores the same identities and baselines. Title
 and reader picker metadata follow the current workspace store, including queued input.
+Desktop entry and return keep the App subtree inert through their ownership handoff.
+Entry releases it and drains queued imports before focusing; failure paths release
+the guard without discarding transferred sources. Reading view/New share one
+transition/export/native-save availability calculation. The native smoke requires
+visible, enabled UIA buttons; `readyWorkspace` also waits for actual inert=false.
+See `tests/desktop-lifetime.test.ts`, `tests/desktop-new-document.test.ts` and
+`docs/design/2026-11-05-desktop-workspace-readiness.md`.
 
 Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not borrow New/Open/Save `data-document-command` identities for recovery buttons. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
 
