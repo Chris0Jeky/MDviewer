@@ -32,6 +32,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'lib/desktop-probe-json.ps1')
 
 if ($Probe) {
     $result = [ordered]@{ found = $false; reason = $null; screenshot = $null; runtimeReady = $false }
@@ -47,17 +48,10 @@ if ($Probe) {
             apartment = [System.Threading.Thread]::CurrentThread.GetApartmentState().ToString()
             sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
         }
-        $path = $ProbeOutput + '.progress.json'
-        $pending = $path + '.writing'
-        [System.IO.File]::WriteAllText($pending, ($progress | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
-        if ([System.IO.File]::Exists($path)) { [System.IO.File]::Delete($path) }
-        [System.IO.File]::Move($pending, $path)
+        Write-SmokeProbeJson ($ProbeOutput + '.progress.json') $progress
     }
     function Write-ProbeResult {
-        $pending = $ProbeOutput + '.writing'
-        [System.IO.File]::WriteAllText($pending, ($result | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
-        if ([System.IO.File]::Exists($ProbeOutput)) { [System.IO.File]::Delete($ProbeOutput) }
-        [System.IO.File]::Move($pending, $ProbeOutput)
+        Write-SmokeProbeJson $ProbeOutput $result
     }
     function Find-Button($Parent, [string]$Name) {
         # Workspace entry keeps its controls inert until rendering is ready.
@@ -415,14 +409,9 @@ function Get-MemorySample([string]$Stage) {
 }
 
 function Read-ProbeProgress([string]$ProbeFile) {
-    # Phase publication replaces a file, so one poll may see the brief rename
-    # gap. Retain the caller's last valid phase/readiness rather than resetting.
-    try {
-        if ([System.IO.File]::Exists($ProbeFile + '.progress.json')) {
-            return Get-Content -Raw -LiteralPath ($ProbeFile + '.progress.json') | ConvertFrom-Json
-        }
-    } catch { }
-    return $null
+    # No initial snapshot is normal. The caller keeps its last valid readiness;
+    # corrupt snapshots and unexpected I/O failures remain visible.
+    return Read-SmokeProbeJson ($ProbeFile + '.progress.json')
 }
 
 function Wait-ProbeWorker([System.Diagnostics.Process]$Worker, [string]$ProbeFile,
@@ -498,9 +487,7 @@ function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnost
         $evidence.lastPhase = $progress.lastPhase
         $evidence.progress = $progress
     }
-    if ([System.IO.File]::Exists($ProbeFile)) {
-        try { $evidence.result = Get-Content -Raw -LiteralPath $ProbeFile | ConvertFrom-Json } catch { }
-    }
+    $evidence.result = Read-SmokeProbeJson $ProbeFile
     return [pscustomobject]$evidence
 }
 
@@ -528,9 +515,8 @@ function Capture-FailedWindow {
     if ($timedOut) { Stop-ProbeWorker $worker }
     $evidence = Get-ProbeEvidence $probeFile $timedOut $worker $wait
     $metrics.probes += $evidence
-    if ([System.IO.File]::Exists($probeFile)) {
-        $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
-        $metrics.failureScreenshot = $result.screenshot
+    if ($null -ne $evidence.result) {
+        $metrics.failureScreenshot = $evidence.result.screenshot
     } else {
         $metrics.failureScreenshot = @{ saved = $false; reason = "Diagnostic worker $($wait.decision) at phase: $($evidence.lastPhase)" }
     }
@@ -559,8 +545,8 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
             # Repeatedly killing cold or hung workers proves no application
             # state. Keep the first bounded failure and its phase diagnostics.
             throw "Heading worker $($wait.decision) after $($wait.elapsedMs) ms at phase: $($evidence.lastPhase). No rendered-heading assertion passed."
-        } elseif (Test-Path -LiteralPath $probeFile) {
-            $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
+        } elseif ($null -ne $evidence.result) {
+            $result = $evidence.result
             if (-not $result.runtimeReady) { throw "Heading worker bootstrap failed: $($result.reason)" }
             if ($result.found) { return $result }
             $lastReason = $result.reason
@@ -594,8 +580,8 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if ($timedOut) {
             throw "Native UI '$Action' worker $($wait.decision) after $($wait.elapsedMs) ms at phase: $($evidence.lastPhase). No action retry was attempted."
         }
-        if (Test-Path -LiteralPath $probeFile) {
-            $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
+        if ($null -ne $evidence.result) {
+            $result = $evidence.result
             if (-not $result.runtimeReady) { throw "Native UI '$Action' worker bootstrap failed: $($result.reason)" }
             if ($result.found) { return }
             $lastReason = $result.reason

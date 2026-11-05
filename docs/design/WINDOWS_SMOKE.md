@@ -14,6 +14,36 @@ Save resolves only the verified dialog's direct ID 1 child. It requires a visibl
 
 The actual smoke must subsequently find the newly saved Markdown file and compare every UTF-8 byte with its fixture. It must find the PDF with its header and EOF marker. A published probe attempt or completed click is never substituted for these file checks. Full rendering fidelity remains covered separately by the production browser's saved-PDF pixel tests.
 
+## Probe JSON publication
+
+Every worker owns a unique probe path. Its progress and result snapshots use the
+shared `scripts/lib/desktop-probe-json.ps1` helper in both the Windows PowerShell
+5.1 worker and PowerShell 7 parent. The worker writes complete UTF-8 JSON without
+a BOM to a same-directory `.writing` file. Initial publication moves that file
+into place; subsequent publication uses
+[`File.Replace`](https://learn.microsoft.com/en-us/dotnet/api/system.io.file.replace?view=netframework-4.7.2), without deleting the
+visible snapshot first or falling back after a replacement error.
+
+Readers open with
+[`FileShare.ReadWrite | FileShare.Delete`](https://learn.microsoft.com/en-us/dotnet/api/system.io.fileshare?view=netframework-4.7.2) and dispose their
+streams deterministically. A reader already holding the old file can finish that
+complete snapshot while a new reader sees the complete replacement. This covers
+both progress updates and results published before a potentially blocking native
+action. The parent consumes the result snapshot recorded with its probe evidence.
+
+An unpublished initial snapshot returns no value. Unexpected I/O failures,
+invalid UTF-8, malformed JSON, and non-object snapshots remain errors. The parent
+retains the first observed readiness time and the last valid progress snapshot;
+publication does not reset the 30-second bootstrap, eight-second worker-operation,
+45-second action, or 180-second overall budgets. This is a single-writer protocol
+for harness-owned JSON, not a user-file conflict-safety primitive for Save/Save As.
+
+`scripts/test-desktop-probe-json.ps1` runs against real Windows handles in both
+PowerShell versions in the native workflow. It holds a reader opened by the
+production helper across publication and checks complete old/new snapshots,
+Unicode bytes, initial and repeated progress/result writes, missing versus invalid
+snapshots, handle disposal, and visible failures when replacement is blocked.
+
 ## Verified main checkpoint — 2026-11-05
 
 The final-main push at `203c09798b01061ceb0c00f0937c22beeafb1a55` passed
