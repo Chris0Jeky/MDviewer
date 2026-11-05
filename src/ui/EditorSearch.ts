@@ -2,6 +2,7 @@
 import { ATTRS, CLASSES, IDS, el } from "../app/dom";
 import { findMatches, MAX_SEARCH_QUERY_CHARS, nextMatch, replaceMatches, replacementByteLength } from "./EditorSearchModel";
 import type { SearchResults, SourceMatch } from "./EditorSearchModel";
+import { mountEditorMatchCue } from "./EditorMatchCue";
 
 export interface EditorSearchController {
   /** Rebind the current native textarea after a document identity boundary. */
@@ -18,68 +19,6 @@ export interface EditorSearchOptions {
 }
 
 const SEARCH_DELAY_MS = 90;
-
-/** Reveal the first matched character using actual source metrics, never a ratio. */
-function revealMatch(input: HTMLTextAreaElement, backdrop: HTMLElement, start: number): void {
-  const box = input.getBoundingClientRect();
-  if (!box.width || !box.height) return;
-  const styles = getComputedStyle(input);
-  let target: Pick<DOMRect, "top" | "bottom" | "left" | "right" | "height"> | undefined;
-
-  // The normal syntax backdrop already has precisely the textarea's metrics.
-  // Only navigation measures it; source keystrokes never walk this DOM.
-  if (backdrop.textContent === input.value) {
-    const walker = document.createTreeWalker(backdrop, NodeFilter.SHOW_TEXT);
-    let offset = 0;
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const length = node.textContent?.length ?? 0;
-      if (start < offset + length) {
-        const range = document.createRange();
-        range.setStart(node, start - offset);
-        range.setEnd(node, Math.min(length, start - offset + 1));
-        target = range.getBoundingClientRect();
-        break;
-      }
-      offset += length;
-    }
-  }
-
-  // Large documents deliberately have no backdrop. Measure a temporary text-only
-  // mirror through the matched logical line; later lines cannot move this glyph.
-  // The client width excludes the real scrollbar gutter, so do not add it again.
-  if (!target) {
-    const mirror = el("div", { attrs: { "aria-hidden": "true" } });
-    const properties = ["font-family", "font-size", "font-weight", "font-style",
-      "font-stretch", "font-variant-ligatures", "line-height", "letter-spacing",
-      "word-spacing", "tab-size", "white-space", "overflow-wrap", "word-break",
-      "padding", "text-indent", "text-transform", "direction", "text-align"];
-    for (const property of properties) mirror.style.setProperty(property, styles.getPropertyValue(property));
-    Object.assign(mirror.style, {
-      position: "fixed", top: `${box.top}px`, left: `${box.left}px`,
-      width: `${input.clientWidth}px`, boxSizing: "border-box", margin: "0", border: "0",
-      visibility: "hidden", pointerEvents: "none", overflow: "hidden",
-    });
-    const end = start + ((input.value.codePointAt(start) ?? 0) > 0xffff ? 2 : 1);
-    const lineEnd = input.value.indexOf("\n", end);
-    const marker = el("span", {}, input.value.slice(start, end));
-    mirror.append(document.createTextNode(input.value.slice(0, start)), marker,
-      document.createTextNode(input.value.slice(end, lineEnd === -1 ? undefined : lineEnd)));
-    document.body.append(mirror);
-    try {
-      const rect = marker.getBoundingClientRect();
-      target = { top: rect.top - input.scrollTop, bottom: rect.bottom - input.scrollTop,
-        left: rect.left - input.scrollLeft, right: rect.right - input.scrollLeft, height: rect.height };
-    } finally { mirror.remove(); }
-  }
-  const top = box.top + parseFloat(styles.paddingTop || "0");
-  const bottom = box.bottom - parseFloat(styles.paddingBottom || "0");
-  if (target.top < top || target.bottom > bottom) {
-    input.scrollTop += target.top - top - (bottom - top - target.height) / 2;
-  }
-  if (target.left < box.left) input.scrollLeft += target.left - box.left;
-  else if (target.right > box.right) input.scrollLeft += target.right - box.right;
-  input.dispatchEvent(new Event("scroll"));
-}
 
 export function mountEditorSearch(
   pane: HTMLElement, head: HTMLElement, input: HTMLTextAreaElement,
@@ -131,6 +70,7 @@ export function mountEditorSearch(
     el("div", { class: CLASSES.editorSearchRow }, query, caseButton, previous, next, close),
     replaceRow, el("div", { class: CLASSES.editorSearchFooter }, status, replaceToggle));
   head.after(panel);
+  const cue = mountEditorMatchCue(input, backdrop);
 
   function available(): boolean {
     return !destroyed && pane.isConnected && !pane.closest("[inert], [hidden]") &&
@@ -147,6 +87,7 @@ export function mountEditorSearch(
 
   function sync(): void {
     const disabled = busy || stale || results.matches.length === 0;
+    cue.show(!panel.hidden && !disabled ? results.matches[currentIndex()] : undefined);
     previous.disabled = next.disabled = disabled;
     replace.disabled = disabled || currentIndex() === -1;
     replaceAll.disabled = disabled || results.limited;
@@ -169,7 +110,7 @@ export function mountEditorSearch(
     const match = results.matches[index];
     if (!match) return;
     input.setSelectionRange(match.start, match.end);
-    revealMatch(input, backdrop, match.start);
+    cue.show(match, true);
     sync();
   }
 
@@ -354,10 +295,12 @@ export function mountEditorSearch(
       if (destroyed || next === input) return;
       unbindInput(input);
       input = next;
+      cue.setInput(input);
       bindInput(input);
     },
     sourceChanged(documentChanged = false): void {
       if (destroyed) return;
+      cue.clear();
       if (documentChanged) { revision++; pendingEdit?.abort(); pendingEdit = undefined; busy = false; }
       if (!panel.hidden) schedule(false);
     },
@@ -368,6 +311,7 @@ export function mountEditorSearch(
       pendingEdit?.abort();
       results = { matches: [], limited: false };
       indexedText = "";
+      cue.destroy();
       unbindInput(input);
       window.removeEventListener("keydown", onKey);
       panel.remove();

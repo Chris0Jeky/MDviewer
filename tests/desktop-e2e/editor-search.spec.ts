@@ -10,6 +10,8 @@ test("desktop source Find and Replace preserves the exact saved note and reading
   await page.locator("#editor-input").press("Control+h");
   await page.getByRole("searchbox", { name: "Find in Markdown" }).fill("cat");
   await expect(page.locator(".editor-search-status")).toHaveText("1 of 2 matches");
+  await expect(page.locator("#editor-match-cue .editor-match-rect").first()).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Find in Markdown" })).toBeFocused();
   await page.getByRole("textbox", { name: "Replace with", exact: true }).fill("fox");
   await page.getByRole("button", { name: "Replace all", exact: true }).click();
   const edited = "# Local writing\n\nA fox and another fox.\n";
@@ -44,6 +46,8 @@ for (const width of [560, 1280]) {
     await page.locator("#editor-input").press("Control+h");
     await page.getByRole("searchbox", { name: "Find in Markdown" }).fill("cat");
     await expect(page.locator(".editor-search-status")).toHaveText("1 of 2 matches");
+    await expect(page.locator("#editor-match-cue .editor-match-rect").first()).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "Find in Markdown" })).toBeFocused();
     const geometry = await page.locator("#workspace").evaluate(workspace => {
       const box = workspace.getBoundingClientRect();
       const input = workspace.querySelector<HTMLTextAreaElement>("#editor-input")!;

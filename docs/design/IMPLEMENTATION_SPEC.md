@@ -274,14 +274,22 @@ Replace all uses one native undo edit; replacement text has no substitution synt
 An accepted delayed edit or completion cannot reclaim focus after the user moves.
 
 Closed Search does not scan source text. While open, input changes schedule a
-90ms idle recomputation. Navigation measures the existing backdrop; large sources
-with highlighting disabled use a temporary text-only mirror with actual wrapping
-metrics, removed immediately after measurement. Search controls occupy their own
+90ms idle recomputation. `EditorMatchCue.ts` paints the active full match in one
+accessibility-hidden, pointer-transparent rectangle layer while query focus stays
+in Find. It measures existing backdrop ranges across syntax spans; large sources
+with highlighting disabled use a temporary text-only mirror through the matched
+logical line, removed immediately after measurement. Cached content-coordinate
+rectangles serve both reveal and paint. Scroll only translates and clips that
+cache; active layout/font changes remeasure once per animation frame. Source or
+query changes, close, input rebinding and destroy clear geometry and pending work.
+The cue never changes source, native selection, focus or undo, and retains no
+source copy after measurement. Search controls occupy their own
 grid row, adapt to narrow source panes and inherit source print suppression. No
 new dependencies, network traffic or document persistence are introduced.
 
 Coverage: `tests/editor-search-model.test.ts`, `tests/editor-search.test.ts`,
-`tests/e2e/editor-search.spec.ts` and `tests/desktop-e2e/editor-search.spec.ts`.
+`tests/editor-match-cue.test.ts`, `tests/e2e/editor-search.spec.ts`,
+`tests/e2e/editor-search-cue.spec.ts` and `tests/desktop-e2e/editor-search.spec.ts`.
 Native undo, source geometry and print visibility require real browser evidence.
 A generated zero-width sentinel after the highlight code retains the textarea's
 empty final line after a trailing newline without changing backdrop textContent;
