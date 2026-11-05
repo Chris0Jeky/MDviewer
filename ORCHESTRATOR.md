@@ -3,7 +3,32 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
+> **CURRENT CHECKPOINT - 2026-11-05 (desktop authoring and offline capture):**
+> Integration basis is merged main `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`.
+> New documents (#183), guarded native editor mutations (#185), compact desktop
+> writing space (#187), Find/Replace (#188), and desktop entry readiness (#192)
+> are merged. #192 fixes controls becoming available before their transition could
+> accept a Save click. Its five hosted jobs passed, including both real native Save
+> dialogs, exact Markdown bytes and PDF header/EOF; its verified source TREE matches
+> the reviewed head. The failing main and PR-integration artifacts remain in #190.
+> This source tree integrates #178's exact html2canvas-pro 2.6.0 capture adapter and
+> removes the temporary 2.6.0 Dependabot exclusion. Offline controlled sources use
+> an owned controlled `srcdoc` destination; real CSS/font failures still save no PDF.
+> Browser checks associated with `268bcb8f` passed 127 cases with five existing optional
+> skips, including saved-PDF pixels, damaged controls and actual CSS/font cache-loss
+> recovery. Its native readiness failure is addressed by the inherited #192 fix.
+> Final combined-head review, all five checks and source provenance remain mandatory
+> before this integration merges; PR #178 records those final receipts. See
+> `docs/design/RASTER_OFFLINE_CAPTURE.md` for lifecycle evidence and limits.
+> Active-match visibility #189 / draft #191 remains separate: its initial jobs passed,
+> but screenshot review found large plain-source misalignment. The stronger geometry
+> regression must pass and the actual screenshots must align before that work merges.
+> Windows acceptance/performance #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No live
+> deployment, signed release, automatic updater or comparative RAM/startup claim follows.
+
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
 > Based on merged main 8265edd4, including the workspace correction #177 and CLI
 > update #176. This checkpoint implements #179 in PR #180: fatal feedback is visible
 > and actionable in Markdown-only mode while the preview remains parked. Showing
