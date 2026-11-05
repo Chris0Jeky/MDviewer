@@ -6,6 +6,14 @@ export interface ReaderDocument {
   dirty: boolean;
 }
 
+/** Names are local to the open set; compare case-insensitively for Windows. */
+export function nextUntitledName(docs: readonly { name: string }[]): string {
+  const names = new Set(docs.map(doc => doc.name.toLowerCase()));
+  let name = "Untitled.md";
+  for (let number = 2; names.has(name.toLowerCase()); number += 1) name = `Untitled ${number}.md`;
+  return name;
+}
+
 export class ReaderSession {
   readonly documents: ReaderDocument[] = [];
   activeId: string | null = null;
