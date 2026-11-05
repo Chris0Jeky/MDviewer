@@ -3,9 +3,9 @@
  *
  * We use the `shiki/core` API so Vite code-splits each language/theme into its own
  * lazily-loaded chunk: only the langs and themes we ship are bundled, and the heavy
- * Oniguruma WASM grammar engine loads once. The highlighter is created exactly once
- * (`getHighlighter()` returns the same promise/instance forever) and reused across
- * every render so `md.render()` can stay synchronous via `fromHighlighter`.
+ * Oniguruma WASM grammar engine loads once. The reader prepares only requested
+ * grammars; getHighlighter() keeps the complete eager workspace contract. Both
+ * share one instance so md.render() stays synchronous via fromHighlighter.
  */
 
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
@@ -33,12 +33,30 @@ export const CODE_THEME_PAIRS: Record<CodeThemeId, CodeThemePair> = {
 
 let highlighter: HighlighterCore | null = null;
 let creating: Promise<HighlighterCore> | null = null;
+let preparingWorkspace: Promise<HighlighterCore> | null = null;
+const loadingLanguages = new WeakMap<HighlighterCore, Map<string, Promise<void>>>();
 
 /**
- * Common grammars kept off the startup path. Explicit subpath imports give Vite a
- * bounded set of lazy chunks instead of glob-bundling the entire Shiki catalogue.
+ * Explicit imports bound the bundle and let the reader load only the requested
+ * grammar modules, including the embedded grammars each module supplies.
  */
-const LAZY_LANGUAGE_LOADERS = {
+const LANGUAGE_LOADERS = {
+  typescript: () => import("@shikijs/langs/typescript"),
+  javascript: () => import("@shikijs/langs/javascript"),
+  python: () => import("@shikijs/langs/python"),
+  bash: () => import("@shikijs/langs/bash"),
+  json: () => import("@shikijs/langs/json"),
+  markdown: () => import("@shikijs/langs/markdown"),
+  html: () => import("@shikijs/langs/html"),
+  css: () => import("@shikijs/langs/css"),
+  rust: () => import("@shikijs/langs/rust"),
+  go: () => import("@shikijs/langs/go"),
+  java: () => import("@shikijs/langs/java"),
+  c: () => import("@shikijs/langs/c"),
+  cpp: () => import("@shikijs/langs/cpp"),
+  sql: () => import("@shikijs/langs/sql"),
+  yaml: () => import("@shikijs/langs/yaml"),
+  diff: () => import("@shikijs/langs/diff"),
   csharp: () => import("@shikijs/langs/csharp"),
   php: () => import("@shikijs/langs/php"),
   ruby: () => import("@shikijs/langs/ruby"),
@@ -61,6 +79,13 @@ const LAZY_LANGUAGE_LOADERS = {
   nginx: () => import("@shikijs/langs/nginx"),
   ini: () => import("@shikijs/langs/ini"),
 } as const;
+type LanguageId = keyof typeof LANGUAGE_LOADERS;
+type LanguageInput = Parameters<HighlighterCore["loadLanguage"]>[number];
+
+const WORKSPACE_LANGUAGE_IDS = [
+  "typescript", "javascript", "python", "bash", "json", "markdown", "html", "css",
+  "rust", "go", "java", "c", "cpp", "sql", "yaml", "diff",
+] as const satisfies readonly LanguageId[];
 
 const LANGUAGE_ALIASES: Readonly<Record<string, string>> = {
   ts: "typescript",
@@ -87,11 +112,7 @@ const LANGUAGE_ALIASES: Readonly<Record<string, string>> = {
   hcl: "terraform",
 };
 
-const BASE_LANGUAGE_IDS = new Set([
-  "typescript", "javascript", "python", "bash", "json", "markdown", "html", "css",
-  "rust", "go", "java", "c", "cpp", "sql", "yaml", "diff", "mermaid",
-  "text", "plaintext", "txt", "",
-]);
+const SPECIAL_LANGUAGE_IDS = new Set(["mermaid", "text", "plaintext", "txt", ""]);
 
 function normalizeLanguageId(lang: string): string {
   const id = lang.toLowerCase().replace(/^language-/, "");
@@ -101,7 +122,7 @@ function normalizeLanguageId(lang: string): string {
 
 export function isSupportedLanguage(lang: string): boolean {
   const id = normalizeLanguageId(lang);
-  return BASE_LANGUAGE_IDS.has(id) || Object.hasOwn(LAZY_LANGUAGE_LOADERS, id);
+  return SPECIAL_LANGUAGE_IDS.has(id) || Object.hasOwn(LANGUAGE_LOADERS, id);
 }
 
 /** Return distinct fenced-code language ids in source order. */
@@ -121,10 +142,49 @@ export function findFenceLanguages(src: string): string[] {
 }
 
 /**
- * Returns the shared highlighter, creating it on first call. Concurrent callers during
- * the initial async creation share one in-flight promise (no duplicate WASM loads).
+ * Eager workspace contract: every common grammar and every theme is ready before
+ * resolving, including when a reader created the engine first. Keep this readiness
+ * promise separate from engine creation and retry after a failed preparation.
  */
 export function getHighlighter(): Promise<HighlighterCore> {
+  if (preparingWorkspace) return preparingWorkspace;
+  preparingWorkspace = prepareLanguages(WORKSPACE_LANGUAGE_IDS).catch(error => {
+    preparingWorkspace = null;
+    throw error;
+  });
+  return preparingWorkspace;
+}
+
+/** Reader-only preparation; plaintext transformers can request no grammars. */
+export function getReaderHighlighter(languages: readonly string[]): Promise<HighlighterCore> {
+  const ids = [...new Set(languages.map(normalizeLanguageId))]
+    .filter((id): id is LanguageId => Object.hasOwn(LANGUAGE_LOADERS, id));
+  return prepareLanguages(ids, true);
+}
+
+async function prepareLanguages(
+  languages: readonly LanguageId[],
+  preserveOptionalEmbeds = false,
+): Promise<HighlighterCore> {
+  // Start grammar imports alongside engine/theme creation, preserving the eager
+  // workspace's parallel asset preparation. Native module imports remain cached.
+  const [hl, grammars] = await Promise.all([
+    getCoreHighlighter(),
+    Promise.all(languages.map(id => LANGUAGE_LOADERS[id]())),
+  ]);
+  // Optional embeds are not included in a grammar's module. Keep their previous
+  // common-language colors (including transitive grammar members) without a new
+  // embed resolver. Workspace preparation does not take this reader-only path,
+  // so its own Markdown grammar cannot wait on the workspace promise itself.
+  if (preserveOptionalEmbeds && grammars.some(module =>
+    module.default.some(grammar => grammar.embeddedLangsLazy?.length))) {
+    await getHighlighter();
+  }
+  await Promise.all(languages.map((id, index) => loadLanguage(hl, id, () => grammars[index]!)));
+  return hl;
+}
+
+function getCoreHighlighter(): Promise<HighlighterCore> {
   if (highlighter) return Promise.resolve(highlighter);
   if (creating) return creating;
   creating = create().catch((err) => {
@@ -149,24 +209,7 @@ async function create(): Promise<HighlighterCore> {
       import("@shikijs/themes/catppuccin-latte"),
       import("@shikijs/themes/catppuccin-mocha"),
     ],
-    langs: [
-      import("@shikijs/langs/typescript"),
-      import("@shikijs/langs/javascript"),
-      import("@shikijs/langs/python"),
-      import("@shikijs/langs/bash"),
-      import("@shikijs/langs/json"),
-      import("@shikijs/langs/markdown"),
-      import("@shikijs/langs/html"),
-      import("@shikijs/langs/css"),
-      import("@shikijs/langs/rust"),
-      import("@shikijs/langs/go"),
-      import("@shikijs/langs/java"),
-      import("@shikijs/langs/c"),
-      import("@shikijs/langs/cpp"),
-      import("@shikijs/langs/sql"),
-      import("@shikijs/langs/yaml"),
-      import("@shikijs/langs/diff"),
-    ],
+    langs: [],
     engine: createOnigurumaEngine(import("shiki/wasm")),
   });
   highlighter = hl;
@@ -181,10 +224,22 @@ async function create(): Promise<HighlighterCore> {
  */
 export async function ensureLang(hl: HighlighterCore, lang: string): Promise<void> {
   const id = normalizeLanguageId(lang);
-  if (!id || hl.getLoadedLanguages().includes(id)) return;
-  if (!Object.hasOwn(LAZY_LANGUAGE_LOADERS, id)) return;
-  const loader = LAZY_LANGUAGE_LOADERS[id as keyof typeof LAZY_LANGUAGE_LOADERS];
-  await hl.loadLanguage(loader());
+  if (!Object.hasOwn(LANGUAGE_LOADERS, id)) return;
+  await loadLanguage(hl, id, LANGUAGE_LOADERS[id as LanguageId]);
+}
+
+function loadLanguage(hl: HighlighterCore, id: string, input: () => LanguageInput): Promise<void> {
+  if (hl.getLoadedLanguages().includes(id)) return Promise.resolve();
+  let loading = loadingLanguages.get(hl);
+  if (!loading) {
+    loading = new Map();
+    loadingLanguages.set(hl, loading);
+  }
+  const pending = loading.get(id);
+  if (pending) return pending;
+  const work = Promise.resolve().then(() => hl.loadLanguage(input())).finally(() => loading.delete(id));
+  loading.set(id, work);
+  return work;
 }
 
 /** Load every supported fenced language before markdown-it's synchronous render. */

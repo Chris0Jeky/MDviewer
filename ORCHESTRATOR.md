@@ -3,7 +3,22 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-10-26 (Windows reader action notices):**
+> **CURRENT CHECKPOINT - 2026-11-05 (reader grammar preparation, unpublished follow-up):**
+> Prepared on #162's final tree 4f64b676, now main d09817cd, including its decoding
+> and notation fixes. Reader code prepares requested grammar modules and their bundled
+> dependencies; all existing themes remain ready. A separate workspace readiness
+> promise preserves the eager common-grammar contract on the same engine. Concurrent
+> aliases share registration; engine, grammar and workspace failures remain retryable.
+> Modules with optional embeds retain the common-language compatibility set: Markdown,
+> Ruby/HAML, Vue, Svelte and LaTeX. The workspace path bypasses that fallback to avoid
+> waiting on its own promise. Real-engine tests cover handoff orders, concurrency,
+> retries, plaintext transformers and embedded-language output parity. Desktop browser
+> coverage checks C# asset admission followed by the full Edit & PDF workspace.
+> This is prepared source, not a published PR, measured RAM/startup result or deployment.
+> Fresh independent review, exact-head hosted web/desktop checks and native smoke remain
+> required. Existing manual acceptance items remain open.
+
+> **PREVIOUS CHECKPOINT - 2026-10-26 (Windows reader action notices):**
 > PR #158 head 2dda4de reproduced three mixed-notice failures locally: workspace-entry
 > errors disappeared after recovery warnings/failures, and Sample admission errors
 > disappeared after retained-document warnings. Both handlers now pass their action
@@ -13,7 +28,7 @@
 > PR #158 for their current results. This repair includes no #162 performance work,
 > deployment or human acceptance. AI-6/AI-7/AI-8/AI-9 remain OPEN.
 
-> **PREVIOUS CHECKPOINT - 2026-10-21 (Windows reader ownership and native verification):**
+> **PREVIOUS CHECKPOINT — 2026-10-21 (Windows reader ownership and native verification):**
 > All original open issues/PRs are resolved: #155/#156/#157/#159/#160 merged;
 > #136 closed after the PDF readiness/footnote and dependency fixes. Main at this
 > checkpoint is 22435ce. Windows reader PR #158 remains the active feature review.

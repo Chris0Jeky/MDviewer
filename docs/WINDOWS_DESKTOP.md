@@ -107,9 +107,11 @@ the PDF workspace, and repeated opens. WebView2 uses multiple processes; measuri
 only `mdviewer.exe` would understate its footprint. The app has not established a
 lower-RAM claim than an additional tab in an already-running browser.
 
-Explorer associations, install/uninstall, SmartScreen experience and your preferred
-print driver still need acceptance on a normal Windows desktop. Existing web human
-acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open.
+Explorer associations, install/uninstall, SmartScreen experience, keyboard/Narrator
+behavior and your preferred print driver still need acceptance on a normal Windows
+desktop. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169) tracks those
+checks, representative performance measurements and the signing/distribution decision.
+Existing web human acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open.
 
 See [the design](design/WINDOWS_READER.md) and [native host contract](../src-tauri/README.md)
 for implementation details.
