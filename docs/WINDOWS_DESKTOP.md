@@ -2,7 +2,7 @@
 
 The experimental Windows app opens Markdown directly in a continuous reading view.
 It uses Windows' WebView2 runtime in its own window. The source editor and paginated
-PDF workspace load when you choose **Edit & PDF**.
+PDF workspace load when you choose **New** or **Edit & PDF**.
 
 ## Get the app
 
@@ -31,15 +31,22 @@ selector keeps multiple files open. The reader includes a heading outline, text-
 controls, and light, dark and sepia screen themes. Code highlighting, math,
 diagrams, tables and footnotes use the same rendering modules as the web app.
 
-Choose **Edit & PDF** to edit source and use the existing page-safe preview. **Reader
+Choose **New document** from the empty reader, or **New** from either toolbar, to
+start writing a blank note. Existing files stay open. New notes use the first
+available name (`Untitled.md`, `Untitled 2.md`, and so on), and the source pane is
+shown and focused. An untouched blank note can close without a discard prompt.
+
+Choose **Edit & PDF** to edit an opened file and use the existing page-safe preview. **Reader
 view** returns with your open documents and edits preserved. **Save Markdown** saves
 a copy of the source; **Print / Save as PDF** uses the print dialog, and **Download
 PDF** creates the raster fallback. Exports do not overwrite the original file
 automatically. Closing an edited document asks before discarding changes. During
 export, returning to the reader or closing the app waits for the operation to finish.
 
-`Ctrl+O` opens a file. In the editing workspace, `Ctrl+S` saves Markdown. In the
+`Ctrl+N` starts a new document; `Ctrl+O` opens a file. In the editing workspace,
+`Ctrl+S` saves Markdown. In the
 reader, `Ctrl+W` closes the current document. Native window controls close the app.
+New is unavailable while a mode change, export or native save dialog is in progress.
 
 ## Local files and limits
 
@@ -52,7 +59,8 @@ browser; other link schemes and automatic remote resource loads are blocked.
 The host accepts local `.md` and `.markdown` files, including names containing spaces
 or Unicode. It reads UTF-8, UTF-8 with a BOM, and UTF-16 LE/BE with a BOM. Malformed
 text is rejected. Explicit UNC and device paths are not accepted. File batches and
-open-document imports are bounded to 32 documents and 25,000,000 bytes. Large
+open documents, including new notes, are bounded to 32 documents and 25,000,000
+UTF-8 bytes at admission. Large
 browser-picker/drop imports ask before rendering; native reads remain hard-bounded.
 Editing a document can increase its size; returning to reading reports any exceeded
 session limit and keeps the editing workspace intact so you can save or close files.

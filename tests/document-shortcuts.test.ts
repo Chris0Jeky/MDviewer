@@ -4,17 +4,22 @@ import { mountDocumentShortcuts } from "../src/ui/DocumentShortcuts";
 const cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.splice(0).forEach((stop) => stop()); document.body.replaceChildren(); });
 
-function fixture() {
+function fixture(includeNew = false) {
   const root = document.createElement("div");
-  root.innerHTML = `<div class="workspace-actions"><button class="workspace-action">Open</button></div>
+  root.innerHTML = `<div class="workspace-actions">
+    ${includeNew ? '<button class="workspace-action" data-document-command="new">New</button>' : ""}
+    <button class="workspace-action" data-document-command="open">Open</button></div>
     <div class="workspace-session"><span class="workspace-privacy">Memory only</span>
-    <button class="workspace-action" title="Save source">Save</button></div>`;
+    <button class="workspace-action" data-document-command="save" title="Save source">Save</button></div>`;
   document.body.append(root);
-  const open = root.querySelector<HTMLButtonElement>(".workspace-actions button")!;
-  const save = root.querySelector<HTMLButtonElement>(".workspace-session button")!;
+  const open = root.querySelector<HTMLButtonElement>('[data-document-command="open"]')!;
+  const save = root.querySelector<HTMLButtonElement>('[data-document-command="save"]')!;
+  const newDocument = root.querySelector<HTMLButtonElement>('[data-document-command="new"]');
   const clicked = { open: 0, save: 0 };
+  let created = 0;
   open.addEventListener("click", () => { clicked.open++; });
   save.addEventListener("click", () => { clicked.save++; });
+  newDocument?.addEventListener("click", () => { created++; });
   const stop = mountDocumentShortcuts(root);
   cleanups.push(stop);
   function key(init: KeyboardEventInit, handled = false): KeyboardEvent {
@@ -23,7 +28,7 @@ function fixture() {
     window.dispatchEvent(event);
     return event;
   }
-  return { root, open, save, clicked, stop, key };
+  return { root, open, save, newDocument, clicked, stop, key, created: () => created };
 }
 
 describe("local document shortcuts", () => {
@@ -81,5 +86,36 @@ describe("local document shortcuts", () => {
     const root = document.createElement("div");
     expect(() => mountDocumentShortcuts(root)).toThrow("controls failed to mount");
     expect(root.childElementCount).toBe(0);
+  });
+
+  it.each(["ctrlKey", "metaKey"] as const)("routes optional New via %s while retaining distinct Open and Save actions", modifier => {
+    const t = fixture(true);
+    expect(t.key({ key: "N", [modifier]: true }).defaultPrevented).toBe(true);
+    expect(t.key({ key: "o", [modifier]: true }).defaultPrevented).toBe(true);
+    expect(t.key({ key: "s", [modifier]: true }).defaultPrevented).toBe(true);
+    expect(t.created()).toBe(1);
+    expect(t.clicked).toEqual({ open: 1, save: 1 });
+    expect(t.newDocument!.getAttribute("aria-keyshortcuts")).toBe("Control+n Meta+n");
+    expect(t.root.querySelector(".workspace-shortcuts")?.textContent).toContain("Ctrl/Cmd+N");
+  });
+
+  it("does not consume New when the workspace offers no creation action", () => {
+    const t = fixture();
+    expect(t.key({ key: "n", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(t.created()).toBe(0);
+  });
+
+  it("suppresses repeated or disabled New without creating extra documents", () => {
+    const t = fixture(true);
+    expect(t.key({ key: "n", ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
+    t.newDocument!.disabled = true;
+    expect(t.key({ key: "n", metaKey: true }).defaultPrevented).toBe(true);
+    expect(t.created()).toBe(0);
+    t.newDocument!.disabled = false;
+    expect(t.key({ key: "n", ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(t.created()).toBe(1);
+    t.stop();
+    expect(t.key({ key: "n", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(t.newDocument!.hasAttribute("aria-keyshortcuts")).toBe(false);
   });
 });

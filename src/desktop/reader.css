@@ -39,7 +39,7 @@ body.desktop-reader { margin: 0; height: 100dvh; overflow: hidden; display: bloc
 .reader-eyebrow { font-size: 11px; font-weight: 700; color: var(--reader-muted); letter-spacing: 1.5px; }
 .reader-empty h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.2; letter-spacing: -1px; margin: 18px 0; }
 .reader-empty p { font-size: 16px; color: var(--reader-muted); }
-.reader-empty button { margin: 15px 0 26px; }
+.reader-empty-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 15px 0 26px; }
 .reader-empty small { display: block; color: var(--reader-muted); }
 .reader-footer { flex: none; display: flex; justify-content: space-between; gap: 16px; padding: 7px 18px; color: var(--reader-muted); border-top: 1px solid var(--reader-line); font-size: 11px; }
 .reader-notice { margin: 0; padding: 9px 18px; flex: none; color: var(--reader-fg); background: var(--reader-paper); border-bottom: 1px solid var(--reader-line); font-size: 13px; }
