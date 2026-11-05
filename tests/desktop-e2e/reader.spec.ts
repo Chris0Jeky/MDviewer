@@ -196,9 +196,6 @@ test("both PDF exports work under the production CSP and use the latest edit", a
 });
 
 test("failed capture styles save no PDF, release their iframe and permit a retry", async ({ page }) => {
-  page.on("console", message => {
-    if (message.text().startsWith("MDVIEWER_RASTER_DIAGNOSTIC")) console.log(message.text());
-  });
   await openFiles(page, [{ name: "export.md", text: RICH_MARKDOWN }]);
   await readyReader(page, "Desktop field notes");
   await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();

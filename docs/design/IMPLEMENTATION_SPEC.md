@@ -318,8 +318,23 @@ The continuous reader parses once with `createMarkdown(null, settings)`. It insp
 `fence` tokens (including their nested children), not fence-shaped source lines. Prose,
 math, Mermaid-only documents and ordinary plaintext/unknown fences do not initialize Shiki
 or request its WASM, themes or grammars. Actual supported code fences await the shared
-highlighter and curated language loaders. Explicit line numbering, case-insensitive notation directives or
+highlighter with only their requested grammar modules and those modules' embedded language
+dependencies. Explicit line numbering, case-insensitive notation directives or
 fence metadata also enable the existing code transformers, including for plaintext.
+
+`getReaderHighlighter(languages)` normalizes and deduplicates grammar labels, prepares
+those modules alongside the shared engine, and retains all eleven existing themes.
+Plaintext transformers request an empty grammar list. Concurrent aliases share one pending
+registration per engine; failed registrations can be retried. `getHighlighter()` has a
+separate readiness promise that still prepares all sixteen common workspace grammars.
+Reader-first, workspace-first and concurrent handoffs reuse the same engine; failed engine
+or workspace preparation does not permanently cache a rejection.
+
+Grammar modules with optional embedded languages also await the existing common workspace
+set before rendering. With the pinned grammar bundle this applies to Markdown, Ruby
+(through its HAML member), Vue, Svelte and LaTeX. It preserves previously available embedded
+syntax colors without adding a separate language resolver. Workspace preparation bypasses
+this compatibility step, avoiding a dependency on its own readiness promise.
 
 `installMarkdownHighlighter(md, hl, settings)` installs the synchronous highlight callback
 on that same parser; it does not parse or replace the structural plugin stack.
@@ -338,3 +353,6 @@ unchanged no-slice pipeline in section 3. No document tokens are cached or persi
 change proves avoided engine initialization and asset requests, not a measured RAM or
 startup-time improvement. Unit admission/transformer controls and production browser asset
 checks live in `tests/desktop-lazy-highlight.test.ts` and `tests/desktop-e2e/startup.spec.ts`.
+Real-engine language/dependency, handoff and retry controls live in
+`tests/highlight-reader.test.ts`. The browser request audit checks that a C# reader leaves
+unrelated common grammar assets unloaded until Edit & PDF prepares the workspace.

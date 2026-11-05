@@ -3,9 +3,6 @@ import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
 
 test("failed clone styles save no PDF, release their iframe and permit a retry", async ({ page }) => {
   test.skip(process.env.E2E_TARGET !== "preview", "This regression requires linked production CSS, not Vite's injected dev styles.");
-  page.on("console", message => {
-    if (message.text().startsWith("MDVIEWER_RASTER_DIAGNOSTIC")) console.log(message.text());
-  });
   const markdown = "# Capture recovery\n\nThe source survives a failed stylesheet load.";
   await page.goto("/");
   await loadMarkdownIntoApp(page, markdown);
