@@ -53,6 +53,23 @@ keeps every layout setting and your Markdown unchanged.
 reader, `Ctrl+W` closes the current document. Native window controls close the app.
 New is unavailable while a mode change, export or native save dialog is in progress.
 
+### Find and change source text
+
+In the editing workspace, choose **Find** above the Markdown source or press
+**Ctrl+F**. Type literal text, use **Match case** when needed, and move through
+results with **Enter**, **Shift+Enter**, or the arrow buttons. The source scrolls
+to the selected match while your typing stays in the search field.
+
+Choose **Replace…** or press **Ctrl+H** to reveal replacement controls. **Replace**
+changes the selected match; **Replace all** changes every result as one undoable
+edit. Replacement text is used exactly as typed. **Escape** closes Find and returns
+to the source. In Preview-only mode, Ctrl+F keeps the normal browser/WebView Find.
+
+Very broad searches show a refinement notice after 10,000 results and disable
+Replace all until the search is narrowed. Search text is limited to 2,000
+characters. The usual document size and confirmation limits still apply to edits.
+Search state stays in memory and is never added to saved Markdown or PDF output.
+
 ## Local files and limits
 
 Documents stay in memory until you explicitly export them. The app has no account,

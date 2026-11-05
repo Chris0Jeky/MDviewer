@@ -239,14 +239,50 @@ document preserves its node and first undo entry.
 signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
 shares byte admission and the undo-aware insertion path with intercepted paste,
 text drop and Tab. A delayed confirmation captures document identity, edit/source
-revision, exact text, selection/revision/direction and focused element; all must still match before
-commit and after focusing. Refusal, rejection, abortion, composition, teardown,
+revision, exact text, selection/revision/direction and focused element. Focus must
+still match before commitment; document, value and selection ownership are
+rechecked after focusing the source. Refusal, rejection, abortion, composition, teardown,
 detachment, invalid range and unchanged replacement return false. A configured
 hard limit refuses even if the host accepts; ordinary typing and small paste/drop
 remain native. Abort prevents commitment but does not dismiss a host confirmation
 UI or settle an unresolved host promise. Native insertText owns its single input
 event; the manual fallback dispatches one observable input event. Coverage:
 `tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
+
+### Source Find and Replace
+
+`EditorSearchModel.ts` owns escaped literal Unicode matching with UTF-16 offsets,
+case matching, wrapping navigation and literal replacement construction. Queries
+longer than 2,000 characters receive an explicit recoverable error; at most 10,000
+matches are stored and a truncated set disables Replace all. Bulk UTF-8 size is
+computed before allocating the replacement result, including surrogate pairs
+formed across replacement boundaries.
+
+`mountEditorSearch(pane, head, input, backdrop, options)` receives only the editor's
+`replaceRange` callback and optional hard limit. Its controller exposes
+`setInput(input)`, `sourceChanged(documentChanged?)`, and `destroy()`. Editor rebinds
+Search after replacing its textarea, before restoring source focus. Document
+changes, close and teardown abort pending replacement commitment. Rebinding removes
+selection listeners from the old node; teardown removes the global shortcut.
+
+Find opens from the source header or Ctrl/Cmd+F; Ctrl/Cmd+H reveals Replace.
+Preview-only, inert, detached and composed contexts retain the host shortcuts.
+Search is literal, supports Match case, and wraps through Enter/Shift+Enter, F3
+and previous/next controls. Escape closes and returns to source. Navigation keeps
+query focus. Delayed counting cannot replace a caret chosen after the query.
+Replace all uses one native undo edit; replacement text has no substitution syntax.
+An accepted delayed edit or completion cannot reclaim focus after the user moves.
+
+Closed Search does not scan source text. While open, input changes schedule a
+90ms idle recomputation. Navigation measures the existing backdrop; large sources
+with highlighting disabled use a temporary text-only mirror with actual wrapping
+metrics, removed immediately after measurement. Search controls occupy their own
+grid row, adapt to narrow source panes and inherit source print suppression. No
+new dependencies, network traffic or document persistence are introduced.
+
+Coverage: `tests/editor-search-model.test.ts`, `tests/editor-search.test.ts`,
+`tests/e2e/editor-search.spec.ts` and `tests/desktop-e2e/editor-search.spec.ts`.
+Native undo, source geometry and print visibility require real browser evidence.
 
 Canvas zoom is still a paint-only transform and never a reflow key. The screen-only outer host envelope tracks the painted stack height to remove the unscaled blank scroll tail. Its width is at least the painted sheet plus gutters and viewport width so explicit 100% or 50% zoom retains horizontal access to the whole sheet. Remove the envelope before pagination. Reset height and width to auto and overflow to visible for print. Do not scale sheet layout measurements or crop exported pages.
 
