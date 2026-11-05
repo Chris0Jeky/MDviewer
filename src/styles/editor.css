@@ -69,6 +69,12 @@
   pointer-events: none;
 }
 
+/* Fatal feedback must remain actionable without revealing the parked preview. */
+#workspace[data-view-mode="editor"] #error-card:not([hidden]) {
+  visibility: visible;
+  pointer-events: auto;
+}
+
 #workspace[data-view-mode="preview"] #editor-pane,
 #workspace[data-view-mode="preview"] #split-handle {
   display: none;

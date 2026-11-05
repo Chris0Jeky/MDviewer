@@ -3,7 +3,45 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (workspace labels and dependency handoff):**
+> **CURRENT CHECKPOINT - 2026-11-05 (blocked html2canvas-pro 2.6 draft):**
+> [Draft #178](https://github.com/Chris0Jeky/MDviewer/pull/178) runs exact html2canvas-pro
+> 2.6.0 and retains the observed stylesheet-outcome capture adapter and offline visual
+> gate. Main remains pinned to 2.5.2 as containment; that pin is not offline pixel proof.
+> This candidate incorporates #180's visible, recoverable fatal feedback. The error UI
+> correction does not repair offline stylesheet availability or qualify PDF output.
+> The last completed pre-inheritance draft head, 6516c5dd, recorded 113 passing web
+> tests, two offline failures and five skips in
+> [CI 41959269737](https://github.com/Chris0Jeky/MDviewer/actions/runs/41959269737).
+> Both offline cases failed before a PDF download; the stronger visual case did not
+> reach its pixel or damaged-control assertions. Desktop's 18 cases and native Windows
+> checks passed in [run 41959269733](https://github.com/Chris0Jeky/MDviewer/actions/runs/41959269733).
+> The final inherited head and fresh exact-head evidence are tracked in #178. This
+> checkpoint makes no claim that those fresh checks or offline fidelity have passed.
+> [Offline fidelity issue #174](https://github.com/Chris0Jeky/MDviewer/issues/174) remains
+> a merge blocker. #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No deployment, signed
+> release or comparative performance claim is made.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
+> Based on merged main 8265edd4, including the workspace correction #177 and CLI
+> update #176. This checkpoint implements #179 in PR #180: fatal feedback is visible
+> and actionable in Markdown-only mode while the preview remains parked. Showing
+> a fatal error returns only the canvas to its origin instantly; view mode, Markdown
+> text, and the source editor's selection and scroll remain unchanged. A successful
+> raster save clears only fatal feedback before releasing export ownership, preserving
+> render warnings and ingestion notices. Failed or canceled saves retain feedback.
+> Test-only head 59a5166 reproduced hidden and stale cards in
+> [CI 41960323747](https://github.com/Chris0Jeky/MDviewer/actions/runs/41960323747).
+> The second test-only head dcb9ef5 reproduced an error above the scrolled canvas
+> before any test click/focus in [CI 41961453874](https://github.com/Chris0Jeky/MDviewer/actions/runs/41961453874).
+> Local qualification passes 706 unit tests, four server tests, typecheck, lint,
+> Observatory and both production builds. Final exact-head hosted qualification
+> and failure/recovery screenshot review are recorded in PR #180.
+> html2canvas-pro remains pinned to 2.5.2. Draft #178 and offline raster fidelity
+> issue #174 remain blocked/open; this feedback fix does not qualify their output.
+> Windows acceptance/performance issue #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.
+> No deployment, signed-release or comparative performance claim is made.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (workspace labels and dependency handoff):**
 > Base main 2a26940d includes merged reader grammar PR #172 and development dependency
 > PR #173. This checkpoint implements the independently reviewed workspace/shared
 > parsed-fence correction for #171. Final exact-head hosted qualification is recorded
