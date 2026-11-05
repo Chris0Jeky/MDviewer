@@ -26,10 +26,12 @@ destroyed, detached, or inert textarea. The signal is checked before admission a
 before committing; it does not dismiss a host's confirmation UI.
 
 Before awaiting confirmation, the operation captures document identity, edit and
-selection revisions, full source value, and selection endpoints/direction. It must
-still own all of those when it resumes. The focus operation is followed by another
-ownership check because a host focus listener can switch documents. Rejected or
-throwing confirmers are treated as refusals without an unhandled rejection.
+selection revisions, full source value, selection endpoints/direction, and the
+focused element. It must still own all of those when it resumes. Deliberately
+focusing the source is followed by another value/selection ownership check because
+a host focus listener can switch documents; that second check permits the command's
+own focus change. Rejected or throwing confirmers are treated as refusals without
+an unhandled rejection.
 
 Paste and text drop remain native below the existing soft gate. Intercepted inserts,
 explicit replacements, and Tab share the guarded insertion path. UTF-8 admission
@@ -45,17 +47,26 @@ undo guarantee of unsupported engines; it is not a substitute editor history.
 
 ## Equal-content document boundaries
 
-An identical value assignment can retain a browser's native undo history. A real
-document switch therefore forces a synchronous different-value write before seeding
-equal text, fencing the previous history without emitting an edit. Initial adoption
-of the first typed document during `onInput` is exempt from that write: App creates
-Untitled from that exact input event, and the first native undo entry must survive.
+Hosted Chromium exposed that even a different-value assignment retains native undo
+history: the equal-content switch regression restored A's earlier text into B.
+Every real document identity boundary therefore replaces the textarea with a fresh
+native editing host. Editor listeners are removed from the previous node and bound
+to the new one; composition state belongs to the new host. The controller's read-only
+`input` getter always returns the current node. Integrations that bind listeners to
+the textarea must rebind after a document switch. Source focus is retained when the
+previous textarea owned it; unrelated controls keep their focus.
+
+Initial adoption of the first typed document during `onInput` keeps the same node:
+App creates Untitled from that exact input event, and its native undo entry must
+survive. Same-id, same-text updates also preserve the node and caret.
 
 ## Verification boundary
 
 Unit tests cover delayed document/selection/value changes, edit-then-undo revisions,
 switch-away-and-back revisions, teardown, cancellation, confirmation failure, hard
-limits, observable input delivery, native-command preference, and IME admission.
+limits, observable input delivery, native-command preference, IME admission, detached
+old-node listeners, typed-document adoption, and delayed accepted edits after a
+focus change.
 The existing editor tests remain unchanged.
 
 `tests/e2e/editor-edit-safety.spec.ts` checks first-typing undo, equal-content document

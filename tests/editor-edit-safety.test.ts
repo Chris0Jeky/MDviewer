@@ -103,6 +103,80 @@ describe("Editor: delayed insert ownership", () => {
   });
 });
 
+describe("Editor: native input ownership", () => {
+  it.each(["same", "different"])("uses a fresh textarea across a %s-text document boundary", (nextText) => {
+    editor.setDocument({ id: "a", name: "same.md", text: "same" });
+    const previous = editor.input;
+    editor.setDocument({ id: "b", name: "same.md", text: nextText });
+    expect(editor.input).not.toBe(previous);
+    expect(previous.isConnected).toBe(false);
+    expect(editor.input.isConnected).toBe(true);
+    expect(editor.input.value).toBe(nextText);
+    expect(root.querySelectorAll("#editor-input")).toHaveLength(1);
+    expect(editor.input.getAttribute("aria-label")).toBe("Markdown source");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("detaches the previous textarea's input and keyboard listeners", () => {
+    editor.setDocument({ id: "a", name: "a.md", text: "first" });
+    const previous = editor.input;
+    editor.setDocument({ id: "b", name: "b.md", text: "second" });
+    previous.value = "stale input";
+    previous.dispatchEvent(new Event("input", { bubbles: true }));
+    const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
+    previous.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(false);
+    expect(editor.input.value).toBe("second");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("preserves the textarea and caret for a passive update of the same document", () => {
+    editor.setDocument({ id: "a", name: "a.md", text: "same" });
+    const previous = editor.input;
+    previous.setSelectionRange(1, 3, "backward");
+    editor.setDocument({ id: "a", name: "renamed.md", text: "same" });
+    expect(editor.input).toBe(previous);
+    expect([previous.selectionStart, previous.selectionEnd, previous.selectionDirection])
+      .toEqual([1, 3, "backward"]);
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it("adopts the first typed document without replacing its native input", () => {
+    mount({ onInput: text => {
+      editor.setDocument({ id: "typed", name: "Untitled.md", text });
+      onInput(text);
+    } });
+    const typing = editor.input;
+    typing.value = "first typed text";
+    typing.setSelectionRange(3, 3);
+    typing.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(editor.input).toBe(typing);
+    expect(typing.selectionStart).toBe(3);
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("first typed text");
+  });
+
+  it("keeps an existing source focus on the new textarea and rebinds its events", () => {
+    editor.setDocument({ id: "a", name: "a.md", text: "first" });
+    editor.input.focus();
+    editor.setDocument({ id: "b", name: "b.md", text: "second" });
+    expect(document.activeElement).toBe(editor.input);
+    editor.input.value = "new edit";
+    editor.input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("new edit");
+  });
+
+  it("does not carry composition state from a detached document", async () => {
+    editor.setDocument({ id: "a", name: "a.md", text: "first" });
+    const previous = editor.input;
+    previous.dispatchEvent(new CompositionEvent("compositionstart"));
+    editor.setDocument({ id: "b", name: "b.md", text: "second" });
+    expect(await editor.replaceRange(0, 6, "next")).toBe(true);
+    previous.dispatchEvent(new CompositionEvent("compositionstart"));
+    expect(await editor.replaceRange(0, 4, "again")).toBe(true);
+    expect(editor.input.value).toBe("again");
+  });
+});
+
 describe("Editor: guarded replacements", () => {
   it("replaces the requested range and reports exactly one observable input", async () => {
     editor.setDocument({ id: "a", name: "a.md", text: "zero one two" });
@@ -211,6 +285,23 @@ describe("Editor: guarded replacements", () => {
     }, { once: true });
     expect(await editor.replaceRange(1, 2, "X")).toBe(false);
     expect(editor.input.value).toBe("other");
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
+  it.each(["source", "command"] as const)("refuses an accepted delayed edit after focus leaves its %s owner", async (owner) => {
+    const confirmation = deferred();
+    mount({ largeInsertBytes: 100, confirmLargeInsert: () => confirmation.promise });
+    editor.setDocument({ id: "a", name: "a.md", text: "abc" });
+    const command = document.createElement("button");
+    const other = document.createElement("button");
+    root.append(command, other);
+    (owner === "source" ? editor.input : command).focus();
+    const result = editor.replaceRange(1, 2, "x".repeat(101));
+    other.focus();
+    confirmation.resolve(true);
+    expect(await result).toBe(false);
+    expect(document.activeElement).toBe(other);
+    expect(editor.input.value).toBe("abc");
     expect(onInput).not.toHaveBeenCalled();
   });
 

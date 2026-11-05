@@ -30,8 +30,8 @@ import type { CodeThemeId } from "../app/settings";
 import { CODE_THEME_PAIRS, getHighlighter } from "../render/highlight";
 
 export interface EditorController {
-  /** The editable textarea (`#editor-input`). */
-  input: HTMLTextAreaElement;
+  /** The current textarea (`#editor-input`); reacquire after a document switch. */
+  readonly input: HTMLTextAreaElement;
   /**
    * Seed the editor from outside (a file opened, a document switched). Re-highlights.
    * A same-document, same-text update preserves the caret and native undo history.
@@ -41,7 +41,8 @@ export interface EditorController {
   /**
    * Replace a UTF-16 range through the paste admission and native undo path.
    * Returns false if refused, unchanged, aborted, detached, composing, or stale.
-   * A delayed confirmation belongs to its original document, value, and selection.
+   * A delayed confirmation belongs to its original document, value, selection,
+   * and focused element.
    */
   replaceRange(start: number, end: number, text: string, signal?: AbortSignal): Promise<boolean>;
   /** Re-highlight with a different Shiki theme family (the toolbar's code theme). */
@@ -163,7 +164,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const highlightCode = el("code", { class: "editor-highlight-code" });
   highlight.append(highlightCode);
 
-  const input = el("textarea", {
+  const createInput = (): HTMLTextAreaElement => el("textarea", {
     id: IDS.editorInput,
     class: "editor-input",
     spellcheck: false,
@@ -176,6 +177,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       wrap: "soft",
     },
   });
+  let input = createInput();
 
   const scroll = el("div", { class: CLASSES.editorScroll }, highlight, input);
   pane.append(head, scroll);
@@ -378,7 +380,8 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const captureEdit = () => {
     // A queued select event from before the request must not invalidate it later.
     onSelect();
-    return { value: input.value, documentKey, editRevision, selectionRevision, ...lastSelection };
+    return { value: input.value, documentKey, editRevision, selectionRevision,
+      focused: document.activeElement, ...lastSelection };
   };
   type EditSnapshot = ReturnType<typeof captureEdit>;
   const ownsValue = (snapshot: EditSnapshot, signal?: AbortSignal): boolean =>
@@ -410,7 +413,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const insertTextPreservingUndo = (
     snapshot: EditSnapshot, start: number, end: number, text: string, signal?: AbortSignal,
   ): boolean => {
-    if (!isCurrent(snapshot, signal)) return false;
+    if (!isCurrent(snapshot, signal) || document.activeElement !== snapshot.focused) return false;
     input.focus();
     if (!isCurrent(snapshot, signal) || document.activeElement !== input) return false;
     input.setSelectionRange(start, end);
@@ -501,20 +504,34 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     gateLargeInsert(dt.getData("text/plain"), event);
   };
 
-  input.addEventListener("input", onInputEvent);
-  input.addEventListener("scroll", onScroll);
-  input.addEventListener("keydown", onKeyDown);
-  input.addEventListener("paste", onPasteEvent);
-  input.addEventListener("dragover", onDragOverEvent);
-  input.addEventListener("drop", onDropEvent);
-  input.addEventListener("select", onSelect);
-  input.addEventListener("compositionstart", onCompositionStart);
-  input.addEventListener("compositionend", onCompositionEnd);
+  const bindInput = (target: HTMLTextAreaElement): void => {
+    target.addEventListener("input", onInputEvent);
+    target.addEventListener("scroll", onScroll);
+    target.addEventListener("keydown", onKeyDown);
+    target.addEventListener("paste", onPasteEvent);
+    target.addEventListener("dragover", onDragOverEvent);
+    target.addEventListener("drop", onDropEvent);
+    target.addEventListener("select", onSelect);
+    target.addEventListener("compositionstart", onCompositionStart);
+    target.addEventListener("compositionend", onCompositionEnd);
+  };
+  const unbindInput = (target: HTMLTextAreaElement): void => {
+    target.removeEventListener("input", onInputEvent);
+    target.removeEventListener("scroll", onScroll);
+    target.removeEventListener("keydown", onKeyDown);
+    target.removeEventListener("paste", onPasteEvent);
+    target.removeEventListener("dragover", onDragOverEvent);
+    target.removeEventListener("drop", onDropEvent);
+    target.removeEventListener("select", onSelect);
+    target.removeEventListener("compositionstart", onCompositionStart);
+    target.removeEventListener("compositionend", onCompositionEnd);
+  };
+  bindInput(input);
 
   syncSize("");
 
   return {
-    input,
+    get input(): HTMLTextAreaElement { return input; },
     replaceRange,
     setDocument(doc): void {
       if (destroyed) return;
@@ -530,9 +547,18 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       fileNameEl.textContent = doc?.name ?? "Untitled.md";
       if (sameText && (!switched || adoptingInput)) return;
       const previousSelection = selection();
-      // Identical value assignments can retain the previous document's native undo
-      // history. Force a different value at a real ownership boundary, synchronously.
-      if (sameText) input.value = text ? "" : "\n";
+      const restoreFocus = switched && document.activeElement === input;
+      if (switched) {
+        // Chromium can retain native undo even across different value assignments.
+        // A fresh editing host gives this document its own native history and makes
+        // stale DOM references inert. Initial typed-document adoption returns above.
+        const previousInput = input;
+        unbindInput(previousInput);
+        input = createInput();
+        bindInput(input);
+        previousInput.replaceWith(input);
+        composing = false;
+      }
       input.value = text;
       if (sameText) input.setSelectionRange(
         previousSelection.start, previousSelection.end, previousSelection.direction,
@@ -549,6 +575,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       }
       syncSize(text);
       scheduleHighlight(text);
+      if (restoreFocus) input.focus({ preventScroll: true });
     },
     setCodeTheme(next): void {
       if (next === codeTheme) return;
@@ -564,15 +591,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       destroyed = true;
       if (highlightTimer) clearTimeout(highlightTimer);
       if (statTimer) clearTimeout(statTimer);
-      input.removeEventListener("input", onInputEvent);
-      input.removeEventListener("scroll", onScroll);
-      input.removeEventListener("keydown", onKeyDown);
-      input.removeEventListener("paste", onPasteEvent);
-      input.removeEventListener("dragover", onDragOverEvent);
-      input.removeEventListener("drop", onDropEvent);
-      input.removeEventListener("select", onSelect);
-      input.removeEventListener("compositionstart", onCompositionStart);
-      input.removeEventListener("compositionend", onCompositionEnd);
+      unbindInput(input);
       pane.remove();
     },
   };

@@ -159,10 +159,11 @@ Screen-only `.document-recovery` and its status/name/action/hint classes live in
 
 `EditorController.setDocument` accepts an optional stable `id`; App's DocStore
 supplies it. Same-ID/same-text notifications preserve caret and undo. Equal-text
-identity switches invalidate delayed work and clear the previous document's native
-undo history; first-input adoption is preserved. `replaceRange(start, end, text,
+identity switches invalidate delayed work and replace the textarea to isolate native
+undo history; first-input adoption is preserved. The read-only `input` getter returns
+the current node; node listeners must be rebound after a switch. `replaceRange(start, end, text,
 signal?): Promise<boolean>` replaces UTF-16 ranges through shared UTF-8 admission,
-selection/document/revision guards and native insertText. False means refused,
+selection/document/revision/focus guards and native insertText. False means refused,
 stale, unavailable, unchanged or aborted. The manual fallback emits one input event.
 Abort prevents commitment but does not settle or dismiss the host confirmation.
 See spec §12, `tests/editor-edit-safety.test.ts`,

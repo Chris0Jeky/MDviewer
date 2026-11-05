@@ -230,14 +230,16 @@ The editor accepts `setDocument({ id?: string, name: string, text: string } | nu
 App supplies the stable DocStore ID and legacy callers fall back to the name.
 Same-document, same-text notifications preserve live selection and native undo.
 A different identity fences delayed edits even when text and filename are equal;
-a real value transition clears the previous document's native undo history. App's
-synchronous adoption of the first typed document preserves that first undo entry.
+every real identity boundary replaces the textarea to isolate native undo history.
+The read-only `input` getter returns the current node; integrations must rebind
+node listeners after a switch. App's synchronous adoption of the first typed
+document preserves its node and first undo entry.
 
 `EditorController.replaceRange(start: number, end: number, text: string,
 signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
 shares byte admission and the undo-aware insertion path with intercepted paste,
 text drop and Tab. A delayed confirmation captures document identity, edit/source
-revision, exact text and selection/revision/direction; all must still match before
+revision, exact text, selection/revision/direction and focused element; all must still match before
 commit and after focusing. Refusal, rejection, abortion, composition, teardown,
 detachment, invalid range and unchanged replacement return false. A configured
 hard limit refuses even if the host accepts; ordinary typing and small paste/drop
