@@ -42,6 +42,20 @@ a system-colored outline and readable native text. The same test remains in the
 full Chromium suite. Exact-head hosted Chromium/Windows/Firefox and independent
 review remain required before merge; the PR records those receipts.
 
+`chrome-heading-scope.spec.ts` extends the authored-heading controls to the 17
+literal shell names in `tests/helpers/chromeHeadings.ts`, in both web and desktop
+production bundles. The initial four Firefox controls failed against the prior
+stylesheet: headings acquired grid/overlay layout or divider width, pane/splitter
+headings disappeared in Preview and print, and an Editor search heading falsely
+parked a short Split preview with Find closed. After that first correction, the
+expanded normal/forced-colors/print and desktop cases still failed on the other
+shell names while the short-window control passed. The expanded fixture also
+catches an authored Error card being hidden and Status live text being replaced
+by App's global feedback lookups. Chrome CSS and those two lookups now follow
+their actual parent chains; heading generation and document styles are unchanged.
+The regressions retain ordinary controls, hidden-but-measurable canvas and print
+restoration checks; existing failed-export cases check actionable fatal feedback.
+
 The Firefox run also exposed a test-fixture limitation: constructor-created
 `ClipboardEvent` discards a supplied DataTransfer in that engine. The helper now
 supplies the untrusted test event's own payload only when necessary. Its real

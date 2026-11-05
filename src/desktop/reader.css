@@ -10,7 +10,7 @@ body.desktop-reader { margin: 0; height: 100dvh; overflow: hidden; display: bloc
 .desktop-reader :focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 3px; }
 .reader-skip { position: fixed; left: 12px; top: -100px; z-index: 100; background: var(--reader-paper); padding: 8px 12px; color: var(--reader-accent); }
 .reader-skip:focus { top: 8px; }
-#reader-shell { height: 100%; display: flex; flex-direction: column; }
+body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .reader-toolbar { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--reader-line); background: var(--reader-paper); flex-wrap: wrap; }
 .reader-brand { font-size: 18px; font-weight: 750; letter-spacing: -.6px; padding-right: 10px; color: var(--reader-accent); }
 .reader-brand span { color: var(--reader-fg); font-weight: 500; }
@@ -43,8 +43,8 @@ body.desktop-reader { margin: 0; height: 100dvh; overflow: hidden; display: bloc
 .reader-empty small { display: block; color: var(--reader-muted); }
 .reader-footer { flex: none; display: flex; justify-content: space-between; gap: 16px; padding: 7px 18px; color: var(--reader-muted); border-top: 1px solid var(--reader-line); font-size: 11px; }
 .reader-notice { margin: 0; padding: 9px 18px; flex: none; color: var(--reader-fg); background: var(--reader-paper); border-bottom: 1px solid var(--reader-line); font-size: 13px; }
-#desktop-workspace { height: 100%; display: flex; flex-direction: column; }
-#desktop-workspace #app { min-height: 0; flex: 1; width: 100%; }
+body > #desktop-workspace { height: 100%; display: flex; flex-direction: column; }
+body > #desktop-workspace > #app { min-height: 0; flex: 1; width: 100%; }
 .reader-workspace-bar { display: flex; align-items: center; gap: 15px; padding: 7px 12px; border-bottom: 1px solid var(--reader-line); color: var(--reader-muted); background: var(--reader-paper); font-size: 12px; flex: none; }
 @media (max-width: 850px) { .reader-outline { display: none; } .reader-footer span:last-child { display: none; } .reader-toolbar { gap: 6px; padding: 10px; } .reader-toolbar label { font-size: 0; } .reader-toolbar select { font-size: 13px; } }
-@media print { .reader-workspace-bar, .reader-notice, #reader-shell, .reader-skip { display: none !important; } #desktop-workspace, #desktop-workspace #app { height: auto !important; display: block !important; } }
+@media print { .reader-workspace-bar, .reader-notice, body > #reader-shell, .reader-skip { display: none !important; } body > #desktop-workspace, body > #desktop-workspace > #app { height: auto !important; display: block !important; } }

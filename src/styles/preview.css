@@ -15,7 +15,7 @@
  * #canvas — scroll container and grey backdrop. Establishes a positioning
  * context for the floating chip / zoom / overlays.
  * -------------------------------------------------------------------------- */
-#canvas {
+#app > #workspace > #canvas {
   position: relative;
   overflow: auto;
   background: var(--bg-canvas);
@@ -31,13 +31,13 @@
 /* The scroller is keyboard-focusable (tabIndex 0) so the skip link lands on
    something operable and the preview can be scrolled with arrow keys alone.
    `-2px` keeps the ring inside the pane rather than under the splitter. */
-#canvas:focus-visible {
+#app > #workspace > #canvas:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #canvas {
+  #app > #workspace > #canvas {
     scroll-behavior: auto;
   }
 }
@@ -47,7 +47,7 @@
  * centre the column of sheets and pad it generously. The zoom states below
  * scale this whole stack.
  * -------------------------------------------------------------------------- */
-#paged-output {
+#app > #workspace > #canvas > #paged-output {
   display: block;
   min-height: 100%;
 }
@@ -103,7 +103,7 @@
  * window. Dashed accent frame over a dimming scrim with a "Release to open"
  * prompt. Toggled by adding a visible/active state class or [hidden].
  * -------------------------------------------------------------------------- */
-#drag-overlay {
+#app > #workspace > #canvas > #drag-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -117,12 +117,12 @@
   pointer-events: none; /* the overlay is a visual cue; drop is handled on window */
 }
 
-#drag-overlay[hidden],
-#drag-overlay:not(.is-active):not(.is-visible) {
+#app > #workspace > #canvas > #drag-overlay[hidden],
+#app > #workspace > #canvas > #drag-overlay:not(.is-active):not(.is-visible) {
   display: none;
 }
 
-#drag-overlay .drag-frame {
+#app > #workspace > #canvas > #drag-overlay .drag-frame {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -137,19 +137,19 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
 }
 
-#drag-overlay .drag-icon {
+#app > #workspace > #canvas > #drag-overlay .drag-icon {
   font-size: 40px;
   line-height: 1;
   color: var(--accent);
 }
 
-#drag-overlay .drag-title {
+#app > #workspace > #canvas > #drag-overlay .drag-title {
   font-size: 20px;
   font-weight: 700;
   color: #111827;
 }
 
-#drag-overlay .drag-hint {
+#app > #workspace > #canvas > #drag-overlay .drag-hint {
   font-size: 14px;
   color: #4b5563;
 }
@@ -173,12 +173,12 @@
   backdrop-filter: blur(1px);
 }
 
-#canvas.is-paginating .paginating-overlay,
+#app > #workspace > #canvas.is-paginating .paginating-overlay,
 .is-paginating .paginating-overlay,
 /* The rasterized export reuses the same overlay for its per-page progress, under
    its own state class so `.is-paginating` keeps meaning exactly one thing (the
    e2e helper waits on it). */
-#canvas.is-exporting .paginating-overlay,
+#app > #workspace > #canvas.is-exporting .paginating-overlay,
 .is-exporting .paginating-overlay {
   display: flex;
 }
@@ -186,7 +186,7 @@
 /* Dim the stale page stack while a fresh layout is in flight. Deliberately NOT
    applied while exporting: html2canvas rasterizes these very sheets, and a dimmed
    stack would be baked into the PDF. */
-#canvas.is-paginating .pagedjs_pages,
+#app > #workspace > #canvas.is-paginating .pagedjs_pages,
 .is-paginating .pagedjs_pages {
   opacity: 0.45;
   filter: saturate(0.85);
@@ -256,7 +256,7 @@
  * #page-chip — "Page N of M" for the topmost visible page (Canvas.ts tracks the
  * scroll position); bottom-left of the canvas viewport.
  * -------------------------------------------------------------------------- */
-#page-chip {
+#app > #workspace > #canvas > .canvas-controls > #page-chip {
   z-index: 30;
   display: inline-flex;
   align-items: center;
@@ -273,11 +273,11 @@
   pointer-events: none;
 }
 
-#page-chip[hidden] {
+#app > #workspace > #canvas > .canvas-controls > #page-chip[hidden] {
   display: none;
 }
 
-#page-chip .page-chip-label {
+#app > #workspace > #canvas > .canvas-controls > #page-chip .page-chip-label {
   color: var(--fg-strong);
 }
 
@@ -285,7 +285,7 @@
  * #zoom-control — zoom segmented control, bottom-right of the canvas viewport.
  * Reuses the segmented-control look from app.css.
  * -------------------------------------------------------------------------- */
-#zoom-control {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control {
   z-index: 30;
   display: inline-flex;
   align-items: center;
@@ -297,11 +297,11 @@
   box-shadow: var(--shadow-control);
 }
 
-#zoom-control[hidden] {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control[hidden] {
   display: none;
 }
 
-#zoom-control button {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control button {
   appearance: none;
   -webkit-appearance: none;
   display: inline-flex;
@@ -322,18 +322,18 @@
   transition: background-color 120ms ease, color 120ms ease;
 }
 
-#zoom-control button:hover {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control button:hover {
   color: var(--fg-strong);
   background: var(--bg-hover);
 }
 
-#zoom-control button[aria-pressed="true"],
-#zoom-control button.is-selected {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control button[aria-pressed="true"],
+#app > #workspace > #canvas > .canvas-controls > #zoom-control button.is-selected {
   background: var(--accent);
   color: var(--accent-contrast);
 }
 
-#zoom-control button:focus-visible {
+#app > #workspace > #canvas > .canvas-controls > #zoom-control button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -357,7 +357,7 @@
   pointer-events: none;
 }
 
-#warning-banner {
+#app > #workspace > #canvas > .canvas-notices > #warning-banner {
   position: absolute;
   top: 16px;
   left: 16px;
@@ -379,7 +379,7 @@
   pointer-events: auto;
 }
 
-#warning-banner[hidden] {
+#app > #workspace > #canvas > .canvas-notices > #warning-banner[hidden] {
   display: none;
 }
 
@@ -430,7 +430,7 @@
  * shape as #empty-state (which it replaces when the pipeline cannot produce a
  * document at all), one z-layer above it.
  * -------------------------------------------------------------------------- */
-#error-card {
+#app > #workspace > #canvas > #error-card {
   position: absolute;
   inset: 0;
   z-index: 20;
@@ -446,7 +446,7 @@
   backdrop-filter: blur(2px);
 }
 
-#error-card[hidden] {
+#app > #workspace > #canvas > #error-card[hidden] {
   display: none;
 }
 
@@ -510,7 +510,7 @@
  * (and as the recovery state after a fatal error). Centered card on the grey
  * canvas with a call to action.
  * -------------------------------------------------------------------------- */
-#empty-state {
+#app > #workspace > #canvas > #empty-state {
   position: absolute;
   inset: 0;
   z-index: 10;
@@ -520,11 +520,11 @@
   padding: 32px;
 }
 
-#empty-state[hidden] {
+#app > #workspace > #canvas > #empty-state[hidden] {
   display: none;
 }
 
-#empty-state .empty-card {
+#app > #workspace > #canvas > #empty-state .empty-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -539,25 +539,25 @@
   box-shadow: var(--shadow-control);
 }
 
-#empty-state .empty-icon {
+#app > #workspace > #canvas > #empty-state .empty-icon {
   font-size: 44px;
   line-height: 1;
   color: var(--accent);
 }
 
-#empty-state .empty-title {
+#app > #workspace > #canvas > #empty-state .empty-title {
   font-size: 20px;
   font-weight: 700;
   color: var(--fg-strong);
 }
 
-#empty-state .empty-sub {
+#app > #workspace > #canvas > #empty-state .empty-sub {
   font-size: 14px;
   color: var(--fg-muted);
   max-width: 40ch;
 }
 
-#empty-state .empty-actions {
+#app > #workspace > #canvas > #empty-state .empty-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -565,7 +565,7 @@
   margin-top: 4px;
 }
 
-#empty-state .empty-actions button {
+#app > #workspace > #canvas > #empty-state .empty-actions button {
   appearance: none;
   -webkit-appearance: none;
   height: 36px;
@@ -578,34 +578,34 @@
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-#empty-state .empty-actions .empty-choose {
+#app > #workspace > #canvas > #empty-state .empty-actions .empty-choose {
   border: 1px solid var(--accent);
   background: var(--accent);
   color: var(--accent-contrast);
 }
 
-#empty-state .empty-actions .empty-choose:hover {
+#app > #workspace > #canvas > #empty-state .empty-actions .empty-choose:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
 }
 
-#empty-state .empty-actions .empty-sample {
+#app > #workspace > #canvas > #empty-state .empty-actions .empty-sample {
   border: 1px solid var(--border);
   background: var(--bg-surface);
   color: var(--fg);
 }
 
-#empty-state .empty-actions .empty-sample:hover {
+#app > #workspace > #canvas > #empty-state .empty-actions .empty-sample:hover {
   background: var(--bg-hover);
   border-color: var(--border-strong);
 }
 
-#empty-state .empty-actions button:focus-visible {
+#app > #workspace > #canvas > #empty-state .empty-actions button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-#empty-state .empty-hint {
+#app > #workspace > #canvas > #empty-state .empty-hint {
   font-size: 12px;
   color: var(--fg-faint);
 }
@@ -625,21 +625,22 @@
     display: block !important;
   }
 
-  #app {
+  body > #app,
+  body > #desktop-workspace > #app {
     display: block;
     height: auto !important;
     overflow: visible !important;
   }
 
-  #toolbar,
-  #drag-overlay,
-  #empty-state,
-  #page-chip,
-  #zoom-control,
+  #app > #toolbar,
+  #app > #workspace > #canvas > #drag-overlay,
+  #app > #workspace > #canvas > #empty-state,
+  #app > #workspace > #canvas > .canvas-controls > #page-chip,
+  #app > #workspace > #canvas > .canvas-controls > #zoom-control,
   .canvas-controls,
   .canvas-notices,
-  #warning-banner,
-  #error-card,
+  #app > #workspace > #canvas > .canvas-notices > #warning-banner,
+  #app > #workspace > #canvas > #error-card,
   .paginating-overlay,
   .skip-link,
   [data-pulseboard-bar],
@@ -650,7 +651,7 @@
     display: none !important;
   }
 
-  #canvas {
+  #app > #workspace > #canvas {
     position: static;
     overflow: visible;
     background: none;

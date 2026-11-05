@@ -36,13 +36,18 @@ function gate() {
 
 function fixture() {
   const host = document.createElement("div");
+  const workspaceEl = document.createElement("div");
+  const canvasEl = document.createElement("main");
+  canvasEl.id = "canvas";
+  canvasEl.append(host);
+  workspaceEl.append(canvasEl);
   const store = new DocStore();
   const doc = store.add("Original.md", "First render");
   const app = Object.create(App.prototype) as App;
   const pipeline = app as unknown as { runPipeline(reason: RenderReason): Promise<void> };
   const scheduler = createRenderScheduler((reason) => pipeline.runPipeline(reason));
   Object.assign(app, {
-    store, settings: { ...DEFAULT_SETTINGS }, scheduler, renderedSnapshot: null,
+    store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, scheduler, renderedSnapshot: null,
     exportBusy: false, exportListeners: new Set(), renderToken: 0, hasGoodRender: false,
     canvas: { host, setBusy: vi.fn(), setPaginating: vi.fn(), setProgress: vi.fn(), setPageCount: vi.fn(),
       capturePosition: () => null, restorePosition: vi.fn() },
