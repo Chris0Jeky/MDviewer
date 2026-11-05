@@ -36,11 +36,11 @@
     "desktop:licenses": "node scripts/desktop-native-licenses.mjs --out desktop-artifacts/NATIVE_THIRD_PARTY_NOTICES.txt"
   },
   "dependencies": {
-    "@shikijs/core": "^4.5.0",
-    "@shikijs/langs": "^4.5.0",
-    "@shikijs/markdown-it": "^4.5.0",
+    "@shikijs/core": "^4.6.0",
+    "@shikijs/langs": "^4.6.0",
+    "@shikijs/markdown-it": "^4.6.0",
     "@shikijs/themes": "^4.3.1",
-    "@shikijs/transformers": "^4.5.0",
+    "@shikijs/transformers": "^4.6.0",
     "@vscode/markdown-it-katex": "^1.1.0",
     "dompurify": "^3.4.17",
     "html2canvas-pro": "2.6.0",
