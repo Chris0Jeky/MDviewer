@@ -24,6 +24,16 @@
 .workspace-privacy, .workspace-session-status { color: var(--fg-muted); }
 .workspace-session-status { margin-left: auto; }
 .workspace-session > button { min-height: 30px; font-size: 11px; white-space: nowrap; }
+
+/* Independent grid row: never clipped by toolbar scrolling or a parked canvas. */
+#app > #export-status { min-width: 0; background: var(--bg-surface); color: var(--fg); }
+#app > #export-status .export-status-content {
+  display: flex; align-items: center; gap: 12px; padding: 7px 12px;
+  border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4;
+}
+#app > #export-status .export-status-content[hidden], #app > #export-status progress[hidden] { display: none; }
+#app > #export-status .export-status-text { min-width: 0; overflow-wrap: anywhere; }
+#app > #export-status progress { flex: 0 1 120px; min-width: 48px; height: 6px; margin-left: auto; accent-color: var(--accent); }
 /* Pulseboard Beta pill slot (Toolbar.ts). `display: contents` makes the SDK's pill and
    privacy-choices panel items of the session strip itself: the pill sits beside "Local
    session" and adds no gap while the slot is empty (SDK inert); the panel wraps onto its own
@@ -88,6 +98,7 @@
   .workspace-session > button { min-height: 36px; }
 }
 @media print {
+  #app > #export-status { display: none !important; }
   #paged-output[data-preview-sized] { height: auto !important; width: auto !important; overflow: visible; }
   .canvas-overlay-anchor { display: none !important; }
 }

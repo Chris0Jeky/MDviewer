@@ -67,6 +67,12 @@ export paths.
 
 ### P2 — Desktop authoring and UX — `IN PROGRESS`
 
+- **Implementation prepared (2026-11-05): export feedback #200.** A compact shell
+  status row remains visible in Markdown, Split, Preview and short-window Find.
+  It reports actual completed pages and native-save/browser-handoff outcomes with
+  bounded polite announcements, specific failure detail and preserved focus/source.
+  Exact-head hosted checks/review remain required; see `design/EXPORT_STATUS.md`.
+
 - **Done (2026-11-05): desktop authoring entry and space.**
   [New document #183](https://github.com/Chris0Jeky/MDviewer/pull/183) adds New from
   the reader/workspace and Ctrl/Cmd+N, preserving existing documents, native admission,

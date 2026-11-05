@@ -37,6 +37,7 @@ import { SaveCanceled } from "../export/destination";
 import { mountToolbar } from "../ui/Toolbar";
 import type { RestoreAdmission } from "../ui/DocumentRecovery";
 import { mountCanvas } from "../ui/Canvas";
+import { mountExportStatus, type PdfExportStatus } from "../ui/ExportStatus";
 import type { CanvasController, CanvasPosition } from "../ui/Canvas";
 import { mountEditor } from "../ui/Editor";
 import type { EditorController } from "../ui/Editor";
@@ -93,6 +94,7 @@ export interface ExportState {
   busy: boolean;
   /** At least one document is open, so there is something to export at all. */
   hasDocument: boolean;
+  pdf: PdfExportStatus;
 }
 
 export class App {
@@ -102,6 +104,7 @@ export class App {
   private root: HTMLElement;
   private toolbar!: { destroy(): void };
   private canvas!: CanvasController;
+  private exportStatus!: ReturnType<typeof mountExportStatus>;
   private editor!: EditorController;
   private splitter!: SplitterController;
   private emptyState!: { destroy(): void };
@@ -119,6 +122,7 @@ export class App {
   private reloadGuard: ReloadGuard | null = null;
   /** True between the start and the end of an export (either path). */
   private exportBusy = false;
+  private pdfStatus: PdfExportStatus = { phase: "idle" };
 
   /** Monotonic token so a slow render can't overwrite a newer one (last-write-wins). */
   private renderToken = 0;
@@ -186,7 +190,7 @@ export class App {
    * it never re-creates those ids itself.
    *
    * Layout (matches the CSS grids in app.css / editor.css, overlays in preview.css):
-   *   #app  (grid: auto 1fr)
+   *   #app  (grid: auto 1fr auto)
    *     #toolbar                     row 1
    *     #workspace                   row 2 (grid: editor | handle | preview)
    *       #editor-pane               Markdown source (mountEditor)
@@ -196,6 +200,7 @@ export class App {
    *         #empty-state             absolute overlay (mountEmptyState)
    *         #warning-banner, #error-card  overlays (mountBanner)
    *         #drag-overlay            fixed overlay
+   *     #export-status               row 3, shared by every view mode
    *
    * `data-view-mode` on #workspace decides which of the three columns are shown; the
    * panes are always mounted so switching modes never rebuilds or re-renders anything.
@@ -241,6 +246,8 @@ export class App {
     this.emptyEl = emptyEl;
 
     this.banner = mountBanner(canvasEl);
+    this.exportStatus = mountExportStatus(this.root);
+    this.onExportStateChange(state => this.exportStatus.update(state.pdf));
 
     const dragOverlay = el(
       "div",
@@ -377,7 +384,7 @@ export class App {
   }
 
   get exportState(): ExportState {
-    return { busy: this.exportBusy, hasDocument: this.store.openDocs.length > 0 };
+    return { busy: this.exportBusy, hasDocument: this.store.openDocs.length > 0, pdf: this.pdfStatus };
   }
 
   private emitExportState(): void {
@@ -388,6 +395,11 @@ export class App {
   private setExportBusy(busy: boolean): void {
     if (this.exportBusy === busy) return;
     this.exportBusy = busy;
+    this.emitExportState();
+  }
+
+  private setPdfStatus(status: PdfExportStatus): void {
+    this.pdfStatus = status;
     this.emitExportState();
   }
 
@@ -412,6 +424,7 @@ export class App {
   async exportPrint(): Promise<void> {
     if (this.exportBusy) return;
     const input = this.captureRenderInput();
+    this.setPdfStatus({ phase: "idle" });
     this.setExportBusy(true);
     try {
       await this.scheduler.withRenderLock(async () => {
@@ -431,14 +444,14 @@ export class App {
   /**
    * Trigger the fallback (rasterized) PDF export. Rasterizing is a long blocking
    * loop, so this owns the user-facing feedback: both export buttons go inert, the
-   * canvas overlay reports the page being rendered, and #status-live carries the
-   * same story for assistive tech — sampled, not once per page, so a 60-page export
-   * does not turn into 60 announcements.
+   * global status strip reports actual capture/save phases in every view mode.
+   * Its polite live region samples progress rather than announcing every page.
    */
   async exportPdf(): Promise<void> {
     if (this.exportBusy) return;
     const input = this.captureRenderInput();
     this.setExportBusy(true);
+    this.setPdfStatus({ phase: "preparing" });
     try {
       await this.scheduler.withRenderLock(async () => {
         await this.prepareExport(input);
@@ -446,30 +459,31 @@ export class App {
         if (!snapshot) throw new Error("No paginated document to export.");
         const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
-        this.announce("Preparing PDF export…");
         let pages = 0;
         try {
-          await exportPaginatedToPdf(this.canvas.host, snapshot.settings, {
+          const result = await exportPaginatedToPdf(this.canvas.host, snapshot.settings, {
             fileName: `${base}.pdf`,
             onProgress: (done, total) => {
               pages = total;
               this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
-              if (done === 1 || done === total || done % 5 === 0) {
-                this.announce(`Rendering page ${done} of ${total}.`);
-              }
+              this.setPdfStatus({ phase: "rendering", done, total });
             },
+            onSaving: destination => this.setPdfStatus({ phase: destination === "native" ? "saving" : "downloading" }),
           });
           // Clear this capture's failure before a queued render can publish newer feedback.
           this.banner.clearFatal();
-          this.announce("PDF downloaded.");
+          this.setPdfStatus({ phase: result === "saved" ? "saved" : "download-requested" });
           pulsePdfCompleted(pages);
         } finally {
           this.canvas.setBusy(false);
         }
       });
     } catch (err) {
-      if (err instanceof SaveCanceled) this.announce("PDF save canceled. Your document is still open.");
-      else this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
+      if (err instanceof SaveCanceled) this.setPdfStatus({ phase: "canceled" });
+      else {
+        this.setPdfStatus({ phase: "failed", message: errorMessage(err) });
+        this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
+      }
     } finally {
       this.setExportBusy(false);
     }
@@ -693,6 +707,7 @@ export class App {
     this.editor.destroy();
     this.emptyState.destroy();
     this.canvas.destroy();
+    this.exportStatus.destroy();
     this.settingsListeners.clear();
     this.exportListeners.clear();
   }
