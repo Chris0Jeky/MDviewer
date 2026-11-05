@@ -88,6 +88,29 @@ test("forced colors keep source text and the active match independently visible"
   await page.screenshot({ path: test.info().outputPath("forced-colors-source.png"), fullPage: true });
 });
 
+test("authored editor-named headings keep document paint in normal and forced colors", async ({ page }) => {
+  await source(page, "# Editor highlight\n\nVisible heading content.\n\n## Editor input\n\nVisible source-independent content.");
+  await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "split" }));
+  const headings = page.locator("#paged-output :is(h1, h2):is(#editor-highlight, #editor-input)");
+  await expect(headings).toHaveCount(2);
+  for (const forcedColors of ["none", "active"] as const) {
+    await page.emulateMedia({ forcedColors });
+    for (const heading of await headings.all()) {
+      await expect(heading).toBeVisible();
+      const paint = await heading.evaluate(element => {
+        const style = getComputedStyle(element);
+        return { position: style.position, fill: style.webkitTextFillColor };
+      });
+      expect(paint.position).toBe("static");
+      expect(paint.fill).not.toBe("transparent");
+      expect(paint.fill).not.toBe("rgba(0, 0, 0, 0)");
+    }
+  }
+  await page.emulateMedia({ media: "print", forcedColors: "none" });
+  await expect(page.locator("#workspace > #editor-pane")).toBeHidden();
+  for (const heading of await headings.all()) await expect(heading).toBeVisible();
+});
+
 test("short reflow and reduced motion preserve keyboard Find and readable source space", async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 420 });
   await page.emulateMedia({ reducedMotion: "reduce" });

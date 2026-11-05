@@ -3,7 +3,7 @@
 ## Goal and design
 
 Issue [#203](https://github.com/Chris0Jeky/MDviewer/issues/203) adds a bounded
-production Firefox lane beside the existing Chromium and native Windows checks.
+production Firefox lane on Windows beside the existing Chromium and native Windows checks.
 The existing textarea, render pipeline and offline application assets remain the
 product. Browser testing must exercise those real components, including native
 undo; synthetic DOM geometry and successful mocks cannot establish this behavior.
@@ -49,7 +49,12 @@ Firefox because user namespaces are unavailable; that process-only setting is no
 in the product or CI. The locked Chromium archive downloaded empty here and the
 older preinstalled Chrome could not open its process-singleton socket, so hosted
 Chromium and native Windows jobs supply those checks. Neither limitation is a
-passing browser result. The CI job uses a normal Firefox launch.
+passing browser result. The CI job uses a normal Firefox launch on Windows. Its first Linux attempt spent
+15 minutes downloading OS packages from the Ubuntu mirror and timed out before
+installing Firefox or executing a test. Moving this lane onto Windows removes that
+Linux package-install prerequisite while qualifying the same locked Firefox and
+unchanged authoring assertions on the desktop target OS. It does not replace the
+separate native WebView2 smoke.
 
 Reproduction on a supported local development environment:
 
@@ -84,3 +89,14 @@ behavior, subjective typing feel or full browser compatibility.
 AI-6 and Windows acceptance [#169](https://github.com/Chris0Jeky/MDviewer/issues/169)
 remain open for their human checks. AI-7/AI-8/AI-9 remain open for live/PWA,
 Pulseboard and production promotion. This work does not deploy the public app.
+
+## Review correction: authored IDs
+
+Independent review found that an authored “Editor highlight” or “Editor input”
+heading shares the editor host's ID. A real production Firefox control failed:
+the heading inherited `position: absolute` from source-editor CSS. The new forced
+colors rule could also hide it. Input/highlight paint and geometry selectors now
+require the actual workspace/editor/scroll parent chain, with declarations and
+cascade order preserved. The regression checks both headings in normal and forced
+colors and confirms that print hides only the editing pane. This is covered in
+`authoring-accessibility.spec.ts`; a passing editor-only fixture was insufficient.

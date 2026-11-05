@@ -463,6 +463,15 @@ comparative RAM target, install/default-app acceptance or signed-release readine
 See `../WINDOWS_DESKTOP.md`, `WINDOWS_READER.md` and `../../src-tauri/README.md`.
 
 
+Native smoke worker bootstrap has a separate bounded allowance: 30 seconds through
+framework/helper readiness, then eight seconds for UI operations, always capped by
+the existing 45-second action and 180-second overall defaults. Phase updates never
+renew the budget; timeout fails with classified diagnostics instead of repeatedly
+restarting an unknown worker. The existing Windows path runs the pure deadline
+policy tests and still requires actual rendered headings, single-instance routing,
+owned native Save dialogs and exact saved Markdown/PDF bytes. See
+`NATIVE_SMOKE_BOOTSTRAP.md`; these are harness limits, not app performance claims.
+
 ## 15. Reader-only syntax-engine admission
 
 The continuous reader parses once with `createMarkdown(null, settings)`. It inspects actual
