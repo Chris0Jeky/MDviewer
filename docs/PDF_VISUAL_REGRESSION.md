@@ -49,11 +49,16 @@ Pixel expectations are independent of earlier html2canvas captures:
 
 The production failure/retry check aborts capture CSS on two attempts, verifies
 no PDF was saved and no capture iframe remains, then allows a successful retry.
-Unit tests exercise stylesheet errors/timeouts that settle before `onclone`,
-immediate failure without saving, repeated iframe cleanup and a successful retry.
-They also cover unused stylesheet links and the ten-second post-reveal font
-readiness deadline. Upstream stylesheet/font/image waits precede `onclone`; this
-deadline does not bound them or the whole export.
+Unit tests exercise stylesheet errors before `onclone`, including retained empty
+sheets and sheets whose `cssRules` getter throws, plus load/error events queued
+after the callback starts. Successful empty and inaccessible sheets must still
+export after an observed load. Further cases cover all required links, unused
+links, the mount-time stylesheet deadline, a fresh post-reveal font deadline,
+failures outside the callback, unrelated iframes, source preservation and retry.
+The existing clone/content/pseudo tests invoke their callback during a mounted
+capture; they retain their visibility, geometry and content assertions.
+Upstream font/image waits precede `onclone`; neither readiness deadline is a
+timeout for the whole export.
 
 `test-results/` retains the PDF, extracted page PNG, native browser reference,
 pixel measurements and damaged-control PDF/PNG. The existing CI browser-artifact
@@ -69,17 +74,46 @@ resolves on both link load and error events, and after its readiness timeout.
 The old adapter added its own listeners inside `onclone`; an already-fired error
 was missed, delaying failure by another ten seconds.
 
-The adapter therefore requires the 2.6 lifecycle and checks the completed wait's
-outcome synchronously: an enabled, non-alternate stylesheet link with an `href`
-must have an attached `sheet`. A missing sheet after the upstream wait aborts
-capture, including when a request is still pending after the upstream deadline.
-The check alone is not a pending-versus-failed signal outside this callback
-contract. Disabled, alternate and empty-href links follow the library's exclusions.
-After clone normalization and layout, the adapter still awaits freshly used fonts
-within its own ten-second deadline starting at `onclone` entry.
+A first correction checked for a missing `link.sheet` after that wait. The
+[diagnostic browser run](https://github.com/Chris0Jeky/MDviewer/actions/runs/41952565137/job/126999705106)
+disproved that signal: both aborted required links retained non-null sheets with
+inaccessible rules, and the exporter still saved a PDF. Chromium's
+[`LinkStyle::NotifyFinished`](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/link_style.cc)
+can create a sheet after a load failure; its presence is not a successful load.
+Rejecting empty or inaccessible rules would also reject valid CSS.
 
-Primary source: [`stylesheetsReady` and `mountCloneInIFrame` in v2.6.0](https://github.com/yorickshan/html2canvas-pro/blob/v2.6.0/src/dom/iframe-mount.ts),
-introduced by upstream commit [`b9f57d9`](https://github.com/yorickshan/html2canvas-pro/commit/b9f57d9942745e7a1103d67446d81b919977c669).
+The adapter observes actual load/error outcomes in a container it owns. The
+timing relies on the inspected 2.6 implementation: [`renderElement`](https://github.com/yorickshan/html2canvas-pro/blob/v2.6.0/src/core/render-element.ts)
+does not await until calling `DocumentCloner.toIFrame`, which synchronously calls
+[`mountCloneInIFrame`](https://github.com/yorickshan/html2canvas-pro/blob/v2.6.0/src/dom/iframe-mount.ts).
+Mounting appends the iframe and replaces its document root before returning.
+The adapter attaches listeners immediately after `html2canvas()` returns its
+promise, in the same JavaScript task. Chromium's
+[`HTMLLinkElement::ScheduleEvent`](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/html_link_element.cc)
+queues link load/error dispatch as a later task. No MutationObserver, global
+prototype patch or extra resource request is needed.
+
+The enabled, non-alternate linked stylesheets with nonempty `href` values each
+retain an outcome promise. Errors resolve a failed outcome, avoiding an unhandled
+rejection while upstream waits for fonts/images. At `onclone`, the adapter checks
+that it is using the observed owned Document and the same required links, then
+awaits all outcomes and rejects promptly if any failed. Upstream sheet polling
+can settle before a queued load/error event, so an unresolved outcome remains
+pending even when `link.sheet` is non-null. Its ten-second deadline starts at
+mount observation and is never restarted by the callback. An observed successful
+load accepts empty or inaccessible rules without reading them. External
+`@import` handling remains upstream; the application's bundled CSS has none.
+
+After CSS succeeds, clone normalization and layout precede a fresh ten-second
+font deadline. The entire owned container, iframe, listeners and timers are
+released in `finally`, including when capture fails outside `onclone`. The
+container is fixed with zero dimensions and is excluded from cloning through
+`data-html2canvas-ignore`; unrelated iframes and the live page are preserved.
+The adapter rejects a missing or unobserved callback rather than accepting a
+future incompatible library lifecycle.
+
+The upstream stylesheet wait was introduced by commit
+[`b9f57d9`](https://github.com/yorickshan/html2canvas-pro/commit/b9f57d9942745e7a1103d67446d81b919977c669).
 The production delayed-CSS pixel and failed-CSS cleanup/retry tests remain
 unchanged; extending their timeouts would hide the missed-event regression.
 
@@ -107,7 +141,8 @@ first introduced each behavior.
    unstyled PDF. The original 2.5.2 adapter waited for those links, resolved layout,
    then waited for fonts introduced by that CSS. It released failed clones because
    that version's cleanup started only after `onclone` succeeded. The 2.6 contract
-   above moves the stylesheet wait upstream and retains fail-safe validation.
+   above observes the cloned links before their events and validates every
+   required outcome before normalization.
 5. Paged.js uses native `::marker` content for footnote numerals. The browser
    reserves the correct width, but html2canvas does not paint that content: the
    initial twelve-note downloaded PDF had zero ink in every numeral region.
