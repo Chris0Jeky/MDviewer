@@ -29,7 +29,7 @@
 }
 
 /* -----------------------------------------------------------------------------
- * #workspace — row 2 of the #app grid. Three columns in split mode; a single
+ * #app > #workspace — row 2 of the #app grid. Three columns in split mode; a single
  * column in the two solo modes. `--split-ratio` (dom.ts SPLIT_RATIO_VAR) is
  * written by App from settings.splitRatio and live-updated during a drag.
  * -------------------------------------------------------------------------- */
@@ -89,7 +89,7 @@
 #app > #workspace > #editor-pane {
   container: source-editor / inline-size;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background: var(--bg-surface);
@@ -131,7 +131,7 @@
 
 /* Search is an optional row, not a second scroll surface. Explicit row numbers
    preserve the source's remaining-height track when the panel is hidden. */
-#editor-search {
+#app > #workspace > #editor-pane > #editor-search {
   grid-row: 2;
   display: grid;
   gap: 6px;
@@ -141,8 +141,9 @@
   min-width: 0;
 }
 
-#editor-search[hidden],
-#editor-replace-row[hidden] {
+#app > #workspace > #editor-pane > #editor-search[hidden],
+#app > #workspace > #editor-pane > #editor-search #editor-replace-row[hidden],
+#app > #workspace > #editor-pane > #editor-formatting[hidden] {
   display: none;
 }
 
@@ -220,9 +221,34 @@
   padding-block: 2px;
 }
 
+/* Formatting stays collapsed until requested. Its own bounded row can scroll in
+   a short window without taking the remaining source track away. */
+#app > #workspace > #editor-pane > #editor-formatting {
+  grid-row: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  max-height: min(136px, 28vh);
+  overflow: auto;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-toolbar);
+}
+
+.editor-format-status {
+  flex: 1 0 100%;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.editor-format-status:empty { display: none; }
+
 @container source-editor (max-width: 360px) {
   .editor-head .editor-stat { display: none; }
-  #editor-search { padding-inline: 8px; }
+  #app > #workspace > #editor-pane > #editor-search { padding-inline: 8px; }
   .editor-search-field { flex-basis: 100%; }
 }
 
@@ -230,7 +256,7 @@
  * .editor-scroll — the stacking context holding the two glued layers.
  * -------------------------------------------------------------------------- */
 .editor-scroll {
-  grid-row: 3;
+  grid-row: 4;
   position: relative;
   min-height: 0;
   overflow: hidden;
@@ -471,41 +497,43 @@ body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-in
   }
 }
 
-/* A short window cannot fit search chrome above a fractional Split source pane.
-   While Find is open, use the available workspace for source without changing the
+/* A short window cannot fit command chrome above a fractional Split source pane.
+   While Find or Format is open, use the available workspace without changing the
    selected view or split setting. The preview stays measurable, as in Markdown
-   mode; closing Find restores the prior split immediately. */
+   mode; closing the panels restores the prior split immediately. */
 @media screen and (max-height: 600px) {
-  #app > #workspace > #editor-pane:has(> #editor-search:not([hidden])) {
+  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) {
     --editor-pad-y: 8px;
   }
 
-  #app > #workspace > #editor-pane:has(> #editor-search:not([hidden])) > .editor-head {
+  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) > .editor-head {
     display: none;
   }
 
-  #editor-search {
+  #app > #workspace > #editor-pane > #editor-search {
     gap: 2px;
     padding-block: 2px;
   }
 
-  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > #editor-search:not([hidden])) {
+  #app > #workspace > #editor-pane > #editor-formatting { padding-block: 2px; }
+
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
-  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > #editor-search:not([hidden])) > #split-handle {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #split-handle {
     display: none;
   }
 
-  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > #editor-search:not([hidden])) > #canvas {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas {
     position: absolute;
     inset: 0;
     visibility: hidden;
     pointer-events: none;
   }
 
-  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > #editor-search:not([hidden])) > #canvas > #error-card:not([hidden]) {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas > #error-card:not([hidden]) {
     visibility: visible;
     pointer-events: auto;
   }

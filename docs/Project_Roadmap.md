@@ -69,6 +69,11 @@ export paths.
 
 ### P2 — Desktop authoring and UX — `IN PROGRESS`
 
+- **Implementation prepared (2026-11-05): Markdown writing commands #198.** A
+  compact Format disclosure and source-only shortcuts use guarded native edits
+  for eleven common commands, with one-step Undo, placeholder selections and
+  explicit multiline/toggle behavior. See `design/MARKDOWN_COMMANDS.md`; final
+  hosted checks and independent review remain required before merge.
 - **Implementation prepared (2026-11-05): session positions/navigation #199.**
   Bounded ID-keyed source/preview/reader positions survive document switching,
   Undo Close and reader/workspace transfers while textarea undo stays isolated.

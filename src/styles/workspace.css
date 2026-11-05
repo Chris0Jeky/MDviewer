@@ -24,6 +24,17 @@
 .workspace-privacy, .workspace-session-status { color: var(--fg-muted); }
 .workspace-session-status { margin-left: auto; }
 .workspace-session > button { min-height: 30px; font-size: 11px; white-space: nowrap; }
+#app > #toolbar .workspace-shortcuts { display: block; }
+
+/* Both editor panels must leave room to write in a short desktop window.
+   The key legend yields space while Format is open; every shortcut remains in
+   the corresponding button/picker title and aria-keyshortcuts. The memory
+   warning, document count, Save action and all command controls stay visible. */
+@media screen and (max-height: 600px) {
+  #app:has(> #workspace > #editor-pane > #editor-formatting:not([hidden])) > #toolbar .workspace-shortcuts {
+    display: none;
+  }
+}
 
 /* Independent grid row: never clipped by toolbar scrolling or a parked canvas. */
 #app > #export-status { min-width: 0; background: var(--bg-surface); color: var(--fg); }

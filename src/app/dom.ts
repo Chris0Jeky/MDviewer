@@ -14,6 +14,7 @@ export const IDS = {
   editorMatchCue: "editor-match-cue",
   editorSearch: "editor-search",
   editorReplaceRow: "editor-replace-row",
+  editorFormatting: "editor-formatting",
   splitHandle: "split-handle",
   canvas: "canvas",
   pagedOutput: "paged-output",
@@ -76,6 +77,7 @@ export const CLASSES = {
   editorSearchFooter: "editor-search-footer",
   editorSearchStatus: "editor-search-status",
   editorMatchRect: "editor-match-rect",
+  editorFormatStatus: "editor-format-status",
   // rendered document
   doc: "doc",
   codeFigure: "code-figure",

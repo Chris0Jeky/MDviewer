@@ -229,7 +229,7 @@ Import order in `main.ts` is **app → editor → preview → document → works
 
 The primary toolbar row contains identity, optional desktop New, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting. The web entry starts it expanded above 760 px and collapsed at narrower widths. The experimental Windows desktop starts it collapsed at every width to preserve writing space. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
 
-`DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
+`DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. At viewport heights up to 600px, opening Format hides only this redundant key legend to retain usable source space with both Find and Format open; the memory warning, document count, Save action and every command remain visible. Closing Format restores the legend. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
 
 ## 9. Persistence and navigation
 
@@ -323,7 +323,10 @@ node listeners after a switch. App's synchronous adoption of the first typed
 document preserves its node and first undo entry.
 
 `EditorController.replaceRange(start: number, end: number, text: string,
-signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
+signal?: AbortSignal, selectionAfter?: MarkdownSelection): Promise<boolean>` uses
+native textarea UTF-16 offsets. The optional final selection is validated before
+admission and applied only to the same editing host after its accepted command's
+owned input-event sequence, with value/revision/focus fencing; reentrant input cannot redirect it. It
 shares byte admission and the undo-aware insertion path with intercepted paste,
 text drop and Tab. A delayed confirmation captures document identity, edit/source
 revision, exact text, selection/revision/direction and focused element. Focus must
@@ -332,9 +335,32 @@ rechecked after focusing the source. Refusal, rejection, abortion, composition, 
 detachment, invalid range and unchanged replacement return false. A configured
 hard limit refuses even if the host accepts; ordinary typing and small paste/drop
 remain native. Abort prevents commitment but does not dismiss a host confirmation
-UI or settle an unresolved host promise. Native insertText owns its single input
-event; the manual fallback dispatches one observable input event. Coverage:
+UI or settle an unresolved host promise. Native insertText supplies the browser's
+input-event sequence. The manual fallback dispatches one exact owned Event;
+foreign or reentrant events cannot earn a stale final selection. Coverage:
 `tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
+
+### Source Markdown formatting
+
+A collapsed Format disclosure beside Find exposes Bold, Italic, inline Code, Code
+block, H1–H3, Link, Bullets, Numbers and Tasks. Ctrl/Cmd+B, I and K act only in the
+source textarea. The labelled button group remains keyboard accessible; Escape
+closes it and returns source focus. The panel wraps/scrolls within a bounded height
+and uses the existing short-window measurable-preview parking behavior. Opening
+controls never changes source or requests pagination; formatting stays out of print.
+
+`MarkdownCommands.ts` produces pure UTF-16 range replacements and final selections;
+`EditorFormatting.ts` applies them exclusively through guarded `replaceRange`.
+Commands reject split surrogate boundaries and multiline inline code/link requests.
+The exact empty-selection, multiline, indentation, toggle and placeholder rules
+are pinned in `MARKDOWN_COMMANDS.md`; no parser or rich editor dependency is added.
+Each accepted command makes one native undo edit in supporting engines; a native
+multiline insertion can emit several input events. The manual fallback emits one
+owned event and cannot supply native history. A delayed
+confirmation, document switch, IME, aborted command or reentrant observer must not
+modify a different host or apply a stale final selection. Coverage:
+`tests/markdown-commands.test.ts`, `tests/editor-formatting.test.ts` and the real
+production `tests/e2e/editor-formatting.spec.ts` Undo/geometry/keyboard matrix.
 
 ### Source Find and Replace
 

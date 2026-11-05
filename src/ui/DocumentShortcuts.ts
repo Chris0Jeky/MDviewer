@@ -20,7 +20,6 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
   }
   const hint = root.ownerDocument.createElement("span");
   hint.className = "workspace-shortcuts";
-  hint.style.display = "block";
   hint.textContent = create.length
     ? "Ctrl/Cmd+N/O/S: new/open/save Markdown"
     : "Ctrl/Cmd+O/S: open/save Markdown";

@@ -30,6 +30,8 @@ import type { CodeThemeId } from "../app/settings";
 import { clampEditorPosition, type EditorPosition } from "../app/positions";
 import { CODE_THEME_PAIRS, getHighlighter } from "../render/highlight";
 import { mountEditorSearch } from "./EditorSearch";
+import { mountEditorFormatting } from "./EditorFormatting";
+import type { MarkdownSelection } from "./MarkdownCommands";
 
 export interface EditorController {
   /** The current textarea (`#editor-input`); reacquire after a document switch. */
@@ -46,9 +48,11 @@ export interface EditorController {
    * Replace a UTF-16 range through the paste admission and native undo path.
    * Returns false if refused, unchanged, aborted, detached, composing, or stale.
    * A delayed confirmation belongs to its original document, value, selection,
-   * and focused element.
+   * and focused element. An optional final selection is applied only to the
+   * same editing host immediately after its accepted native command.
    */
-  replaceRange(start: number, end: number, text: string, signal?: AbortSignal): Promise<boolean>;
+  replaceRange(start: number, end: number, text: string, signal?: AbortSignal,
+    selectionAfter?: MarkdownSelection): Promise<boolean>;
   /** Re-highlight with a different Shiki theme family (the toolbar's code theme). */
   setCodeTheme(theme: CodeThemeId): void;
   /** Move keyboard focus into the source text. */
@@ -319,8 +323,28 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
 
   // ---- Events ----------------------------------------------------------------
 
-  const onInputEvent = (): void => {
+  interface Insertion {
+    target: HTMLTextAreaElement;
+    events: number;
+    trusted: boolean | null;
+    interrupted: boolean;
+    fallbackEvent?: Event;
+  }
+  let insertion: Insertion | undefined;
+
+  const onInputEvent = (event: Event): void => {
     if (destroyed) return;
+    if (insertion) {
+      // A multiline native command can dispatch multiple input events.
+      // Count the owned sequence, but the manual fallback owns exactly one
+      // Event. A later external listener can re-enter after reportingInput has
+      // reset, so matching trust alone cannot identify that fallback event.
+      if (input !== insertion.target || event.target !== insertion.target || reportingInput ||
+        (insertion.fallbackEvent !== undefined && event !== insertion.fallbackEvent) ||
+        (insertion.trusted !== null && insertion.trusted !== event.isTrusted)) insertion.interrupted = true;
+      insertion.events++;
+      insertion.trusted ??= event.isTrusted;
+    }
     editRevision++;
     const text = input.value;
     scheduleStat(text);
@@ -417,33 +441,59 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   /** Commit only after admission; a focus handler can also change the active document. */
   const insertTextPreservingUndo = (
     snapshot: EditSnapshot, start: number, end: number, text: string, signal?: AbortSignal,
+    selectionAfter?: MarkdownSelection,
   ): boolean => {
     if (!isCurrent(snapshot, signal) || document.activeElement !== snapshot.focused) return false;
     input.focus();
     if (!isCurrent(snapshot, signal) || document.activeElement !== input) return false;
     input.setSelectionRange(start, end);
-    let inserted: boolean;
+    const target = input;
+    const previousInsertion = insertion;
+    if (previousInsertion) previousInsertion.interrupted = true;
+    const command: Insertion = { target, events: 0, trusted: null, interrupted: false };
+    const expectedValue = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
+    const finish = (): void => {
+      // Input handlers may synchronously switch documents or make another edit.
+      // Only first-input adoption may advance ownership without replacing the host.
+      const adoption = snapshot.documentKey === null && documentKey !== null ? 1 : 0;
+      if (selectionAfter && !command.interrupted && command.events > 0 && input === target && canEdit() && !signal?.aborted &&
+        input.value === expectedValue && editRevision === snapshot.editRevision + command.events + adoption &&
+        document.activeElement === target && input.selectionStart === start + text.length &&
+        input.selectionEnd === start + text.length) {
+        input.setSelectionRange(selectionAfter.start, selectionAfter.end, selectionAfter.direction);
+        onSelect();
+      }
+    };
+    insertion = command;
     try {
-      inserted = document.execCommand("insertText", false, text);
-    } catch {
-      inserted = false;
+      let inserted: boolean;
+      try {
+        inserted = document.execCommand("insertText", false, text);
+      } catch {
+        inserted = false;
+      }
+      if (inserted) { finish(); return true; }
+      // A command that changed the source despite returning false must not be spliced
+      // a second time. The same fence covers re-entrant event handlers.
+      if (!ownsValue(snapshot, signal) || input.selectionStart !== start || input.selectionEnd !== end) {
+        return false;
+      }
+      input.value = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
+      input.selectionStart = input.selectionEnd = start + text.length;
+      // Native commands supply their own events; only the manual fallback needs one.
+      command.fallbackEvent = new Event("input", { bubbles: true });
+      input.dispatchEvent(command.fallbackEvent);
+      finish();
+      return true;
+    } finally {
+      insertion = previousInsertion;
     }
-    if (inserted) return true;
-    // A command that changed the source despite returning false must not be spliced
-    // a second time. The same fence covers re-entrant event handlers.
-    if (!ownsValue(snapshot, signal) || input.selectionStart !== start || input.selectionEnd !== end) {
-      return false;
-    }
-    input.value = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
-    input.selectionStart = input.selectionEnd = start + text.length;
-    // Use the same single event path as native insertText so observers also refresh.
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    return true;
   };
 
   const replaceCapturedRange = async (
     snapshot: EditSnapshot, start: number, end: number, text: string,
     gate: ReturnType<typeof admission>, signal?: AbortSignal,
+    selectionAfter?: MarkdownSelection,
   ): Promise<boolean> => {
     if (!isCurrent(snapshot, signal)) return false;
     if (gate.needsConfirmation) {
@@ -455,18 +505,22 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       }
       if (gate.exceedsHardLimit) return false;
     }
-    return insertTextPreservingUndo(snapshot, start, end, text, signal);
+    return insertTextPreservingUndo(snapshot, start, end, text, signal, selectionAfter);
   };
 
   const replaceRange = async (
     start: number, end: number, text: string, signal?: AbortSignal,
+    selectionAfter?: MarkdownSelection,
   ): Promise<boolean> => {
     if (!canEdit() || signal?.aborted || !Number.isInteger(start) || !Number.isInteger(end) ||
       start < 0 || end < start || end > input.value.length) return false;
     const snapshot = captureEdit();
     if (snapshot.value.slice(start, end) === text) return false;
+    const nextLength = snapshot.value.length - (end - start) + text.length;
+    if (selectionAfter && (!Number.isInteger(selectionAfter.start) || !Number.isInteger(selectionAfter.end) ||
+      selectionAfter.start < 0 || selectionAfter.end < selectionAfter.start || selectionAfter.end > nextLength)) return false;
     return replaceCapturedRange(snapshot, start, end, text,
-      admission(snapshot.value, start, end, text), signal);
+      admission(snapshot.value, start, end, text), signal, selectionAfter);
   };
 
   /**
@@ -536,6 +590,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const search = mountEditorSearch(pane, head, input, highlight, {
     replaceRange, hardLimitBytes: opts.hardLimitBytes,
   });
+  const formatting = mountEditorFormatting(pane, head, input, { replaceRange, canEdit });
 
   syncSize("");
 
@@ -598,6 +653,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       scheduleHighlight(text);
       search.setInput(input);
       search.sourceChanged(true);
+      formatting.setInput(input);
       if (restoreFocus) input.focus({ preventScroll: true });
       restorePosition(position ?? (switched && !adoptingPosition
         ? { start: 0, end: 0, direction: "none", scrollTop: 0, scrollLeft: 0 }
@@ -616,6 +672,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     destroy(): void {
       destroyed = true;
       search.destroy();
+      formatting.destroy();
       if (highlightTimer) clearTimeout(highlightTimer);
       if (statTimer) clearTimeout(statTimer);
       unbindInput(input);
