@@ -19,7 +19,10 @@ before the saved position is restored.
 Preview coordinates use the existing page/fraction model and restore only after
 the corresponding document finishes pagination. Reader/workspace transitions
 transfer coordinates explicitly while preserving the reader's lazy workspace
-import. Filename collisions receive an ordinal label in the document picker.
+import. A successful reader render builds and reveals the heading outline before
+restoring scroll offsets, so clamping uses the final text width and document
+height. Stale and failed renders cannot restore another document's position.
+Filename collisions receive an ordinal label in the document picker.
 
 Complete visible pages retain their own document identity while new source is
 preparing or preparation has failed. That identity is separate from export-ready
@@ -107,3 +110,20 @@ survive that intentional reset; the corrected test preserves the existing
 feedback contract. Both new cases are included in the production Firefox
 authoring lane. Hosted exact-head checks and independent review remain separate
 release gates.
+
+### Reader outline geometry regression
+
+The 1000×720 desktop regression uses wrapped paragraphs and a visible 17-heading
+outline, with the saved position 40 px from the document end. Against baseline
+`7758707`, both a document switch and a reader/workspace round-trip restored
+7378.3999 instead of the saved 7501 px. The hidden outline temporarily widened
+and shortened the document before the browser clamped the requested scroll.
+
+Runtime fix `c59b48f` builds and reveals the outline before restoring offsets,
+within the existing successful-render generation check. Both new cases and the
+three existing desktop navigation cases pass in production Firefox. The existing
+stale/failed-render unit control also now checks outline exclusion and retained
+coordinate ownership. TypeScript, ESLint, 33 relevant unit tests across three
+files, and clean web/desktop production builds passed. Both browser regressions
+are selected by the existing desktop Firefox authoring lane. Packaged Windows
+and hosted exact-head checks remain separate gates.

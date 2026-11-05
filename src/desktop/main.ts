@@ -129,13 +129,6 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       content.replaceChildren(...result.document.childNodes);
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
-      const position = session.positions.get(doc.id)?.reader;
-      const previousBehavior = scroll.style.scrollBehavior;
-      scroll.style.scrollBehavior = "auto";
-      scroll.scrollTop = position?.scrollTop ?? 0;
-      scroll.scrollLeft = position?.scrollLeft ?? 0;
-      scroll.style.scrollBehavior = previousBehavior;
-      renderedReaderId = doc.id;
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
         const link = document.createElement("a");
         link.href = `#${encodeURIComponent(heading.id)}`;
@@ -144,6 +137,15 @@ function render(importErrors: readonly string[] = []): Promise<void> {
         outline.append(link);
       }
       outline.hidden = outline.childElementCount < 2;
+      // The outline changes text wrapping and the maximum scroll offset. Reveal
+      // it first so saved offsets clamp against the final reader geometry.
+      const position = session.positions.get(doc.id)?.reader;
+      const previousBehavior = scroll.style.scrollBehavior;
+      scroll.style.scrollBehavior = "auto";
+      scroll.scrollTop = position?.scrollTop ?? 0;
+      scroll.scrollLeft = position?.scrollLeft ?? 0;
+      scroll.style.scrollBehavior = previousBehavior;
+      renderedReaderId = doc.id;
       status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
       // A new open/action may have reported a newer failure while this render ran.
       if (result.warnings.length && currentNotice === noticeGeneration) {

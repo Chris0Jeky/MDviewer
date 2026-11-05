@@ -106,21 +106,31 @@ describe("desktop source ownership", () => {
     boundary.open.mockResolvedValueOnce(batch([{ name: "one.md", text: "One" }, { name: "two.md", text: "Two" }]));
     click("reader-open");
     await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledOnce());
+    const reader = boundary.sessions[0]!;
+    const [one, two] = reader.documents;
+    reader.positions.set(one!.id, { reader: { scrollTop: 800, scrollLeft: 0 } });
+    reader.positions.set(two!.id, { reader: { scrollTop: 90, scrollLeft: 0 } });
+    const scroll = document.getElementById("reader-scroll")!;
     const navigate = (key: string) => window.dispatchEvent(new KeyboardEvent("keydown", {
       key, altKey: true, shiftKey: true, bubbles: true, cancelable: true,
     }));
     navigate("n");
-    const stale = document.createElement("div"); stale.textContent = "Stale One";
+    const stale = document.createElement("div"); stale.innerHTML = '<h1 id="stale-one">Stale One</h1><h2 id="stale-section">Stale section</h2>';
     finish({ document: stale, warnings: [] });
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("Two"));
     expect(document.title).toBe("two.md — MDviewer");
+    expect(scroll.scrollTop).toBe(90);
+    expect(document.getElementById("reader-outline")!.childElementCount).toBe(0);
     boundary.render.mockRejectedValueOnce(new Error("Read render failed"));
     navigate("p");
     await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("Read render failed"));
     expect(document.getElementById("reader-document")!.textContent).toBe("");
+    scroll.scrollTop = 777; // Failed content cannot become the owner of these coordinates.
     navigate("n");
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("Two"));
     expect(document.getElementById("reader-notice")!.hidden).toBe(true);
+    expect(scroll.scrollTop).toBe(90);
+    expect(reader.positions.get(one!.id)?.reader?.scrollTop).toBe(800);
   });
 
   it("transfers independent reader and editor positions through repeated mode boundaries", async () => {

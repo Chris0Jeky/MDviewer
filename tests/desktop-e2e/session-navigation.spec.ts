@@ -56,3 +56,42 @@ test("reader positions and source selections survive keyboard switches and repea
   await expect(input).toHaveValue(source);
   await page.screenshot({ path: test.info().outputPath("desktop-session-navigation.png"), fullPage: true });
 });
+
+for (const transition of ["document switch", "workspace round-trip"] as const) {
+  test(`reader restores a near-end position after ${transition} with a visible outline at 1000px`, async ({ page, audit }) => {
+    await page.setViewportSize({ width: 1000, height: 720 });
+    const paragraph = "Wrapped reading text keeps the final document taller when its heading outline is visible. ".repeat(12);
+    const source = "# Wrapped reader\n\n" + Array.from({ length: 16 }, (_, index) =>
+      `## Section ${index}\n\n${paragraph}\n\n`).join("");
+    await openFiles(page, [{ name: "wrapped.md", text: source }, { name: "other.md", text: "# Other" }]);
+    await readyReader(page, "Wrapped reader");
+    await expect(page.locator("#reader-outline")).toBeVisible();
+    await expect(page.locator("#reader-outline a")).toHaveCount(17);
+    const scroll = page.locator("#reader-scroll");
+    const saved = await scroll.evaluate(el => {
+      el.style.scrollBehavior = "auto";
+      el.scrollTop = el.scrollHeight - el.clientHeight - 40;
+      return el.scrollTop;
+    });
+    expect(saved).toBeGreaterThan(3000);
+    expect(audit.requests.filter(url => /workspace-|pagedjs/i.test(url)), "reading stays lazy before entering the workspace").toEqual([]);
+
+    if (transition === "document switch") {
+      const picker = page.getByRole("combobox", { name: "Open documents" });
+      await picker.selectOption({ label: "other.md" });
+      await readyReader(page, "Other");
+      await expect(page.locator("#reader-outline")).toBeHidden();
+      await picker.selectOption({ label: "wrapped.md" });
+    } else {
+      await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+      await readyWorkspace(page, source);
+      await page.getByRole("button", { name: "← Reading view", exact: true }).click();
+    }
+
+    await readyReader(page, "Wrapped reader");
+    await expect(page.locator("#reader-outline")).toBeVisible();
+    await expect.poll(() => scroll.evaluate(el => el.scrollTop), {
+      message: `Restore the saved near-end offset after ${transition}, using the final outlined layout`,
+    }).toBe(saved);
+  });
+}
