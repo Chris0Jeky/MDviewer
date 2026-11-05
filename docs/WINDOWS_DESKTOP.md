@@ -69,6 +69,8 @@ Very broad searches show a refinement notice after 10,000 results and disable
 Replace all until the search is narrowed. Search text is limited to 2,000
 characters. The usual document size and confirmation limits still apply to edits.
 Search state stays in memory and is never added to saved Markdown or PDF output.
+In short windows, Find temporarily uses the workspace for source text; closing it
+restores your Split layout.
 
 ## Local files and limits
 

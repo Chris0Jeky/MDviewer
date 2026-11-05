@@ -284,6 +284,13 @@
   display: inline;
 }
 
+/* A textarea includes the empty final line after a trailing newline. A plain pre
+   drops that line unless a glyph occupies it; a zero-width generated sentinel
+   keeps both scroll ranges identical without adding to source textContent. */
+.editor-highlight-code::after {
+  content: "\200b";
+}
+
 /* The real input. Glyphs are transparent so the backdrop shows through; the
    caret and the selection band stay visible. */
 #editor-input {
@@ -412,6 +419,42 @@ body.is-splitting #editor-input {
   #editor-pane {
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+}
+
+/* A short window cannot fit search chrome above a fractional Split source pane.
+   While Find is open, use the available workspace for source without changing the
+   selected view or split setting. The preview stays measurable, as in Markdown
+   mode; closing Find restores the prior split immediately. */
+@media screen and (max-height: 600px) {
+  #editor-pane:has(#editor-search:not([hidden])) .editor-head {
+    display: none;
+  }
+
+  #editor-search {
+    gap: 4px;
+    padding-block: 6px;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #split-handle {
+    display: none;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #canvas {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #error-card:not([hidden]) {
+    visibility: visible;
+    pointer-events: auto;
   }
 }
 

@@ -283,6 +283,14 @@ new dependencies, network traffic or document persistence are introduced.
 Coverage: `tests/editor-search-model.test.ts`, `tests/editor-search.test.ts`,
 `tests/e2e/editor-search.spec.ts` and `tests/desktop-e2e/editor-search.spec.ts`.
 Native undo, source geometry and print visibility require real browser evidence.
+A generated zero-width sentinel after the highlight code retains the textarea's
+empty final line after a trailing newline without changing backdrop textContent;
+both layers therefore have the same scroll range.
+At viewport heights up to 600px, open Find temporarily gives the source the Split
+workspace and hides its redundant header. The canvas remains measurable and fatal
+feedback remains visible. Closing Find restores the previous split geometry;
+view mode, split ratio and document layout settings are not changed or persisted.
+This also keeps source text usable in the supported 560×420 desktop window.
 
 Canvas zoom is still a paint-only transform and never a reflow key. The screen-only outer host envelope tracks the painted stack height to remove the unscaled blank scroll tail. Its width is at least the painted sheet plus gutters and viewport width so explicit 100% or 50% zoom retains horizontal access to the whole sheet. Remove the envelope before pagination. Reset height and width to auto and overflow to visible for print. Do not scale sheet layout measurements or crop exported pages.
 

@@ -7,8 +7,6 @@ test("Find keyboard navigation retains query focus and replacements keep native 
   await waitForPagination(page);
   const input = page.locator("#editor-input");
   await input.focus();
-  await input.press("ControlOrMeta+End");
-  await page.keyboard.insertText("!");
   await input.press("ControlOrMeta+f");
   const query = page.getByRole("searchbox", { name: "Find in Markdown" });
   await query.fill("cat");
@@ -21,6 +19,13 @@ test("Find keyboard navigation retains query focus and replacements keep native 
   await expect(status).toHaveText("1 of 3 matches");
   await page.getByRole("button", { name: "Show replace", exact: true }).click();
   await page.getByRole("textbox", { name: "Replace with", exact: true }).fill("dog");
+  // Chromium's undo history includes native edits to the query/replacement fields.
+  // Make this source edit adjacent to Replace all so the second undo specifically
+  // proves the preceding source entry survives, rather than undoing a form field.
+  await input.focus();
+  await input.press("ControlOrMeta+End");
+  await page.keyboard.insertText("!");
+  await expect(status).toHaveText("3 matches");
   await page.getByRole("button", { name: "Replace all", exact: true }).click();
   await expect(input).toHaveValue("dog dog dog!");
   await input.focus();
@@ -66,6 +71,7 @@ test("Find reveals a deep source match and keeps the painted text aligned", asyn
     return { top: a.top, bottom: a.bottom, matchTop: match.top, matchBottom: match.bottom,
       inputBox: [a.x, a.y, a.width, a.height], backdropBox: [b.x, b.y, b.width, b.height],
       inputScroll: input.scrollTop, backdropScroll: backdrop.scrollTop,
+      inputHeight: input.scrollHeight, backdropHeight: backdrop.scrollHeight,
       selected: input.value.slice(input.selectionStart, input.selectionEnd) };
   });
   expect(geometry.selected).toBe("last-needle");
@@ -74,6 +80,7 @@ test("Find reveals a deep source match and keeps the painted text aligned", asyn
   expect(geometry.matchBottom).toBeLessThanOrEqual(geometry.bottom);
   expect(geometry.inputBox).toEqual(geometry.backdropBox);
   expect(geometry.inputScroll).toBe(geometry.backdropScroll);
+  expect(geometry.inputHeight).toBe(geometry.backdropHeight);
   await page.screenshot({ path: test.info().outputPath("source-find-deep-match.png"), fullPage: true });
 });
 
@@ -98,7 +105,9 @@ test("large plain-text source reveals its wrapped end without a second caret jum
   });
   expect(before.top).toBeGreaterThan(0);
   expect(before.selected).toBe("large-needle");
-  await query.press("Escape");
+  // Keep the panel open so source viewport height stays fixed. Closing it changes
+  // the scroll limit and can clamp scrollTop independently of match visibility.
+  await input.focus();
   await expect(input).toBeFocused();
   await input.press("ArrowRight");
   // Chromium's own caret movement is the independent visibility control. If Find

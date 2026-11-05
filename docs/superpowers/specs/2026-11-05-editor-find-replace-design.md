@@ -54,3 +54,9 @@ Chromium verifies undo/redo, deep-source navigation, responsive geometry, source
 layer alignment and print suppression. No local browser is available in this
 session: exact-head hosted Chromium and Windows checks are the browser/native
 evidence. Human acceptance gates AI-6/7/8/9 and #169 stay open.
+
+At viewport heights up to 600px, open Find temporarily gives the source the Split
+workspace and hides its redundant header. The canvas remains measurable and fatal
+feedback remains visible. Closing Find restores the previous split geometry;
+view mode, split ratio and document layout settings are not changed or persisted.
+This also keeps source text usable in the supported 560×420 desktop window.
