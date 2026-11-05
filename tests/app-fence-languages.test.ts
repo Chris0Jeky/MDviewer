@@ -48,12 +48,17 @@ async function fixture(source: string) {
   const { DocStore } = await import("../src/app/state");
   const { DEFAULT_SETTINGS } = await import("../src/app/settings");
   const host = document.createElement("div");
+  const workspaceEl = document.createElement("div");
+  const canvasEl = document.createElement("main");
+  canvasEl.id = "canvas";
+  canvasEl.append(host);
+  workspaceEl.append(canvasEl);
   const store = new DocStore();
   const doc = store.add("Code.md", source);
   const app = Object.create(App.prototype) as AppController;
   const banner = { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn() };
   Object.assign(app, {
-    store, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
+    store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
     renderedSnapshot: null, banner, emptyEl: document.createElement("div"),
     canvas: { host, setPaginating: vi.fn(), setProgress: vi.fn(), setPageCount: vi.fn(),
       capturePosition: () => null, restorePosition: vi.fn() },

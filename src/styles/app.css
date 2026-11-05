@@ -150,7 +150,8 @@ body {
 /* -----------------------------------------------------------------------------
  * #app — toolbar, workspace, and the normally collapsed PDF status strip.
  * -------------------------------------------------------------------------- */
-#app {
+body > #app,
+body > #desktop-workspace > #app {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
@@ -202,7 +203,7 @@ body {
 /* -----------------------------------------------------------------------------
  * #toolbar — sticky control strip. Wraps groups separated by dividers.
  * -------------------------------------------------------------------------- */
-#toolbar {
+#app > #toolbar {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -576,7 +577,7 @@ body {
 }
 
 /* The aria-live status node is off-screen but announced. */
-#status-live,
+#app > #workspace > #canvas > #status-live,
 #app > #export-status > #export-status-live {
   position: absolute;
   width: 1px;

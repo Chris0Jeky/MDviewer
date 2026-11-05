@@ -1,5 +1,5 @@
 /* Screen-only workspace hierarchy. The document and generated print CSS are unchanged. */
-#toolbar { display: block; padding: 0; max-height: 48dvh; overflow: auto; }
+#app > #toolbar { display: block; padding: 0; max-height: 48dvh; overflow: auto; }
 .workspace-actions {
   display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
   padding: 14px 16px; min-width: 0;
@@ -57,8 +57,8 @@
 .workspace-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Paint-only zoom needs a matching outer scroll envelope, not a layout scale. */
-#paged-output[data-preview-sized] { overflow: clip; }
-#canvas .pagedjs_pages { transition: none; }
+#app > #workspace > #canvas > #paged-output[data-preview-sized] { overflow: clip; }
+#app > #workspace > #canvas .pagedjs_pages { transition: none; }
 .canvas-overlay-anchor { position: sticky; top: 0; height: 0; z-index: 40; pointer-events: none; }
 .canvas-overlay-anchor > .paginating-overlay { bottom: auto; height: var(--canvas-viewport-height, 100vh); }
 
@@ -70,7 +70,7 @@
   .workspace-formatting-controls > .toolbar-divider { display: none; }
 }
 @media (max-width: 760px) {
-  #toolbar { max-height: 52dvh; min-width: 0; }
+  #app > #toolbar { max-height: 52dvh; min-width: 0; }
   /* Single-row horizontal strip: wrapping the primary controls stacked them to
      347px on a 375x667 phone with a document loaded (TECH-1), leaving a 192px
      preview. The strip keeps one short row (~62px measured on 375x667); every
@@ -99,23 +99,23 @@
 }
 @media print {
   #app > #export-status { display: none !important; }
-  #paged-output[data-preview-sized] { height: auto !important; width: auto !important; overflow: visible; }
+  #app > #workspace > #canvas > #paged-output[data-preview-sized] { height: auto !important; width: auto !important; overflow: visible; }
   .canvas-overlay-anchor { display: none !important; }
 }
 
 /* Cross-axis auto margins center a fitting card and become zero on overflow,
    unlike centered alignment which strands the beginning above scrollTop=0. */
 @media screen {
-  #empty-state { overflow-y: auto; align-items: flex-start; padding-bottom: 72px; scroll-padding-block: 8px 48px; }
-  #empty-state .empty-card { flex-shrink: 0; max-width: 100%; margin-block: auto; }
+  #app > #workspace > #canvas > #empty-state { overflow-y: auto; align-items: flex-start; padding-bottom: 72px; scroll-padding-block: 8px 48px; }
+  #app > #workspace > #canvas > #empty-state .empty-card { flex-shrink: 0; max-width: 100%; margin-block: auto; }
 }
 @media screen and (max-width: 760px), screen and (max-height: 600px) {
-  #empty-state { padding: 16px 16px 72px; }
-  #empty-state .empty-card { padding: 20px 16px; gap: 12px; }
-  #empty-state .empty-icon { font-size: 28px; }
-  #empty-state .empty-title { margin: 0; }
-  #empty-state .empty-sub { font-size: 13px; margin: 0; }
-  #empty-state .empty-hint { margin: 0; }
+  #app > #workspace > #canvas > #empty-state { padding: 16px 16px 72px; }
+  #app > #workspace > #canvas > #empty-state .empty-card { padding: 20px 16px; gap: 12px; }
+  #app > #workspace > #canvas > #empty-state .empty-icon { font-size: 28px; }
+  #app > #workspace > #canvas > #empty-state .empty-title { margin: 0; }
+  #app > #workspace > #canvas > #empty-state .empty-sub { font-size: 13px; margin: 0; }
+  #app > #workspace > #canvas > #empty-state .empty-hint { margin: 0; }
 }
 
 .document-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--accent-soft); color: var(--fg); font-size: 12px; }

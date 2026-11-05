@@ -24,6 +24,10 @@ restoring scroll offsets, so clamping uses the final text width and document
 height. Stale and failed renders cannot restore another document's position.
 Filename collisions receive an ordinal label in the document picker.
 
+The reader shell establishes its border-box model before the first workspace
+import. Lazy workspace CSS therefore cannot change the outline or reading width
+and invalidate saved offsets when returning to the reader.
+
 Complete visible pages retain their own document identity while new source is
 preparing or preparation has failed. That identity is separate from export-ready
 render metadata, which is invalidated immediately. Position capture follows the
@@ -127,3 +131,23 @@ coordinate ownership. TypeScript, ESLint, 33 relevant unit tests across three
 files, and clean web/desktop production builds passed. Both browser regressions
 are selected by the existing desktop Firefox authoring lane. Packaged Windows
 and hosted exact-head checks remain separate gates.
+
+### First workspace stylesheet regression
+
+Hosted Windows Firefox run `42089308673`, job `127463352748`, exposed another
+geometry change at published head `c6f7f2be` (local `ca37a09`): the workspace
+round-trip restored 6671 instead of 7066 px. Its downloaded trace and artifact
+`13443928529` show a stable clamp, while the document-switch case passed.
+
+The lazy workspace's universal `box-sizing: border-box` reset narrowed the
+reader outline from 219 to 190 px and widened the reading viewport from 781 to
+810 px. Local Firefox retained the same paragraph line counts despite the width
+change; Windows rewrapped and shortened the document. Local measurements showed
+unchanged fonts and line height, with fonts already loaded on both sides.
+
+The reader now applies the same box model within the actual body-child reader
+shell at startup, without importing workspace assets. The existing near-end
+regression retains its exact scroll assertion and additionally requires equal
+outline, viewport and document geometry before and after the transition. That
+new geometry assertion fails against `ca37a09` on local Firefox as well, making
+the cause reproducible independently of platform font wrapping.

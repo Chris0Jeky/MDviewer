@@ -39,11 +39,16 @@ function fixture() {
   const store = new DocStore();
   const [a, b] = store.addBatch([{ name: "a.md", text: "A" }, { name: "b.md", text: "B" }]);
   const host = document.createElement("div");
+  const workspaceEl = document.createElement("div");
+  const canvasEl = document.createElement("main");
+  canvasEl.id = "canvas";
+  canvasEl.append(host);
+  workspaceEl.append(canvasEl);
   let position: CanvasPosition = { page: 1, offset: 0 };
   const restore = vi.fn((next: CanvasPosition | null) => { position = next ?? { page: 1, offset: 0 }; });
   const app = Object.create(App.prototype) as App;
   Object.assign(app, {
-    store, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
+    store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
     renderedSnapshot: null, visiblePreviewId: null, editorDocumentId: a!.id,
     emptyEl: document.createElement("div"),
     banner: { fatal: vi.fn(), warn: vi.fn(), clear: vi.fn() },

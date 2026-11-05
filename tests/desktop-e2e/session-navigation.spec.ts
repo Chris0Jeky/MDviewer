@@ -68,6 +68,17 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
     await expect(page.locator("#reader-outline")).toBeVisible();
     await expect(page.locator("#reader-outline a")).toHaveCount(17);
     const scroll = page.locator("#reader-scroll");
+    const geometry = () => page.evaluate(() => {
+      const outline = document.getElementById("reader-outline")!;
+      const scroll = document.getElementById("reader-scroll")!;
+      const content = document.getElementById("reader-document")!;
+      return {
+        outlineWidth: outline.getBoundingClientRect().width,
+        viewport: [scroll.clientWidth, scroll.clientHeight],
+        document: [content.clientWidth, content.scrollHeight],
+      };
+    });
+    const initialGeometry = await geometry();
     const saved = await scroll.evaluate(el => {
       el.style.scrollBehavior = "auto";
       el.scrollTop = el.scrollHeight - el.clientHeight - 40;
@@ -90,6 +101,9 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
 
     await readyReader(page, "Wrapped reader");
     await expect(page.locator("#reader-outline")).toBeVisible();
+    // Loading the workspace's CSS must not change reader wrapping on return.
+    // The width check catches this even when platform fonts keep the same lines.
+    await expect.poll(geometry).toEqual(initialGeometry);
     await expect.poll(() => scroll.evaluate(el => el.scrollTop), {
       message: `Restore the saved near-end offset after ${transition}, using the final outlined layout`,
     }).toBe(saved);

@@ -294,6 +294,22 @@ All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster
 
 Foundation section 12 remains the detailed editor contract: mounted panes, an invisible but measurable parked canvas in Markdown mode, in-place text events, native textarea editing, synchronous backdrop freshness, matched layer metrics, glued scrolling, bounded tokenization and editor-free print output.
 
+Workspace chrome selectors follow the mounted `#app > #workspace` parent chain;
+pane, splitter and canvas rules address its direct children, and the active-match
+cue belongs to the source pane's `.editor-scroll`. The app root is a direct child
+of `body` on the web or the body's `#desktop-workspace` on desktop. Desktop shell
+rules address the body's actual shells. These IDs are not reserved document
+names: the literal 17-heading fixture in `tests/helpers/chromeHeadings.ts` retains
+authored text and ordinary document flow in Split, Preview, forced colors and
+print, including App, Status live, Error card and Reader shell. App feedback
+lookups also target the actual canvas's direct error/live children, never a
+heading inside the paginated document. Print hides only actual chrome.
+Short-window Find layout matches the pane's direct search panel, never an
+authored heading with the same ID. A parked canvas remains measurable and its
+direct fatal card remains visible and actionable. Production web and desktop
+`chrome-heading-scope.spec.ts` cases run beside the existing editor geometry,
+search cue and failed-export recovery specifications.
+
 The editor accepts `setDocument({ id?: string, name: string, text: string } | null)`;
 App supplies the stable DocStore ID and legacy callers fall back to the name.
 Same-document, same-text notifications preserve live selection and native undo.

@@ -666,7 +666,8 @@ export class App {
     // The canvas is always present; #empty-state overlays it until a document loads.
     this.emptyEl.hidden = pane !== "empty";
     if (pane !== "error") {
-      const errorCard = document.getElementById(IDS.errorCard);
+      // Authored headings can reuse these IDs before the actual feedback nodes.
+      const errorCard = this.workspaceEl.querySelector<HTMLElement>(`:scope > #${IDS.canvas} > #${IDS.errorCard}`);
       if (errorCard) errorCard.hidden = true;
     }
   }
@@ -704,7 +705,7 @@ export class App {
   }
 
   private announce(message: string): void {
-    const live = document.getElementById(IDS.statusLive);
+    const live = this.workspaceEl.querySelector<HTMLElement>(`:scope > #${IDS.canvas} > #${IDS.statusLive}`);
     if (live) live.textContent = message;
   }
 
