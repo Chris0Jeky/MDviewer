@@ -5,12 +5,13 @@ procedures in `.claude/skills/*/SKILL.md` and deep detail in `docs/*`.
 
 ## What this project is
 
-A browser-based, drag-and-drop **Markdown → PDF** tool. The one job that defines it:
-export beautiful PDFs where **no code block, figure, table, or callout is ever sliced
-across a page boundary**. Built for research papers and code-heavy docs. 100%
-client-side, local-first (documents are never uploaded or sent; the only runtime request is the
-owner-approved, content-free Pulseboard SDK — README "Privacy and usage data"). Vanilla
-TypeScript + Vite. Full design: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md).
+A local Markdown reader and editor for the web and an experimental Windows desktop app.
+The desktop starts in continuous reading and loads the editing/PDF workspace on demand.
+Its defining export contract keeps code blocks, figures, tables and callouts whole when
+they fit on a page, with canonical shrink/split tiers for oversized content. Documents
+are never uploaded or sent; the approved external runtime-network exception is the
+owner's first-party, content-free Pulseboard collector — README "Privacy and usage data". Vanilla TypeScript + Vite,
+with a bounded Tauri/Rust host. Full design: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md).
 
 ## Authority Order
 
@@ -38,6 +39,12 @@ When sources conflict, follow the higher source and report the conflict.
 
 Do not bulk-read `node_modules`, `dist`, build output, or generated artifacts unless the task requires it.
 
+Use [Future work](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+for the issue-backed queue. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
+and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) are design-first proposals.
+Current Save Copy, memory-only sessions and privacy contracts remain in force until their
+reviewed implementation updates those contracts together.
+
 ## Human Action Items
 
 `ACTION_ITEMS.md` is the running list of tasks only the user (Chris) can do — manual
@@ -64,7 +71,7 @@ Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). The
 ## Default Work Style
 
 - Prefer narrow diffs over rewrites; preserve existing behavior unless the task asks for a change.
-- Keep the app **local-first**: no document network calls or document persistence (only `Settings` in localStorage). The one runtime request is the Pulseboard SDK (`public/pulseboard.js`), reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
+- Keep the app **local-first**: no document network calls or automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports write the requested output; Save Copy does not adopt an original-file binding or clear its dirty baseline. Persisted app-managed user state remains limited to `Settings` and the approved Pulseboard keys in `AGENTS.md`. The SDK (`public/pulseboard.js`) is reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
 - The **render order is load-bearing** (parse → Shiki → KaTeX → Mermaid await → fonts → paginate). Never paginate before async content settles — that defeats the no-slice guarantee.
 - Do not mix render-pipeline, pagination, export, and UI concerns in one slice unless the seam requires it.
 - Do not silently ignore failures. Classify as blocker, non-blocking risk, pre-existing noise, or invalid signal.
@@ -116,7 +123,7 @@ change is considered done:
   green for render/pagination/export/UI changes. New code has tests.
 - **Manual (Gate, human)**: drag-drop → preview → Print/Save-as-PDF and Download-PDF verified in
   a real browser for UI/pagination/export changes (tracked as an AI-N item when it needs Chris).
-- **Zero tech debt**: no TODO without a tracked follow-up; no skipped tests; no silent workarounds.
+- **Zero tech debt**: no TODO without a tracked follow-up; no skipped required tests; no silent workarounds. Report the existing opt-in performance-ladder skips separately; they do not replace required verification.
 - **Docs sync**: roadmap, `IMPLEMENTATION_SPEC.md`, and `AGENT_INDEX.md` updated if their truth changed.
 
 ## Verification Protocol
@@ -132,6 +139,8 @@ in the current environment.
 - Pagination (the core): `src/paginate/paginate.ts`, `cssBuilder.ts`, `handler.ts`, `shrinkToFit.ts`, `measure.ts`.
 - Export: `src/export/print.ts`, `download.ts`.
 - App core: `src/app/App.ts` (render order), `state.ts`, `settings.ts`, `dom.ts`, `input.ts`.
+- Windows reading and workspace ownership: `src/desktop/{main,session,render,workspace,native}.ts`;
+  native file/link/save boundaries: `src-tauri/src/{main,file_policy,export_policy}.rs`.
 - UI: `src/ui/Toolbar.ts`, `Canvas.ts`, `EmptyState.ts`, `Banner.ts`. Styles: `src/styles/*`.
 - Split workspace: `src/ui/Editor.ts`, `Splitter.ts`, `src/styles/editor.css`
   (`IMPLEMENTATION_SPEC.md` §12). The source backdrop and the textarea must keep identical box

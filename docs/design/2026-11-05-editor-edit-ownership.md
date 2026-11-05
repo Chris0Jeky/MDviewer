@@ -1,6 +1,12 @@
 # Guard delayed editor mutations by document ownership
 
-Issue: #184. Scope: `Editor.ts`, focused unit regressions, and native undo browser regressions.
+**Completed:** [#185](https://github.com/Chris0Jeky/MDviewer/pull/185), merged as
+`f0faf7c624b0c0682aaa10d31c0d391efb95500a`, closes
+[#184](https://github.com/Chris0Jeky/MDviewer/issues/184). Scope: `Editor.ts`, focused
+unit regressions, and native undo browser regressions. The corrected fresh-textarea
+implementation passed all five hosted jobs and independent review; the
+[authoring checkpoint](2026-11-05-authoring-checkpoint.md) records the exact heads and
+later combined-main verification. The reproduced failures below remain historical evidence.
 
 ## Failure reproduced
 
@@ -74,4 +80,6 @@ switch undo isolation, and undo through the shared Tab path in real Chromium.
 Those checks require hosted browser CI; jsdom is not evidence of native undo behavior.
 
 No document persistence, network paths, dependencies, rendering, pagination, export
-leases, desktop ownership, or Find/Replace UI are changed by this slice.
+leases, desktop ownership, or Find/Replace UI were changed by this slice.
+AI-6/AI-7/AI-8/AI-9 and Windows #169 remain open. Further work is tracked in
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).

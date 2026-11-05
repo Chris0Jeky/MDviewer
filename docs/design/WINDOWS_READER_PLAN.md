@@ -1,6 +1,14 @@
 # Windows reader implementation plan
 
-Spec: `docs/design/WINDOWS_READER.md`.
+**Completed:** the original reader/host work merged in
+[#158](https://github.com/Chris0Jeky/MDviewer/pull/158). The sequence below is historical;
+subsequent New, editing and readiness work is recorded in the
+[authoring checkpoint](2026-11-05-authoring-checkpoint.md). Windows acceptance
+[#169](https://github.com/Chris0Jeky/MDviewer/issues/169) and AI-6/AI-7/AI-8/AI-9 remain open.
+New work is tracked in [Future work](../FUTURE_WORK.md) and
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+
+Spec: [Windows reader design](WINDOWS_READER.md).
 
 1. Implement the isolated native host, bounded file policy, queue and external-link
    policy; prove these with Rust tests. Pin dependencies and generate Cargo.lock.

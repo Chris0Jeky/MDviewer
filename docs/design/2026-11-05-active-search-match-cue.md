@@ -1,5 +1,12 @@
 # Active source match visibility — issue 189
 
+**Completed:** [#191](https://github.com/Chris0Jeky/MDviewer/pull/191), merged as
+`280c73e26487b16d7de607c269b2839636b0b969`, closes
+[#189](https://github.com/Chris0Jeky/MDviewer/issues/189). The corrected implementation
+passed hosted browser checks and independent screenshot review. The
+[authoring checkpoint](2026-11-05-authoring-checkpoint.md) records its exact-head
+qualification and later combined-main verification.
+
 Find keeps focus in its query field so repeated Enter/Shift+Enter navigation stays
 fast. Chromium does not reliably paint an inactive textarea selection, so the
 native selection alone did not visibly locate the active result.
@@ -56,9 +63,9 @@ It writes `find-active-wrapped-cue.png`, `find-active-resized-cue.png` and
 undo/redo regressions remain unchanged. The desktop Search tests additionally
 require a visible cue while Find keeps focus, including both short-window sizes.
 
-Actual browser results and screenshot review must be recorded against the
-published candidate before this change is qualified. No rendering claim follows
-from jsdom tests alone.
+The qualification gate required actual browser results and screenshot review
+against the published candidate. The corrected #191 head met that gate; jsdom
+results alone were not treated as proof of rendering.
 
 ## Plain-source browser regression and correction
 
@@ -85,4 +92,9 @@ center only 0.1375 pixels from the native reference.
 The correction preserves the shared authored value in the temporary mirror.
 A focused unit regression first failed with `21.45px` instead of `1.65`. The
 hosted native alignment threshold and diagnostic screenshot remain unchanged;
-the corrected candidate still requires their actual-browser verification.
+the corrected combined head `e8ef574a` passed them and independent visual review.
+The retained large-source alignment error was 0.1375 CSS pixels. All five hosted
+jobs passed; the authoring checkpoint preserves their original counts and source
+identity. AI-6/AI-7/AI-8/AI-9 and Windows #169 remain open. Further authoring work is
+tracked in [Future work](../FUTURE_WORK.md) and
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195).

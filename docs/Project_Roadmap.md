@@ -8,8 +8,28 @@
 
 ## Status legend
 
-`DONE` — complete and verified · `IN PROGRESS` — actively being built · `PLANNED` — accepted, not
-started · `DEFERRED` — explicitly out of scope for now.
+`DONE` — implemented and verified · `IN PROGRESS` — implementation or acceptance remains ·
+`PLANNED` — scoped, not started · `DESIGN FIRST` — behavior/ownership decision before implementation ·
+`WAITING` — named external or human dependency · `DEFERRED` — deliberately later.
+
+## Current delivery and next work
+
+Verified application baseline: [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
+including merged #183/#187/#185/#188/#192/#178/#191/#193/#194. Postmerge
+[CI](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540) and
+[Windows Desktop](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244)
+passed all five jobs. This is an application checkpoint, not a live deployment.
+
+Use [Future work](FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+for the ordered issue queue and acceptance criteria. Next: fix hidden-preview export
+feedback (#200), design file ownership/Save semantics (#196), then coordinate optional
+recovery design (#197). Formatting (#198), in-session navigation (#199), second-engine/
+accessibility regressions (#203), bounded raster cancellation (#201), and measured
+authoring performance (#202) are separately scoped work.
+
+**#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Their human checklists are unchanged.
+Current documents remain memory-only except explicit user-requested saves; planning
+file/recovery features does not enable persistence.
 
 ## Active gate
 
@@ -45,7 +65,7 @@ The end-to-end path: **render → paginate → export**, delivering the **no-sli
 code-heavy, math-and-diagram document exports with no block sliced across a page boundary, via both
 export paths.
 
-### P2 — UX polish — `IN PROGRESS`
+### P2 — Desktop authoring and UX — `IN PROGRESS`
 
 - **Done (2026-11-05): desktop authoring entry and space.**
   [New document #183](https://github.com/Chris0Jeky/MDviewer/pull/183) adds New from
@@ -109,10 +129,10 @@ export paths.
   **promotes the P4 "optional split editor" item on explicit owner request** and reverses the
   former "no editor pane" non-goal in [`PRODUCT_VISION.md`](./PRODUCT_VISION.md).
   Spec: `design/IMPLEMENTATION_SPEC.md` §12.
-- Theme system refinement (light / dark / sepia screen themes; the six code-theme families).
-- Toolbar grouping, control affordances, and keyboard operation.
-- Empty-state, error, and recovery flows (aggregated warning banner, fatal error card).
-- Accessibility: `aria-live` status, focus management, reduced-motion, contrast.
+- **Planned writing improvements:** compact formatting commands [#198](https://github.com/Chris0Jeky/MDviewer/issues/198) and bounded in-session position/keyboard navigation [#199](https://github.com/Chris0Jeky/MDviewer/issues/199).
+- **Confirmed feedback gap:** [#200](https://github.com/Chris0Jeky/MDviewer/issues/200) keeps existing PDF progress visible and exposed when the preview is hidden; fatal-error recovery and ordinary preview progress already ship.
+- **Design first:** file ownership/Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196), then optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197). Existing Save Copy and in-memory Undo Close behavior remain current until a reviewed implementation changes them.
+- **Acceptance and regressions:** second-engine/accessibility automation [#203](https://github.com/Chris0Jeky/MDviewer/issues/203), with manual typing, Narrator and Windows acceptance retained in AI-6/#169. Existing themes, toolbar disclosure and empty/error flows are implemented, not unstarted features.
 
 ### P3 — Hardening and distribution — `IN PROGRESS`
 
@@ -138,12 +158,9 @@ export paths.
   exact Markdown bytes and PDF header/EOF with clean teardown. See
   [offline capture evidence](design/RASTER_OFFLINE_CAPTURE.md). Human cross-engine,
   live/PWA and representative Windows acceptance remain separate open gates.
-- **Dependency qualification:** [#193](https://github.com/Chris0Jeky/MDviewer/pull/193)
-  records the six-package Shiki 4.6 update, the initial jsdom `Blob.stream()` compatibility
-  finding, and the correction/review/CI receipts. Consult that record for its final
-  head and merge state; authoring acceptance and human gates remain separate.
-- Large-document performance (incremental page count, layout responsiveness, memory).
-- Render-time budget and main-thread blocking mitigation.
+- **Done (2026-11-05): Shiki 4.6 [#193](https://github.com/Chris0Jeky/MDviewer/pull/193), merge `5fbb219c`.** The real compressed WASM loader is qualified with a test-only jsdom byte-stream compatibility bridge. The generated WASM JavaScript asset is smaller; this does not establish representative runtime performance. Both Node lanes pass 832 units at the final combined application checkpoint.
+- **Measured responsiveness:** [#202](https://github.com/Chris0Jeky/MDviewer/issues/202) refreshes the existing performance ladder and profiles authoring bottlenecks. Incremental page feedback already ships; whole-process native comparisons and budgets stay in #169.
+- **Export lifetime:** [#201](https://github.com/Chris0Jeky/MDviewer/issues/201) designs bounded cancellation beyond the current per-phase CSS/font/frame deadlines. Offline output qualification is already complete.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
   embedded images, and Mermaid SVG output.
 - **Done:** Mermaid fences bypass Shiki and render to sanitized, styled SVG text across flowchart and
@@ -214,10 +231,9 @@ Explicitly out of scope for now; revisit only after P1–P3 land.
 
 ## Priorities
 
-1. Preserve the completed P1 no-slice export gate. **Done.**
-2. P2 everyday desktop authoring. **In progress** — New, writing space, edit ownership,
-   Find/Replace and visible matches are merged. Complete the remaining manual typing
-   and browser acceptance, then address observed usability findings while keeping the
-   reader lightweight.
-3. P3 hardening before claiming production readiness.
-4. P4 stays deferred until explicitly reprioritized.
+1. Preserve the shipped no-slice, sanitization, edit-ownership and export-lifetime contracts.
+2. Fix the confirmed export-feedback gap (#200); review the next file-lifecycle design (#196) before changing Save behavior.
+3. Add bounded writing/navigation improvements (#198/#199) and accessibility/second-engine regressions (#203); coordinate optional recovery design (#197) with file identity.
+4. Qualify cancellation (#201) and improve measured authoring bottlenecks (#202). Keep representative native acceptance and efficiency evidence in #169.
+5. Resolve the remaining ledger-backed follow-ups in [Future work](FUTURE_WORK.md), including Unicode IDs, the upstream SDK issue and the explicitly deferred pagination trade-off.
+6. Keep P4 options, canonical-host selection and human release/deployment decisions explicit; do not infer their completion from green CI.

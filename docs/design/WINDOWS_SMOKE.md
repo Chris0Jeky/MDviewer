@@ -14,7 +14,41 @@ Save resolves only the verified dialog's direct ID 1 child. It requires a visibl
 
 The actual smoke must subsequently find the newly saved Markdown file and compare every UTF-8 byte with its fixture. It must find the PDF with its header and EOF marker. A published probe attempt or completed click is never substituted for these file checks. Full rendering fidelity remains covered separately by the production browser's saved-PDF pixel tests.
 
-## Evidence and limits
+## Verified main checkpoint — 2026-11-05
+
+The final-main push at `203c09798b01061ceb0c00f0937c22beeafb1a55` passed
+[Windows Desktop 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244).
+The [native job](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/job/127336397827)
+passed 22 Rust tests, the release build and the actual executable smoke. It rendered
+the absolute Unicode UTF-8 launch and relative Unicode UTF-16LE forwarded launch,
+retained the original host, and verified two native Save dialogs with exact
+filename readback. The actual saved Markdown matched all 93 expected UTF-8 bytes;
+the 54,601-byte saved PDF had a valid header/EOF and parsed as one A4 page. The
+native screenshots and rendered saved PDF were inspected, and cleanup errors were
+empty.
+
+The [corresponding source artifact](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13427938732)
+records the literal main commit above, not a synthetic PR merge checkout. Its
+tree is `8fe8e94f9cde0a52f3344075f0c272f140825ccb`; all 330 archived Git blobs
+matched the authoritative tree. The packaged portable executable's SHA-256 equals
+the executable hash recorded by smoke, and its `SOURCE.txt` names the same main
+commit.
+
+| Verified file | SHA-256 |
+| --- | --- |
+| [Windows binary artifact ZIP](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13429490041) | `29f99920e9e165b297f361b39093ecf622bf1616af93a6642a7c795070f631c8` |
+| Portable `mdviewer.exe` | `fa3a648678270a750d6ee05ffcf61119f009c8bbd355f168b2dffb676f8110cf` |
+| `MDviewer_0.2.0_x64-setup.exe` | `59b87cca3c341a0caf6fe0702eab4756f47e34cb87d6fef587a817eac9f04811` |
+| Inner tracked `source.zip` | `5b0290835635702c31a1038ce1316705be994ab3f5b6eb7edf71a1c094a4a354` |
+| [Native smoke artifact ZIP](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13427024597) | `d699562b2c19cbe365e007051fbde30486742099bf90f502e667bf34ed9b04ae` |
+
+The binary/source artifacts expire on 2026-12-05; the smoke evidence expires on
+2026-11-19. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) records the
+artifact identity, all-five-job qualification and remaining human checks. The
+installer was built and checksummed; this smoke tested the portable executable
+and does not claim a manual installation/uninstallation pass.
+
+## Historical evidence and limits
 
 Run 39775474433 captured matching UIA/native HWND identities without reading window text. Run 39777243620 confirmed successful filename write/readback and isolated Save-button selection failure. Run 39783780956 closed the dialog and the app reported saved Markdown, but the expected destination was absent; its actual saved path was not established. Run 39786113293, with the filename-change notification, produced the exact expected Markdown file, then exposed the second PDF dialog's missing UIA children. None of those is a fully passed native export run. Keep subsequent exact-head evidence with the PR.
 

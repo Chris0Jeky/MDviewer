@@ -5,13 +5,21 @@ Large-document behavior is profiled, not guessed. The ladder below is produced b
 deterministic stress documents from `tests/perf/generateLargeDoc.ts` through the
 real file-input path and times load to paginated.
 
+This budget covers the web/editing workspace's render and pagination pipeline.
+The table is a historical reference, not a measurement of main `203c0979` or the
+native Windows process tree. [#202](https://github.com/Chris0Jeky/MDviewer/issues/202)
+tracks a current production baseline, durable measurements and improvements to
+measured main-thread stalls. Representative native startup, WebView2 memory and
+desktop efficiency targets remain in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169).
+
 ## Reference measurement (2026-09-26)
 
 Reference machine: 13th Gen Intel i5-13600K, 32 GB RAM, Windows, headless
 Chromium (Playwright 1.63). Production bundle (`E2E_TARGET=preview`) built from
-the ladder at `f63cb40` (later commits touch docs and the paste/drop gates
-only, which do not affect the measured numbers). Times are wall clock from
-document load to pagination settled.
+the ladder at `f63cb40`. The measurements below apply to that revision and machine;
+later pipeline, dependency and authoring changes require a new run before making
+current performance claims. Times are wall clock from document load to pagination
+settled.
 
 | Input | Pages | Wall time | Longtasks (blocking) | JS heap | DOM nodes |
 | --- | --- | --- | --- | --- | --- |
@@ -94,3 +102,10 @@ npx playwright test tests/e2e/large-doc-perf.spec.ts          # on the bundle
 When re-measuring on new hardware or after pipeline changes, replace the
 reference table above (keeping the date, machine, and commit) rather than
 appending: one current table, history in git.
+
+The follow-up in [#202](https://github.com/Chris0Jeky/MDviewer/issues/202) also covers
+repeat edits, settings reflow and release/reopen cycles, with repeat counts and
+retained heap/DOM measurements. Keep these workspace measurements separate from
+the native acceptance scenarios in #169. Ordinary green CI, which skips this
+ladder, does not refresh the reference or establish that a performance budget was
+met.

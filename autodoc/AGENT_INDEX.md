@@ -4,16 +4,17 @@ Current navigation map for MDviewer. Read the narrow owning seam before editing;
 
 ## Read order
 
-1. `../CLAUDE.md` and `../AGENTS.md` for workflow and merge policy.
-2. `../docs/design/IMPLEMENTATION_SPEC.md` for current contracts, especially sections 3, 5, 7, 9 and 12.
-3. Its retained `IMPLEMENTATION_FOUNDATION.md` only for unchanged API or editor/no-slice details relevant to the task. Its dated dependency inventory is not current evidence.
-4. `STATE.md`, `DECISIONS.md`, `FAILURE_PATTERNS.md`, then the owning source/tests below.
+1. `../ACTION_ITEMS.md`, then `../AGENTS.md` and the applicable `../CLAUDE.md` runtime contract.
+2. `../ORCHESTRATOR.md` and `../docs/Project_Roadmap.md` for current state and priorities.
+3. `../docs/design/IMPLEMENTATION_SPEC.md` for current contracts, especially sections 3, 5, 7, 9, 12 and 14.
+4. [Future work](../docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195), then the owning source/tests below. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) are design-first proposals, not current behavior.
+5. The retained `../docs/design/IMPLEMENTATION_FOUNDATION.md` only for unchanged API or editor/no-slice details relevant to the task. Its dated dependency inventory is not current evidence. Current failure records live in `../docs/agentic/failure_ledger.jsonl`.
 
 Do not change a public export, DOM contract or render ordering without updating this index and the canonical specification in the same change. Keep branch work isolated; use merge commits, exact-head CI and latest-head independent review. Never claim an unavailable local, second-engine or live deployment check passed.
 
 ## Product and flow
 
-Local-first Markdown editor and paginated PDF preview. Only settings persist; no Markdown uploads. The only runtime request is the content-free Pulseboard SDK via `src/app/pulse.ts`. Vector print is primary; raster PDF is the fallback. The source-save action downloads exact current text without persisting it in the app.
+Local-first Markdown reader/editor and paginated PDF workspace for the web and experimental Windows app. The desktop continuous reader loads the shared workspace on demand. Open documents and latest-close recovery stay in memory; no automatic/app-managed document or session persistence is added. Settings and approved Pulseboard keys are the exceptions for persisted app-managed user state. The content-free SDK is reached only through `src/app/pulse.ts`; document content is never uploaded. Vector print is primary; raster PDF is the fallback. Save Markdown writes an explicit copy through the browser or native destination without adopting an original-file binding or clearing the dirty baseline.
 
 ```text
 input / textarea → DocStore → serialized scheduler → App.runPipeline
@@ -73,7 +74,7 @@ repairFootnoteLinks(host: ParentNode): void;
 
 // src/export/markdown.ts
 markdownFilename(name: string): string;
-downloadMarkdown(name: string, text: string): void;
+downloadMarkdown(name: string, text: string): void | Promise<void>;
 
 // src/ui/DocumentShortcuts.ts
 mountDocumentShortcuts(root: HTMLElement): () => void;
@@ -109,7 +110,7 @@ reloadForUpdate(): boolean;
 
 ## Invariants and tripwires
 
-Capture export input before queueing, not when a queued render eventually starts. Keep the host leased until capture/print settles; do not teardown it on an intervening close. New failed preparation invalidates export eligibility even if old pages stay visible. Stable input matching avoids unnecessary repagination when the requested document is already current.
+Capture export input before queueing, not when a queued render eventually starts. Keep the host leased until capture/print and any native save settle; do not teardown it on an intervening close. New failed preparation invalidates export eligibility even if old pages stay visible. Each scheduled render builds a fresh source fragment; export reuses a matching completed paginated render under the lease.
 
 Offline raster capture selects its controlled `srcdoc` destination before staging only when the source reports offline and has a service-worker controller. The temporary library frame omits exact source CSS links; the final document restores fresh links in the original cascade order and must observe successful CSS/font outcomes. Preserve source inline styles, trailing renderer-adopted styles and generated body pseudo styles. Controller/document mismatches, resource errors and owned wait deadlines save no PDF and remove both frames. Do not add fallback CSS after an arbitrary failed request or bypass the online CSS failure guards. This private adapter adds no App/global API, persistence, worker policy or print-routing change; see the offline capture design note for its direct-head CSS scope and exact-head evidence.
 
@@ -127,7 +128,7 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 
 Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow verifies supported Node 24 with strict engine checks and runs production Chromium on Node 24. The existing Node 22 required-check context remains a legacy compatibility probe until branch protection is updated. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
-No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. Keep AI-6 second-engine/manual-feel and AI-7 live/PWA operator work open. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's contradictory historical deployment receipts still need reconciliation. Record remaining gates and actual commit/run identifiers in handoffs.
+Required tests must pass; report existing opt-in performance-ladder skips separately. No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain OPEN. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's historical deployment-evidence inconsistency is closed, while AI-7's separate live/PWA acceptance remains open. Preserve historical receipts and record actual commit/run identifiers in handoffs.
 
 ## Latest-close recovery seam
 

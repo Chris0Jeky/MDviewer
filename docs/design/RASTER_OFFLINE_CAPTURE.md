@@ -5,6 +5,39 @@ Contract: [implementation spec §§5, 6 and 10](IMPLEMENTATION_SPEC.md).
 Related qualification: [#174](https://github.com/Chris0Jeky/MDviewer/issues/174),
 [#178](https://github.com/Chris0Jeky/MDviewer/pull/178).
 
+## Completed qualification — 2026-11-05
+
+The capture correction merged in #178 as `85f7361e`, closing #174. Its integrated
+head `a9664f9b5041ffa7e7c04fa3913dbc6959334df7` passed all five jobs in
+[CI 42045009842](https://github.com/Chris0Jeky/MDviewer/actions/runs/42045009842) and
+[Windows Desktop 42045009809](https://github.com/Chris0Jeky/MDviewer/actions/runs/42045009809):
+818 unit tests, 127 web cases with five existing optional performance skips,
+27 desktop-reader cases, and the native build/smoke gate. The
+[browser evidence](https://github.com/Chris0Jeky/MDviewer/actions/runs/42045009842/artifacts/13423519305)
+retains the original online/offline saved-PDF pixels, damaged controls, and both
+CSS/font recovery JSON files and PDFs. All 11 RGB probes and six ink measurements
+matched between healthy online and offline captures. Each missing-resource control
+refused two saves, removed its frames, then saved a one-page PDF after restoring
+the original cached response.
+
+The [integration source artifact](https://github.com/Chris0Jeky/MDviewer/actions/runs/42045009809/artifacts/13422969042)
+recorded GitHub's synthetic PR merge commit `b18b8ab03266939ba42b8472c87f6906d69ba8d6`.
+Its tree `62fb5c93cbcffd1df86dc92ab0070ac7234a9cf8` matched the reviewed candidate,
+and all 323 archived blobs matched the authoritative tree.
+
+After the authoring and Shiki updates, final main
+`203c09798b01061ceb0c00f0937c22beeafb1a55` passed all five push jobs in
+[CI 42053738540](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540) and
+[Windows Desktop 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244):
+832 unit tests in each Node job, 130 web cases with the same five optional skips,
+27 desktop-reader cases, and 22 Rust tests plus actual native smoke. Its
+[source artifact](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13427938732)
+names that literal main commit and tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`;
+all 330 archived blobs were verified. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169)
+records the corresponding binary, source and native saved-file checksums and the
+remaining human acceptance. These checkpoints qualify the tested Chromium capture
+contract; they do not close second-engine, live/PWA or Windows manual gates.
+
 ## Failure established in Chromium
 
 The source page and html2canvas's capture iframe are different service-worker
@@ -106,17 +139,19 @@ listeners and timers are disposed; unrelated frames remain. A failure saves no
 PDF and leaves the existing error feedback/retry behavior available. The frame,
 CSS and font waits are bounded individually; the library's preceding image/font
 waits and the complete multi-page export still have no new overall timeout.
+[#201](https://github.com/Chris0Jeky/MDviewer/issues/201) tracks bounded cancellation
+and cleanup while preserving render ownership and the existing no-save controls.
 
-## Evidence and acceptance
+## Historical diagnosis and required acceptance
 
 The workflows use the default pull-request merge ref. Runs below are associated
 with the listed PR head, while their runtime tree is the synthetic integration
 with main available to that run. In particular, the run associated with
 `268bcb8f` includes main `4976` and its New/Find features. Test counts include the
 main-branch tests present in each merge ref. These runs do not establish runtime
-behavior of an isolated historical branch tree. Final qualification requires an
-explicit merge of current main into the branch, fresh CI, and verification of
-the source archive COMMIT/TREE against that integrated tree.
+behavior of an isolated historical branch tree. They preceded the completed
+`a9664f9b` integration above, which explicitly merged current main, passed fresh CI,
+and verified the source archive COMMIT/TREE against the integrated candidate tree.
 
 | PR head / run | Evidence | Limit |
 | --- | --- | --- |
@@ -135,9 +170,9 @@ correction. [Native artifact 13421195361](https://github.com/Chris0Jeky/MDviewer
 has SHA256 `55ed02f0e4f7200e85d95473409909d71f7594bc1ffbcf99031bbe0ca77e0727`.
 The correction has since merged in [#192](https://github.com/Chris0Jeky/MDviewer/pull/192)
 as `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`, after all five jobs passed and the
-source TREE and actual two-dialog native save metrics were verified. This integration
-includes that correction and must pass fresh native and browser
-checks before qualification; the passing raster assertions do not close this gate.
+source TREE and actual two-dialog native save metrics were verified. The completed
+`a9664f9b` capture integration includes that correction and passed fresh native and
+browser checks. The earlier `268bcb8f` native failure remains part of the record.
 
 Required browser acceptance remains the actual offline downloaded-PDF RGB/ink
 test and its deliberately damaged second download in `raster-visual.spec.ts`.
@@ -166,7 +201,7 @@ source's loaded face. Restoring the original response must yield a worker-served
 font and an actual one-page PDF. Both cache-loss controls keep their normal test
 deadlines and write bounded resource/source metadata to artifact JSON files.
 
-Exact-head CI and independent review still apply after main reconciliation or
-further commits. This note does not close second-engine, live/PWA operator,
+Exact-head CI and independent review still apply to further commits. This note
+does not close second-engine, live/PWA operator,
 Windows manual, performance or AI-6–AI-9 gates, and does not constitute deployment
 evidence.

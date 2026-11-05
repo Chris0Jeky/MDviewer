@@ -15,17 +15,25 @@ editor nor Paged.js, does not create printable pages, and does not register a se
 worker or load Pulseboard. Markdown, code, math, diagrams and sanitization reuse the
 existing render modules. Footnotes remain endnotes, and heading links work directly.
 
-Open, drag/drop, document switching, text size, screen themes and a heading outline
-are available in the reader. The Edit & PDF action imports the existing App lazily
-and transfers documents in memory. Returning to reading flushes pending edits,
-clears the pagination host and destroys the workspace. Unsaved work requires an
-explicit discard confirmation when closing. Documents never persist automatically.
+New, Open, drag/drop, document switching, text size, screen themes and a heading
+outline are available in the reader. New and Edit & PDF import the existing App
+lazily and transfer documents in memory. New creates a blank source with the first
+available Untitled name and an empty clean baseline, preserving the existing session
+and its admission limits. An untouched blank source closes without a discard prompt.
+Returning to reading flushes pending edits, clears the pagination host and destroys
+the workspace. Edited work requires an explicit discard confirmation when closing.
+Save Markdown writes a copy and does not reset the original-source dirty baseline.
+Documents never persist automatically.
 The old reader source list is released once the workspace safely owns its documents
 and dirty baselines. Closed-document baselines are pruned; successful return clears
 them. Failed return validation keeps the workspace intact, and a failed teardown
 flush restores its original document identities, edits and selection for retry.
-Workspace input is paused during return so a late edit or Save shortcut cannot race
-that ownership transfer; a failed return restores interaction as well as source.
+The workspace stays inert through initial rendering during entry, then releases
+readiness and finishes queued imports before focusing the source. It also stays
+inert during return so a late edit or Save shortcut cannot race that ownership
+transfer. Entry/return failure releases the guard and preserves the appropriate
+source owner for recovery; a failed return restores interaction as well as source.
+New and Reading view use the same transition, export and native-save busy guards.
 
 Native file reads come only from the OS launch arguments or a native picker. The
 renderer cannot request arbitrary paths. The host validates extensions, encodings,
@@ -58,7 +66,10 @@ Chromium tests cover rendered Markdown, absence of initial pagination/editor/net
 requests, switching documents, the lazy workspace round trip and PDF exports under
 the production CSP. Windows Actions compiles/tests the locked native host, builds
 an unsigned per-user NSIS installer and portable executable, and records a native
-launch smoke. Existing web CI and no-slice checks remain required.
+launch/save smoke. The smoke verifies the two actual Save dialogs, exact saved
+Markdown bytes, and the saved PDF header/EOF. Existing web CI and no-slice checks
+remain required. Completed authoring and combined-main qualification are recorded
+in the [authoring checkpoint](2026-11-05-authoring-checkpoint.md).
 
 No RAM or startup target is claimed from executable size. Native measurements must
 include the host plus the complete associated WebView2 process tree, with empty,
@@ -72,3 +83,8 @@ File associations, both native export dialogs and startup/memory on Chris's Wind
 machine require acceptance. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
 tracks the installation, accessibility, printing, performance and distribution evidence.
 Existing AI-6/7/8/9 remain open and separate.
+
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+track further improvements. Native file saving in #196 and optional recovery in #197
+are design-first proposals; they do not change the current copy-saving or memory-only
+document contracts.

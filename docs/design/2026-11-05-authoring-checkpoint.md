@@ -1,12 +1,15 @@
 # Desktop authoring checkpoint and tracking reconciliation
 
-Snapshot: **2026-11-05**. Last merged authoring baseline verified for this record:
+Record date: **2026-11-05**. The original authoring baseline for the historical
+feature evidence below is
 [`280c73e26487b16d7de607c269b2839636b0b969`](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969),
 tree `89d93bf31fbdff3db87725cd6726d57199a09b56`. The primary GitHub connector verified
 the five existing documentation baselines, merged #178/#191, closed #174/#189,
-and the successful exact-head workflows below. Dependency qualification is linked
-separately to #193; this record does not predict its merge or a future main SHA.
-Evidence here makes no live-site deployment or human-acceptance claim.
+and the successful exact-head workflows below. Subsequent qualification of merged
+#193/#194 on main `203c0979` is recorded in
+[Combined-main verification](#combined-main-verification). Earlier source identities
+and test counts are retained. This record makes no live-site deployment or
+human-acceptance claim.
 
 Main `85f7361e` postmerge [CI 42046588461](https://github.com/Chris0Jeky/MDviewer/actions/runs/42046588461)
 and [Windows 42046589174](https://github.com/Chris0Jeky/MDviewer/actions/runs/42046589174)
@@ -132,14 +135,51 @@ Its initial head `0edbde4f` passed
 [Windows 42046835262](https://github.com/Chris0Jeky/MDviewer/actions/runs/42046835262),
 while [CI 42046835215](https://github.com/Chris0Jeky/MDviewer/actions/runs/42046835215)
 found Node unit failures traced to jsdom's missing `Blob.stream()`. A normal
-installation on supported Node worked. The test-environment correction, independent
-review, exact-head checks and final head/merge receipts are maintained in #193.
-This checkpoint does not infer those results from a different dependency tree.
+installation on supported Node worked. The corrected head
+`49297f08f0690b7f968fdec2e59bbb806a6d7ea4` passed review and qualification, then merged
+in #193 as `5fbb219c720b949131e12fe801d2137f2629f273`. Its PR retains the original
+failure and correction evidence. The subsequent #194 documentation merge produced
+the combined main verified below; those results were read from that main's own runs.
 
 **#169 and AI-6/7/8/9 remain open.** No deployment, signed release, automatic updater
 or comparative RAM/startup claim follows from these merges. Extra paper formats and
 custom themes remain deferred; source persistence and cloud/account features are
 outside these authoring slices.
+
+## Combined-main verification
+
+After [#193](https://github.com/Chris0Jeky/MDviewer/pull/193) and
+[#194](https://github.com/Chris0Jeky/MDviewer/pull/194), main
+[`203c09798b01061ceb0c00f0937c22beeafb1a55`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55)
+(tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`) passed all five push jobs in
+[CI 42053738540](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540) and
+[Windows 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244).
+The actual job logs record:
+
+| Check | Result |
+| --- | --- |
+| Node 22 legacy probe and Node 24 | 832 unit tests across 71 files passed on each; typecheck, lint and builds passed |
+| Production web Chromium | 130 passed; five existing optional performance tests skipped |
+| Production desktop Chromium | 27 passed |
+| Windows native build and smoke | 22 Rust tests passed; real-app launch and save smoke passed |
+
+The [source artifact](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13427938732)
+contains the literal final-main COMMIT/TREE and all 330 matching Git blobs, with no
+missing, mismatched or extra files. The
+[distributed executable](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13429490041)
+identifies that same source commit, and its hash matches the binary exercised by
+the native smoke. Inspection of the
+[smoke artifact](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244/artifacts/13427024597)
+verified two actual Save dialogs, exact expected UTF-8 Markdown bytes, the saved PDF
+header/EOF, and no cleanup errors. These are automated qualification receipts;
+AI-6/AI-7/AI-8/AI-9 and ordinary Windows acceptance/performance #169 remain open.
+
+[Future work](../FUTURE_WORK.md) and [tracker #195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+record the remaining work. Native file saving in #196 and optional recovery in #197
+are design-first proposals. They do not change the current Save Copy behavior or
+introduce automatic document storage. Formatting, navigation, progress visibility,
+cancellation and performance follow-ups are tracked there separately from completed
+features and human acceptance.
 
 ## Tracking reconciliation and audit limits
 
