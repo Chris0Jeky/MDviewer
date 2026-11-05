@@ -254,8 +254,8 @@
 }
 
 /* The shared box metrics. Both layers get exactly these values. */
-#editor-highlight,
-#editor-input {
+#workspace > #editor-pane > .editor-scroll > #editor-highlight,
+#workspace > #editor-pane > .editor-scroll > #editor-input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -282,7 +282,7 @@
 
 /* The painted backdrop. Never interactive; scrolled programmatically from the
    textarea's scroll event so the two layers cannot drift apart. */
-#editor-highlight {
+#workspace > #editor-pane > .editor-scroll > #editor-highlight {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
@@ -312,7 +312,7 @@
 
 /* The real input. Glyphs are transparent so the backdrop shows through; the
    caret and the selection band stay visible. */
-#editor-input {
+#workspace > #editor-pane > .editor-scroll > #editor-input {
   z-index: 1;
   overflow: auto;
   resize: none;
@@ -322,17 +322,17 @@
   -webkit-text-fill-color: transparent;
 }
 
-#editor-input::selection {
+#workspace > #editor-pane > .editor-scroll > #editor-input::selection {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
-#editor-input::placeholder {
+#workspace > #editor-pane > .editor-scroll > #editor-input::placeholder {
   color: var(--fg-faint);
   -webkit-text-fill-color: var(--fg-faint);
   opacity: 1;
 }
 
-#editor-input:focus-visible {
+#workspace > #editor-pane > .editor-scroll > #editor-input:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -341,13 +341,41 @@
    Editor.HIGHLIGHT_MAX_CHARS, or a tokenizer failure): hide the empty backdrop
    and let the textarea paint its own plain text. The metrics are unchanged, so
    the switch is invisible apart from the colors. */
-#editor-pane[data-highlight="off"] #editor-highlight {
+#workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-highlight {
   visibility: hidden;
 }
 
-#editor-pane[data-highlight="off"] #editor-input {
+#workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
   color: var(--fg);
   -webkit-text-fill-color: var(--fg);
+}
+
+/* Forced-color engines discard translucent fills and shadows. Use native
+   system text and a real outline so source, caret and Find remain perceivable
+   independently of the decorative syntax layer. This is screen chrome only. */
+@media screen and (forced-colors: active) {
+  #workspace > #editor-pane > .editor-scroll > #editor-highlight { visibility: hidden; }
+
+  #workspace > #editor-pane > .editor-scroll > #editor-input,
+  #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+    caret-color: CanvasText;
+    background: Canvas;
+  }
+
+  #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
+    color: HighlightText;
+    -webkit-text-fill-color: HighlightText;
+    background: Highlight;
+  }
+
+  .editor-match-rect {
+    background: transparent;
+    box-shadow: none;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 /* Dark chrome: swap each token's inline light color for its --shiki-dark
@@ -365,7 +393,7 @@
    inline style (Shiki's `defaultColor: "light"`), and an inline declaration beats
    any selector without it. Without this the pane would paint light-theme token
    colors onto a dark surface. */
-:root[data-app-theme="dark"] #editor-highlight span {
+:root[data-app-theme="dark"] #workspace > #editor-pane > .editor-scroll > #editor-highlight span {
   color: var(--shiki-dark, inherit) !important;
 }
 
@@ -415,7 +443,7 @@ body.is-splitting {
   user-select: none;
 }
 
-body.is-splitting #editor-input {
+body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
   pointer-events: none;
 }
 

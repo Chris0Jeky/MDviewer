@@ -94,6 +94,9 @@ restores your Split layout.
 The current match stays visibly marked in the source while the Find field keeps
 keyboard focus, so you can follow repeated results without leaving the query.
 The marker does not change your Markdown and is excluded from print and PDF output.
+In forced-colors mode, the source uses system text colors and the match uses a
+visible outline. Syntax colors are suppressed in that mode so the native text
+surface follows the selected contrast theme.
 See the [authoring checkpoint](design/2026-11-05-authoring-checkpoint.md) for verified
 coverage and the remaining human Windows checks.
 
@@ -161,6 +164,15 @@ Those file checks are separate from the production browser's saved-PDF visual te
 Browser tests cover the reading path, absent initial editor/pagination, hostile
 Markdown, file limits, repeated edit/read transitions, and both PDF paths under the
 production CSP.
+
+`npm run test:authoring` checks a bounded set of the production web and desktop
+authoring flows in Firefox after both frontend builds. It covers native undo,
+Find/Replace, keyboard New/Open/Save, layout/focus, source scrolling, short-window
+reflow and accessibility states. The CI `firefox-authoring-evidence` artifact
+records screenshots, failure traces and actual browser versions. This is separate
+from native WebView2, real Narrator, operating-system IME and Windows contrast-theme
+acceptance. Those human checks remain in #169 and AI-6. See
+[the coverage and limits](design/AUTHORING_QUALITY.md).
 
 Memory figures from a hosted runner are diagnostic observations. A useful comparison
 on your PC should include cold start, an ordinary file, a large code/diagram file,

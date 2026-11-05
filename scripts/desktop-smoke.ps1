@@ -34,13 +34,15 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 if ($Probe) {
-    $result = [ordered]@{ found = $false; reason = $null; screenshot = $null }
+    $result = [ordered]@{ found = $false; reason = $null; screenshot = $null; runtimeReady = $false }
+    $runtimeReadyElapsedMs = $null
     $probeClock = [System.Diagnostics.Stopwatch]::StartNew()
     $phases = [System.Collections.Generic.List[object]]::new()
     function Write-ProbePhase([string]$Phase) {
         $phases.Add([pscustomobject]@{ phase = $Phase; elapsedMs = [Math]::Round($probeClock.Elapsed.TotalMilliseconds, 2) })
         $progress = [ordered]@{
             action = $ProbeAction; lastPhase = $Phase; phases = $phases.ToArray()
+            runtimeReady = $result.runtimeReady; runtimeReadyElapsedMs = $runtimeReadyElapsedMs
             powershellVersion = $PSVersionTable.PSVersion.ToString()
             apartment = [System.Threading.Thread]::CurrentThread.GetApartmentState().ToString()
             sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
@@ -98,6 +100,26 @@ if ($Probe) {
         }
         return [pscustomobject]$metadata
     }
+    function Initialize-ScreenshotRuntime {
+        Write-ProbePhase 'loading-screenshot-drawing'
+        Add-Type -AssemblyName System.Drawing
+        Write-ProbePhase 'loading-screenshot-forms'
+        Add-Type -AssemblyName System.Windows.Forms
+        Write-ProbePhase 'compiling-screenshot-helper'
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class SmokeWindow {
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT bounds);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+}
+'@
+    }
     try {
         Write-ProbePhase 'worker-started'
         if ($ProbeAction -ne 'screenshot') {
@@ -105,6 +127,16 @@ if ($Probe) {
             Add-Type -AssemblyName UIAutomationClient
             Write-ProbePhase 'loading-uia-types'
             Add-Type -AssemblyName UIAutomationTypes
+        }
+        if ($ProbeAction -eq 'save-dialog') {
+            Write-ProbePhase 'compiling-native-save-helper'
+            Add-Type -Path (Join-Path $PSScriptRoot 'desktop-save-button.cs')
+        }
+        if ($ScreenshotPath) { Initialize-ScreenshotRuntime }
+        $result.runtimeReady = $true
+        $runtimeReadyElapsedMs = [Math]::Round($probeClock.Elapsed.TotalMilliseconds, 2)
+        Write-ProbePhase 'runtime-ready'
+        if ($ProbeAction -ne 'screenshot') {
             Write-ProbePhase 'getting-window-element'
             $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$WindowHandle)
             Write-ProbePhase 'window-element-ready'
@@ -148,7 +180,6 @@ if ($Probe) {
                 # on a second Save. The native bridge addresses only the unique
                 # owned Edit/1001 under ComboBox/FloatNotifySink, then direct Button/1.
                 Write-ProbePhase 'validating-native-save-controls'
-                Add-Type -Path (Join-Path $PSScriptRoot 'desktop-save-button.cs')
                 $dialogHandle = [IntPtr]$dialog.Current.NativeWindowHandle
                 $saveHandle = [SmokeSaveButton]::Validate($dialogHandle, [uint32]$OwnerProcessId)
                 Write-ProbePhase 'setting-and-notifying-native-filename'
@@ -186,24 +217,6 @@ if ($Probe) {
         }
         if (($result.found -or $ProbeAction -eq 'screenshot') -and $ScreenshotPath) {
             try {
-                Write-ProbePhase 'loading-screenshot-drawing'
-                Add-Type -AssemblyName System.Drawing
-                Write-ProbePhase 'loading-screenshot-forms'
-                Add-Type -AssemblyName System.Windows.Forms
-                Write-ProbePhase 'compiling-screenshot-helper'
-                Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class SmokeWindow {
-    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
-    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT bounds);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-}
-'@
                 Write-ProbePhase 'capturing-owned-window'
                 [uint32]$windowOwner = 0
                 [void][SmokeWindow]::GetWindowThreadProcessId([IntPtr]$WindowHandle, [ref]$windowOwner)
@@ -249,6 +262,9 @@ public static class SmokeWindow {
 if ($PSVersionTable.PSVersion.Major -lt 7 -or -not $IsWindows) {
     throw 'Run this harness using PowerShell 7 on Windows.'
 }
+# The same pure deadline policy tests run on every existing native CI smoke path.
+& (Join-Path $PSScriptRoot 'test-desktop-probe-wait.ps1')
+. (Join-Path $PSScriptRoot 'lib/desktop-probe-wait.ps1')
 if (-not $Executable) { throw 'Pass -Executable with the built mdviewer.exe path.' }
 # Windows PowerShell 5.1 can bind parameter defaults before PSScriptRoot is
 # initialized. Only the parent harness needs this path; probe workers return above.
@@ -260,6 +276,7 @@ $out = [System.IO.Path]::GetFullPath($OutputDirectory)
 $workerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
 $owned = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 $workerOutput = @{}
+$workerClocks = @{}
 $observed = @{}
 $app = $null
 $fixtureDirectory = $null
@@ -278,6 +295,7 @@ $metrics = [ordered]@{
     secondLaunch = $null
     samples = @()
     probes = @()
+    probeBudgets = @{ bootstrapMs = 30000; workerOperationMs = 8000; operationSeconds = $TimeoutSeconds; overallSeconds = $OverallTimeoutSeconds }
     notes = @(
         'Startup timings are upper bounds observed by polling and UI Automation, not cache-controlled benchmarks.',
         'Samples include the app and its observed descendants; UI Automation worker processes are excluded.',
@@ -300,6 +318,7 @@ function Start-OwnedProcess([string]$File, [string[]]$Arguments, [string]$Workin
     $process = [System.Diagnostics.Process]::Start($info)
     $owned.Add($process)
     if ($CaptureOutput) {
+        $workerClocks[$process.Id] = [System.Diagnostics.Stopwatch]::StartNew()
         # Drain both pipes concurrently so a parser/parameter error cannot block
         # on a full output pipe. Only the bounded diagnostic excerpts are saved.
         $workerOutput[$process.Id] = @{
@@ -395,13 +414,63 @@ function Get-MemorySample([string]$Stage) {
     }
 }
 
-function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnostics.Process]$Worker) {
+function Read-ProbeProgress([string]$ProbeFile) {
+    # Phase publication replaces a file, so one poll may see the brief rename
+    # gap. Retain the caller's last valid phase/readiness rather than resetting.
+    try {
+        if ([System.IO.File]::Exists($ProbeFile + '.progress.json')) {
+            return Get-Content -Raw -LiteralPath ($ProbeFile + '.progress.json') | ConvertFrom-Json
+        }
+    } catch { }
+    return $null
+}
+
+function Wait-ProbeWorker([System.Diagnostics.Process]$Worker, [string]$ProbeFile,
+    [System.Diagnostics.Stopwatch]$OperationClock, [switch]$ReturnOnResult) {
+    $clock = $workerClocks[$Worker.Id]
+    $runtimeReadyAtMs = -1
+    $lastProgress = $null
+    while ($true) {
+        $progress = Read-ProbeProgress $ProbeFile
+        if ($null -ne $progress) {
+            $lastProgress = $progress
+            if ($runtimeReadyAtMs -lt 0 -and $progress.runtimeReady) {
+                $runtimeReadyAtMs = $clock.Elapsed.TotalMilliseconds
+            }
+        }
+        $Worker.Refresh()
+        $elapsed = $clock.Elapsed.TotalMilliseconds
+        $operationRemaining = $TimeoutSeconds * 1000 - $OperationClock.Elapsed.TotalMilliseconds
+        $overallRemaining = $OverallTimeoutSeconds * 1000 - $runClock.Elapsed.TotalMilliseconds
+        $decision = Get-SmokeProbeWaitDecision -ElapsedMs $elapsed -RuntimeReadyAtMs $runtimeReadyAtMs `
+            -OperationRemainingMs $operationRemaining -OverallRemainingMs $overallRemaining `
+            -HasExited $Worker.HasExited -HasResult ([System.IO.File]::Exists($ProbeFile)) -ReturnOnResult $ReturnOnResult.IsPresent
+        if ($decision -ne 'wait') {
+            return [pscustomobject]@{
+                decision = $decision; elapsedMs = [Math]::Round($elapsed, 2)
+                runtimeReadyObservedAtMs = $(if ($runtimeReadyAtMs -ge 0) { [Math]::Round($runtimeReadyAtMs, 2) } else { $null })
+                operationRemainingMs = [Math]::Round($operationRemaining, 2)
+                overallRemainingMs = [Math]::Round($overallRemaining, 2)
+                progress = $lastProgress
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+}
+
+function Stop-ProbeWorker([System.Diagnostics.Process]$Worker) {
+    if (-not $Worker.HasExited) { $Worker.Kill($true); [void]$Worker.WaitForExit(2000) }
+}
+
+function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnostics.Process]$Worker, $Wait) {
     $progressPath = $ProbeFile + '.progress.json'
     $evidence = [ordered]@{
         timedOut = $TimedOut; lastPhase = 'worker-not-started'; progress = $null
         file = [System.IO.Path]::GetFileName($progressPath)
         exitCode = $null; stdout = $null; stderr = $null; result = $null
+        workerPid = $Worker.Id; wait = $Wait; workerCpuMs = $null
     }
+    try { $evidence.workerCpuMs = [Math]::Round($Worker.TotalProcessorTime.TotalMilliseconds, 2) } catch { }
     if ($Worker.HasExited) {
         $evidence.exitCode = $Worker.ExitCode
         $streams = $workerOutput[$Worker.Id]
@@ -423,12 +492,11 @@ function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnost
             }
         }
     }
-    if ([System.IO.File]::Exists($progressPath)) {
-        try {
-            $progress = Get-Content -Raw -LiteralPath $progressPath | ConvertFrom-Json
-            $evidence.lastPhase = $progress.lastPhase
-            $evidence.progress = $progress
-        } catch { $evidence.lastPhase = 'progress-read-unavailable' }
+    $progress = Read-ProbeProgress $ProbeFile
+    if ($null -eq $progress -and $null -ne $Wait) { $progress = $Wait.progress }
+    if ($null -ne $progress) {
+        $evidence.lastPhase = $progress.lastPhase
+        $evidence.progress = $progress
     }
     if ([System.IO.File]::Exists($ProbeFile)) {
         try { $evidence.result = Get-Content -Raw -LiteralPath $ProbeFile | ConvertFrom-Json } catch { }
@@ -438,22 +506,33 @@ function Get-ProbeEvidence([string]$ProbeFile, [bool]$TimedOut, [System.Diagnost
 
 function Capture-FailedWindow {
     if ($NoScreenshot -or $null -eq $app) { return }
+    if ($runClock.Elapsed.TotalSeconds -ge $OverallTimeoutSeconds) {
+        $metrics.failureScreenshot = @{ saved = $false; reason = 'No overall smoke budget remains for an owned-window diagnostic.' }
+        return
+    }
     $app.Refresh()
     if ($app.HasExited -or $app.MainWindowHandle -eq [IntPtr]::Zero) { return }
     # Independent of UIA: an accessibility-provider hang must not hide the
     # visible app state. This worker still verifies the window's owning PID.
-    $probeFile = Join-Path $out 'failure-window-probe.json'
+    # A unique protocol file prevents a previous run's ready/result publication
+    # from spending this worker's bootstrap allowance or masquerading as output.
+    $probeFile = Join-Path $out ('failure-window-probe-' + [Guid]::NewGuid().ToString('N') + '.json')
     $arguments = @('-NoProfile', '-NonInteractive', '-MTA', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath,
         '-Probe', '-ProbeAction', 'screenshot', '-WindowHandle', $app.MainWindowHandle.ToInt64().ToString(),
         '-OwnerProcessId', $app.Id.ToString(), '-ProbeOutput', $probeFile,
         '-ScreenshotPath', (Join-Path $out 'failure-window.png'))
+    $watch = [System.Diagnostics.Stopwatch]::StartNew()
     $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
-    $timedOut = -not $worker.WaitForExit(8000)
-    if ($timedOut) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
-    $metrics.probes += Get-ProbeEvidence $probeFile $timedOut $worker
+    $wait = Wait-ProbeWorker $worker $probeFile $watch
+    $timedOut = $wait.decision.EndsWith('-timeout')
+    if ($timedOut) { Stop-ProbeWorker $worker }
+    $evidence = Get-ProbeEvidence $probeFile $timedOut $worker $wait
+    $metrics.probes += $evidence
     if ([System.IO.File]::Exists($probeFile)) {
         $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
         $metrics.failureScreenshot = $result.screenshot
+    } else {
+        $metrics.failureScreenshot = @{ saved = $false; reason = "Diagnostic worker $($wait.decision) at phase: $($evidence.lastPhase)" }
     }
 }
 
@@ -471,18 +550,18 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
             '-ExpectedHeading', $Heading, '-ProbeOutput', $probeFile)
         if (-not $NoScreenshot) { $arguments += @('-ScreenshotPath', (Join-Path $out $ScreenshotName)) }
         $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
-        $remaining = [Math]::Max(1, [int](($TimeoutSeconds - $watch.Elapsed.TotalSeconds) * 1000))
-        $timedOut = -not $worker.WaitForExit([Math]::Min(8000, $remaining))
-        if ($timedOut) {
-            $worker.Kill($true)
-            [void]$worker.WaitForExit(2000)
-        }
-        $evidence = Get-ProbeEvidence $probeFile $timedOut $worker
+        $wait = Wait-ProbeWorker $worker $probeFile $watch
+        $timedOut = $wait.decision.EndsWith('-timeout')
+        if ($timedOut) { Stop-ProbeWorker $worker }
+        $evidence = Get-ProbeEvidence $probeFile $timedOut $worker $wait
         $metrics.probes += $evidence
         if ($timedOut) {
-            $lastReason = 'The UI Automation worker timed out at phase: ' + $evidence.lastPhase
+            # Repeatedly killing cold or hung workers proves no application
+            # state. Keep the first bounded failure and its phase diagnostics.
+            throw "Heading worker $($wait.decision) after $($wait.elapsedMs) ms at phase: $($evidence.lastPhase). No rendered-heading assertion passed."
         } elseif (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
+            if (-not $result.runtimeReady) { throw "Heading worker bootstrap failed: $($result.reason)" }
             if ($result.found) { return $result }
             $lastReason = $result.reason
         } else {
@@ -507,24 +586,23 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if ($Name) { $arguments += @('-ButtonName', $Name) }
         if ($Destination) { $arguments += @('-SavePath', $Destination) }
         $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
-        $attempt = [System.Diagnostics.Stopwatch]::StartNew()
-        while (-not (Test-Path -LiteralPath $probeFile) -and -not $worker.HasExited -and
-            $attempt.Elapsed.TotalSeconds -lt 8 -and $watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
-            Start-Sleep -Milliseconds 100
+        $wait = Wait-ProbeWorker $worker $probeFile $watch -ReturnOnResult
+        $timedOut = $wait.decision.EndsWith('-timeout')
+        if ($timedOut) { Stop-ProbeWorker $worker }
+        $evidence = Get-ProbeEvidence $probeFile $timedOut $worker $wait
+        $metrics.probes += $evidence
+        if ($timedOut) {
+            throw "Native UI '$Action' worker $($wait.decision) after $($wait.elapsedMs) ms at phase: $($evidence.lastPhase). No action retry was attempted."
         }
         if (Test-Path -LiteralPath $probeFile) {
             $result = Get-Content -Raw -LiteralPath $probeFile | ConvertFrom-Json
-            $metrics.probes += Get-ProbeEvidence $probeFile $false $worker
+            if (-not $result.runtimeReady) { throw "Native UI '$Action' worker bootstrap failed: $($result.reason)" }
             if ($result.found) { return }
             $lastReason = $result.reason
         } else {
-            $evidence = Get-ProbeEvidence $probeFile (-not $worker.HasExited) $worker
-            $metrics.probes += $evidence
-            if ($worker.HasExited) {
-                throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
-            }
+            throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
         }
-        if (-not $worker.HasExited) { $worker.Kill($true); [void]$worker.WaitForExit(2000) }
+        Stop-ProbeWorker $worker
         Start-Sleep -Milliseconds 200
     }
     throw "Native UI action '$Action' ('$Name') did not become available before the timeout. $lastReason"

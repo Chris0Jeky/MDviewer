@@ -69,11 +69,19 @@ export paths.
 
 ### P2 — Desktop authoring and UX — `IN PROGRESS`
 
-- **Implementation prepared (2026-11-05): export feedback #200.** A compact shell
+- **Implementation prepared (2026-11-05): authoring quality #203.** A bounded
+  production Firefox lane reuses actual editor/undo/search/shortcut and desktop
+  New/layout tests. New accessibility tests cover keyboard focus and state,
+  composition guards, short reflow and forced-colors Find. Forced colors now use
+  native system text and an outlined match cue. Exact-head CI/review is required
+  before merge; this automation does not clear AI-6 or Windows acceptance #169.
+  Coverage and local environment limits: `design/AUTHORING_QUALITY.md`.
+- **Done (2026-11-05): export feedback [#210](https://github.com/Chris0Jeky/MDviewer/pull/210).** A compact shell
   status row remains visible in Markdown, Split, Preview and short-window Find.
   It reports actual completed pages and native-save/browser-handoff outcomes with
   bounded polite announcements, specific failure detail and preserved focus/source.
-  Exact-head hosted checks/review remain required; see `design/EXPORT_STATUS.md`.
+  Exact-head Chromium, Node and native Windows checks and independent review passed;
+  see `design/EXPORT_STATUS.md`.
 
 - **Done (2026-11-05): desktop authoring entry and space.**
   [New document #183](https://github.com/Chris0Jeky/MDviewer/pull/183) adds New from

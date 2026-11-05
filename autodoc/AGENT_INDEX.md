@@ -60,7 +60,9 @@ Export click → capture document id/name/text and settings NOW
 | Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts`, `src/app/App.ts` | `tests/app-ingestion-notices.test.ts`, `tests/app-export-lifetime.test.ts`, `tests/e2e/{empty-error,raster-styles-ready}.spec.ts`; spec §7 pins independent notice/warning lifetimes and visible, recoverable fatal feedback |
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
 | Patched transitive dependencies and supported Node floor | `package.json`, `package-lock.json` | `tests/dependency-security.test.ts` checks the wrapper-resolved KaTeX trust boundary and encoded-host normalization; spec §2 |
+| Bounded native smoke worker startup | `scripts/desktop-smoke.ps1`, `scripts/lib/desktop-probe-wait.ps1` | `scripts/test-desktop-probe-wait.ps1` runs in the existing Windows smoke; bootstrap and UI-operation budgets remain capped by action/overall deadlines; `docs/design/NATIVE_SMOKE_BOOTSTRAP.md` |
 | Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 24 verification and production Chromium; retained Node 22 compatibility probe |
+| Second-engine authoring and accessibility | `playwright.authoring.config.ts`, `.github/workflows/ci.yml`, `src/styles/editor.css` | Production Firefox plus both `authoring-accessibility.spec.ts` suites; actual undo/focus, forced-colors Find outline, native source paint and short reflow; `docs/design/AUTHORING_QUALITY.md`; AI-6/#169 remain open |
 
 ## New or changed public seams
 

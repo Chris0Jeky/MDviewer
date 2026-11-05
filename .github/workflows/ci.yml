@@ -53,6 +53,36 @@ jobs:
       - name: Build
         run: npm run build
 
+  authoring:
+    name: Authoring (Firefox · production builds)
+    # Qualify the desktop authoring surface on Windows as well as in Chromium.
+    # Windows ships the OS dependencies; avoid an unrelated Linux apt mirror gate.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --engine-strict
+      - name: Install the locked Firefox engine
+        run: npx playwright install firefox
+      - run: npm run build
+      - run: npm run desktop:build:web
+      - name: Production authoring and accessibility regressions
+        run: npm run test:authoring
+      - name: Upload Firefox browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: firefox-authoring-evidence
+          path: test-results/authoring/
+          if-no-files-found: error
+          retention-days: 14
+
   e2e:
     name: E2E (Playwright · Chromium · production build)
     runs-on: ubuntu-latest

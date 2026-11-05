@@ -340,6 +340,12 @@ test.describe("split workspace: large-insert gate", () => {
       const data = new DataTransfer();
       data.setData("text/plain", t);
       const evt = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      // Firefox deliberately strips constructor-supplied clipboard data from an
+      // untrusted event. Supply only this test event's payload; the production
+      // paste listener, byte admission, confirmation and source remain real.
+      if (evt.clipboardData?.getData("text/plain") !== t) {
+        Object.defineProperty(evt, "clipboardData", { value: data });
+      }
       el.dispatchEvent(evt);
       return evt.defaultPrevented;
     }, text);
