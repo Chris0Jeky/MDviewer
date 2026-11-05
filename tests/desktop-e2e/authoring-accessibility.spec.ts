@@ -89,8 +89,9 @@ test("desktop Find and Format retain usable source space together at 560×420", 
   for (const button of await page.locator("#editor-formatting button").all()) {
     await button.scrollIntoViewIfNeeded();
     const bounds = (await button.boundingBox())!;
-    expect(bounds.width).toBeGreaterThanOrEqual(30);
-    expect(bounds.height).toBeGreaterThanOrEqual(30);
+    // Firefox can report a 30px target a few hundred-thousandths below 30.
+    expect(Number(bounds.width.toFixed(3))).toBeGreaterThanOrEqual(30);
+    expect(Number(bounds.height.toFixed(3))).toBeGreaterThanOrEqual(30);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(561);
   }

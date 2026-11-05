@@ -282,7 +282,8 @@ test.describe("Markdown writing commands", () => {
     expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(60);
     for (const button of await page.locator("#editor-formatting button").all()) {
       await button.scrollIntoViewIfNeeded();
-      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(30);
+      // Firefox can report a 30px target as 29.999984741210938 at fractional positions.
+      expect(Number((await button.boundingBox())!.height.toFixed(3))).toBeGreaterThanOrEqual(30);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(560);
     await page.screenshot({ path: test.info().outputPath("format-and-find-short.png") });
@@ -328,8 +329,9 @@ test.describe("Markdown writing commands", () => {
       await button.scrollIntoViewIfNeeded();
       const box = await button.boundingBox();
       expect(box).not.toBeNull();
-      expect(box!.width).toBeGreaterThanOrEqual(30);
-      expect(box!.height).toBeGreaterThanOrEqual(30);
+      // Ignore sub-millipixel bounding-box noise, retaining the 30px target requirement.
+      expect(Number(box!.width.toFixed(3))).toBeGreaterThanOrEqual(30);
+      expect(Number(box!.height.toFixed(3))).toBeGreaterThanOrEqual(30);
       expect(box!.x).toBeGreaterThanOrEqual(pane!.x);
       expect(box!.x + box!.width).toBeLessThanOrEqual(pane!.x + pane!.width + 1);
     }
