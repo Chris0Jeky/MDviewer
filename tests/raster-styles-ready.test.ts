@@ -1,85 +1,121 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 
-const capture = vi.hoisted(() => vi.fn(async (_page: HTMLElement, _options: unknown) => ({
-  toDataURL: () => "data:image/png;base64,AAAA",
-})));
+type CloneOptions = { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
+const { capture, addImage, save } = vi.hoisted(() => ({
+  capture: vi.fn<(page: HTMLElement, options: CloneOptions) => Promise<{ toDataURL(): string }>>(),
+  addImage: vi.fn(),
+  save: vi.fn(),
+}));
 vi.mock("html2canvas-pro", () => ({ default: capture }));
-vi.mock("jspdf", () => ({ jsPDF: class { addImage() {} addPage() {} save() {} } }));
+vi.mock("jspdf", () => ({ jsPDF: class { addImage = addImage; addPage() {} save = save; } }));
 import { exportPaginatedToPdf } from "../src/export/download";
 
-beforeEach(() => { capture.mockClear(); });
+beforeEach(() => { capture.mockReset(); addImage.mockClear(); save.mockClear(); });
 afterEach(() => { document.body.replaceChildren(); vi.useRealTimers(); });
 
-async function pendingClone() {
+function sourcePages() {
   const host = document.createElement("div");
-  host.innerHTML = '<div class="pagedjs_page"></div>';
+  host.innerHTML = '<div class="pagedjs_page">The source survives a failed capture.</div>';
   document.body.append(host);
-  await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
-  const { onclone } = capture.mock.calls[0]![1] as { onclone(doc: Document, sheet: HTMLElement): Promise<void> };
-  const copy = document.implementation.createHTMLDocument("capture");
-  Object.defineProperty(copy, "defaultView", { value: window, configurable: true });
-  copy.head.innerHTML = '<link rel="stylesheet" href="/assets/document.css">';
-  copy.body.innerHTML = '<div class="pagedjs_page" style="visibility:hidden"></div>';
-  return { onclone, copy, link: copy.querySelector<HTMLLinkElement>("link")!, sheet: copy.querySelector<HTMLElement>(".pagedjs_page")! };
+  return host;
 }
 
-it("waits for cloned CSS and the fonts it introduces before allowing capture", async () => {
-  const { onclone, copy, link, sheet } = await pendingClone();
+function mountedClone(stylesLoaded = true) {
+  const frame = document.createElement("iframe");
+  frame.className = "html2canvas-container";
+  document.body.append(frame);
+  // Keep the owning iframe relationship without issuing real CSS requests.
+  const copy = document.implementation.createHTMLDocument("capture");
+  Object.defineProperty(copy, "defaultView", { value: frame.contentWindow });
+  copy.head.innerHTML = '<link rel="stylesheet" href="/assets/document.css">';
+  copy.body.innerHTML = '<div class="pagedjs_page" style="visibility:hidden"></div>';
+  const link = copy.querySelector<HTMLLinkElement>("link")!;
+  const sheet = copy.querySelector<HTMLElement>(".pagedjs_page")!;
+  if (stylesLoaded) Object.defineProperty(link, "sheet", { value: {} });
+  capture.mockImplementationOnce(async (_page, { onclone }) => {
+    // html2canvas-pro 2.6 invokes this only after its stylesheet wait settles,
+    // including on error or timeout. The hook must validate that outcome.
+    await onclone(copy, sheet);
+    frame.remove();
+    return { toDataURL: () => "data:image/png;base64,AAAA" };
+  });
+  return { copy, link, sheet, frame };
+}
+
+it("waits for fonts used after revealing the styled clone before saving", async () => {
+  const host = sourcePages();
+  const { copy, sheet } = mountedClone();
   let releaseFonts!: () => void;
   Object.defineProperty(copy, "fonts", { value: { ready: new Promise<void>(resolve => { releaseFonts = resolve; }) } });
-  let complete = false;
-  const pending = onclone(copy, sheet).then(() => { complete = true; });
+  const pending = exportPaginatedToPdf(host, DEFAULT_SETTINGS);
   await Promise.resolve();
-  expect(complete).toBe(false);
-  expect(sheet.style.visibility).toBe("hidden");
-  Object.defineProperty(link, "sheet", { value: {} });
-  link.dispatchEvent(new Event("load"));
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(complete).toBe(false);
+  expect(sheet.style.visibility).toBe("visible");
+  expect(addImage).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
   releaseFonts();
   await pending;
-  expect(complete).toBe(true);
-  expect(sheet.style.visibility).toBe("visible");
+  expect(addImage).toHaveBeenCalledOnce();
+  expect(save).toHaveBeenCalledWith("document.pdf");
 });
 
-it.each(["error", "timeout"])("rejects a cloned stylesheet %s and releases the failed capture", async mode => {
+it.each(["error", "timeout"])("rejects a stylesheet %s that settled before onclone, cleans up and permits a retry", async mode => {
   vi.useFakeTimers();
-  const { onclone, copy, link, sheet } = await pendingClone();
-  const second = copy.createElement("link");
-  second.rel = "stylesheet";
-  second.href = "/assets/workspace.css";
-  copy.head.append(second);
-  const frame = document.createElement("iframe");
-  document.body.append(frame);
-  // A real capture document's defaultView owns its iframe. Use that relationship
-  // here without allowing the test environment to perform stylesheet requests.
-  Object.defineProperty(copy, "defaultView", { value: { frameElement: frame } });
-  const rejected = expect(onclone(copy, sheet)).rejects.toThrow("stylesheet could not load. Try Print / Save as PDF.");
-  if (mode === "error") link.dispatchEvent(new Event("error"));
-  else await vi.advanceTimersByTimeAsync(10_000);
-  await rejected;
-  expect(sheet.style.visibility).toBe("hidden");
-  expect(frame.isConnected).toBe(false);
-  expect(vi.getTimerCount()).toBe(0);
+  const host = sourcePages();
+  const original = host.innerHTML;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { link, sheet, frame } = mountedClone(false);
+    // Match 2.6's lifecycle: the failed event or readiness deadline has already
+    // passed before it calls onclone. No second event will wake a new listener.
+    if (mode === "error") link.dispatchEvent(new Event("error"));
+    else await vi.advanceTimersByTimeAsync(10_000);
+    const failure = vi.fn();
+    const pending = exportPaginatedToPdf(host, DEFAULT_SETTINGS).catch(failure);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failure).toHaveBeenCalledWith(expect.objectContaining({
+      message: "The PDF capture stylesheet could not load. Try Print / Save as PDF.",
+    }));
+    await pending;
+    expect(sheet.style.visibility).toBe("hidden");
+    expect(frame.isConnected).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(addImage).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(host.innerHTML).toBe(original);
+  }
+  mountedClone();
+  await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
+  expect(addImage).toHaveBeenCalledOnce();
+  expect(save).toHaveBeenCalledOnce();
+  expect(document.querySelector("iframe.html2canvas-container")).toBeNull();
 });
 
-it("gives fonts only the remaining readiness budget and releases a timed-out capture", async () => {
+it("does not require unused stylesheet links that the library skips", async () => {
+  const host = sourcePages();
+  const { copy } = mountedClone();
+  const disabled = copy.createElement("link");
+  disabled.rel = "stylesheet";
+  disabled.href = "/assets/disabled.css";
+  disabled.disabled = true;
+  copy.head.append(disabled);
+  copy.head.insertAdjacentHTML("beforeend", '<link rel="alternate stylesheet" href="/assets/alternate.css"><link rel="stylesheet">');
+  await exportPaginatedToPdf(host, DEFAULT_SETTINGS);
+  expect(save).toHaveBeenCalledOnce();
+});
+
+it("bounds post-reveal font loading and releases a timed-out capture without saving", async () => {
   vi.useFakeTimers();
-  const { onclone, copy, link, sheet } = await pendingClone();
-  const frame = document.createElement("iframe");
-  document.body.append(frame);
-  Object.defineProperty(copy, "defaultView", { value: frame.contentWindow });
+  const host = sourcePages();
+  const { copy, frame } = mountedClone();
   Object.defineProperty(copy, "fonts", { value: { ready: new Promise<void>(() => {}) } });
-  const rejected = expect(onclone(copy, sheet)).rejects.toThrow("fonts did not finish loading. Try Print / Save as PDF.");
-  await vi.advanceTimersByTimeAsync(9_000);
-  Object.defineProperty(link, "sheet", { value: {} });
-  link.dispatchEvent(new Event("load"));
-  await vi.advanceTimersByTimeAsync(999);
+  const rejected = expect(exportPaginatedToPdf(host, DEFAULT_SETTINGS)).rejects.toThrow("fonts did not finish loading. Try Print / Save as PDF.");
+  await vi.advanceTimersByTimeAsync(9_999);
   expect(frame.isConnected).toBe(true);
+  expect(save).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
   await rejected;
   expect(frame.isConnected).toBe(false);
   expect(vi.getTimerCount()).toBe(0);
+  expect(addImage).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
 });

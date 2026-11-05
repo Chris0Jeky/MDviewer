@@ -49,15 +49,39 @@ Pixel expectations are independent of earlier html2canvas captures:
 
 The production failure/retry check aborts capture CSS on two attempts, verifies
 no PDF was saved and no capture iframe remains, then allows a successful retry.
-Unit tests exercise stylesheet errors/timeouts, sibling-listener cleanup and the
-shared readiness budget, including CSS taking nine seconds and fonts receiving
-only the remaining second. The ten-second bound is for this onclone CSS/font
-readiness wait; it does not bound earlier html2canvas work or the whole export.
+Unit tests exercise stylesheet errors/timeouts that settle before `onclone`,
+immediate failure without saving, repeated iframe cleanup and a successful retry.
+They also cover unused stylesheet links and the ten-second post-reveal font
+readiness deadline. Upstream stylesheet/font/image waits precede `onclone`; this
+deadline does not bound them or the whole export.
 
 `test-results/` retains the PDF, extracted page PNG, native browser reference,
 pixel measurements and damaged-control PDF/PNG. The existing CI browser-artifact
 upload includes them on success and failure. No native PDF package or new npm
 dependency is required for this check.
+
+## html2canvas-pro 2.6 readiness contract
+
+Issue [#167](https://github.com/Chris0Jeky/MDviewer/issues/167) exposed a changed
+callback order when PR #165 upgraded html2canvas-pro from 2.5.2 to 2.6.0.
+The library now awaits `stylesheetsReady` before calling `onclone`, but that wait
+resolves on both link load and error events, and after its readiness timeout.
+The old adapter added its own listeners inside `onclone`; an already-fired error
+was missed, delaying failure by another ten seconds.
+
+The adapter therefore requires the 2.6 lifecycle and checks the completed wait's
+outcome synchronously: an enabled, non-alternate stylesheet link with an `href`
+must have an attached `sheet`. A missing sheet after the upstream wait aborts
+capture, including when a request is still pending after the upstream deadline.
+The check alone is not a pending-versus-failed signal outside this callback
+contract. Disabled, alternate and empty-href links follow the library's exclusions.
+After clone normalization and layout, the adapter still awaits freshly used fonts
+within its own ten-second deadline starting at `onclone` entry.
+
+Primary source: [`stylesheetsReady` and `mountCloneInIFrame` in v2.6.0](https://github.com/yorickshan/html2canvas-pro/blob/v2.6.0/src/dom/iframe-mount.ts),
+introduced by upstream commit [`b9f57d9`](https://github.com/yorickshan/html2canvas-pro/commit/b9f57d9942745e7a1103d67446d81b919977c669).
+The production delayed-CSS pixel and failed-CSS cleanup/retry tests remain
+unchanged; extending their timeouts would hide the missed-event regression.
 
 ## Defects found while adding the check
 
@@ -80,9 +104,10 @@ first introduced each behavior.
    21 pixels at 8×8 after adding `width="16" height="16"`.
 4. The capture iframe can report loaded before its newly adopted stylesheet links
    finish loading. A controlled 350 ms clone-only CSS delay produced a valid but
-   unstyled PDF. Capture now waits for those links, resolves layout, then waits
-   for fonts introduced by that CSS. Failures abort saving and release the clone;
-   html2canvas's own cleanup starts only after its onclone callback succeeds.
+   unstyled PDF. The original 2.5.2 adapter waited for those links, resolved layout,
+   then waited for fonts introduced by that CSS. It released failed clones because
+   that version's cleanup started only after `onclone` succeeded. The 2.6 contract
+   above moves the stylesheet wait upstream and retains fail-safe validation.
 5. Paged.js uses native `::marker` content for footnote numerals. The browser
    reserves the correct width, but html2canvas does not paint that content: the
    initial twelve-note downloaded PDF had zero ink in every numeral region.
