@@ -15,6 +15,20 @@
 
 ## Current State (snapshot)
 
+- **2026-11-05 (Windows preview integrated; acceptance open)** — the experimental
+  Windows reader is merged through [#158](https://github.com/Chris0Jeky/MDviewer/pull/158),
+  with the lazy highlighting follow-up in [#162](https://github.com/Chris0Jeky/MDviewer/pull/162).
+  Independent review and all five exact-head web, desktop-browser and native Windows
+  checks passed before those merges. The native smoke verifies actual Markdown/PDF
+  saves and records the complete observed WebView2 process tree. Dependency PRs
+  #166, #168 and #170 also merged after review and green exact-head checks.
+  These are unsigned CI previews; no live web deployment or comparative RAM/startup
+  result is claimed. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
+  tracks ordinary Windows install/uninstall, Explorer associations, keyboard/Narrator,
+  print drivers, representative hardware measurements and signing/distribution decisions.
+  **AI-6/AI-7/AI-8/AI-9 remain OPEN.** The deployed application's source anchor remains
+  the historical record below until an actual deployment is verified.
+
 - **2026-10-02 (reviewed fixes deployed)** — application source
   `51b9758fa4e6b265f4376edf02d3f56821b9de8e` is live as `bf04155f`
   (`https://bf04155f.mdviewer-c9r.pages.dev/`, id

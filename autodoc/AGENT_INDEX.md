@@ -165,4 +165,11 @@ without changing parsed structural state. `renderMarkdownTokens(md, tokens, env)
 the sanitizer and warnings with `renderMarkdown(md, src)` and requires the same parser's
 tokens/environment. `src/desktop/render.ts` owns admission; line-number/notation/metadata
 requests retain the existing transformers. The web pagination order is unchanged.
-Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/desktop-e2e/startup.spec.ts`.
+`getReaderHighlighter(languages)` prepares only requested grammar modules and embedded
+dependencies, retaining all themes. `getHighlighter()` independently awaits the complete
+common-grammar workspace contract on the same engine. Pending canonical registrations are
+shared and retry after failure; only the workspace gate establishes complete common-grammar readiness.
+Modules with optional embeds explicitly await the workspace gate to preserve existing
+embedded-language colors; that compatibility path is excluded from workspace preparation.
+Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/highlight-reader.test.ts`,
+`tests/desktop-e2e/startup.spec.ts`.

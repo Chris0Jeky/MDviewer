@@ -69,4 +69,6 @@ ordinary and large documents, before and after entering the PDF workspace.
 Local/remote linked images remain blocked by the existing sanitizer; embedded raster
 images work. There is no watcher, autosave, recents list or shell preview extension.
 File associations, both native export dialogs and startup/memory on Chris's Windows
-machine require acceptance. Existing AI-6/7/8/9 remain open and separate.
+machine require acceptance. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
+tracks the installation, accessibility, printing, performance and distribution evidence.
+Existing AI-6/7/8/9 remain open and separate.

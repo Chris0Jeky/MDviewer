@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-10-21.
+> Last updated: 2026-11-05.
 
 ## Status legend
 
@@ -24,7 +24,7 @@ Chrome PDF page-count regression test. The maintainer accepted this evidence and
 ### P0 — Scaffolding — `DONE`
 
 - Repository, git, and agentic tooling (`CLAUDE.md`, `AGENTS.md`, skills, `autodoc/AGENT_INDEX.md`).
-- Build and test config: Vite 8, Vitest 4, TypeScript 6.0 (strict), ESLint 10, Playwright.
+- Build and test config: Vite 8, Vitest 5, TypeScript 6.0 (strict), ESLint 10, Playwright.
 - Pinned design specs: `design/IMPLEMENTATION_SPEC.md`, `design/LIBRARY_NOTES.md`.
 - Canonical seams committed: `src/app/dom.ts`, `src/app/settings.ts`, `src/app/state.ts`, the
   ambient type shims, `index.html`, and toolchain config.
@@ -84,12 +84,15 @@ export paths.
 
 ### P3 — Hardening and distribution — `IN PROGRESS`
 
-- **Experimental Windows distribution (2026-10-21):** a Tauri/WebView2 host opens local
+- **Experimental Windows distribution (merged 2026-11-05, #158):** a Tauri/WebView2 host opens local
   Markdown in a continuous reader, with a lazy transition to the existing editing/PDF
   workspace. Includes bounded file handling, single-instance forwarding, a per-user
   installer, a portable artifact and Windows process-tree measurements in CI. This is
-  a separate entry point; it does not replace the web/PWA build. Native acceptance on
-  an ordinary desktop and comparative memory targets remain open. See
+  a separate entry point; it does not replace the web/PWA build. The native smoke
+  verifies actual Markdown/PDF saves, and #162 defers the reader's highlighting engine
+  until a document needs supported code highlighting or Shiki notation. Native acceptance
+  on an ordinary desktop and comparative memory targets remain open in
+  [#169](https://github.com/Chris0Jeky/MDviewer/issues/169). See
   [`WINDOWS_DESKTOP.md`](WINDOWS_DESKTOP.md) and `design/WINDOWS_READER.md`.
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.

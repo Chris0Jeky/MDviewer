@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
-import { getHighlighter } from "../src/render/highlight";
+import { getHighlighter, getReaderHighlighter } from "../src/render/highlight";
 import { renderReaderDocument } from "../src/desktop/render";
 import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 
@@ -8,9 +8,9 @@ import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 // boundary; asserting the rendered document prevents an inert stub from passing.
 vi.mock("../src/render/highlight", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/render/highlight")>();
-  return { ...actual, getHighlighter: vi.fn(actual.getHighlighter) };
+  return { ...actual, getReaderHighlighter: vi.fn(actual.getReaderHighlighter) };
 });
-beforeEach(() => vi.mocked(getHighlighter).mockClear());
+beforeEach(() => { vi.mocked(getReaderHighlighter).mockClear(); });
 
 describe("reader syntax highlighting admission", () => {
   // Run the cold curated-grammar control first: a preceding literal fence
@@ -19,7 +19,7 @@ describe("reader syntax highlighting admission", () => {
     const result = await renderReaderDocument("# Quoted code\n\n> ```cs\n> public record Person(string Name);\n> ```", DEFAULT_SETTINGS);
     expect(result.document.querySelector("blockquote pre.shiki code")?.textContent).toContain("public record Person(string Name);");
     expect(result.document.querySelectorAll("blockquote pre.shiki code span[style]").length).toBeGreaterThan(1);
-    expect(getHighlighter).toHaveBeenCalledTimes(1);
+    expect(getReaderHighlighter).toHaveBeenCalledTimes(1);
     expect(result.warnings).toEqual([]);
   }, 30_000);
 
@@ -31,7 +31,7 @@ describe("reader syntax highlighting admission", () => {
     expect(result.document.querySelector(".footnotes")?.textContent).toContain("Endnote text.");
     expect(result.document.querySelector('.toc a[href="#mathematics"]')).not.toBeNull();
     expect(result.warnings).toEqual([]);
-    expect(getHighlighter).not.toHaveBeenCalled();
+    expect(getReaderHighlighter).not.toHaveBeenCalled();
   });
 
   for (const language of ["", "text", "plaintext", "txt", "unbundled-example"]) {
@@ -39,7 +39,7 @@ describe("reader syntax highlighting admission", () => {
       const result = await renderReaderDocument(`# Plain code\n\n\`\`\`${language}\n<script>literal code</script>\n\`\`\``, DEFAULT_SETTINGS);
       expect(result.document.querySelector("pre code")?.textContent?.trimEnd()).toBe("<script>literal code</script>");
       expect(result.document.querySelector("script")).toBeNull();
-      expect(getHighlighter).not.toHaveBeenCalled();
+      expect(getReaderHighlighter).not.toHaveBeenCalled();
       expect(result.warnings.length).toBe(language === "unbundled-example" ? 1 : 0);
     });
   }
@@ -49,7 +49,7 @@ describe("reader syntax highlighting admission", () => {
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelectorAll("pre code")).toHaveLength(1);
     expect(result.document.querySelector("pre code")?.textContent).toContain("```cs");
-    expect(getHighlighter).not.toHaveBeenCalled();
+    expect(getReaderHighlighter).not.toHaveBeenCalled();
     expect(result.warnings).toEqual([]);
   });
 
@@ -57,12 +57,12 @@ describe("reader syntax highlighting admission", () => {
     const result = await renderReaderDocument("# Unknown code\n\n> ```unbundled-example\n> Visible source\n> ```", DEFAULT_SETTINGS);
     expect(result.document.querySelector("blockquote pre code")?.textContent?.trimEnd()).toBe("Visible source");
     expect(result.warnings).toEqual(['Code language "unbundled-example" is not bundled; rendered as plain text.']);
-    expect(getHighlighter).not.toHaveBeenCalled();
+    expect(getReaderHighlighter).not.toHaveBeenCalled();
   });
   it("preserves explicitly requested plaintext line numbers", async () => {
     const result = await renderReaderDocument("# Numbered\n\n```text\nalpha\nbeta\n```", { ...DEFAULT_SETTINGS, showLineNumbers: true });
     expect(result.document.querySelectorAll("pre.shiki.with-line-numbers .line")).toHaveLength(2);
-    expect(getHighlighter).toHaveBeenCalledOnce();
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it.each(["text", "", "unbundled-example"])("preserves case-insensitive notation in %s fences", async language => {
@@ -71,11 +71,11 @@ describe("reader syntax highlighting admission", () => {
     const reference = document.createElement("div");
     reference.innerHTML = eager.html;
     expect(reference.querySelector(".line.highlighted")?.textContent).toBe("alpha");
-    vi.mocked(getHighlighter).mockClear();
+    vi.mocked(getReaderHighlighter).mockClear();
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelector(".line.highlighted")?.textContent).toBe("alpha");
     expect(result.document.querySelector("pre code")?.textContent).not.toContain("[!CODE");
-    expect(getHighlighter).toHaveBeenCalledOnce();
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it("preserves plaintext metadata highlighting", async () => {
@@ -86,10 +86,10 @@ describe("reader syntax highlighting admission", () => {
     const reference = document.createElement("div");
     reference.innerHTML = eager.html;
     expect(reference.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
-    vi.mocked(getHighlighter).mockClear();
+    vi.mocked(getReaderHighlighter).mockClear();
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
-    expect(getHighlighter).toHaveBeenCalledOnce();
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -101,11 +101,11 @@ describe("reader syntax highlighting admission", () => {
     const reference = document.createElement("div");
     reference.innerHTML = eager.html;
     expect(reference.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
-    vi.mocked(getHighlighter).mockClear();
+    vi.mocked(getReaderHighlighter).mockClear();
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
     expect(result.warnings).toEqual([]);
-    expect(getHighlighter).toHaveBeenCalledOnce();
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it("preserves metadata separated by decoded spaces", async () => {
@@ -114,11 +114,11 @@ describe("reader syntax highlighting admission", () => {
     const reference = document.createElement("div");
     reference.innerHTML = eager.html;
     expect(reference.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
-    vi.mocked(getHighlighter).mockClear();
+    vi.mocked(getReaderHighlighter).mockClear();
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
     expect(result.warnings).toEqual([]);
-    expect(getHighlighter).toHaveBeenCalledOnce();
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it("warns once for the decoded unknown language without loading Shiki", async () => {
@@ -126,14 +126,14 @@ describe("reader syntax highlighting admission", () => {
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(result.document.querySelectorAll("pre code")).toHaveLength(2);
     expect(result.warnings).toEqual(['Code language "unknown-example" is not bundled; rendered as plain text.']);
-    expect(getHighlighter).not.toHaveBeenCalled();
+    expect(getReaderHighlighter).not.toHaveBeenCalled();
   });
 
   it("does not warn for unknown fence labels that are only literal code examples", async () => {
     const result = await renderReaderDocument("# Literal example\n\n````text\n```not-a-language\nexample\n```\n````", DEFAULT_SETTINGS);
     expect(result.document.querySelector("pre code")?.textContent).toContain("not-a-language");
     expect(result.warnings).toEqual([]);
-    expect(getHighlighter).not.toHaveBeenCalled();
+    expect(getReaderHighlighter).not.toHaveBeenCalled();
   });
 
 });

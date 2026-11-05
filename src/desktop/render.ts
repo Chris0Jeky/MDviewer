@@ -1,4 +1,4 @@
-import { ensureLang, getHighlighter, isSupportedLanguage } from "../render/highlight";
+import { getReaderHighlighter, isSupportedLanguage } from "../render/highlight";
 import type { MarkdownIt, Token } from "markdown-it";
 import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, renderMarkdownTokens } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
@@ -18,8 +18,7 @@ export async function renderReaderDocument(text: string, settings: Settings): Pr
   // Explicit line numbers, notation directives and metadata highlighting still
   // use the existing transformers even when the fence has no syntax grammar.
   if (languages.length || needsCodeTransformers(md, tokens, settings.showLineNumbers)) {
-    const highlighter = await getHighlighter();
-    for (const language of languages) await ensureLang(highlighter, language);
+    const highlighter = await getReaderHighlighter(languages);
     installMarkdownHighlighter(md, highlighter, settings);
   }
   const result = renderMarkdownTokens(md, tokens, env);

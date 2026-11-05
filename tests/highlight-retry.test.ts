@@ -24,10 +24,14 @@ async function freshModule() {
   return import("../src/render/highlight");
 }
 
+function fakeHighlighter(): HighlighterCore {
+  return { getLoadedLanguages: () => [], loadLanguage: async () => {} } as unknown as HighlighterCore;
+}
+
 describe("getHighlighter retry", () => {
   it("retries creation after a first failure", async () => {
     const mod = await freshModule();
-    const fake = {} as HighlighterCore;
+    const fake = fakeHighlighter();
     let n = 0;
     stub.impl = () => {
       n += 1;
@@ -44,7 +48,7 @@ describe("getHighlighter retry", () => {
 
   it("shares one in-flight creation across concurrent callers", async () => {
     const mod = await freshModule();
-    const fake = {} as HighlighterCore;
+    const fake = fakeHighlighter();
     let resolveGate!: (value: HighlighterCore) => void;
     const gate = new Promise<HighlighterCore>((resolve) => {
       resolveGate = resolve;
