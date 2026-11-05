@@ -85,8 +85,9 @@
  * scrolling text surface.
  * -------------------------------------------------------------------------- */
 #editor-pane {
+  container: source-editor / inline-size;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background: var(--bg-surface);
@@ -94,6 +95,7 @@
 }
 
 .editor-head {
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -115,6 +117,8 @@
   color: var(--fg-strong);
   text-overflow: ellipsis;
   overflow: hidden;
+  margin-right: auto;
+  min-width: 0;
 }
 
 .editor-head .editor-stat {
@@ -123,10 +127,108 @@
   flex: 0 0 auto;
 }
 
+/* Search is an optional row, not a second scroll surface. Explicit row numbers
+   preserve the source's remaining-height track when the panel is hidden. */
+#editor-search {
+  grid-row: 2;
+  display: grid;
+  gap: 6px;
+  padding: 8px var(--editor-pad-x);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-toolbar);
+  min-width: 0;
+}
+
+#editor-search[hidden],
+#editor-replace-row[hidden] {
+  display: none;
+}
+
+.editor-search-row,
+.editor-search-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editor-search-row { flex-wrap: wrap; }
+
+.editor-search-field {
+  flex: 1 1 130px;
+  min-width: 0;
+  width: 100%;
+  height: 32px;
+  padding: 4px 8px;
+  color: var(--fg-strong);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.editor-command {
+  flex: 0 0 auto;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editor-command:hover:not(:disabled),
+.editor-command[aria-pressed="true"] {
+  color: var(--fg-strong);
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+.editor-command:focus-visible,
+.editor-search-field:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.editor-command:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.editor-search-footer {
+  justify-content: space-between;
+}
+
+.editor-search-status {
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.editor-search-footer .editor-command {
+  min-height: 26px;
+  padding-block: 2px;
+}
+
+@container source-editor (max-width: 360px) {
+  .editor-head .editor-stat { display: none; }
+  #editor-search { padding-inline: 8px; }
+  .editor-search-field { flex-basis: 100%; }
+}
+
 /* -----------------------------------------------------------------------------
  * .editor-scroll — the stacking context holding the two glued layers.
  * -------------------------------------------------------------------------- */
 .editor-scroll {
+  grid-row: 3;
   position: relative;
   min-height: 0;
   overflow: hidden;
@@ -180,6 +282,13 @@
 
 .editor-line {
   display: inline;
+}
+
+/* A textarea includes the empty final line after a trailing newline. A plain pre
+   drops that line unless a glyph occupies it; a zero-width generated sentinel
+   keeps both scroll ranges identical without adding to source textContent. */
+.editor-highlight-code::after {
+  content: "\200b";
 }
 
 /* The real input. Glyphs are transparent so the backdrop shows through; the
@@ -310,6 +419,46 @@ body.is-splitting #editor-input {
   #editor-pane {
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+}
+
+/* A short window cannot fit search chrome above a fractional Split source pane.
+   While Find is open, use the available workspace for source without changing the
+   selected view or split setting. The preview stays measurable, as in Markdown
+   mode; closing Find restores the prior split immediately. */
+@media screen and (max-height: 600px) {
+  #editor-pane:has(#editor-search:not([hidden])) {
+    --editor-pad-y: 8px;
+  }
+
+  #editor-pane:has(#editor-search:not([hidden])) .editor-head {
+    display: none;
+  }
+
+  #editor-search {
+    gap: 2px;
+    padding-block: 2px;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #split-handle {
+    display: none;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #canvas {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) #error-card:not([hidden]) {
+    visibility: visible;
+    pointer-events: auto;
   }
 }
 

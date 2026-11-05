@@ -28,6 +28,7 @@
 import { ATTRS, CLASSES, IDS, el } from "../app/dom";
 import type { CodeThemeId } from "../app/settings";
 import { CODE_THEME_PAIRS, getHighlighter } from "../render/highlight";
+import { mountEditorSearch } from "./EditorSearch";
 
 export interface EditorController {
   /** The current textarea (`#editor-input`); reacquire after a document switch. */
@@ -150,7 +151,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const statEl = el("span", { class: "editor-stat" }, "0 words");
   const head = el(
     "div",
-    { class: CLASSES.editorHead, attrs: { "aria-hidden": "true" } },
+    { class: CLASSES.editorHead },
     fileNameEl,
     statEl,
   );
@@ -321,6 +322,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     const text = input.value;
     scheduleStat(text);
     scheduleHighlight(text);
+    search.sourceChanged();
     reportingInput = true;
     try {
       opts.onInput(text);
@@ -528,6 +530,10 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   };
   bindInput(input);
 
+  const search = mountEditorSearch(pane, head, input, highlight, {
+    replaceRange, hardLimitBytes: opts.hardLimitBytes,
+  });
+
   syncSize("");
 
   return {
@@ -545,7 +551,10 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       if (switched || !sameText) editRevision++;
       documentKey = nextKey;
       fileNameEl.textContent = doc?.name ?? "Untitled.md";
-      if (sameText && (!switched || adoptingInput)) return;
+      if (sameText && (!switched || adoptingInput)) {
+        if (switched) search.sourceChanged(true);
+        return;
+      }
       const previousSelection = selection();
       const restoreFocus = switched && document.activeElement === input;
       if (switched) {
@@ -575,6 +584,8 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       }
       syncSize(text);
       scheduleHighlight(text);
+      search.setInput(input);
+      search.sourceChanged(true);
       if (restoreFocus) input.focus({ preventScroll: true });
     },
     setCodeTheme(next): void {
@@ -589,6 +600,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     },
     destroy(): void {
       destroyed = true;
+      search.destroy();
       if (highlightTimer) clearTimeout(highlightTimer);
       if (statTimer) clearTimeout(statTimer);
       unbindInput(input);
