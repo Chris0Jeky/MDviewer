@@ -21,6 +21,16 @@ the corresponding document finishes pagination. Reader/workspace transitions
 transfer coordinates explicitly while preserving the reader's lazy workspace
 import. Filename collisions receive an ordinal label in the document picker.
 
+Complete visible pages retain their own document identity while new source is
+preparing or preparation has failed. That identity is separate from export-ready
+render metadata, which is invalidated immediately. Position capture follows the
+visible page owner even when another document is active in the editor. The last
+complete position is sampled again immediately before pagination; partial or
+failed pagination cannot overwrite it. Closing a document still removes its
+coordinates, including while old pages await teardown. Fatal feedback keeps its
+existing behavior of revealing the error card at the canvas origin; later
+scrolling of retained pages is captured under their original document identity.
+
 ## Keyboard access
 
 Visible Previous and Next controls cycle the current document order. On Windows
@@ -78,3 +88,22 @@ provenance; clean committed builds subsequently passed.
 Locked Chromium, packaged Windows behavior, hosted exact-head CI, and independent
 review remain the publishing agent's gates. Apple modifier behavior is covered
 by a platform-stubbed unit test; no native Mac browser claim is made.
+
+### Pending preparation regression
+
+The follow-up runtime fix `a66e027` separates complete visible-page ownership
+from export readiness. Its five unit cases cover held preparation, failed
+preparation for another document, obsolete preparation, partial pagination
+failure, and close-before-teardown. At `387645a`, TypeScript, ESLint, the full
+862-test / 75-file unit suite, and a clean production web build passed.
+
+Production Firefox passed six focused cases from `preview-position-race.spec.ts`
+and `session-navigation.spec.ts` on a separate preview server. The new regression
+holds the first Mermaid module request, moves the old preview during preparation,
+switches documents, and verifies the restored position. Its failure control
+asserts the existing fatal-card scroll reset before testing a new scroll on the
+retained pages. The first version incorrectly expected the pre-error scroll to
+survive that intentional reset; the corrected test preserves the existing
+feedback contract. Both new cases are included in the production Firefox
+authoring lane. Hosted exact-head checks and independent review remain separate
+release gates.
