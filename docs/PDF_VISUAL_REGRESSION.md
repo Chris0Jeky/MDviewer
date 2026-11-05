@@ -12,7 +12,7 @@ pass that comparison.
 npm ci
 npx playwright install chromium
 npm run build
-E2E_TARGET=preview npm run test:e2e -- tests/e2e/raster-visual.spec.ts tests/e2e/raster-footnotes.spec.ts tests/e2e/raster-styles-ready.spec.ts
+E2E_TARGET=preview npm run test:e2e -- tests/e2e/raster-visual.spec.ts tests/e2e/raster-footnotes.spec.ts tests/e2e/raster-styles-ready.spec.ts tests/e2e/raster-fonts-ready.spec.ts tests/e2e/raster-offline-frame.spec.ts
 ```
 
 The fixture passes through the real file-input, Markdown/sanitization and Paged.js
@@ -105,7 +105,9 @@ load accepts empty or inaccessible rules without reading them. External
 `@import` handling remains upstream; the application's bundled CSS has none.
 
 After CSS succeeds, clone normalization and layout precede a fresh ten-second
-font deadline. The entire owned container, iframe, listeners and timers are
+font deadline. A fulfilled `document.fonts.ready` is insufficient if an attempted
+font face has an error status; that capture also rejects without saving. Unused,
+unloaded faces remain valid. The entire owned container, iframe, listeners and timers are
 released in `finally`, including when capture fails outside `onclone`. The
 container is fixed with zero dimensions and is excluded from cloning through
 `data-html2canvas-ignore`; unrelated iframes and the live page are preserved.
@@ -118,9 +120,9 @@ The existing online delayed-CSS pixel assertions and the failed-CSS
 cleanup/retry tests remain intact; extending their timeouts would hide the
 missed-event regression.
 
-## Offline qualification blocker (#174)
+## Offline resource availability and qualification (#174)
 
-The 2.6 adapter is a **blocked draft**, not an offline fix. Exact-head
+The original 2.6 adapter was blocked by offline resource availability. Historical
 [`ab40ca7f` web CI](https://github.com/Chris0Jeky/MDviewer/actions/runs/41954702853)
 passed the original online CSS failure/retry and delayed-CSS pixel cases, but
 failed the unchanged offline raster download. Its trace shows the source page
@@ -130,9 +132,15 @@ error correctly prevents saving. The iframe creation and document-open sequence
 are unchanged between upstream 2.5.2 and 2.6.0, so this evidence does not establish
 a newly introduced service-worker lifecycle change.
 
-Issue [#174](https://github.com/Chris0Jeky/MDviewer/issues/174) requires a proven
-offline resource-loading strategy and saved-PDF visual qualification. The
-retained 2.5.2 download test alone is not proof of offline pixel fidelity.
+The later diagnostic directly observed an uncontrolled staging document and
+failed CSS, despite the source being controlled. The correction in
+[#178](https://github.com/Chris0Jeky/MDviewer/pull/178) prepares a controlled empty
+`srcdoc` destination before cloning, adopts the cloned root into that destination,
+and recreates the app's stylesheet links in their original cascade positions.
+This path requires an offline source and an accessible existing service-worker
+controller; ordinary online/native capture retains its existing route. It does
+not retry arbitrary failed stylesheets. See [the lifecycle contract and exact-head
+evidence](design/RASTER_OFFLINE_CAPTURE.md) for ownership, scope and cleanup.
 
 `raster-visual.spec.ts` now runs the same independent pixel expectations and
 actually damaged second download in separate online and offline contexts. The
@@ -145,10 +153,25 @@ outside the production-preview target; hosted production checks must run it.
 The page/frame foreign-request assertion is supplemental and is not a complete
 service-worker network inventory.
 
-Static review of this stronger gate is complete. Local browser execution was
-unavailable; no successful offline pixel result is claimed. Keep the exact
-2.6.0 Dependabot exclusion until #174's qualification and cleanup/retry gates
-are satisfied.
+In CI associated with head `c02627a8`, the original offline download, online/offline saved-PDF
+pixels and damaged controls passed. The independently extracted online and offline
+fixtures have identical color and ink measurements. The test-only `f5a3b6f8`
+correction aligned an extra CDP cache-control session with the context's offline
+state; its full production browser run passed 126 tests with five existing optional
+skips. The next head `268bcb8f` added the real missing-font recovery control and
+[passed 127 tests with five existing optional skips](https://github.com/Chris0Jeky/MDviewer/actions/runs/42039793150/job/127287280284).
+These workflows used GitHub's PR merge refs, so their runtime trees also included
+the then-current main. These results are specific checkpoints, not a substitute
+for all five required checks and source-tree verification after subsequent integration.
+
+The CSS and font recovery tests delete the actual CacheStorage entry only after
+the source has loaded it. HTTP/memory cache is disabled. Both failed capture
+attempts must use the controlled destination, save no PDF and remove all owned
+frames; the source and view remain intact. Restoring the original cached Response
+must yield a real parseable PDF with a worker-served resource response. The font
+case additionally proves CSS still loads while the required KaTeX face fails.
+No route supplies a replacement stylesheet or font. File-backed JSON attachments
+retain bounded resource metadata alongside the recovery PDFs.
 
 ## Defects found while adding the check
 

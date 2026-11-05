@@ -28,15 +28,24 @@
 import { ATTRS, CLASSES, IDS, el } from "../app/dom";
 import type { CodeThemeId } from "../app/settings";
 import { CODE_THEME_PAIRS, getHighlighter } from "../render/highlight";
+import { mountEditorSearch } from "./EditorSearch";
 
 export interface EditorController {
-  /** The editable textarea (`#editor-input`). */
-  input: HTMLTextAreaElement;
+  /** The current textarea (`#editor-input`); reacquire after a document switch. */
+  readonly input: HTMLTextAreaElement;
   /**
    * Seed the editor from outside (a file opened, a document switched). Re-highlights.
-   * A no-op when the text already matches, so it can never disturb a live caret.
+   * A same-document, same-text update preserves the caret and native undo history.
+   * Hosts should supply stable ids; name is the compatibility fallback.
    */
-  setDocument(doc: { name: string; text: string } | null): void;
+  setDocument(doc: { id?: string; name: string; text: string } | null): void;
+  /**
+   * Replace a UTF-16 range through the paste admission and native undo path.
+   * Returns false if refused, unchanged, aborted, detached, composing, or stale.
+   * A delayed confirmation belongs to its original document, value, selection,
+   * and focused element.
+   */
+  replaceRange(start: number, end: number, text: string, signal?: AbortSignal): Promise<boolean>;
   /** Re-highlight with a different Shiki theme family (the toolbar's code theme). */
   setCodeTheme(theme: CodeThemeId): void;
   /** Move keyboard focus into the source text. */
@@ -60,9 +69,9 @@ export interface EditorOptions {
    */
   largeInsertBytes?: number;
   /**
-   * Byte size past which any insert, however small, is routed to
-   * `confirmLargeInsert` so the host can refuse it. Unset means no hard limit.
-   * Only enforced while `largeInsertBytes` and `confirmLargeInsert` are set.
+   * Byte size past which a paste, text drop, or explicit replacement is refused.
+   * `confirmLargeInsert` is still called when supplied so the host can explain the
+   * refusal. Unset means no hard limit. Ordinary typing remains native.
    */
   hardLimitBytes?: number;
   /**
@@ -120,6 +129,12 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   let wordCount = 0;
   let sizeChars = 0;
   let destroyed = false;
+  let documentKey: string | null = null;
+  // Also advances for edits that later undo back to the same text, so value equality
+  // alone can never revive an old confirmation.
+  let editRevision = 0;
+  let composing = false;
+  let reportingInput = false;
 
   const pane = el("section", {
     id: IDS.editorPane,
@@ -136,7 +151,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const statEl = el("span", { class: "editor-stat" }, "0 words");
   const head = el(
     "div",
-    { class: CLASSES.editorHead, attrs: { "aria-hidden": "true" } },
+    { class: CLASSES.editorHead },
     fileNameEl,
     statEl,
   );
@@ -150,7 +165,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   const highlightCode = el("code", { class: "editor-highlight-code" });
   highlight.append(highlightCode);
 
-  const input = el("textarea", {
+  const createInput = (): HTMLTextAreaElement => el("textarea", {
     id: IDS.editorInput,
     class: "editor-input",
     spellcheck: false,
@@ -163,6 +178,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       wrap: "soft",
     },
   });
+  let input = createInput();
 
   const scroll = el("div", { class: CLASSES.editorScroll }, highlight, input);
   pane.append(head, scroll);
@@ -301,10 +317,18 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
   // ---- Events ----------------------------------------------------------------
 
   const onInputEvent = (): void => {
+    if (destroyed) return;
+    editRevision++;
     const text = input.value;
     scheduleStat(text);
     scheduleHighlight(text);
-    opts.onInput(text);
+    search.sourceChanged();
+    reportingInput = true;
+    try {
+      opts.onInput(text);
+    } finally {
+      reportingInput = false;
+    }
   };
 
   // Declared (not assigned to a const) so the painters above can call it: they run
@@ -328,43 +352,118 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
    * engines), accepting the weaker undo only when there is no alternative.
    */
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Tab" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+    if (event.key !== "Tab" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
+      event.isComposing || composing) {
       return;
     }
     event.preventDefault();
-    input.focus();
-    let inserted: boolean;
-    try {
-      // A successful insertText dispatches a native "input" event, so onInputEvent
-      // runs through the normal listener and must not be invoked again below.
-      inserted = document.execCommand("insertText", false, "\t");
-    } catch {
-      inserted = false;
-    }
-    if (inserted) return;
-
-    const { selectionStart, selectionEnd, value } = input;
-    input.value = `${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`;
-    input.selectionStart = input.selectionEnd = selectionStart + 1;
-    onInputEvent();
+    void replaceRange(input.selectionStart, input.selectionEnd, "\t");
   };
 
-  /** Insert text preserving the native undo entry where execCommand exists. */
-  const insertTextPreservingUndo = (text: string): void => {
+  const selection = () => ({
+    start: input.selectionStart,
+    end: input.selectionEnd,
+    direction: input.selectionDirection,
+  });
+  let lastSelection = selection();
+  let selectionRevision = 0;
+  const onSelect = (): void => {
+    const next = selection();
+    if (next.start !== lastSelection.start || next.end !== lastSelection.end ||
+      next.direction !== lastSelection.direction) selectionRevision++;
+    lastSelection = next;
+  };
+  const onCompositionStart = (): void => { composing = true; editRevision++; };
+  const onCompositionEnd = (): void => { composing = false; };
+
+  const canEdit = (): boolean => !destroyed && !composing && input.isConnected &&
+    pane.contains(input) && !input.disabled && !input.readOnly && !input.closest("[inert]");
+
+  const captureEdit = () => {
+    // A queued select event from before the request must not invalidate it later.
+    onSelect();
+    return { value: input.value, documentKey, editRevision, selectionRevision,
+      focused: document.activeElement, ...lastSelection };
+  };
+  type EditSnapshot = ReturnType<typeof captureEdit>;
+  const ownsValue = (snapshot: EditSnapshot, signal?: AbortSignal): boolean =>
+    canEdit() && !signal?.aborted && snapshot.documentKey === documentKey &&
+    snapshot.editRevision === editRevision && snapshot.value === input.value;
+  const isCurrent = (snapshot: EditSnapshot, signal?: AbortSignal): boolean =>
+    ownsValue(snapshot, signal) && snapshot.selectionRevision === selectionRevision &&
+    snapshot.start === input.selectionStart && snapshot.end === input.selectionEnd &&
+    snapshot.direction === input.selectionDirection;
+
+  const encoder = new TextEncoder();
+  const admission = (value: string, start: number, end: number, text: string) => {
+    const threshold = opts.largeInsertBytes ?? 0;
+    const hardLimit = opts.hardLimitBytes ?? 0;
+    if (threshold <= 0 && hardLimit <= 0) {
+      return { needsConfirmation: false, exceedsHardLimit: false, nextBytes: 0 };
+    }
+    const currentBytes = encoder.encode(value).length;
+    const textBytes = encoder.encode(text).length;
+    const nextBytes = encoder.encode(value.slice(0, start) + text + value.slice(end)).length;
+    const crossesGate = nextBytes > threshold && currentBytes <= threshold;
+    const exceedsHardLimit = hardLimit > 0 && nextBytes > hardLimit;
+    const needsConfirmation = exceedsHardLimit || (!!opts.confirmLargeInsert && threshold > 0 &&
+      (crossesGate || textBytes > threshold));
+    return { needsConfirmation, exceedsHardLimit, nextBytes };
+  };
+
+  /** Commit only after admission; a focus handler can also change the active document. */
+  const insertTextPreservingUndo = (
+    snapshot: EditSnapshot, start: number, end: number, text: string, signal?: AbortSignal,
+  ): boolean => {
+    if (!isCurrent(snapshot, signal) || document.activeElement !== snapshot.focused) return false;
+    input.focus();
+    if (!isCurrent(snapshot, signal) || document.activeElement !== input) return false;
+    input.setSelectionRange(start, end);
     let inserted: boolean;
     try {
-      input.focus();
       inserted = document.execCommand("insertText", false, text);
     } catch {
       inserted = false;
     }
-    if (inserted) return;
-    const current = input.value;
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    input.value = `${current.slice(0, start)}${text}${current.slice(end)}`;
+    if (inserted) return true;
+    // A command that changed the source despite returning false must not be spliced
+    // a second time. The same fence covers re-entrant event handlers.
+    if (!ownsValue(snapshot, signal) || input.selectionStart !== start || input.selectionEnd !== end) {
+      return false;
+    }
+    input.value = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
     input.selectionStart = input.selectionEnd = start + text.length;
-    onInputEvent();
+    // Use the same single event path as native insertText so observers also refresh.
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  };
+
+  const replaceCapturedRange = async (
+    snapshot: EditSnapshot, start: number, end: number, text: string,
+    gate: ReturnType<typeof admission>, signal?: AbortSignal,
+  ): Promise<boolean> => {
+    if (!isCurrent(snapshot, signal)) return false;
+    if (gate.needsConfirmation) {
+      if (!opts.confirmLargeInsert) return false;
+      try {
+        if (!await opts.confirmLargeInsert(gate.nextBytes)) return false;
+      } catch {
+        return false;
+      }
+      if (gate.exceedsHardLimit) return false;
+    }
+    return insertTextPreservingUndo(snapshot, start, end, text, signal);
+  };
+
+  const replaceRange = async (
+    start: number, end: number, text: string, signal?: AbortSignal,
+  ): Promise<boolean> => {
+    if (!canEdit() || signal?.aborted || !Number.isInteger(start) || !Number.isInteger(end) ||
+      start < 0 || end < start || end > input.value.length) return false;
+    const snapshot = captureEdit();
+    if (snapshot.value.slice(start, end) === text) return false;
+    return replaceCapturedRange(snapshot, start, end, text,
+      admission(snapshot.value, start, end, text), signal);
   };
 
   /**
@@ -375,24 +474,12 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
    * edits to a document the user already accepted as large proceed natively.
    */
   const gateLargeInsert = (text: string, event: { preventDefault(): void }): void => {
-    const threshold = opts.largeInsertBytes ?? 0;
-    const hardLimit = opts.hardLimitBytes ?? 0;
-    const confirmer = opts.confirmLargeInsert;
-    if (!confirmer || threshold <= 0 || !text) return;
-    const encoder = new TextEncoder();
-    const { selectionStart, selectionEnd, value } = input;
-    const currentBytes = encoder.encode(value).length;
-    const textBytes = encoder.encode(text).length;
-    const nextBytes = encoder.encode(
-      value.slice(0, selectionStart) + text + value.slice(selectionEnd),
-    ).length;
-    const crossesGate = nextBytes > threshold && currentBytes <= threshold;
-    const passesHardLimit = hardLimit > 0 && nextBytes > hardLimit;
-    if (!crossesGate && textBytes <= threshold && !passesHardLimit) return;
+    if (!text) return;
+    const snapshot = captureEdit();
+    const gate = admission(snapshot.value, snapshot.start, snapshot.end, text);
+    if (!gate.needsConfirmation) return;
     event.preventDefault();
-    void confirmer(nextBytes).then((proceed) => {
-      if (proceed) insertTextPreservingUndo(text);
-    });
+    void replaceCapturedRange(snapshot, snapshot.start, snapshot.end, text, gate);
   };
 
   const onPasteEvent = (event: ClipboardEvent): void => {
@@ -419,22 +506,72 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     gateLargeInsert(dt.getData("text/plain"), event);
   };
 
-  input.addEventListener("input", onInputEvent);
-  input.addEventListener("scroll", onScroll);
-  input.addEventListener("keydown", onKeyDown);
-  input.addEventListener("paste", onPasteEvent);
-  input.addEventListener("dragover", onDragOverEvent);
-  input.addEventListener("drop", onDropEvent);
+  const bindInput = (target: HTMLTextAreaElement): void => {
+    target.addEventListener("input", onInputEvent);
+    target.addEventListener("scroll", onScroll);
+    target.addEventListener("keydown", onKeyDown);
+    target.addEventListener("paste", onPasteEvent);
+    target.addEventListener("dragover", onDragOverEvent);
+    target.addEventListener("drop", onDropEvent);
+    target.addEventListener("select", onSelect);
+    target.addEventListener("compositionstart", onCompositionStart);
+    target.addEventListener("compositionend", onCompositionEnd);
+  };
+  const unbindInput = (target: HTMLTextAreaElement): void => {
+    target.removeEventListener("input", onInputEvent);
+    target.removeEventListener("scroll", onScroll);
+    target.removeEventListener("keydown", onKeyDown);
+    target.removeEventListener("paste", onPasteEvent);
+    target.removeEventListener("dragover", onDragOverEvent);
+    target.removeEventListener("drop", onDropEvent);
+    target.removeEventListener("select", onSelect);
+    target.removeEventListener("compositionstart", onCompositionStart);
+    target.removeEventListener("compositionend", onCompositionEnd);
+  };
+  bindInput(input);
+
+  const search = mountEditorSearch(pane, head, input, highlight, {
+    replaceRange, hardLimitBytes: opts.hardLimitBytes,
+  });
 
   syncSize("");
 
   return {
-    input,
+    get input(): HTMLTextAreaElement { return input; },
+    replaceRange,
     setDocument(doc): void {
+      if (destroyed) return;
       const text = doc?.text ?? "";
+      const nextKey = doc ? (doc.id === undefined ? `name:${doc.name}` : `id:${doc.id}`) : null;
+      const switched = nextKey !== documentKey;
+      const sameText = input.value === text;
+      // App adopts the first typed text as Untitled during onInput. That establishes
+      // ownership without erasing the very native undo entry that created it.
+      const adoptingInput = documentKey === null && doc !== null && reportingInput && sameText;
+      if (switched || !sameText) editRevision++;
+      documentKey = nextKey;
       fileNameEl.textContent = doc?.name ?? "Untitled.md";
-      if (input.value === text) return;
+      if (sameText && (!switched || adoptingInput)) {
+        if (switched) search.sourceChanged(true);
+        return;
+      }
+      const previousSelection = selection();
+      const restoreFocus = switched && document.activeElement === input;
+      if (switched) {
+        // Chromium can retain native undo even across different value assignments.
+        // A fresh editing host gives this document its own native history and makes
+        // stale DOM references inert. Initial typed-document adoption returns above.
+        const previousInput = input;
+        unbindInput(previousInput);
+        input = createInput();
+        bindInput(input);
+        previousInput.replaceWith(input);
+        composing = false;
+      }
       input.value = text;
+      if (sameText) input.setSelectionRange(
+        previousSelection.start, previousSelection.end, previousSelection.direction,
+      );
       input.scrollTop = 0;
       input.scrollLeft = 0;
       onScroll();
@@ -447,6 +584,9 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       }
       syncSize(text);
       scheduleHighlight(text);
+      search.setInput(input);
+      search.sourceChanged(true);
+      if (restoreFocus) input.focus({ preventScroll: true });
     },
     setCodeTheme(next): void {
       if (next === codeTheme) return;
@@ -460,14 +600,10 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     },
     destroy(): void {
       destroyed = true;
+      search.destroy();
       if (highlightTimer) clearTimeout(highlightTimer);
       if (statTimer) clearTimeout(statTimer);
-      input.removeEventListener("input", onInputEvent);
-      input.removeEventListener("scroll", onScroll);
-      input.removeEventListener("keydown", onKeyDown);
-      input.removeEventListener("paste", onPasteEvent);
-      input.removeEventListener("dragover", onDragOverEvent);
-      input.removeEventListener("drop", onDropEvent);
+      unbindInput(input);
       pane.remove();
     },
   };

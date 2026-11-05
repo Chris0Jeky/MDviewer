@@ -89,8 +89,9 @@ cross-origin-inaccessible rule lists are not inspected as readiness evidence.
 After successful CSS, the existing clone normalization reveals the sheet and
 removes preview scaling/clipping. A layout read precedes a separate ten-second
 font deadline. `fonts.ready` must settle and no font in that document's font set
-may have error status. Font readiness can settle after failures, so settlement
-alone is insufficient. Footnote marker painting and the existing one-canvas-per-
+may have error status. The [Font Loading specification](https://www.w3.org/TR/css-font-loading-3/#font-face-set-ready)
+defines the ready promise as fulfilling even after font failures, so settlement
+alone is insufficient. Unused, unloaded faces are allowed. Footnote marker painting and the existing one-canvas-per-
 paginated-page export then continue normally.
 
 The source DOM, prepared-page lease, pagination order, export APIs, native save
@@ -108,11 +109,35 @@ waits and the complete multi-page export still have no new overall timeout.
 
 ## Evidence and acceptance
 
-| Head / run | Evidence | Limit |
+The workflows use the default pull-request merge ref. Runs below are associated
+with the listed PR head, while their runtime tree is the synthetic integration
+with main available to that run. In particular, the run associated with
+`268bcb8f` includes main `4976` and its New/Find features. Test counts include the
+main-branch tests present in each merge ref. These runs do not establish runtime
+behavior of an isolated historical branch tree. Final qualification requires an
+explicit merge of current main into the branch, fresh CI, and verification of
+the source archive COMMIT/TREE against that integrated tree.
+
+| PR head / run | Evidence | Limit |
 | --- | --- | --- |
 | `8ca1b584`, [CI 42030752873](https://github.com/Chris0Jeky/MDviewer/actions/runs/42030752873), Chromium job `127256289626` | Both offline attempts recorded a controlled source, initially uncontrolled capture iframe, and the real CSS error. 114 passed, 2 failed, 5 skipped. [Artifact 13416716182](https://github.com/Chris0Jeky/MDviewer/actions/runs/42030752873/artifacts/13416716182). | No saved offline PDF; this establishes the failure, not pixel fidelity. |
 | `4de36024`, [CI 42033740144](https://github.com/Chris0Jeky/MDviewer/actions/runs/42033740144), Chromium job `127266404527` | The controlled `srcdoc` proof passed: control survived adoption; CSS and a KaTeX font returned 200 from the worker. Removing the exact cached CSS entry caused a real error while the source remained styled. 115 passed, the same 2 export failures, 5 skipped. [Artifact 13418076297](https://github.com/Chris0Jeky/MDviewer/actions/runs/42033740144/artifacts/13418076297). | This is a capture-context proof, not a PDF/export replacement. |
-| `c02627a8`, [CI 42036581888](https://github.com/Chris0Jeky/MDviewer/actions/runs/42036581888), Chromium job `127276196392` | The original offline download, actual saved-PDF RGB/ink checks, deliberately damaged second PDF, and existing online CSS controls passed. 120 passed, 1 failed, 5 skipped. Local checks: 721 unit tests in 64 files, typecheck/lint, 4 server tests, web and desktop web builds. [Artifact 13418942201](https://github.com/Chris0Jeky/MDviewer/actions/runs/42036581888/artifacts/13418942201). | The new cache-loss control failed on its restored-cache retry. Its trace showed ordinary uncontrolled capture frames on all three attempts. The test had not asserted the offline routing hint; aligning its additional cache-control CDP session is the next harness check. Cache-recovery acceptance still needs exact-head hosted results. |
+| `c02627a8`, [CI 42036581888](https://github.com/Chris0Jeky/MDviewer/actions/runs/42036581888), Chromium job `127276196392` | The original offline download, actual saved-PDF RGB/ink checks, deliberately damaged second PDF, and existing online CSS controls passed. 120 passed, 1 failed, 5 skipped. All 11 RGB samples and 6 ink measurements matched the online PDF. Local checks: 721 unit tests in 64 files, typecheck/lint, 4 server tests, web and desktop web builds. [Artifact 13418942201](https://github.com/Chris0Jeky/MDviewer/actions/runs/42036581888/artifacts/13418942201). | The new cache-loss control failed on its restored-cache retry. Its trace showed ordinary uncontrolled capture frames on all three attempts; the test had not asserted the offline routing hint. The additional cache-control CDP session was aligned in the next test-only candidate. |
+| `f5a3b6f8`, [CI 42038913043](https://github.com/Chris0Jeky/MDviewer/actions/runs/42038913043), Chromium job `127284220223` | 126 passed, 5 skipped, no failures. The CSS control asserted an offline source before all captures, two missing-CSS requests in the controlled destination, no saves or retained frames, restoration of the original cached response, then worker-served CSS and an actual one-page PDF. Existing saved-PDF pixels, damaged controls and online failure/retry guards passed. [Artifact 13420422027](https://github.com/Chris0Jeky/MDviewer/actions/runs/42038913043/artifacts/13420422027) includes the recovery PDF. | The capture implementation files are unchanged from `c02627a8`. The extra test CDP session explicitly emulates offline after reload. The initial body-only JSON attachment was not retained by the artifact upload; the assertions and PDF were retained. Later runs write the JSON file explicitly. The missing-font control was not yet present at this head. |
+| `268bcb8f`, [CI 42039793150](https://github.com/Chris0Jeky/MDviewer/actions/runs/42039793150), Chromium job `127287280284` | 127 passed, 5 skipped, no failures. The real font-cache control passed: the source retained its loaded font; two captures requested the missing font in `about:srcdoc` while CSS remained worker-served; neither saved a PDF or retained a frame. Restoring the original response yielded a worker-served font and an actual one-page PDF. Existing CSS recovery, saved-PDF pixels, damaged controls and online guards remained green. [Artifact 13420388005](https://github.com/Chris0Jeky/MDviewer/actions/runs/42039793150/artifacts/13420388005). | The capture implementation files are unchanged from `c02627a8`. This head still used body-only recovery JSON attachments; the final integration writes those files explicitly. Reconciliation with current main and any further commit require fresh exact-head CI and review. |
+
+The same `268bcb8f` head did not pass every platform gate. In
+[Windows run 42039793185](https://github.com/Chris0Jeky/MDviewer/actions/runs/42039793185),
+native job `127287280277` passed the build and 22 Rust tests, then timed out waiting
+for its first Save dialog. The same readiness race also affected main `4976`;
+[#190](https://github.com/Chris0Jeky/MDviewer/issues/190) tracks the desktop smoke
+correction. [Native artifact 13421195361](https://github.com/Chris0Jeky/MDviewer/actions/runs/42039793185/artifacts/13421195361)
+has SHA256 `55ed02f0e4f7200e85d95473409909d71f7594bc1ffbcf99031bbe0ca77e0727`.
+The correction has since merged in [#192](https://github.com/Chris0Jeky/MDviewer/pull/192)
+as `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`, after all five jobs passed and the
+source TREE and actual two-dialog native save metrics were verified. This integration
+includes that correction and must pass fresh native and browser
+checks before qualification; the passing raster assertions do not close this gate.
 
 Required browser acceptance remains the actual offline downloaded-PDF RGB/ink
 test and its deliberately damaged second download in `raster-visual.spec.ts`.
@@ -131,6 +156,15 @@ controller and offline hint, and resource events must identify the controlled
 destination. There are no route-provided CSS responses. Unit cases
 cover source/link/style ordering, generated styles, controller refusal, bounded
 navigation, inactive links, final CSS failure/cleanup/retry and failed fonts.
+
+`raster-fonts-ready.spec.ts` removes the exact precached KaTeX Main-Regular woff2
+response only after the source's corresponding face is loaded. Its two exports
+must receive the font-failure message and save no PDF while app CSS still loads
+through the worker. It requires missing-font requests in the controlled
+destination, complete cleanup, unchanged source text/view, and retention of the
+source's loaded face. Restoring the original response must yield a worker-served
+font and an actual one-page PDF. Both cache-loss controls keep their normal test
+deadlines and write bounded resource/source metadata to artifact JSON files.
 
 Exact-head CI and independent review still apply after main reconciliation or
 further commits. This note does not close second-engine, live/PWA operator,

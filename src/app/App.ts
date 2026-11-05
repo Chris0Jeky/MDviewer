@@ -140,10 +140,12 @@ export class App {
     inputHandlers?: boolean;
     openFilePicker?: () => void;
     canRestoreDocument?: RestoreAdmission;
+    createDocument?: () => void;
+    layoutInitiallyOpen?: boolean;
   } = {}): App {
     const app = new App(root);
     app.filePicker = options.openFilePicker ?? null;
-    app.buildShell(options.canRestoreDocument);
+    app.buildShell(options.canRestoreDocument, options.createDocument, options.layoutInitiallyOpen);
     app.applyThemeAttributes();
     app.applyViewMode();
 
@@ -198,9 +200,9 @@ export class App {
    * `data-view-mode` on #workspace decides which of the three columns are shown; the
    * panes are always mounted so switching modes never rebuilds or re-renders anything.
    */
-  private buildShell(canRestoreDocument?: RestoreAdmission): void {
+  private buildShell(canRestoreDocument?: RestoreAdmission, createDocument?: () => void, layoutInitiallyOpen?: boolean): void {
     // Row 1 then row 2 — append order defines the grid rows.
-    this.toolbar = mountToolbar(this.root, this, canRestoreDocument);
+    this.toolbar = mountToolbar(this.root, this, canRestoreDocument, createDocument, layoutInitiallyOpen);
 
     this.workspaceEl = el("div", { id: IDS.workspace, class: "workspace" });
     this.root.append(this.workspaceEl);

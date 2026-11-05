@@ -7,7 +7,7 @@ import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
 import { native, type OpenBatch } from "./native";
-import { ReaderSession, decodeMarkdown, drainSerially } from "./session";
+import { ReaderSession, decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { renderReaderDocument } from "./render";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 
@@ -30,6 +30,7 @@ const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
 const workspaceButton = element<HTMLButtonElement>("reader-workspace");
+const newButtons = [element<HTMLButtonElement>("reader-new"), element<HTMLButtonElement>("reader-new-empty")];
 const closeButton = element<HTMLButtonElement>("reader-close");
 const returnButton = element<HTMLButtonElement>("reader-return");
 const settings = loadSettings();
@@ -79,6 +80,11 @@ function syncDocuments(): void {
   select.disabled = !docs.length;
   closeButton.disabled = !active;
   workspaceButton.disabled = !active || changingMode;
+  const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
+  returnButton.disabled = workspaceBusy;
+  for (const button of newButtons) button.disabled = workspaceBusy;
+  const workspaceNew = appRoot.querySelector<HTMLButtonElement>('.workspace-actions > button[data-document-command="new"]');
+  if (workspaceNew) workspaceNew.disabled = workspaceBusy;
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
@@ -194,10 +200,34 @@ async function open(): Promise<void> {
   catch (error) { report(`Could not open files: ${errorText(error)}`); }
 }
 
-async function enterWorkspace(): Promise<void> {
+async function createDocument(): Promise<void> {
+  if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
+  const doc = { name: nextUntitledName(app ? app.store.openDocs : session.documents), text: "" };
+  if (app) {
+    if (!canRestoreDocument(doc)) return;
+    ++generation;
+    const added = app.store.add(doc.name, doc.text);
+    workspaceOriginals.set(added.id, { ...doc, dirty: false });
+    if (app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
+    syncDocuments(); // add emits before the explicit clean baseline is recorded.
+    app.focusEditor();
+    return;
+  }
+  const errors = session.append([doc]);
+  report(errors.join(" "));
+  if (errors.length) return;
+  ++generation;
+  await enterWorkspace(true);
+}
+
+async function enterWorkspace(revealEditor = false): Promise<void> {
   if (app || changingMode || !session.active) return;
   changingMode = true; ++generation; ++renderGeneration;
+  // Layout needs a visible workspace, but its controls must not accept input
+  // until the initial render and source handoff have finished.
+  appRoot.inert = true;
   syncDocuments();
+  let focusWhenReady = false;
   try {
     await renderChain;
     const { startWorkspace } = await import("./workspace");
@@ -206,12 +236,13 @@ async function enterWorkspace(): Promise<void> {
     document.body.classList.add("desktop-editing");
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument);
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument);
     app = mounted.app;
     const selected = session.documents.findIndex(doc => doc.id === session.activeId);
     const added = app.store.addBatch(session.documents);
     workspaceOriginals = new Map(added.map((doc, index) => [doc.id, session.documents[index]!]));
     if (added[selected]) app.store.setActive(added[selected]!.id);
+    if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
     const offText = app.store.on("text", () => { generation += 1; });
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
@@ -221,7 +252,7 @@ async function enterWorkspace(): Promise<void> {
       if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
       syncDocuments();
     });
-    const offExport = app.onExportStateChange(state => { returnButton.disabled = state.busy || nativeSaveBusy; });
+    const offExport = app.onExportStateChange(() => syncDocuments());
     detachWorkspace = () => { mounted.detachShortcuts(); offText(); offChange(); offExport(); };
     // The App, selection and dirty baselines now own every transferred source.
     // Keep the old session intact until that handoff succeeds, then release it.
@@ -229,7 +260,7 @@ async function enterWorkspace(): Promise<void> {
     session.activeId = null;
     content.replaceChildren(); // Release the reader DOM while the PDF workspace owns the document.
     await app.flushRender();
-    app.focusEditor();
+    focusWhenReady = true;
   } catch (error) {
     const failure = `Could not open the editing workspace: ${errorText(error)}`;
     report(failure);
@@ -237,14 +268,17 @@ async function enterWorkspace(): Promise<void> {
       workspace.hidden = true; shell.hidden = false; document.body.classList.remove("desktop-editing");
       void render([failure]);
     }
-  } finally { finishMode(); }
+  } finally { appRoot.inert = false; finishMode(); }
+  // An inert textarea cannot receive focus. Also finish queued imports before
+  // announcing entry by focusing the current editor.
+  if (focusWhenReady) app?.focusEditor();
 }
 
 async function returnToReader(): Promise<void> {
   if (!app || changingMode || app.exportState.busy || nativeSaveBusy) return;
   changingMode = true; ++generation;
-  returnButton.disabled = true;
   appRoot.inert = true; // No edits or sample actions may race the ownership snapshot.
+  syncDocuments();
   try {
     await app.flushRender();
     const next = new ReaderSession();
@@ -284,7 +318,7 @@ async function returnToReader(): Promise<void> {
     await render();
     content.focus();
   } catch (error) { report(`Could not return to reading: ${errorText(error)}`); }
-  finally { appRoot.inert = false; returnButton.disabled = false; finishMode(); }
+  finally { appRoot.inert = false; finishMode(); }
 }
 
 function finishMode(): void {
@@ -304,6 +338,7 @@ function closeDocument(): void {
 }
 
 element("reader-open").addEventListener("click", () => { void open(); });
+for (const button of newButtons) button.addEventListener("click", () => { void createDocument(); });
 for (const input of [fileInput, element<HTMLInputElement>("file-input")]) {
   input.addEventListener("change", () => {
     const files = Array.from(input.files ?? []);
@@ -352,9 +387,14 @@ window.addEventListener("drop", event => {
   void readFiles(Array.from(event.dataTransfer.files));
 });
 window.addEventListener("keydown", event => {
-  if (app || changingMode || event.altKey || !(event.ctrlKey || event.metaKey)) return;
-  if (event.key.toLowerCase() === "o") { event.preventDefault(); void open(); }
-  if (event.key.toLowerCase() === "w") { event.preventDefault(); closeDocument(); }
+  if (app || event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (key !== "n" && key !== "o" && key !== "w") return;
+  event.preventDefault();
+  if (event.repeat || changingMode) return;
+  if (key === "n") void createDocument();
+  if (key === "o") void open();
+  if (key === "w") closeDocument();
 });
 document.addEventListener("click", event => {
   const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
@@ -382,13 +422,13 @@ if (native.available) {
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
-    returnButton.disabled = true;
+    syncDocuments();
     try {
       const result = await native.save(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;
-      returnButton.disabled = changingMode || !!app?.exportState.busy;
+      syncDocuments();
     }
   });
   const drain = drainSerially(async () => {

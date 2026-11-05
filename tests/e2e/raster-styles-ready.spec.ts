@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
 import { readRasterPdf } from "../helpers/rasterPdf";
 
@@ -229,7 +229,9 @@ test("missing cached CSS saves no offline PDF, cleans up and permits a restored-
     expect(evidence.some(event => event.event === "stylesheet-response" && event.frame === "about:srcdoc" &&
       event.fromServiceWorker === true && event.status === 200), "retry CSS must come from the service worker").toBe(true);
   } finally {
-    await info.attach("offline-css-recovery", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+    const path = info.outputPath("offline-css-recovery.json");
+    await writeFile(path, JSON.stringify(evidence, null, 2));
+    await info.attach("offline-css-recovery", { path, contentType: "application/json" });
     if (info.status !== info.expectedStatus) console.log("Offline CSS recovery:", JSON.stringify(evidence));
     if (!page.isClosed()) await session.detach();
   }

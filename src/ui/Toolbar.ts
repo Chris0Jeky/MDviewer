@@ -218,7 +218,8 @@ function divider(): HTMLElement {
  * Mount the toolbar into `root` and wire every control to the App. Returns a
  * controller whose `destroy()` removes the DOM and unsubscribes from the store.
  */
-export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: RestoreAdmission): ToolbarController {
+export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: RestoreAdmission,
+  createDocument?: () => void, layoutInitiallyOpen?: boolean): ToolbarController {
   const s: Settings = app.settings;
 
   const bar = el("div", {
@@ -259,9 +260,14 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
   const docGroup = group("Document", docField, docCloseBtn);
   const brand = el("div", { class: "workspace-brand" },
     el("strong", {}, "MDviewer"), el("span", {}, "Markdown to print"));
-  const openBtn = el("button", { type: "button", class: CLASSES.workspaceAction }, "Open Markdown");
+  const newBtn = createDocument ? el("button", { type: "button", class: CLASSES.workspaceAction,
+    attrs: { "data-document-command": "new" }, title: "Start a blank Markdown document" }, "New") : null;
+  if (newBtn && createDocument) newBtn.addEventListener("click", createDocument);
+  const openBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
+    attrs: { "data-document-command": "open" } }, "Open Markdown");
   openBtn.addEventListener("click", () => app.openFilePicker());
   const saveBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
+    attrs: { "data-document-command": "save" },
     title: "Download the current source. Documents are not saved by this app." }, "Save Markdown");
   const sessionStatus = el("span", { class: "workspace-session-status", attrs: { role: "status" } });
   saveBtn.addEventListener("click", async () => {
@@ -452,11 +458,11 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
   const exportGroup = group("Export", printBtn, downloadBtn);
 
   const primaryRow = el("div", { class: "workspace-actions" },
-    brand, openBtn, docGroup,
+    brand, ...(newBtn ? [newBtn] : []), openBtn, docGroup,
     el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
     viewGroup, themeGroup, exportGroup);
   const layoutDetails = el("details", { class: "workspace-formatting" });
-  layoutDetails.open = typeof matchMedia !== "function" || !matchMedia("(max-width: 760px)").matches;
+  layoutDetails.open = layoutInitiallyOpen ?? (typeof matchMedia !== "function" || !matchMedia("(max-width: 760px)").matches);
   const layoutSummary = el("summary", {}, "Document layout",
     el("span", { class: "workspace-formatting-hint" }, "Typography, paper & page furniture"));
   const formattingRow = el("div", { class: "workspace-formatting-controls" },

@@ -3,25 +3,32 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (blocked html2canvas-pro 2.6 draft):**
-> [Draft #178](https://github.com/Chris0Jeky/MDviewer/pull/178) runs exact html2canvas-pro
-> 2.6.0 and retains the observed stylesheet-outcome capture adapter and offline visual
-> gate. Main remains pinned to 2.5.2 as containment; that pin is not offline pixel proof.
-> This candidate incorporates #180's visible, recoverable fatal feedback. The error UI
-> correction does not repair offline stylesheet availability or qualify PDF output.
-> The last completed pre-inheritance draft head, 6516c5dd, recorded 113 passing web
-> tests, two offline failures and five skips in
-> [CI 41959269737](https://github.com/Chris0Jeky/MDviewer/actions/runs/41959269737).
-> Both offline cases failed before a PDF download; the stronger visual case did not
-> reach its pixel or damaged-control assertions. Desktop's 18 cases and native Windows
-> checks passed in [run 41959269733](https://github.com/Chris0Jeky/MDviewer/actions/runs/41959269733).
-> The final inherited head and fresh exact-head evidence are tracked in #178. This
-> checkpoint makes no claim that those fresh checks or offline fidelity have passed.
-> [Offline fidelity issue #174](https://github.com/Chris0Jeky/MDviewer/issues/174) remains
-> a merge blocker. #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No deployment, signed
-> release or comparative performance claim is made.
+> **CURRENT CHECKPOINT - 2026-11-05 (desktop authoring and offline capture):**
+> Integration basis is merged main `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`.
+> New documents (#183), guarded native editor mutations (#185), compact desktop
+> writing space (#187), Find/Replace (#188), and desktop entry readiness (#192)
+> are merged. #192 fixes controls becoming available before their transition could
+> accept a Save click. Its five hosted jobs passed, including both real native Save
+> dialogs, exact Markdown bytes and PDF header/EOF; its verified source TREE matches
+> the reviewed head. The failing main and PR-integration artifacts remain in #190.
+> This source tree integrates #178's exact html2canvas-pro 2.6.0 capture adapter and
+> removes the temporary 2.6.0 Dependabot exclusion. Offline controlled sources use
+> an owned controlled `srcdoc` destination; real CSS/font failures still save no PDF.
+> Browser checks associated with `268bcb8f` passed 127 cases with five existing optional
+> skips, including saved-PDF pixels, damaged controls and actual CSS/font cache-loss
+> recovery. Its native readiness failure is addressed by the inherited #192 fix.
+> Final combined-head review, all five checks and source provenance remain mandatory
+> before this integration merges; PR #178 records those final receipts. See
+> `docs/design/RASTER_OFFLINE_CAPTURE.md` for lifecycle evidence and limits.
+> Active-match visibility #189 / draft #191 remains separate: its initial jobs passed,
+> but screenshot review found large plain-source misalignment. The stronger geometry
+> regression must pass and the actual screenshots must align before that work merges.
+> Windows acceptance/performance #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No live
+> deployment, signed release, automatic updater or comparative RAM/startup claim follows.
 
-> **PREVIOUS CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
 > Based on merged main 8265edd4, including the workspace correction #177 and CLI
 > update #176. This checkpoint implements #179 in PR #180: fatal feedback is visible
 > and actionable in Markdown-only mode while the preview remains parked. Showing

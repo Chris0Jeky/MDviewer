@@ -49,12 +49,12 @@ Export click → capture document id/name/text and settings NOW
 | Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
 | Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
 | Vector / raster PDF | `src/export/{print,download,footnoteMarkers}.ts` | `tests/export-download.test.ts`, `tests/raster-{content-clone,styles-ready,footnote-markers}.test.ts`, `tests/e2e/export.spec.ts`, `tests/e2e/raster-resolution.spec.ts` (preview isolation), `tests/e2e/raster-{visual,footnotes,styles-ready}.spec.ts` (saved pixels, CSS delay/failure recovery and damage controls); spec §§5,10 and `docs/PDF_VISUAL_REGRESSION.md` |
-| Offline raster capture document and CSS ownership | `src/export/offlineCapture.ts`, `src/export/download.ts` | `tests/raster-offline-capture.test.ts`, `tests/e2e/raster-offline-frame.spec.ts`, existing saved-PDF pixels and real cache-loss/no-save/retry in `tests/e2e/raster-{visual,styles-ready}.spec.ts`; spec §§5,6,10; `docs/design/RASTER_OFFLINE_CAPTURE.md` |
+| Offline raster capture document and CSS ownership | `src/export/offlineCapture.ts`, `src/export/download.ts` | `tests/raster-offline-capture.test.ts`, `tests/e2e/raster-offline-frame.spec.ts`, existing saved-PDF pixels and real CSS/font cache-loss/no-save/retry in `tests/e2e/raster-{visual,styles-ready,fonts-ready}.spec.ts`; spec §§5,6,10; `docs/design/RASTER_OFFLINE_CAPTURE.md` |
 | Exact source download and filename | `src/export/markdown.ts` | `tests/markdown-download.test.ts`, `tests/e2e/workspace-design.spec.ts` |
-| Local Open/Save keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
+| Local Open/Save and optional desktop New keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
 | Preview zoom envelope, horizontal reach, pinned feedback | `src/ui/Canvas.ts`, `src/styles/{preview,workspace}.css` | `tests/e2e/workspace-design.spec.ts` and canvas E2E |
-| Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
+| Textarea/backdrop, native editing/ownership, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
 | Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts`, `src/app/App.ts` | `tests/app-ingestion-notices.test.ts`, `tests/app-export-lifetime.test.ts`, `tests/e2e/{empty-error,raster-styles-ready}.spec.ts`; spec §7 pins independent notice/warning lifetimes and visible, recoverable fatal feedback |
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
 | Patched transitive dependencies and supported Node floor | `package.json`, `package-lock.json` | `tests/dependency-security.test.ts` checks the wrapper-resolved KaTeX trust boundary and encoded-host normalization; spec §2 |
@@ -117,9 +117,9 @@ Source footnote IDs must avoid headings and suffix collisions. Repeated citation
 
 Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` or change natural page dimensions. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
 
-The PDF action classes identify PDF actions only; source Open/Save use `workspaceAction`. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings.
+The PDF action classes identify PDF actions only; source New/Open/Save use `workspaceAction` for styling and explicit `data-document-command` identities for routing. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings. Desktop supplies `layoutInitiallyOpen: false` through App/Toolbar; the web entry keeps its viewport-adaptive default. This screen-only disclosure preference is never persisted and does not alter pagination. Desktop tests: `tests/desktop-toolbar.test.ts`, `tests/desktop-e2e/toolbar.spec.ts`.
 
-Document shortcuts call the existing direct `button.workspace-action` controls in `.workspace-actions` and `.workspace-session`, not a new download/ingestion path. The session `.workspace-privacy` hosts the visible `.workspace-shortcuts` hint. Respect handled/IME/Alt/Shift/combined-modifier events; prevent matched disabled or repeated keys without clicking. Detached workspaces are inert. Main owns installation and HMR disposal; all original button attributes are restored on teardown. Saving source never persists it in the app or removes unload protection.
+Document shortcuts call the existing direct `button[data-document-command="open"]` in `.workspace-actions` and `button[data-document-command="save"]` in `.workspace-session`. An optional unique `button[data-document-command="new"]` adds desktop Ctrl/Cmd+N. Missing required or ambiguous commands fail mounting; styling classes are not routing identities. The buttons own creation, opening and saving. The session `.workspace-privacy` hosts the visible `.workspace-shortcuts` hint. Respect handled/IME/Alt/Shift/combined-modifier events; prevent matched disabled or repeated keys without clicking. Detached workspaces are inert. Main owns installation and HMR disposal; all original button attributes are restored on teardown. Saving source never persists it in the app or removes unload protection.
 
 UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plugin's automatic navigation. App rejects reload during export; current work is checked immediately before an explicitly accepted navigation. Cancellation, dismissal, rejection and timeout must leave usable controls and navigation protection.
 
@@ -154,8 +154,46 @@ Desktop releases the reader's old source list after successful handoff, prunes c
 workspace baselines and clears them after successful return. Missing baselines remain
 dirty, and a failed teardown flush restores the same identities and baselines. Title
 and reader picker metadata follow the current workspace store, including queued input.
+Desktop entry and return keep the App subtree inert through their ownership handoff.
+Entry releases it and drains queued imports before focusing; failure paths release
+the guard without discarding transferred sources. Reading view/New share one
+transition/export/native-save availability calculation. The native smoke requires
+visible, enabled UIA buttons; `readyWorkspace` also waits for actual inert=false.
+See `tests/desktop-lifetime.test.ts`, `tests/desktop-new-document.test.ts` and
+`docs/design/2026-11-05-desktop-workspace-readiness.md`.
 
-Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not reuse `.workspace-action` for these buttons or break the unique keyboard Open/Save selectors. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
+Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not borrow New/Open/Save `data-document-command` identities for recovery buttons. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
+
+
+## Guarded source editing
+
+`EditorController.setDocument` accepts an optional stable `id`; App's DocStore
+supplies it. Same-ID/same-text notifications preserve caret and undo. Equal-text
+identity switches invalidate delayed work and replace the textarea to isolate native
+undo history; first-input adoption is preserved. The read-only `input` getter returns
+the current node; node listeners must be rebound after a switch. `replaceRange(start, end, text,
+signal?): Promise<boolean>` replaces UTF-16 ranges through shared UTF-8 admission,
+selection/document/revision/focus guards and native insertText. False means refused,
+stale, unavailable, unchanged or aborted. The manual fallback emits one input event.
+Abort prevents commitment but does not settle or dismiss the host confirmation.
+See spec §12, `tests/editor-edit-safety.test.ts`,
+`tests/e2e/editor-edit-safety.spec.ts` and
+`docs/design/2026-11-05-editor-edit-ownership.md`.
+
+
+## Desktop New document
+
+`src/desktop/main.ts` owns creation from reader/empty/workspace controls and
+Ctrl/Cmd+N. `src/desktop/session.ts` exports
+`nextUntitledName(docs: readonly { name: string }[]): string` for case-insensitive
+open-name collision avoidance. Desktop admits the empty source through current
+count/UTF-8 limits, records a clean baseline, preserves existing sources and late
+open selection ownership, then reveals/focuses the source. Mode transitions,
+export and native save block creation. Reader startup stays lazy until New or
+Edit & PDF. `App.init` forwards optional `createDocument?: () => void` through
+Toolbar; web defaults remain compatible. See spec §14,
+`tests/desktop-new-document.test.ts`, `tests/desktop-e2e/new-document.spec.ts` and
+`docs/design/DESKTOP_AUTHORING_PLAN.md`.
 
 
 ## Reader-only lazy highlighting
@@ -189,3 +227,17 @@ installed ESLint, config-array, typescript-estree and Workbox consumers through
 CommonJS and checks bounded preprocessing, matching/ignores, real precache output
 and canceled filesystem traversal. Advisory evidence and rejected deepmerge audit
 residue are documented in `docs/DEVELOPMENT_DEPENDENCIES.md`.
+
+## Source Find and Replace
+
+`src/ui/EditorSearchModel.ts` owns bounded literal matching (2,000 query characters,
+10,000 retained matches), UTF-16 navigation and exact UTF-8 bulk-edit preflight.
+`src/ui/EditorSearch.ts` mounts the inline source search panel and receives guarded
+`replaceRange`; it does not directly mutate source. Its `setInput` rebinds selection
+listeners to the current textarea, `sourceChanged(true)` aborts stale edits, and
+`destroy` removes timers/listeners. Canonical IDs/classes are in `src/app/dom.ts`;
+responsive geometry is in `src/styles/editor.css`. Search is memory-only, scans
+only while open, preserves source/native undo ownership and never prints.
+See spec §12, `tests/{editor-search,editor-search-model}.test.ts`,
+`tests/e2e/editor-search.spec.ts`, `tests/desktop-e2e/editor-search.spec.ts` and
+`docs/superpowers/specs/2026-11-05-editor-find-replace-design.md`.

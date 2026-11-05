@@ -10,10 +10,6 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    ignore:
-      # Revisit 2.6.0 after offline export qualification: https://github.com/Chris0Jeky/MDviewer/issues/174
-      - dependency-name: "html2canvas-pro"
-        versions: ["2.6.0"]
     groups:
       production-dependencies:
         dependency-type: "production"

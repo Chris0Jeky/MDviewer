@@ -197,13 +197,13 @@ Each file pick/drop appends its accepted documents in one store notification and
 
 ## 8. DOM IDs and CSS cascade
 
-Existing IDs and named contracts stay in `src/app/dom.ts`; Paged.js-owned names must never be renamed. `workspaceAction` distinguishes source Open/Save buttons from `exportPrimary` and `exportSecondary`, which remain PDF-only control identities.
+Existing IDs and named contracts stay in `src/app/dom.ts`; Paged.js-owned names must never be renamed. `workspaceAction` styles source New/Open/Save buttons and distinguishes them from `exportPrimary` and `exportSecondary`, which remain PDF-only control identities.
 
 Import order in `main.ts` is **app → editor → preview → document → workspace → print → shiki → pwa**. Workspace styles are chrome, not document typography. Print overrides the screen envelope, and the generated Paged.js stylesheet remains independent.
 
-The primary toolbar row contains identity, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting; it starts expanded on desktop and collapsed at widths up to 760 px. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
+The primary toolbar row contains identity, optional desktop New, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting. The web entry starts it expanded above 760 px and collapsed at narrower widths. The experimental Windows desktop starts it collapsed at every width to preserve writing space. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
 
-`DocumentShortcuts` requires exactly one direct `button.workspace-action` in each of `.workspace-actions` (Open) and `.workspace-session` (Save), plus the session's `.workspace-privacy` hint host. Missing/ambiguous controls are an explicit mount error. Shortcuts call these existing buttons synchronously; they do not duplicate input/download logic. Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S downloads current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose both actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
+`DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
 
 ## 9. Persistence and navigation
 
@@ -221,7 +221,7 @@ Keep foundation section 10's unit/real-browser distinction. Added regressions co
 
 Required check names remain Node 22 and 24 typecheck/lint/unit/build plus the production Chromium suite and Observatory guard. Node 24 is the supported strict-install lane; Node 22 remains a legacy compatibility probe until branch protection is updated. Chromium and deployment run on Node 24. Browser artifacts are uploaded on both success and failure. Do not weaken no-slice or export assertions to make a UI change pass.
 
-Offline capture also has a real resource-loss control: `raster-styles-ready.spec.ts` deletes the exact cached app stylesheet after the source is styled, requires two no-save failures with complete iframe cleanup, restores the cached response, and parses the actual PDF saved on retry. HTTP/memory cache is disabled so it cannot conceal the missing CacheStorage entry; no route supplies CSS. `raster-offline-frame.spec.ts` separately checks controller inheritance through adoption, CSS/font worker responses and a missing-cache error. That primitive proof does not replace saved-PDF pixels and damaged controls. Unit coverage in `tests/raster-offline-capture.test.ts` checks cascade order, generated styles, controller refusal, bounded navigation, inactive links and cleanup/retry. Exact-head evidence and limits are recorded in `docs/design/RASTER_OFFLINE_CAPTURE.md`.
+Offline capture also has real resource-loss controls: `raster-styles-ready.spec.ts` deletes the exact cached app stylesheet after the source is styled; `raster-fonts-ready.spec.ts` deletes the cached KaTeX Main-Regular woff2 after the source's corresponding font face is loaded. Each requires two no-save failures with complete iframe cleanup, restores the original cached response, and parses the actual PDF saved on retry. HTTP/memory cache is disabled so it cannot conceal the missing CacheStorage entry. The extra CDP session agrees with the context's offline emulation; the source offline hint and controller, a failed uncached request, controlled-frame resource errors, and worker-served recovery are asserted. No route supplies CSS or fonts. `raster-offline-frame.spec.ts` separately checks controller inheritance through adoption, CSS/font worker responses and a missing-cache error. That primitive proof does not replace saved-PDF pixels and damaged controls. Unit coverage in `tests/raster-offline-capture.test.ts` checks cascade order, generated styles, controller refusal, bounded navigation, inactive links and cleanup/retry. Exact-head evidence and limits are recorded in `docs/design/RASTER_OFFLINE_CAPTURE.md`.
 
 An isolated component probe is not a production-app test. A local dependency-install failure is not a successful suite. Validation applies to the exact tested head; integration needs its own checks even when constituent heads are green. Independent latest-head review and resolved actionable threads remain merge gates.
 
@@ -234,6 +234,72 @@ All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster
 ## 12. Split workspace and preview geometry
 
 Foundation section 12 remains the detailed editor contract: mounted panes, an invisible but measurable parked canvas in Markdown mode, in-place text events, native textarea editing, synchronous backdrop freshness, matched layer metrics, glued scrolling, bounded tokenization and editor-free print output.
+
+The editor accepts `setDocument({ id?: string, name: string, text: string } | null)`;
+App supplies the stable DocStore ID and legacy callers fall back to the name.
+Same-document, same-text notifications preserve live selection and native undo.
+A different identity fences delayed edits even when text and filename are equal;
+every real identity boundary replaces the textarea to isolate native undo history.
+The read-only `input` getter returns the current node; integrations must rebind
+node listeners after a switch. App's synchronous adoption of the first typed
+document preserves its node and first undo entry.
+
+`EditorController.replaceRange(start: number, end: number, text: string,
+signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
+shares byte admission and the undo-aware insertion path with intercepted paste,
+text drop and Tab. A delayed confirmation captures document identity, edit/source
+revision, exact text, selection/revision/direction and focused element. Focus must
+still match before commitment; document, value and selection ownership are
+rechecked after focusing the source. Refusal, rejection, abortion, composition, teardown,
+detachment, invalid range and unchanged replacement return false. A configured
+hard limit refuses even if the host accepts; ordinary typing and small paste/drop
+remain native. Abort prevents commitment but does not dismiss a host confirmation
+UI or settle an unresolved host promise. Native insertText owns its single input
+event; the manual fallback dispatches one observable input event. Coverage:
+`tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
+
+### Source Find and Replace
+
+`EditorSearchModel.ts` owns escaped literal Unicode matching with UTF-16 offsets,
+case matching, wrapping navigation and literal replacement construction. Queries
+longer than 2,000 characters receive an explicit recoverable error; at most 10,000
+matches are stored and a truncated set disables Replace all. Bulk UTF-8 size is
+computed before allocating the replacement result, including surrogate pairs
+formed across replacement boundaries.
+
+`mountEditorSearch(pane, head, input, backdrop, options)` receives only the editor's
+`replaceRange` callback and optional hard limit. Its controller exposes
+`setInput(input)`, `sourceChanged(documentChanged?)`, and `destroy()`. Editor rebinds
+Search after replacing its textarea, before restoring source focus. Document
+changes, close and teardown abort pending replacement commitment. Rebinding removes
+selection listeners from the old node; teardown removes the global shortcut.
+
+Find opens from the source header or Ctrl/Cmd+F; Ctrl/Cmd+H reveals Replace.
+Preview-only, inert, detached and composed contexts retain the host shortcuts.
+Search is literal, supports Match case, and wraps through Enter/Shift+Enter, F3
+and previous/next controls. Escape closes and returns to source. Navigation keeps
+query focus. Delayed counting cannot replace a caret chosen after the query.
+Replace all uses one native undo edit; replacement text has no substitution syntax.
+An accepted delayed edit or completion cannot reclaim focus after the user moves.
+
+Closed Search does not scan source text. While open, input changes schedule a
+90ms idle recomputation. Navigation measures the existing backdrop; large sources
+with highlighting disabled use a temporary text-only mirror with actual wrapping
+metrics, removed immediately after measurement. Search controls occupy their own
+grid row, adapt to narrow source panes and inherit source print suppression. No
+new dependencies, network traffic or document persistence are introduced.
+
+Coverage: `tests/editor-search-model.test.ts`, `tests/editor-search.test.ts`,
+`tests/e2e/editor-search.spec.ts` and `tests/desktop-e2e/editor-search.spec.ts`.
+Native undo, source geometry and print visibility require real browser evidence.
+A generated zero-width sentinel after the highlight code retains the textarea's
+empty final line after a trailing newline without changing backdrop textContent;
+both layers therefore have the same scroll range.
+At viewport heights up to 600px, open Find temporarily gives the source the Split
+workspace and hides its redundant header. The canvas remains measurable and fatal
+feedback remains visible. Closing Find restores the previous split geometry;
+view mode, split ratio and document layout settings are not changed or persisted.
+This also keeps source text usable in the supported 560×420 desktop window.
 
 Canvas zoom is still a paint-only transform and never a reflow key. The screen-only outer host envelope tracks the painted stack height to remove the unscaled blank scroll tail. Its width is at least the painted sheet plus gutters and viewport width so explicit 100% or 50% zoom retains horizontal access to the whole sheet. Remove the envelope before pagination. Reset height and width to auto and overflow to visible for print. Do not scale sheet layout measurements or crop exported pages.
 
@@ -265,7 +331,7 @@ close still replaces the offer. The ordinary web entry supplies no callback and
 retains its existing restoration behavior. Desktop supplies the same open-document
 count/UTF-8-byte gate used by its importer, including current edited source sizes.
 
-The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not use the unique Open/Save `.workspace-action` selector. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
+The `.document-recovery` row contains `.document-recovery-status`, `.document-recovery-name`, `.document-recovery-action` buttons and `.document-recovery-hint`. It is hidden without recovery and in print. Names use text nodes, full titles and narrow-screen ellipsis. Recovery buttons must not borrow the `data-document-command` identities used by New/Open/Save. Close focuses Undo; Undo/Discard return focus to the editor when visible, the active-document selector in Preview-only mode, or Open when no document remains. View mode does not change.
 
 Store notifications continue through App's existing render scheduler and export leases. The pipeline and DocStore signatures are unchanged; App's optional desktop admission hook is described in section 14. Coverage: `tests/document-recovery.test.ts`, `tests/e2e/undo-close.spec.ts`, and `tests/e2e/undo-close-lifetime.spec.ts`. The test-first baseline run 36192170082 failed exactly the three missing-Undo assertions while 83 existing browser tests passed. Final-head CI and independent review, not this baseline, determine readiness.
 
@@ -301,11 +367,20 @@ a failed teardown flush restores the same document objects, IDs, selection and
 baselines so the user can retry. The temporary rollback snapshot ends with that
 transition. The separate one-close recovery source is released by Discard, a later
 close or workspace teardown. These ownership rules do not claim a total heap cap.
-The App subtree is inert during return, and desktop captures action clicks during
-mode changes (including shortcut-generated clicks), so new edits, sample loads or
-native saves cannot race the handoff. The interaction guard is released in `finally`.
+The App subtree is inert during entry as well as return. Entry keeps it visible
+for layout but unavailable until the initial flush completes, then releases the
+guard, drains queued imports and focuses the current editor. Desktop also captures
+action clicks during mode changes (including shortcut-generated clicks), so new
+edits, sample loads or native saves cannot race the handoff. The interaction guard
+is released in `finally`, including mount/flush failures. Reading view and New
+derive availability from the same transition/export/native-save state; an immediate
+idle export notification cannot expose them during entry. The Windows smoke polls
+visible, enabled UI Automation controls and records/rechecks that state before
+invocation, with no fixed settling delay or replayed Save action. See
+`docs/design/2026-11-05-desktop-workspace-readiness.md` for the retained failure and
+deterministic delayed-render regression.
 
-`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission })` retains the
+`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission, createDocument?: () => void, layoutInitiallyOpen?: boolean })` retains the
 ordinary web defaults. Desktop disables App's second input adapter and supplies its
 own picker; both modes use one bounded importer. The web fallback caches the genuine
 body file input before authored IDs can collide with it. The desktop passes its
@@ -315,6 +390,25 @@ mode return are blocked during an export or mode transition.
 `tests/desktop-lifetime.test.ts` exercises real entry-point ownership with rendering
 and host boundaries stubbed; `tests/desktop-e2e/recovery.spec.ts` drives actual
 production controls for count/UTF-8-byte refusal, retry and dirty round trips.
+
+Desktop owns New from the reader toolbar, empty state, workspace toolbar and
+Ctrl/Cmd+N. `App.init` forwards its optional `createDocument` callback through
+`buildShell` and `mountToolbar`; the ordinary web entry omits it. Desktop also
+passes `layoutInitiallyOpen: false` through that same shell boundary. This is a
+transient initial disclosure preference, not a persisted setting. One-click
+expansion and Escape focus return retain every document layout setting, Markdown
+source, paginated sheet identity and export behavior. See
+`tests/desktop-toolbar.test.ts` and `tests/desktop-e2e/toolbar.spec.ts`.
+`nextUntitledName(docs: readonly { name: string }[]): string` chooses the first
+available case-insensitive `Untitled.md` / `Untitled N.md` name. Creation admits
+through the current 32-document / 25,000,000 UTF-8-byte limits, records a clean
+empty baseline and preserves prior sources. A refusal preserves selection and
+content. Reader creation enters the lazy workspace; a mount failure retains its
+sources for retry. New reveals a Preview-only source pane and preserves existing
+Markdown/Split layout. Mode transitions, export and native save block creation;
+interaction generations keep older opens passive. Save Copy baseline semantics are
+unchanged. Coverage: `tests/desktop-new-document.test.ts`,
+`tests/desktop-e2e/new-document.spec.ts` and the existing shortcut suites.
 
 The optional `src/export/destination.ts` Blob destination is installed only by the
 native entry. The web build retains browser source downloads and jsPDF save. Source

@@ -58,13 +58,17 @@ if ($Probe) {
         [System.IO.File]::Move($pending, $ProbeOutput)
     }
     function Find-Button($Parent, [string]$Name) {
+        # Workspace entry keeps its controls inert until rendering is ready.
+        # Poll actual UIA availability; do not substitute a fixed settling delay.
         $condition = [System.Windows.Automation.AndCondition]::new(
             [System.Windows.Automation.PropertyCondition]::new(
                 [System.Windows.Automation.AutomationElement]::NameProperty, $Name),
             [System.Windows.Automation.PropertyCondition]::new(
                 [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button),
             [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true))
+                [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true),
+            [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::IsOffscreenProperty, $false))
         return $Parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
     function Get-ControlMetadata($Element, [switch]$IncludePatterns) {
@@ -107,7 +111,14 @@ if ($Probe) {
             if ($ProbeAction -eq 'button') {
                 Write-ProbePhase 'finding-button'
                 $button = Find-Button $window $ButtonName
-                if ($null -eq $button) { throw 'The requested button is not enabled yet.' }
+                if ($null -eq $button) { throw 'The requested button is not visible and enabled yet.' }
+                $current = $button.Current
+                $result.button = [ordered]@{
+                    name = [string]$current.Name
+                    isEnabled = $current.IsEnabled
+                    isOffscreen = $current.IsOffscreen
+                }
+                if (-not $current.IsEnabled -or $current.IsOffscreen) { throw 'The requested button is no longer available.' }
                 Write-ProbePhase 'getting-button-pattern'
                 $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
                 $result.found = $true

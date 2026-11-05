@@ -27,7 +27,7 @@ export async function createOfflineCapture(source: Document, container: HTMLElem
   if (!view) throw captureLifecycleError();
   const links = stylesheetLinks(source);
   // MDviewer's external styles belong to the app head. Reject an unsupported
-  // structure instead of moving body/shadow CSS to a different cascade position.
+  // structure instead of moving linked body CSS to a different cascade position.
   if (links.some(link => link.parentElement !== source.head || new URL(link.href, source.baseURI).origin !== view.location.origin)) {
     throw captureLifecycleError();
   }
