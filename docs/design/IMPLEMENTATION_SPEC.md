@@ -226,6 +226,28 @@ All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster
 
 Foundation section 12 remains the detailed editor contract: mounted panes, an invisible but measurable parked canvas in Markdown mode, in-place text events, native textarea editing, synchronous backdrop freshness, matched layer metrics, glued scrolling, bounded tokenization and editor-free print output.
 
+The editor accepts `setDocument({ id?: string, name: string, text: string } | null)`;
+App supplies the stable DocStore ID and legacy callers fall back to the name.
+Same-document, same-text notifications preserve live selection and native undo.
+A different identity fences delayed edits even when text and filename are equal;
+every real identity boundary replaces the textarea to isolate native undo history.
+The read-only `input` getter returns the current node; integrations must rebind
+node listeners after a switch. App's synchronous adoption of the first typed
+document preserves its node and first undo entry.
+
+`EditorController.replaceRange(start: number, end: number, text: string,
+signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
+shares byte admission and the undo-aware insertion path with intercepted paste,
+text drop and Tab. A delayed confirmation captures document identity, edit/source
+revision, exact text, selection/revision/direction and focused element; all must still match before
+commit and after focusing. Refusal, rejection, abortion, composition, teardown,
+detachment, invalid range and unchanged replacement return false. A configured
+hard limit refuses even if the host accepts; ordinary typing and small paste/drop
+remain native. Abort prevents commitment but does not dismiss a host confirmation
+UI or settle an unresolved host promise. Native insertText owns its single input
+event; the manual fallback dispatches one observable input event. Coverage:
+`tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
+
 Canvas zoom is still a paint-only transform and never a reflow key. The screen-only outer host envelope tracks the painted stack height to remove the unscaled blank scroll tail. Its width is at least the painted sheet plus gutters and viewport width so explicit 100% or 50% zoom retains horizontal access to the whole sheet. Remove the envelope before pagination. Reset height and width to auto and overflow to visible for print. Do not scale sheet layout measurements or crop exported pages.
 
 A zero-height sticky overlay anchor keeps progress feedback in the preview viewport during deep scroll. The page chip and zoom controls retain their existing sticky behavior. Production browser tests, not jsdom rectangles, determine whether these geometry contracts hold.
