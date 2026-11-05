@@ -10,6 +10,8 @@ vi.mock("../src/render/highlight", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/render/highlight")>();
   return { ...actual, getReaderHighlighter: vi.fn(actual.getReaderHighlighter) };
 });
+// Diagram layout is outside this grammar test; retain its prepared source node.
+vi.mock("../src/render/mermaid", () => ({ renderAllMermaid: async () => ({ failed: 0 }) }));
 beforeEach(() => { vi.mocked(getReaderHighlighter).mockClear(); });
 
 describe("reader syntax highlighting admission", () => {
@@ -127,6 +129,17 @@ describe("reader syntax highlighting admission", () => {
     expect(result.document.querySelectorAll("pre code")).toHaveLength(2);
     expect(result.warnings).toEqual(['Code language "unknown-example" is not bundled; rendered as plain text.']);
     expect(getReaderHighlighter).not.toHaveBeenCalled();
+  });
+
+  it.each(["CS", "language-cs"])("normalizes %s beside an encoded Mermaid fence", async label => {
+    const source = `\`\`\`${label}\npublic record Person(string Name);\n\`\`\`\n\n\`\`\`&#109;ermaid\ngraph TD\nA-->B\n\`\`\``;
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
+    expect(result.document.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
+    expect(result.document.querySelector("pre.shiki code")?.className).toBe("language-cs");
+    expect(result.document.querySelector("code.language-mermaid")?.textContent).toContain("graph TD");
+    expect(result.document.querySelector("code.language-mermaid")?.closest("pre")?.classList.contains("shiki")).toBe(false);
+    expect(result.warnings).toEqual([]);
+    expect(getReaderHighlighter).toHaveBeenCalledOnce();
   });
 
   it("does not warn for unknown fence labels that are only literal code examples", async () => {

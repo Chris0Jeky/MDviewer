@@ -13,12 +13,16 @@ Pagination measures real, laid-out heights. Every earlier step changes those hei
 follows this order and must never reorder it:
 
 ```
-  0  read raw markdown string            (drag-drop / paste / file picker)
+  0  capture markdown + settings         (drag-drop / paste / file picker)
        │
   1  await getHighlighter()              singleton: Shiki core + Oniguruma WASM (once)
        │
-  2  createMarkdown(hl, settings)        SYNC render: markdown-it + Shiki (fromHighlighter)
-     .render(src)                        + inline KaTeX  ->  { html, warnings }
+  1b createMarkdown(null, settings)      parse once, retaining tokens and environment
+     await ensureLang(...)              prepare parsedFenceLanguages(md, tokens)
+       │
+  2  installMarkdownHighlighter(...)     attach after grammars are ready
+     renderMarkdownTokens(md,            SYNC Shiki + inline KaTeX -> { html, warnings }
+       tokens, env)
        │
   3  buildPaginationSource(html,         inject TOC nav; transform end-of-doc footnotes
        settings)                         into inline float spans  ->  DocumentFragment
@@ -27,7 +31,7 @@ follows this order and must never reorder it:
        │
   5  await awaitFontsAndImages(src)      document.fonts.ready + img.decode  ->  heights final
        │
-  6  capture pristine clone of source    enables re-paginate without re-render
+  6  retain fully prepared source        fresh fragment for this render
        │
   7  registerHandlersOnce();             PAGINATION LAST — Paged.js over the settled DOM
      await paginate(source,                afterParsed  -> shrinkToFit (Tier 3)
@@ -41,8 +45,8 @@ follows this order and must never reorder it:
 **Re-pagination** (full reflow, debounced ~120ms) is triggered by anything that changes layout:
 paper size, margins, font, font size, and the TOC / page-numbers / running-header / line-numbers
 toggles. Purely visual changes — screen theme, same-family code light/dark flip — are CSS-only and
-do **not** re-paginate. Content changes debounce at ~250ms. Re-pagination reuses the **pristine
-clone** captured at step 6, so it never re-runs the render pipeline or bakes stale transforms.
+do **not** re-paginate. Content changes debounce at ~250ms. Each reflow rebuilds a fresh
+fragment through the serialized pipeline, so prepared transforms do not accumulate.
 
 ## Module responsibilities by folder
 

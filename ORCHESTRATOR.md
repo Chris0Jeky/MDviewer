@@ -3,7 +3,45 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (scoped development dependency advisories, prepared):**
+> **CURRENT CHECKPOINT - 2026-11-05 (workspace labels and dependency handoff):**
+> Base main 2a26940d includes merged reader grammar PR #172 and development dependency
+> PR #173. This checkpoint implements the independently reviewed workspace/shared
+> parsed-fence correction for #171. Final exact-head hosted qualification is recorded
+> in its PR. Local qualification passed 704 unit tests, four server tests, typecheck,
+> lint, Observatory, both production builds, hook smoke checks and validation of all
+> 14 skills after a clean engine-strict offline install. The production precache
+> matches all 181 expected assets without duplicate, missing or incorrect revisions.
+> Production audit reports zero findings; the full audit retains four low entries
+> from the rejected deepmerge CVE described in docs/DEVELOPMENT_DEPENDENCIES.md.
+> PR #165 merged as [2a26940d](https://github.com/Chris0Jeky/MDviewer/commit/2a26940d4c1da3e6c770b47111538726fc882d12)
+> from reviewed head [bd9d0769](https://github.com/Chris0Jeky/MDviewer/commit/bd9d0769cbbc4976b7d8b2bd360bb3277774330c)
+> after all five exact-head checks passed: [CI 41956789157](https://github.com/Chris0Jeky/MDviewer/actions/runs/41956789157)
+> and [Windows 41956789138](https://github.com/Chris0Jeky/MDviewer/actions/runs/41956789138).
+> It keeps the exact html2canvas-pro 2.5.2 pin, advances KaTeX to 0.19.1 and excludes
+> only html2canvas-pro 2.6.0 from Dependabot pending #174. The 2.6 capture candidate passed the online CSS regressions
+> but failed an offline stylesheet request; issue #174 tracks both its follow-up and
+> offline saved-PDF visual fidelity on the current exporter. Pinning 2.5.2 does not
+> prove that offline styles/assets are captured correctly.
+> AI-6/AI-7/AI-8/AI-9 remain OPEN. Windows human acceptance and representative
+> performance work remain open in #169; no comparative RAM/startup, signed-release
+> or deployment claim is made. The historical deployed-source anchor is unchanged.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (workspace fence preparation, unpublished follow-up):**
+> Prepared after reader grammar PR #172 head 42244b9, merged as e4711f54, for issue #171.
+> Real App/engine tests reproduced missing first-render colors for escaped/entity C#
+> labels and blockquote fences, plus unwanted grammar loads from literal code examples.
+> App now parses once without installing Shiki, prepares the actual decoded fence
+> languages, checks its render token, then installs Shiki and renders the same tokens
+> and environment. Late installation preserves Shiki's loaded-language snapshot.
+> Shared fence rendering now matches preparation for uppercase/prefixed labels and
+> encoded Mermaid. Single-decode guards retain unknown literal labels, existing
+> lowercase alias classes and metadata. Reader and eager output both have controls.
+> List/footnote rendering, delayed preparation, captured settings, stale renders,
+> export ownership and notice/telemetry controls retain regression coverage.
+> This follow-up remains unpublished pending independent review and fresh exact-head
+> hosted checks. It makes no deployment, RAM/startup or manual-acceptance claim.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (scoped development dependency advisories, prepared):**
 > Reader grammar PR #172 is merged; this follow-up is based on main
 > e4711f54b4dc3f0fd8fd37711a9cbb4721781b94 and preserves that grammar source,
 > workspace behavior and status documentation. Four parent-scoped overrides
@@ -24,7 +62,7 @@
 > hosted CI remain required before merge; this checkpoint claims no publication
 > or deployment. Existing human acceptance items remain open.
 
-> **PREVIOUS CHECKPOINT - 2026-11-05 (reader grammar preparation, before publication):**
+> **PREVIOUS CHECKPOINT - 2026-11-05 (reader grammar preparation, unpublished follow-up):**
 > Prepared on #162's final tree 4f64b676, now main d09817cd, including its decoding
 > and notation fixes. Reader code prepares requested grammar modules and their bundled
 > dependencies; all existing themes remain ready. A separate workspace readiness
@@ -434,7 +472,10 @@ If dependency maintenance is intentionally deferred, the highest-value product c
 4. Consider installable PWA packaging only as optional product polish. A remote `POST /convert` API
    is a separate security/privacy product and must not be slipped into this client-only app.
 
-## Run header
+## Historical run header — 2026-09-27
+
+This section preserves the earlier loop's bookkeeping. Use the latest checkpoint
+above and refresh GitHub state for the current queue, verification and next work.
 
 - **Start commit (static — start of record):** `fe085b0` (Initial scaffold) on `main`.
 - **Cycle-2 base (static — historical):** exact `origin/main` `a0647549be99f8053732150d7ef1ff9c5e9c65c6`.

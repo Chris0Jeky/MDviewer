@@ -17,11 +17,21 @@
 
 - **2026-11-05 (Windows preview integrated; acceptance open)** — the experimental
   Windows reader is merged through [#158](https://github.com/Chris0Jeky/MDviewer/pull/158),
-  with the lazy highlighting follow-up in [#162](https://github.com/Chris0Jeky/MDviewer/pull/162).
+  with highlighting admission in [#162](https://github.com/Chris0Jeky/MDviewer/pull/162)
+  and selective reader grammar preparation in [#172](https://github.com/Chris0Jeky/MDviewer/pull/172).
   Independent review and all five exact-head web, desktop-browser and native Windows
   checks passed before those merges. The native smoke verifies actual Markdown/PDF
   saves and records the complete observed WebView2 process tree. Dependency PRs
-  #166, #168 and #170 also merged after review and green exact-head checks.
+  #166, #168, #170 and the scoped development dependency follow-up
+  [#173](https://github.com/Chris0Jeky/MDviewer/pull/173) also merged after review and green exact-head checks.
+  The workspace label correction for [#171](https://github.com/Chris0Jeky/MDviewer/issues/171)
+  is implemented in this checkpoint; final exact-head hosted qualification is recorded
+  in its PR. The narrow dependency split in [#165](https://github.com/Chris0Jeky/MDviewer/pull/165)
+  merged as [2a26940d](https://github.com/Chris0Jeky/MDviewer/commit/2a26940d4c1da3e6c770b47111538726fc882d12)
+  after all five exact-head checks passed. It pins html2canvas-pro 2.5.2, advances KaTeX to 0.19.1
+  and limits the temporary Dependabot exclusion to html2canvas-pro 2.6.0.
+  [#174](https://github.com/Chris0Jeky/MDviewer/issues/174) tracks offline raster PDF styling
+  and the blocked html2canvas-pro 2.6 follow-up; retaining 2.5.2 does not establish offline visual fidelity.
   These are unsigned CI previews; no live web deployment or comparative RAM/startup
   result is claimed. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
   tracks ordinary Windows install/uninstall, Explorer associations, keyboard/Narrator,

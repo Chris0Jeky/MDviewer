@@ -90,10 +90,15 @@ export paths.
   installer, a portable artifact and Windows process-tree measurements in CI. This is
   a separate entry point; it does not replace the web/PWA build. The native smoke
   verifies actual Markdown/PDF saves, and #162 defers the reader's highlighting engine
-  until a document needs supported code highlighting or Shiki notation. Native acceptance
+  until a document needs supported code highlighting or Shiki notation. #172 selectively
+  prepares reader grammars while preserving embedded-language compatibility and the
+  editing workspace's eager common-grammar readiness. Native acceptance
   on an ordinary desktop and comparative memory targets remain open in
   [#169](https://github.com/Chris0Jeky/MDviewer/issues/169). See
   [`WINDOWS_DESKTOP.md`](WINDOWS_DESKTOP.md) and `design/WINDOWS_READER.md`.
+- Offline raster PDF styling and the blocked html2canvas-pro 2.6 follow-up remain open in
+  [#174](https://github.com/Chris0Jeky/MDviewer/issues/174). Retaining the qualified exporter
+  does not establish offline saved-PDF visual fidelity.
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),

@@ -85,6 +85,16 @@ function lineNumbers(): ShikiTransformer {
   };
 }
 
+/** Keep aliases such as cs/js intact while matching preparation's label rules. */
+function normalizeFenceLabel(language: string): string {
+  return language.toLowerCase().replace(/^language-/, "");
+}
+
+function fenceLanguage(md: MarkdownIt, info: string): string {
+  const decoded = md.utils.unescapeAll(info).trim().split(/\s+/, 1)[0] ?? "";
+  return normalizeFenceLabel(decoded);
+}
+
 /**
  * Build a fully-configured MarkdownIt for the given highlighter + settings. The Shiki theme
  * pair and the line-numbers transformer are settings-dependent. Passing null keeps
@@ -141,9 +151,7 @@ export function createMarkdown(hl: HighlighterCore | null, settings: Settings): 
   if (!codeFence) throw new Error("Markdown fence renderer is unavailable");
   md.renderer.rules.fence = (tokens, idx, options, env, self): string => {
     const token = tokens[idx];
-    const language = (token?.info.trim().split(/\s+/, 1)[0] ?? "")
-      .toLowerCase()
-      .replace(/^language-/, "");
+    const language = fenceLanguage(md, token?.info ?? "");
     if (language === "mermaid") {
       return `<pre><code class="language-mermaid">${md.utils.escapeHtml(token?.content ?? "")}</code></pre>\n`;
     }
@@ -181,6 +189,13 @@ export function installMarkdownHighlighter(
       fallbackLanguage: "text" as unknown as BundledLanguage,
     }),
   );
+
+  const highlight = md.options.highlight;
+  if (!highlight) throw new Error("Markdown highlighter is unavailable");
+  // markdown-it already decoded and separated this label from its metadata.
+  // Normalize case/prefix here, without decoding twice or changing alias classes.
+  md.options.highlight = (code, language, attrs) =>
+    highlight(code, normalizeFenceLabel(language), attrs);
 }
 
 /** Actual parser-recognized fences, including nested quotes/lists/footnotes. */
@@ -191,7 +206,7 @@ export function parsedFenceLanguages(md: MarkdownIt, tokens: Token[]): string[] 
       if (token.type === "fence") {
         // Match markdown-it's fence renderer: decode escapes and character
         // references before separating the language from its metadata.
-        const language = md.utils.unescapeAll(token.info).trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
+        const language = fenceLanguage(md, token.info);
         if (language) languages.add(language);
       }
       if (token.children) visit(token.children);

@@ -17,7 +17,7 @@ Local-first Markdown editor and paginated PDF preview. Only settings persist; no
 
 ```text
 input / textarea → DocStore → serialized scheduler → App.runPipeline
- → highlighter + curated grammars → synchronous Markdown + KaTeX
+ → highlighter → parse actual fences + prepare curated grammars → same-token Markdown + KaTeX
  → build source / TOC / one float per footnote → Mermaid → stamp atomic identities
  → fonts/images → Paged.js preview → href-only footnote repair → completed snapshot
 
@@ -32,7 +32,7 @@ Export click → capture document id/name/text and settings NOW
 | --- | --- | --- |
 | Windows continuous reader and lazy workspace handoff | `src/desktop/{main,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
 | Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
-| App orchestration, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
+| App orchestration, parsed-fence grammar preparation, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-fence-languages.test.ts`, `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
 | Settings migration, tokens, fonts, paper geometry | `src/app/settings.ts` | `tests/settings.test.ts`; spec §9 |
 | Browser-chrome color per screen theme | `src/app/themeColor.ts` | `tests/theme-color.test.ts`, theme-color e2e; spec §7 |
@@ -163,8 +163,11 @@ parser fences and decodes their info with the parser's own utility, matching ren
 `installMarkdownHighlighter(md, hl, settings)` enables synchronous Shiki
 without changing parsed structural state. `renderMarkdownTokens(md, tokens, env)` shares
 the sanitizer and warnings with `renderMarkdown(md, src)` and requires the same parser's
-tokens/environment. `src/desktop/render.ts` owns admission; line-number/notation/metadata
-requests retain the existing transformers. The web pagination order is unchanged.
+tokens/environment. `src/desktop/render.ts` owns reader admission; line-number/notation/metadata
+requests retain the existing transformers. App also prepares decoded parser fences and
+installs Shiki afterward, preserving the loaded-language snapshot and web layout order.
+Shared fence rendering normalizes label case/prefix and decoded Mermaid labels without
+decoding twice, changing lowercase alias classes or rewriting metadata.
 `getReaderHighlighter(languages)` prepares only requested grammar modules and embedded
 dependencies, retaining all themes. `getHighlighter()` independently awaits the complete
 common-grammar workspace contract on the same engine. Pending canonical registrations are
