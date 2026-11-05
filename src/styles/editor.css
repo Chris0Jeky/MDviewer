@@ -513,6 +513,8 @@ body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
     padding-block: 2px;
   }
 
+  #workspace > #editor-pane > #editor-formatting { padding-block: 2px; }
+
   #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);

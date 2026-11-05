@@ -72,13 +72,91 @@ test.describe("Markdown writing commands", () => {
     const input = page.locator("#editor-input");
     await expect(input).toHaveValue(source);
     await select(page, 2, 17, "backward");
+    await input.evaluate((node: HTMLTextAreaElement) => {
+      const events: unknown[] = [];
+      Object.defineProperty(node, "formattingInputs", { value: events });
+      node.addEventListener("input", (event) => events.push({
+        trusted: event.isTrusted, type: (event as InputEvent).inputType,
+        start: node.selectionStart, end: node.selectionEnd, length: node.value.length,
+      }));
+    });
     await page.getByRole("button", { name: "Format Markdown", exact: true }).click();
     await page.getByRole("button", { name: "Task list", exact: true }).click();
     await expect(input).toHaveValue("  - [ ] first\n\n  - [ ] second\nafter");
+    const native = await input.evaluate((node: HTMLTextAreaElement & { formattingInputs?: unknown[] }) => ({
+      selection: [node.selectionStart, node.selectionEnd, node.selectionDirection], events: node.formattingInputs,
+    }));
+    expect(native.selection, `Native multiline input sequence: ${JSON.stringify(native.events)}`).toEqual([0, 29, "backward"]);
     await page.getByRole("button", { name: "Task list", exact: true }).click();
     await expect(input).toHaveValue(source);
     await input.press("ControlOrMeta+z");
     await expect(input).toHaveValue("  - [ ] first\n\n  - [ ] second\nafter");
+  });
+
+  test("balanced link destinations and complete multiple code spans preserve text and native Undo", async ({ page }) => {
+    await page.goto("/");
+    const link = "before [label](https://example.com/a_(b)) after";
+    await loadMarkdownIntoApp(page, link, "link.md");
+    const input = page.locator("#editor-input");
+    await expect(input).toHaveValue(link);
+    for (const [start, end] of [[8, 13], [7, link.length - 6]]) {
+      await select(page, start!, end!, "backward");
+      await input.press("ControlOrMeta+k");
+      await expect(input).toHaveValue("before label after");
+      await input.press("ControlOrMeta+z");
+      await expect(input).toHaveValue(link);
+    }
+    const code = "`one` and `two`";
+    await loadMarkdownIntoApp(page, code, "code.md");
+    await expect(input).toHaveValue(code);
+    await select(page, 0, code.length);
+    await page.getByRole("button", { name: "Format Markdown", exact: true }).click();
+    await page.getByRole("button", { name: "Inline code", exact: true }).click();
+    await expect(input).toHaveValue("`` `one` and `two` ``");
+    await input.press("ControlOrMeta+z");
+    await expect(input).toHaveValue(code);
+    await select(page, 1, code.length - 1, "backward");
+    await page.getByRole("button", { name: "Inline code", exact: true }).click();
+    await expect(input).toHaveValue(code);
+    await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+  });
+
+  test("ambiguous emphasis and link shortcuts preserve their source and explain the refusal", async ({ page }) => {
+    await page.goto("/");
+    for (const [key, source, start, end] of [
+      ["i", "\\*word*", 2, 6], ["b", "**one** and **two**", 0, 19],
+      ["k", "[label](url \"title\")", 1, 6],
+    ] as const) {
+      await loadMarkdownIntoApp(page, source, `${key}.md`);
+      const input = page.locator("#editor-input");
+      await expect(input).toHaveValue(source);
+      await select(page, start, end, "backward");
+      await input.press(`ControlOrMeta+${key}`);
+      await expect(input).toHaveValue(source);
+      await expect(input).toBeFocused();
+      await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+      expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
+        .toEqual([start, end, "backward"]);
+    }
+  });
+
+  test("Find and Format together retain usable source space in a short window", async ({ page }) => {
+    await page.setViewportSize({ width: 560, height: 420 });
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, "# Both panels\n\nSource remains available.");
+    await waitForPagination(page);
+    await page.getByRole("button", { name: "Format Markdown", exact: true }).click();
+    const input = page.locator("#editor-input");
+    await input.focus();
+    await input.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox", { name: "Find in Markdown" })).toBeFocused();
+    expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(60);
+    for (const button of await page.locator("#editor-formatting button").all()) {
+      await button.scrollIntoViewIfNeeded();
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(30);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(560);
+    await page.screenshot({ path: test.info().outputPath("format-and-find-short.png") });
   });
 
   test("formatting cannot carry native Undo across an equal-content document switch", async ({ page }) => {

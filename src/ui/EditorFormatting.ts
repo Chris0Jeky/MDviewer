@@ -85,8 +85,14 @@ export function mountEditorFormatting(pane: HTMLElement, head: HTMLElement,
       start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection,
     }, command);
     if (!change) {
-      status.textContent = command === "inline-code" ? "Select one line for inline code, or use Code block."
-        : command === "link" ? "Select one line for a link." : "Select complete characters to format.";
+      const multiline = /[\r\n]/.test(input.value.slice(input.selectionStart, input.selectionEnd));
+      status.textContent = multiline && command === "inline-code" ? "Select one line for inline code, or use Code block."
+        : multiline && command === "link" ? "Select one line for a link."
+          : "This selection cannot be formatted safely. Select plain text or one complete supported span.";
+      // Keyboard commands can run with the disclosure closed. Make a refusal
+      // visible and announce it without moving the source selection or focus.
+      panel.hidden = false;
+      toggle.setAttribute("aria-expanded", "true");
       return;
     }
     const operation = ++revision;

@@ -46,7 +46,7 @@ export interface EditorController {
    * Returns false if refused, unchanged, aborted, detached, composing, or stale.
    * A delayed confirmation belongs to its original document, value, selection,
    * and focused element. An optional final selection is applied only to the
-   * same editing host immediately after its single accepted input event.
+   * same editing host immediately after its accepted native command.
    */
   replaceRange(start: number, end: number, text: string, signal?: AbortSignal,
     selectionAfter?: MarkdownSelection): Promise<boolean>;
@@ -320,8 +320,25 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
 
   // ---- Events ----------------------------------------------------------------
 
-  const onInputEvent = (): void => {
+  interface Insertion {
+    target: HTMLTextAreaElement;
+    events: number;
+    trusted: boolean | null;
+    interrupted: boolean;
+  }
+  let insertion: Insertion | undefined;
+
+  const onInputEvent = (event: Event): void => {
     if (destroyed) return;
+    if (insertion) {
+      // A multiline native command can dispatch multiple input events.
+      // Count the owned sequence; do not
+      // mistake a host callback's re-entrant edit for part of that sequence.
+      if (input !== insertion.target || event.target !== insertion.target || reportingInput ||
+        (insertion.trusted !== null && insertion.trusted !== event.isTrusted)) insertion.interrupted = true;
+      insertion.events++;
+      insertion.trusted ??= event.isTrusted;
+    }
     editRevision++;
     const text = input.value;
     scheduleStat(text);
@@ -425,37 +442,45 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     if (!isCurrent(snapshot, signal) || document.activeElement !== input) return false;
     input.setSelectionRange(start, end);
     const target = input;
+    const previousInsertion = insertion;
+    if (previousInsertion) previousInsertion.interrupted = true;
+    const command: Insertion = { target, events: 0, trusted: null, interrupted: false };
     const expectedValue = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
     const finish = (): void => {
       // Input handlers may synchronously switch documents or make another edit.
       // Only first-input adoption may advance ownership without replacing the host.
       const adoption = snapshot.documentKey === null && documentKey !== null ? 1 : 0;
-      if (selectionAfter && input === target && canEdit() && !signal?.aborted &&
-        input.value === expectedValue && editRevision === snapshot.editRevision + 1 + adoption &&
+      if (selectionAfter && !command.interrupted && command.events > 0 && input === target && canEdit() && !signal?.aborted &&
+        input.value === expectedValue && editRevision === snapshot.editRevision + command.events + adoption &&
         document.activeElement === target && input.selectionStart === start + text.length &&
         input.selectionEnd === start + text.length) {
         input.setSelectionRange(selectionAfter.start, selectionAfter.end, selectionAfter.direction);
         onSelect();
       }
     };
-    let inserted: boolean;
+    insertion = command;
     try {
-      inserted = document.execCommand("insertText", false, text);
-    } catch {
-      inserted = false;
+      let inserted: boolean;
+      try {
+        inserted = document.execCommand("insertText", false, text);
+      } catch {
+        inserted = false;
+      }
+      if (inserted) { finish(); return true; }
+      // A command that changed the source despite returning false must not be spliced
+      // a second time. The same fence covers re-entrant event handlers.
+      if (!ownsValue(snapshot, signal) || input.selectionStart !== start || input.selectionEnd !== end) {
+        return false;
+      }
+      input.value = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
+      input.selectionStart = input.selectionEnd = start + text.length;
+      // Native commands supply their own events; only the manual fallback needs one.
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      finish();
+      return true;
+    } finally {
+      insertion = previousInsertion;
     }
-    if (inserted) { finish(); return true; }
-    // A command that changed the source despite returning false must not be spliced
-    // a second time. The same fence covers re-entrant event handlers.
-    if (!ownsValue(snapshot, signal) || input.selectionStart !== start || input.selectionEnd !== end) {
-      return false;
-    }
-    input.value = `${snapshot.value.slice(0, start)}${text}${snapshot.value.slice(end)}`;
-    input.selectionStart = input.selectionEnd = start + text.length;
-    // Use the same single event path as native insertText so observers also refresh.
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    finish();
-    return true;
   };
 
   const replaceCapturedRange = async (

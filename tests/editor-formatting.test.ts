@@ -108,6 +108,62 @@ describe("editor formatting ownership and controls", () => {
     expect(onInput).not.toHaveBeenCalled();
   });
 
+  it.each([["i", "\\*word*", 2, 6], ["b", "**one** and **two**", 0, 19],
+    ["k", "[label](url \"title\")", 1, 6]] as const)(
+    "discloses an accurate refusal for ambiguous %s without changing source or selection", async (key, source, start, end) => {
+      editor.setDocument({ id: "a", name: "a.md", text: source });
+      editor.input.focus();
+      editor.input.setSelectionRange(start, end, "backward");
+      shortcut(key);
+      await settle();
+      expect(editor.input.value).toBe(source);
+      expect([editor.input.selectionStart, editor.input.selectionEnd, editor.input.selectionDirection]).toEqual([start, end, "backward"]);
+      expect(root.querySelector(".editor-format-status")?.textContent).toContain("cannot be formatted safely");
+      expect(root.querySelector(".editor-format-status")?.textContent).not.toContain("one line");
+      expect(button("Format Markdown").getAttribute("aria-expanded")).toBe("true");
+      expect(document.activeElement).toBe(editor.input);
+      expect(onInput).not.toHaveBeenCalled();
+    });
+
+  it("restores the final multiline selection when one native command emits multiple input events", async () => {
+    editor.setDocument({ id: "a", name: "a.md", text: "first\nsecond" });
+    editor.input.focus();
+    editor.input.setSelectionRange(0, 12, "backward");
+    const execCommand = vi.fn((_command: string, _showUI: boolean, text: string) => {
+      const target = editor.input;
+      for (const value of [text.split("\n")[0] ?? "", text]) {
+        target.value = value;
+        target.setSelectionRange(value.length, value.length);
+        target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      }
+      return true;
+    });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+    try {
+      button("Task list").click();
+      await settle();
+      expect(editor.input.value).toBe("- [ ] first\n- [ ] second");
+      expect([editor.input.selectionStart, editor.input.selectionEnd, editor.input.selectionDirection]).toEqual([0, 24, "backward"]);
+      expect(execCommand).toHaveBeenCalledOnce();
+      expect(onInput).toHaveBeenCalledTimes(2); // Only the actual native events, no synthetic duplicate.
+    } finally {
+      delete (document as unknown as { execCommand?: unknown }).execCommand;
+    }
+  });
+
+  it("does not mistake a re-entrant host input for another event of the native command", async () => {
+    let reentered = false;
+    mount({ onInput: () => {
+      if (reentered) return;
+      reentered = true;
+      editor.input.dispatchEvent(new Event("input", { bubbles: true }));
+    } });
+    button("Bold").click();
+    await settle();
+    expect(editor.input.value).toBe("**word**");
+    expect([editor.input.selectionStart, editor.input.selectionEnd]).toEqual([8, 8]);
+  });
+
   it.each(["switch", "selection", "edit", "focus", "close", "destroy"])(
     "rejects late confirmation after %s without restoring stale selection", async (action) => {
       let resolve!: (accepted: boolean) => void;

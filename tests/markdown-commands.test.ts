@@ -100,6 +100,91 @@ describe("Markdown writing commands", () => {
     expect(apply("a [example](url) z", "link", 3, 10).text).toBe("a example z");
   });
 
+  it.each(["https://example.com/a_(b)", "a(b(c)d)e", "a\\(b\\)", "a\\)b"])(
+    "removes the entire link destination %j from complete and label selections", (destination) => {
+      const markup = `[label](${destination})`;
+      expect(apply(markup, "link").text).toBe("label");
+      const source = `before ${markup} after`;
+      const start = source.indexOf("label");
+      expect(apply(source, "link", start, start + 5, "backward"))
+        .toMatchObject({ text: "before label after", selected: "label", selection: { direction: "backward" } });
+    });
+
+  it.each([
+    ["[label](url(unclosed)", 1, 6],
+    ["[label](url \"title\")", 1, 6],
+    ["\\[label](url)", 2, 7],
+    ["[one](a) and [two](b)", 0, 21],
+    ["[outer [inner]](url)", 8, 13],
+  ] as const)("refuses an ambiguous link without removing any syntax: %j", (source, start, end) => {
+    expect(markdownCommand(source, { start, end: Math.min(end, source.length), direction: "forward" }, "link")).toBeNull();
+  });
+
+  it("wraps complete multiple code spans without stripping their exterior backticks", () => {
+    const source = "`one` and `two`";
+    const result = apply(source, "inline-code");
+    expect(result.text).toBe("`` `one` and `two` ``");
+    expect(result.selected).toBe(source);
+    expect(apply(result.text, "inline-code", result.selection.start, result.selection.end).text).toBe(source);
+    expect(apply(result.text, "inline-code").text).toBe(source);
+  });
+
+  it.each([
+    ["`one` and `two`", 1, 14],
+    ["``one`` and ``two``", 2, 17],
+    ["\\`word`", 2, 6],
+    ["``word`", 2, 6],
+    ["`   `", 2, 3],
+  ] as const)("refuses an ambiguous code-body selection: %j", (source, start, end) => {
+    expect(markdownCommand(source, { start, end, direction: "forward" }, "inline-code")).toBeNull();
+  });
+
+  it("handles escaped backticks outside code without treating backslashes inside code as escapes", () => {
+    for (const source of ["\\`word`", "`one\\` and `two`", "``one`two``"]) {
+      const result = apply(source, "inline-code");
+      if (source === "``one`two``") expect(result.text).toBe("one`two");
+      else {
+        expect(result.selected).toBe(source);
+        expect(apply(result.text, "inline-code", result.selection.start, result.selection.end).text).toBe(source);
+      }
+    }
+  });
+
+  it.each(["bold", "italic"] as const)("refuses multiple %s spans in complete or body selections", (command) => {
+    const marker = command === "bold" ? "**" : "*";
+    const source = `${marker}one${marker} and ${marker}two${marker}`;
+    for (const [start, end] of [[0, source.length], [marker.length, source.length - marker.length]]) {
+      expect(markdownCommand(source, { start: start!, end: end!, direction: "backward" }, command)).toBeNull();
+    }
+  });
+
+  it.each(["*", "_", "**", "__"])("does not remove escaped literal %s delimiters", (marker) => {
+    const command = marker.length === 2 ? "bold" : "italic";
+    const source = `\\${marker}word${marker}`;
+    for (const [start, end] of [[0, source.length], [1, source.length], [1 + marker.length, 5 + marker.length]]) {
+      expect(markdownCommand(source, { start: start!, end: end!, direction: "forward" }, command)).toBeNull();
+    }
+  });
+
+  it("recognizes escaped interior emphasis markers and even backslashes before an opener", () => {
+    expect(apply("*one\\*two*", "italic").text).toBe("one\\*two");
+    expect(apply("*one\\*two*", "italic", 1, 9).text).toBe("one\\*two");
+    expect(apply("\\\\*word*", "italic", 3, 7).text).toBe("\\\\word");
+    expect(markdownCommand("*word\\*", { start: 0, end: 7, direction: "forward" }, "italic")).toBeNull();
+  });
+
+  it.each(["_", "__"])("does not strip literal %s inside an identifier", (marker) => {
+    const source = `prefix${marker}word${marker}suffix`;
+    const start = source.indexOf("word");
+    expect(markdownCommand(source, { start, end: start + 4, direction: "forward" },
+      marker.length === 1 ? "italic" : "bold")).toBeNull();
+  });
+
+  it("refuses an ambiguous multiline emphasis operation atomically", () => {
+    const source = "**one** and **two**\nplain";
+    expect(markdownCommand(source, { start: 0, end: source.length, direction: "forward" }, "bold")).toBeNull();
+  });
+
   it.each(["inline-code", "link"] as const)("refuses multiline %s without a partial edit", (command) => {
     expect(markdownCommand("one\ntwo", { start: 0, end: 7, direction: "none" }, command)).toBeNull();
   });

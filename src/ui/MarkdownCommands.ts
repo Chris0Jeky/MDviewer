@@ -34,31 +34,81 @@ function markerRun(source: string, offset: number, step: -1 | 1, marker: string)
   return count;
 }
 
-function emphasis(source: string, selection: MarkdownSelection, marker: string): MarkdownEdit {
+function escaped(source: string, offset: number): boolean {
+  let slashes = 0;
+  while (source[--offset] === "\\") slashes++;
+  return slashes % 2 === 1;
+}
+
+function acceptsEmphasis(count: number, width: number): boolean {
+  return count <= 3 && (width === 1 ? count % 2 === 1 : count >= 2);
+}
+
+/** Any possible closer makes an exterior-only toggle unsafe without a full parser. */
+function hasEmphasisCloser(source: string, start: number, end: number, width: number, symbol?: string): boolean {
+  for (const match of source.slice(start, end).matchAll(/\*+|_+/g)) {
+    if ((!symbol || match[0][0] === symbol) && !escaped(source, start + match.index) &&
+      (match[0].length > 3 || acceptsEmphasis(match[0].length, width))) return true;
+  }
+  return false;
+}
+
+/** Recognize one simple span, including the shared *** run for nested bold/italic. */
+function singleEmphasis(source: string, start: number, end: number, width: number): boolean {
+  const symbol = source[start];
+  if ((symbol !== "*" && symbol !== "_") || source[end - 1] !== symbol) return false;
+  const opening = markerRun(source, start, 1, symbol);
+  const closing = markerRun(source, end - 1, -1, symbol);
+  const extraBefore = markerRun(source, start - 1, -1, symbol);
+  const extraAfter = markerRun(source, end, 1, symbol);
+  if (symbol === "_" && /[\p{L}\p{N}\p{M}]/u.test(
+    (source[start - extraBefore - 1] ?? "") + (source[end + extraAfter] ?? ""))) return false;
+  if (opening !== closing || extraBefore !== extraAfter || opening + extraBefore > 3 ||
+    !acceptsEmphasis(opening, width) || !acceptsEmphasis(opening + extraBefore, width) ||
+    start + opening >= end - closing ||
+    escaped(source, start - extraBefore) || escaped(source, end - closing)) return false;
+  const content = source.slice(start + opening, end - closing);
+  return content.trim() === content &&
+    !hasEmphasisCloser(source, start + opening, end - closing, width, symbol);
+}
+
+function emphasis(source: string, selection: MarkdownSelection, marker: string): MarkdownEdit | null {
   const { start, end, direction } = selection;
   const body = source.slice(start, end);
   const width = marker.length;
-  const accepts = (count: number) => width === 1 ? count % 2 === 1 : count >= 2;
-  const wrapped = (value: string) => value.length >= width * 2 && ["*", "_"].some((symbol) =>
-    accepts(markerRun(value, 0, 1, symbol)) && accepts(markerRun(value, value.length - 1, -1, symbol)));
   if (body.includes("\n")) {
-    const parts = body.split("\n").map((line) => /^(\s*)(.*?)(\s*)$/.exec(line));
-    const active = parts.filter((part) => !!part?.[2]);
-    const remove = active.length > 0 && active.every((part) => wrapped(part?.[2] ?? ""));
-    const text = parts.map((part) => {
+    let offset = start;
+    const parts = body.split("\n").map((line) => {
+      const part = /^(\s*)(.*?)(\s*)$/.exec(line);
+      const from = offset + (part?.[1]?.length ?? 0);
+      const to = from + (part?.[2]?.length ?? 0);
+      offset += line.length + 1;
+      return { part, from, to, wrapped: singleEmphasis(source, from, to, width) };
+    });
+    if (parts.some(({ part, from, to, wrapped }) => part?.[2] && !wrapped &&
+      (escaped(source, from) || hasEmphasisCloser(source, from, to, width)))) return null;
+    const active = parts.filter(({ part }) => !!part?.[2]);
+    const remove = active.length > 0 && active.every(({ wrapped }) => wrapped);
+    const text = parts.map(({ part, wrapped }) => {
       if (!part?.[2]) return part?.[0] ?? "";
-      const content = remove ? part[2].slice(width, -width) : wrapped(part[2]) ? part[2] : `${marker}${part[2]}${marker}`;
+      const content = remove ? part[2].slice(width, -width) : wrapped ? part[2] : `${marker}${part[2]}${marker}`;
       return `${part[1]}${content}${part[3]}`;
     }).join("\n");
     return edit(start, end, text, 0, text.length, direction);
   }
   // Selecting the contents or the complete markup both toggle the same command.
   for (const symbol of ["*", "_"]) {
-    if (accepts(markerRun(source, start - 1, -1, symbol)) && accepts(markerRun(source, end, 1, symbol))) {
+    const before = markerRun(source, start - 1, -1, symbol);
+    const after = markerRun(source, end, 1, symbol);
+    if (!before && !after) continue;
+    if (before >= width && after >= width && singleEmphasis(source, start - width, end + width, width)) {
       return edit(start - width, end + width, body, 0, body.length, direction);
     }
+    // Adding italic inside a single bold span (or vice versa) remains useful.
+    // Escaped, unmatched, and multiple-span boundaries are left untouched.
+    if (!singleEmphasis(source, start - before, end + after, width === 1 ? 2 : 1)) return null;
   }
-  if (wrapped(body)) {
+  if (singleEmphasis(source, start, end, width)) {
     const unwrapped = body.slice(width, -width);
     return edit(start, end, unwrapped, 0, unwrapped.length, direction);
   }
@@ -67,11 +117,28 @@ function emphasis(source: string, selection: MarkdownSelection, marker: string):
   if (!parts?.[2]) return edit(start, end, body, 0, body.length, direction);
   const leading = parts[1] ?? "";
   const trailing = parts[3] ?? "";
-  const remove = wrapped(parts[2]);
+  const from = start + leading.length;
+  const to = end - trailing.length;
+  const remove = singleEmphasis(source, from, to, width);
+  if (!remove && (escaped(source, from) || hasEmphasisCloser(source, from, to, width))) return null;
   const content = remove ? parts[2].slice(width, -width) : parts[2];
   const prefix = leading + (remove ? "" : marker);
   const text = `${prefix}${content}${remove ? "" : marker}${trailing}`;
   return edit(start, end, text, prefix.length, prefix.length + content.length, direction);
+}
+
+function singleCodeSpan(source: string, start: number, end: number): { start: number; end: number } | null {
+  if (source[start] !== "`" || source[end - 1] !== "`" || source[start - 1] === "`" ||
+    source[end] === "`" || escaped(source, start)) return null;
+  const width = markerRun(source, start, 1, "`");
+  if (width !== markerRun(source, end - 1, -1, "`") || start + width >= end - width) return null;
+  let from = start + width;
+  let to = end - width;
+  const content = source.slice(from, to);
+  // Backslashes do not escape a closing backtick run inside a code span.
+  for (const match of content.matchAll(/`+/g)) if (match[0].length === width) return null;
+  if (content.startsWith(" ") && content.endsWith(" ") && content.trim()) { from++; to--; }
+  return { start: from, end: to };
 }
 
 function inlineCode(source: string, selection: MarkdownSelection): MarkdownEdit | null {
@@ -80,18 +147,27 @@ function inlineCode(source: string, selection: MarkdownSelection): MarkdownEdit 
   if (body.includes("\n")) return null;
   const before = markerRun(source, start - 1, -1, "`");
   const after = markerRun(source, end, 1, "`");
-  if (before > 0 && before === after) return edit(start - before, end + after, body, 0, body.length, direction);
+  if (before || after) {
+    if (before > 0 && before === after && singleCodeSpan(source, start - before, end + after)) {
+      return edit(start - before, end + after, body, 0, body.length, direction);
+    }
+    return null;
+  }
   const paddedBefore = markerRun(source, start - 2, -1, "`");
   const paddedAfter = markerRun(source, end + 1, 1, "`");
   if (source[start - 1] === " " && source[end] === " " && paddedBefore > 0 && paddedBefore === paddedAfter) {
-    return edit(start - paddedBefore - 1, end + paddedAfter + 1, body, 0, body.length, direction);
+    const span = singleCodeSpan(source, start - paddedBefore - 1, end + paddedAfter + 1);
+    if (span?.start === start && span.end === end) {
+      return edit(start - paddedBefore - 1, end + paddedAfter + 1, body, 0, body.length, direction);
+    }
+    return null;
   }
-  const full = /^(`+)([\s\S]*?)\1$/.exec(body);
-  if (full?.[1] && full[2] !== undefined && !full[2].startsWith("`") && !full[2].endsWith("`")) {
-    let content = full[2];
-    if (content.startsWith(" ") && content.endsWith(" ") && content.trim()) content = content.slice(1, -1);
+  const full = singleCodeSpan(source, start, end);
+  if (full) {
+    const content = source.slice(full.start, full.end);
     return edit(start, end, content, 0, content.length, direction);
   }
+  if (escaped(source, start)) return null;
   const content = body || "code";
   const longest = longestBackticks(content);
   const marker = "`".repeat(longest + 1);
@@ -151,16 +227,55 @@ function codeBlock(source: string, selection: MarkdownSelection): MarkdownEdit {
     prefix.length + body.length, selection.direction);
 }
 
+/** A non-nested label and an unquoted destination; balance parentheses before deleting anything. */
+function singleLink(source: string, start: number): { labelStart: number; labelEnd: number; end: number } | null {
+  if (source[start] !== "[" || escaped(source, start) ||
+    (source[start - 1] === "!" && !escaped(source, start - 1))) return null;
+  let index = start + 1;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "\n" || character === "\r" || character === "[") return null;
+    if (character === "\\") {
+      if (!source[index + 1] || /[\r\n]/.test(source[index + 1]!)) return null;
+      index += 2;
+      continue;
+    }
+    if (character === "]") break;
+    index++;
+  }
+  const labelEnd = index;
+  if (source[index] !== "]" || source[index + 1] !== "(") return null;
+  index += 2;
+  let depth = 1;
+  while (index < source.length) {
+    const character = source[index] ?? "";
+    if (/[\s<>]/.test(character)) return null;
+    if (character === "\\") {
+      if (!source[index + 1] || /\s/.test(source[index + 1]!)) return null;
+      index += 2;
+      continue;
+    }
+    if (character === "(") depth++;
+    if (character === ")" && --depth === 0) return { labelStart: start + 1, labelEnd, end: index + 1 };
+    index++;
+  }
+  return null;
+}
+
 function link(source: string, selection: MarkdownSelection): MarkdownEdit | null {
   const { start, end, direction } = selection;
   const body = source.slice(start, end);
   if (body.includes("\n")) return null;
-  const complete = /^\[([^\]\n]*)\]\([^)\n]*\)$/.exec(body);
-  if (complete?.[1] !== undefined) return edit(start, end, complete[1], 0, complete[1].length, direction);
-  const tail = /^\]\([^)\n]*\)/.exec(source.slice(end));
-  if (source[start - 1] === "[" && source[start - 2] !== "!" && tail) {
-    return edit(start - 1, end + tail[0].length, body, 0, body.length, direction);
+  const complete = singleLink(source, start);
+  if (complete?.end === end) {
+    const label = source.slice(complete.labelStart, complete.labelEnd);
+    return edit(start, end, label, 0, label.length, direction);
   }
+  const surrounding = singleLink(source, start - 1);
+  if (surrounding?.labelStart === start && surrounding.labelEnd === end) {
+    return edit(start - 1, surrounding.end, body, 0, body.length, direction);
+  }
+  if (body.includes("[") || body.includes("]") || source[start - 1] === "[" || source[end] === "]" || escaped(source, start)) return null;
   const label = body || "text";
   const text = `[${label}](url)`;
   return body ? edit(start, end, text, label.length + 3, label.length + 6, "forward")
@@ -202,7 +317,7 @@ function lines(source: string, selection: MarkdownSelection, command: MarkdownCo
     collapsed ? Math.min(caret, text.length) : text.length, selection.direction);
 }
 
-/** Invalid offsets (including a split surrogate pair) and multiline inline code/links are refused. */
+/** Refuse invalid offsets, unsupported multiline commands, and ambiguous inline toggle boundaries. */
 export function markdownCommand(source: string, selection: MarkdownSelection, command: MarkdownCommand): MarkdownEdit | null {
   const { start, end } = selection;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start ||
