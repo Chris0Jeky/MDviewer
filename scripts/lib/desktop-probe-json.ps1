@@ -7,7 +7,8 @@ function Write-SmokeProbeJson([string]$Path, [object]$Value) {
     if ([System.IO.File]::Exists($Path)) {
         # The three-argument overload is available in the PS5.1 worker's framework.
         # Never delete the visible snapshot or fall back after a replace failure.
-        [System.IO.File]::Replace($pending, $Path, $null)
+        # PowerShell coerces $null to an empty string for the optional backup path.
+        [System.IO.File]::Replace($pending, $Path, [System.Management.Automation.Language.NullString]::Value)
     } else {
         [System.IO.File]::Move($pending, $Path)
     }
