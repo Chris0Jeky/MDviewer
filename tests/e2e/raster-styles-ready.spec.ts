@@ -111,7 +111,7 @@ for (const viewMode of ["split", "editor"] as const) {
   });
 }
 
-test("missing cached CSS saves no offline PDF, cleans up and permits a restored-cache retry", async ({ page, context, baseURL }) => {
+test("missing cached CSS saves no offline PDF, cleans up and permits a restored-cache retry", async ({ page, context, baseURL }, info) => {
   test.skip(process.env.E2E_TARGET !== "preview", "This regression requires the production service worker.");
   const session = await context.newCDPSession(page);
   await session.send("Network.enable");
@@ -121,18 +121,46 @@ test("missing cached CSS saves no offline PDF, cleans up and permits a restored-
   let stylesheet = "";
   let failedStyles = 0;
   let downloads = 0;
+  const evidence: Array<Record<string, unknown>> = [];
   page.on("request", request => {
     const url = new URL(request.url());
     if (url.protocol.startsWith("http") && url.origin !== ownOrigin) foreignRequests.push(request.url());
   });
-  page.on("requestfailed", request => { if (request.url() === stylesheet) failedStyles++; });
+  page.on("requestfailed", request => {
+    if (request.url() !== stylesheet) return;
+    failedStyles++;
+    let frame: string | undefined;
+    try { frame = request.frame().url(); } catch { /* Worker requests have no frame. */ }
+    if (evidence.length < 64) evidence.push({ event: "stylesheet-error", url: request.url(), frame, error: request.failure()?.errorText });
+  });
+  page.on("response", response => {
+    if (response.url() !== stylesheet || evidence.length >= 64) return;
+    let frame: string | undefined;
+    try { frame = response.request().frame().url(); } catch { /* Worker requests have no frame. */ }
+    evidence.push({ event: "stylesheet-response", url: response.url(), status: response.status(), frame,
+      fromServiceWorker: response.fromServiceWorker() });
+  });
   page.on("download", () => { downloads++; });
+  const assertOfflineSource = async (stage: string) => {
+    const state = await page.evaluate(() => ({ online: navigator.onLine,
+      controller: navigator.serviceWorker.controller?.scriptURL ?? null }));
+    evidence.push({ event: "source", stage, ...state });
+    expect(state.online, `${stage}: capture requires the offline routing hint`).toBe(false);
+    expect(state.controller, `${stage}: capture requires the existing service worker`).toBeTruthy();
+  };
   try {
     await page.goto("/");
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await context.setOffline(true);
     await page.reload();
+    // Keep this extra cache-control CDP session consistent with the context
+    // after navigation. Assert the browser hint and disconnected transport
+    // independently; a failed fetch alone does not select the offline route.
+    await session.send("Network.emulateNetworkConditions", {
+      offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+    });
     await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+    await assertOfflineSource("after-reload");
     expect(await page.evaluate(() => fetch(`/__offline-recovery-probe-${Date.now()}`)
       .then(response => `online-${response.status}`).catch(() => "offline"))).toBe("offline");
     const markdown = "# Offline capture recovery\n\nThe source survives missing capture CSS.\n\n```ts\nconst offline = true;\n```\n\nMath: $e^{i\\pi}+1=0$.";
@@ -158,6 +186,7 @@ test("missing cached CSS saves no offline PDF, cleans up and permits a restored-
     expect(removed.sourceStyled).toBe(true);
     const exportButton = page.getByRole("button", { name: "Download PDF", exact: true });
     for (let attempt = 0; attempt < 2; attempt++) {
+      await assertOfflineSource(`missing-css-${attempt + 1}`);
       await exportButton.click();
       const error = page.getByRole("alertdialog", { name: "Rendering failed" });
       await expect(error).toBeVisible();
@@ -169,13 +198,21 @@ test("missing cached CSS saves no offline PDF, cleans up and permits a restored-
       expect(downloads, "missing offline CSS must not yield an incomplete PDF").toBe(0);
     }
     expect(failedStyles, "both failed captures must request the missing stylesheet").toBeGreaterThanOrEqual(2);
-    await page.evaluate(async href => {
+    expect(evidence.filter(event => event.event === "stylesheet-error" && event.frame === "about:srcdoc").length,
+      "both missing-CSS controls must exercise the controlled destination").toBeGreaterThanOrEqual(2);
+    const restored = await page.evaluate(async href => {
       const target = window as Window & { __offlineStyleBackups?: Array<{ name: string; response: Response }> };
+      let count = 0;
       for (const backup of target.__offlineStyleBackups ?? []) {
-        await (await caches.open(backup.name)).put(href, backup.response);
+        const cache = await caches.open(backup.name);
+        await cache.put(href, backup.response);
+        if (await cache.match(href)) count++;
       }
       delete target.__offlineStyleBackups;
+      return count;
     }, stylesheet);
+    expect(restored).toBe(removed.entries);
+    await assertOfflineSource("restored-cache-retry");
     const downloading = page.waitForEvent("download");
     await exportButton.click();
     const download = await downloading;
@@ -189,5 +226,11 @@ test("missing cached CSS saves no offline PDF, cleans up and permits a restored-
     await expect(page.locator("#workspace")).toHaveAttribute("data-view-mode", "editor");
     expect(downloads).toBe(1);
     expect(foreignRequests).toEqual([]);
-  } finally { await session.detach(); }
+    expect(evidence.some(event => event.event === "stylesheet-response" && event.frame === "about:srcdoc" &&
+      event.fromServiceWorker === true && event.status === 200), "retry CSS must come from the service worker").toBe(true);
+  } finally {
+    await info.attach("offline-css-recovery", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+    if (info.status !== info.expectedStatus) console.log("Offline CSS recovery:", JSON.stringify(evidence));
+    if (!page.isClosed()) await session.detach();
+  }
 });

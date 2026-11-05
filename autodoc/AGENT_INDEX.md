@@ -49,6 +49,7 @@ Export click → capture document id/name/text and settings NOW
 | Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
 | Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
 | Vector / raster PDF | `src/export/{print,download,footnoteMarkers}.ts` | `tests/export-download.test.ts`, `tests/raster-{content-clone,styles-ready,footnote-markers}.test.ts`, `tests/e2e/export.spec.ts`, `tests/e2e/raster-resolution.spec.ts` (preview isolation), `tests/e2e/raster-{visual,footnotes,styles-ready}.spec.ts` (saved pixels, CSS delay/failure recovery and damage controls); spec §§5,10 and `docs/PDF_VISUAL_REGRESSION.md` |
+| Offline raster capture document and CSS ownership | `src/export/offlineCapture.ts`, `src/export/download.ts` | `tests/raster-offline-capture.test.ts`, `tests/e2e/raster-offline-frame.spec.ts`, existing saved-PDF pixels and real cache-loss/no-save/retry in `tests/e2e/raster-{visual,styles-ready}.spec.ts`; spec §§5,6,10; `docs/design/RASTER_OFFLINE_CAPTURE.md` |
 | Exact source download and filename | `src/export/markdown.ts` | `tests/markdown-download.test.ts`, `tests/e2e/workspace-design.spec.ts` |
 | Local Open/Save keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
@@ -109,6 +110,8 @@ reloadForUpdate(): boolean;
 ## Invariants and tripwires
 
 Capture export input before queueing, not when a queued render eventually starts. Keep the host leased until capture/print settles; do not teardown it on an intervening close. New failed preparation invalidates export eligibility even if old pages stay visible. Stable input matching avoids unnecessary repagination when the requested document is already current.
+
+Offline raster capture selects its controlled `srcdoc` destination before staging only when the source reports offline and has a service-worker controller. The temporary library frame omits exact source CSS links; the final document restores fresh links in the original cascade order and must observe successful CSS/font outcomes. Preserve source inline styles, trailing renderer-adopted styles and generated body pseudo styles. Controller/document mismatches, resource errors and owned wait deadlines save no PDF and remove both frames. Do not add fallback CSS after an arbitrary failed request or bypass the online CSS failure guards. This private adapter adds no App/global API, persistence, worker policy or print-routing change; see the offline capture design note for its direct-head CSS scope and exact-head evidence.
 
 Source footnote IDs must avoid headings and suffix collisions. Repeated citations share one float; post-preview repair uses Paged.js `data-id` to generated-note mapping and leaves unrelated links alone.
 
