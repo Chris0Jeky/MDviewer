@@ -13,13 +13,15 @@ declare global {
 }
 
 export const test = base.extend<{ audit: Audit }>({
-  audit: [async ({ page }, use) => {
+  audit: [async ({ page, baseURL }, use) => {
+    if (!baseURL) throw new Error("Desktop browser tests require a configured baseURL.");
+    const localOrigin = new URL(baseURL).origin;
     const audit: Audit = { requests: [], external: [], errors: [], allowedCsp: [] };
     page.on("request", request => audit.requests.push(request.url()));
     page.on("pageerror", error => audit.errors.push(error.message));
     await page.route("**/*", route => {
       const url = new URL(route.request().url());
-      if (["http:", "https:"].includes(url.protocol) && url.origin !== "http://127.0.0.1:5183") {
+      if (["http:", "https:"].includes(url.protocol) && url.origin !== localOrigin) {
         audit.external.push(url.href);
         return route.abort("blockedbyclient");
       }

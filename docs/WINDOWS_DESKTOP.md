@@ -90,6 +90,10 @@ integration, native dialogs, native window-close behavior or WebView2 memory use
 
 The Windows workflow runs the production reader browser suite, native file/URL
 policy tests, the locked release build, and a smoke test of the actual executable.
+Local reader tests use port 5183 by default. Set `DESKTOP_E2E_PORT` to another
+available port when testing multiple checkouts; the request audit follows that
+configured origin. Tests always start their own preview server and fail if the
+port is occupied, so an older checkout cannot supply a misleading passing result.
 The smoke test opens ordinary and Unicode filenames, verifies rendered headings,
 forwards a second launch to the original app, and records the host **and all of its
 WebView2 descendants**. The `windows-desktop-smoke` artifact contains `metrics.json`
