@@ -15,6 +15,35 @@
 
 ## Current State (snapshot)
 
+- **2026-11-05 (qualified desktop authoring and offline capture)** — the last merged
+  authoring baseline verified for this record is
+  [280c73e2](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969).
+  It includes [New #183](https://github.com/Chris0Jeky/MDviewer/pull/183),
+  [compact writing space #187](https://github.com/Chris0Jeky/MDviewer/pull/187),
+  [guarded mutations #185](https://github.com/Chris0Jeky/MDviewer/pull/185),
+  [Find/Replace #188](https://github.com/Chris0Jeky/MDviewer/pull/188),
+  [workspace readiness #192](https://github.com/Chris0Jeky/MDviewer/pull/192),
+  [offline capture #178](https://github.com/Chris0Jeky/MDviewer/pull/178), and
+  [visible source matches #191](https://github.com/Chris0Jeky/MDviewer/pull/191).
+  Their reviewed heads completed CI and Windows Desktop qualification. Documents
+  remain in memory, reader startup stays lazy, and Save Markdown still saves a copy.
+  #174/#189/#190 are closed. The final combined authoring head `e8ef574a` passed
+  all five jobs: 830 units, 130 web cases with five optional performance skips,
+  27 desktop cases and 22 Rust tests plus native smoke. Independent review inspected
+  corrected match alignment, short/laptop-window screenshots and the source TREE.
+  Offline capture uses exact html2canvas-pro 2.6.0; review verified saved-PDF pixels,
+  real CSS/font failure and recovery evidence, both native Save dialogs, exact
+  Markdown/PDF files and clean teardown. Main `85f7361e` postmerge checks also passed.
+  [Shiki dependency qualification #193](https://github.com/Chris0Jeky/MDviewer/pull/193)
+  records the initial jsdom `Blob.stream()` finding, test-environment correction and
+  final qualification receipts separately; consult that PR for its final head/merge.
+  See `docs/design/2026-11-05-authoring-checkpoint.md` for source and evidence anchors.
+  **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** No live deployment, signed release or
+  representative performance result is claimed. The deployed-source anchor and exact
+  human checklists below are unchanged.
+
+### Earlier snapshots (historical)
+
 - **2026-11-05 (Windows preview integrated; acceptance open)** — the experimental
   Windows reader is merged through [#158](https://github.com/Chris0Jeky/MDviewer/pull/158),
   with highlighting admission in [#162](https://github.com/Chris0Jeky/MDviewer/pull/162)
@@ -25,8 +54,8 @@
   #166, #168, #170 and the scoped development dependency follow-up
   [#173](https://github.com/Chris0Jeky/MDviewer/pull/173) also merged after review and green exact-head checks.
   The workspace label correction for [#171](https://github.com/Chris0Jeky/MDviewer/issues/171)
-  is implemented in this checkpoint; final exact-head hosted qualification is recorded
-  in its PR. The narrow dependency split in [#165](https://github.com/Chris0Jeky/MDviewer/pull/165)
+  completed in merged [#177](https://github.com/Chris0Jeky/MDviewer/pull/177).
+  The narrow dependency split in [#165](https://github.com/Chris0Jeky/MDviewer/pull/165)
   merged as [2a26940d](https://github.com/Chris0Jeky/MDviewer/commit/2a26940d4c1da3e6c770b47111538726fc882d12)
   after all five exact-head checks passed. It pins html2canvas-pro 2.5.2, advances KaTeX to 0.19.1
   and limits the temporary Dependabot exclusion to html2canvas-pro 2.6.0.
