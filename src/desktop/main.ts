@@ -39,6 +39,7 @@ let detachWorkspace: (() => void) | null = null;
 let changingMode = false;
 let generation = 0;
 let renderGeneration = 0;
+let noticeGeneration = 0;
 let renderChain: Promise<void> = Promise.resolve();
 let textSize = 17;
 let nativeSaveBusy = false;
@@ -50,6 +51,7 @@ theme.value = settings.screenTheme;
 document.documentElement.dataset.appTheme = settings.screenTheme;
 
 function report(message: string): void {
+  ++noticeGeneration;
   notice.textContent = message;
   notice.hidden = !message;
   workspaceNotice.textContent = message;
@@ -80,8 +82,9 @@ function syncDocuments(): void {
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
-function render(): Promise<void> {
+function render(importErrors: readonly string[] = []): Promise<void> {
   const current = ++renderGeneration;
+  const currentNotice = noticeGeneration;
   const doc = session.active;
   syncDocuments();
   outline.replaceChildren();
@@ -115,11 +118,16 @@ function render(): Promise<void> {
       }
       outline.hidden = outline.childElementCount < 2;
       status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
-      if (result.warnings.length) report(result.warnings.join(" "));
+      // A new open/action may have reported a newer failure while this render ran.
+      if (result.warnings.length && currentNotice === noticeGeneration) {
+        report([...importErrors, ...result.warnings].join(" "));
+      }
     } catch (error) {
       if (current !== renderGeneration) return;
       content.setAttribute("aria-busy", "false");
-      report(`Could not render ${doc.name}: ${errorText(error)}`);
+      if (currentNotice === noticeGeneration) {
+        report([...importErrors, `Could not render ${doc.name}: ${errorText(error)}`].join(" "));
+      }
       status.textContent = "Rendering failed. You can still open Edit & PDF or another file.";
     }
   });
@@ -140,9 +148,10 @@ function commitBatch(batch: OpenBatch, request: number): void {
     syncDocuments(); // addBatch emits before the imported clean baselines are recorded.
   } else {
     errors.push(...session.append(batch.documents, request === generation));
-    if (batch.documents.length) void render();
   }
   if (errors.length) report(errors.join(" "));
+  // Capture the notices for this batch only, after publishing its immediate errors.
+  if (!app && batch.documents.length) void render(errors);
 }
 
 function canRestoreDocument(doc: Readonly<Pick<Doc, "name" | "text">>): boolean {
@@ -222,10 +231,11 @@ async function enterWorkspace(): Promise<void> {
     await app.flushRender();
     app.focusEditor();
   } catch (error) {
-    report(`Could not open the editing workspace: ${errorText(error)}`);
+    const failure = `Could not open the editing workspace: ${errorText(error)}`;
+    report(failure);
     if (!app) {
       workspace.hidden = true; shell.hidden = false; document.body.classList.remove("desktop-editing");
-      void render();
+      void render([failure]);
     }
   } finally { finishMode(); }
 }
@@ -317,8 +327,9 @@ workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
 element("reader-sample").addEventListener("click", () => {
   ++generation;
-  report(session.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]).join(" "));
-  void render();
+  const errors = session.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]);
+  report(errors.join(" "));
+  void render(errors);
 });
 theme.addEventListener("change", () => {
   if (!["light", "dark", "sepia"].includes(theme.value)) return;
@@ -381,12 +392,15 @@ if (native.available) {
     }
   });
   const drain = drainSerially(async () => {
-    const request = ++generation;
+    const startedAt = generation;
     try {
       const batch = await native.takePending();
       // Coalesced notifications may produce an empty second drain. Only a new
-      // batch replaces notices; an empty queue must not hide a real failure.
-      if (batch.documents.length || batch.errors.length) report("");
+      // batch owns selection or notices; an empty queue must not invalidate an
+      // in-flight picker. A real batch remains passive after a newer user action.
+      if (!batch.documents.length && !batch.errors.length) return;
+      const request = startedAt === generation ? ++generation : startedAt;
+      report("");
       commitBatch(batch, request);
     }
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }

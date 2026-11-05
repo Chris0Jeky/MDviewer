@@ -3,7 +3,17 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-10-21 (Windows reader ownership and native verification):**
+> **CURRENT CHECKPOINT - 2026-10-26 (Windows reader action notices):**
+> PR #158 head 2dda4de reproduced three mixed-notice failures locally: workspace-entry
+> errors disappeared after recovery warnings/failures, and Sample admission errors
+> disappeared after retained-document warnings. Both handlers now pass their action
+> errors to the existing render path; notice/render generation fences are unchanged.
+> The existing regressions remain intact. Fresh exact-head CI, production browser
+> checks, Windows native smoke and independent review remain the merge gates; consult
+> PR #158 for their current results. This repair includes no #162 performance work,
+> deployment or human acceptance. AI-6/AI-7/AI-8/AI-9 remain OPEN.
+
+> **PREVIOUS CHECKPOINT - 2026-10-21 (Windows reader ownership and native verification):**
 > All original open issues/PRs are resolved: #155/#156/#157/#159/#160 merged;
 > #136 closed after the PDF readiness/footnote and dependency fixes. Main at this
 > checkpoint is 22435ce. Windows reader PR #158 remains the active feature review.
