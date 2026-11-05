@@ -55,6 +55,7 @@ function prepareWorkspace(viewMode: ViewMode = "split") {
     flushRender: vi.fn(async () => {}), destroy: () => { input.remove(); },
     updateSettings: (patch: { viewMode: ViewMode }) => { Object.assign(settings, patch); },
     focusEditor: () => { input.focus(); },
+    captureDocumentPosition: vi.fn(), restoreDocumentPosition: vi.fn(),
     onExportStateChange: (listener: (state: { busy: boolean; hasDocument: boolean }) => void) => {
       exportListeners.add(listener); listener(app.exportState);
       return () => { exportListeners.delete(listener); };

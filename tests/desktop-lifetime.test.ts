@@ -88,6 +88,7 @@ async function openReader() {
 function mount() {
   const store = new DocStore();
   const app = { store, exportState: { busy: false }, flushRender: vi.fn(async () => {}),
+    captureDocumentPosition: vi.fn(), restoreDocumentPosition: vi.fn(),
     focusEditor: vi.fn(), destroy: vi.fn(), onExportStateChange: vi.fn(() => () => {}) };
   boundary.start.mockReturnValueOnce({ app, detachShortcuts: vi.fn() });
   click("reader-workspace");
@@ -99,6 +100,67 @@ async function entered(app: ReturnType<typeof mount>): Promise<void> {
 }
 
 describe("desktop source ownership", () => {
+  it("keyboard navigation fences an unfinished first render and recovers from a failed render", async () => {
+    let finish!: (result: { document: HTMLElement; warnings: string[] }) => void;
+    boundary.render.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    boundary.open.mockResolvedValueOnce(batch([{ name: "one.md", text: "One" }, { name: "two.md", text: "Two" }]));
+    click("reader-open");
+    await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledOnce());
+    const navigate = (key: string) => window.dispatchEvent(new KeyboardEvent("keydown", {
+      key, altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    navigate("n");
+    const stale = document.createElement("div"); stale.textContent = "Stale One";
+    finish({ document: stale, warnings: [] });
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("Two"));
+    expect(document.title).toBe("two.md — MDviewer");
+    boundary.render.mockRejectedValueOnce(new Error("Read render failed"));
+    navigate("p");
+    await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("Read render failed"));
+    expect(document.getElementById("reader-document")!.textContent).toBe("");
+    navigate("n");
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("Two"));
+    expect(document.getElementById("reader-notice")!.hidden).toBe(true);
+  });
+
+  it("transfers independent reader and editor positions through repeated mode boundaries", async () => {
+    const before = await openReader();
+    const scroll = document.getElementById("reader-scroll")!;
+    scroll.scrollTop = 310;
+    const app = mount(); await entered(app);
+    const first = app.store.openDocs[0]!;
+    expect(app.store.positions.get(first.id)?.reader?.scrollTop).toBe(310);
+    expect(before.session.positions.size).toBe(0);
+    const editor = { start: 2, end: 5, direction: "backward" as const, scrollTop: 200, scrollLeft: 0 };
+    app.store.positions.set(first.id, { editor });
+    click("reader-return");
+    await vi.waitFor(() => expect(app.destroy).toHaveBeenCalledOnce());
+    const reader = boundary.sessions.at(-1)!;
+    expect(reader.positions.get(reader.activeId!)?.editor).toEqual(editor);
+    expect(scroll.scrollTop).toBe(310);
+    const secondApp = mount(); await entered(secondApp);
+    expect(secondApp.store.positions.get(secondApp.store.activeId!)?.editor).toEqual(editor);
+    expect(reader.positions.size).toBe(0);
+  });
+
+  it("a delayed inactive reader import preserves position without rendering current source again", async () => {
+    const before = await openReader();
+    let finish!: (result: OpenBatch) => void;
+    boundary.open.mockImplementationOnce(() => new Promise<OpenBatch>(resolve => { finish = resolve; }));
+    click("reader-open");
+    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
+    picker.value = before.session.documents[1]!.id;
+    picker.dispatchEvent(new Event("change"));
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe(before.documents[1]!.text));
+    const renders = boundary.render.mock.calls.length;
+    document.getElementById("reader-scroll")!.scrollTop = 220;
+    finish(batch([{ name: "retention-late.md", text: "# Late" }]));
+    await vi.waitFor(() => expect(picker.options).toHaveLength(3));
+    expect(document.getElementById("reader-scroll")!.scrollTop).toBe(220);
+    expect(boundary.render).toHaveBeenCalledTimes(renders);
+    expect(picker.value).toBe(before.session.documents[1]!.id);
+  });
+
   it("releases the reader sources after transfer and follows current workspace identity", async () => {
     const before = await openReader();
     before.session.documents[1]!.dirty = true;

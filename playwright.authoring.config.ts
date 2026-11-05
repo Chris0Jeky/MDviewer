@@ -23,13 +23,13 @@ export default defineConfig({
     {
       name: "authoring-firefox",
       testDir: "tests/e2e",
-      testMatch: ["**/editor.spec.ts", "**/editor-edit-safety.spec.ts", "**/editor-search.spec.ts", "**/document-shortcuts.spec.ts", "**/authoring-accessibility.spec.ts", "**/export-status.spec.ts"],
+      testMatch: ["**/editor.spec.ts", "**/session-navigation.spec.ts", "**/input-race.spec.ts", "**/editor-edit-safety.spec.ts", "**/editor-search.spec.ts", "**/document-shortcuts.spec.ts", "**/authoring-accessibility.spec.ts", "**/export-status.spec.ts"],
       use: { ...devices["Desktop Firefox"], baseURL: "http://localhost:5185" },
     },
     {
       name: "desktop-authoring-firefox",
       testDir: "tests/desktop-e2e",
-      testMatch: ["**/new-document.spec.ts", "**/toolbar.spec.ts", "**/authoring-accessibility.spec.ts"],
+      testMatch: ["**/new-document.spec.ts", "**/session-navigation.spec.ts", "**/editor-search.spec.ts", "**/toolbar.spec.ts", "**/authoring-accessibility.spec.ts"],
       use: { ...devices["Desktop Firefox"], baseURL: "http://127.0.0.1:5186/desktop.html" },
     },
   ],

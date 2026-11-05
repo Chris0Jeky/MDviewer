@@ -104,6 +104,33 @@ describe("Editor: delayed insert ownership", () => {
 });
 
 describe("Editor: native input ownership", () => {
+  it("restores independent saved selections across repeated equal-content boundaries without edits", () => {
+    const text = "λ😀 same text\n".repeat(300);
+    const first = { id: "a", name: "same.md", text };
+    const second = { id: "b", name: "same.md", text };
+    editor.setDocument(first);
+    editor.input.setSelectionRange(1, 3, "backward");
+    const a = editor.capturePosition();
+    editor.setDocument(second);
+    expect(editor.input.selectionStart).toBe(0);
+    editor.input.setSelectionRange(40, 60, "forward");
+    const b = editor.capturePosition();
+    for (let count = 0; count < 4; count++) {
+      const previous = editor.input;
+      editor.setDocument(first, a);
+      expect(editor.input).not.toBe(previous);
+      expect(editor.capturePosition()).toEqual(a);
+      editor.setDocument(second, b);
+      expect(editor.capturePosition()).toEqual(b);
+    }
+    editor.setDocument({ ...first, text: "λ😀" }, a);
+    expect(editor.input.value).toBe("λ😀");
+    editor.setDocument(second, { ...b, start: 10_000, end: 20_000 });
+    expect(editor.input.selectionStart).toBe(text.length);
+    expect(editor.input.selectionEnd).toBe(text.length);
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
   it.each(["same", "different"])("uses a fresh textarea across a %s-text document boundary", (nextText) => {
     editor.setDocument({ id: "a", name: "same.md", text: "same" });
     const previous = editor.input;

@@ -69,6 +69,12 @@ export paths.
 
 ### P2 — Desktop authoring and UX — `IN PROGRESS`
 
+- **Implementation prepared (2026-11-05): session positions/navigation #199.**
+  Bounded ID-keyed source/preview/reader positions survive document switching,
+  Undo Close and reader/workspace transfers while textarea undo stays isolated.
+  Compact previous/next controls and Windows/Linux shortcuts preserve native
+  Apple Option behavior. See `design/SESSION_NAVIGATION.md`; final hosted checks
+  and independent review remain required before merge.
 - **Implementation prepared (2026-11-05): authoring quality #203.** A bounded
   production Firefox lane reuses actual editor/undo/search/shortcut and desktop
   New/layout tests. New accessibility tests cover keyboard focus and state,

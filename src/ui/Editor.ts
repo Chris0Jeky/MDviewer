@@ -27,6 +27,7 @@
 
 import { ATTRS, CLASSES, IDS, el } from "../app/dom";
 import type { CodeThemeId } from "../app/settings";
+import { clampEditorPosition, type EditorPosition } from "../app/positions";
 import { CODE_THEME_PAIRS, getHighlighter } from "../render/highlight";
 import { mountEditorSearch } from "./EditorSearch";
 
@@ -38,7 +39,9 @@ export interface EditorController {
    * A same-document, same-text update preserves the caret and native undo history.
    * Hosts should supply stable ids; name is the compatibility fallback.
    */
-  setDocument(doc: { id?: string; name: string; text: string } | null): void;
+  setDocument(doc: { id?: string; name: string; text: string } | null, position?: EditorPosition): void;
+  capturePosition(): EditorPosition;
+  restorePosition(position: EditorPosition): void;
   /**
    * Replace a UTF-16 range through the paste admission and native undo path.
    * Returns false if refused, unchanged, aborted, detached, composing, or stale.
@@ -536,15 +539,30 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
 
   syncSize("");
 
+  const capturePosition = (): EditorPosition => ({
+    ...selection(), scrollTop: input.scrollTop, scrollLeft: input.scrollLeft,
+  });
+  const restorePosition = (position: EditorPosition): void => {
+    const clamped = clampEditorPosition(position, input.value.length);
+    input.setSelectionRange(clamped.start, clamped.end, clamped.direction);
+    // The browser clamps geometry to the current viewport, including resized panes.
+    input.scrollTop = clamped.scrollTop;
+    input.scrollLeft = clamped.scrollLeft;
+    onScroll();
+  };
+
   return {
     get input(): HTMLTextAreaElement { return input; },
     replaceRange,
-    setDocument(doc): void {
+    capturePosition,
+    restorePosition,
+    setDocument(doc, position): void {
       if (destroyed) return;
       const text = doc?.text ?? "";
       const nextKey = doc ? (doc.id === undefined ? `name:${doc.name}` : `id:${doc.id}`) : null;
       const switched = nextKey !== documentKey;
       const sameText = input.value === text;
+      const adoptingPosition = documentKey === null && doc !== null && sameText;
       // App adopts the first typed text as Untitled during onInput. That establishes
       // ownership without erasing the very native undo entry that created it.
       const adoptingInput = documentKey === null && doc !== null && reportingInput && sameText;
@@ -555,7 +573,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
         if (switched) search.sourceChanged(true);
         return;
       }
-      const previousSelection = selection();
+      const previousPosition = capturePosition();
       const restoreFocus = switched && document.activeElement === input;
       if (switched) {
         // Chromium can retain native undo even across different value assignments.
@@ -569,12 +587,6 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
         composing = false;
       }
       input.value = text;
-      if (sameText) input.setSelectionRange(
-        previousSelection.start, previousSelection.end, previousSelection.direction,
-      );
-      input.scrollTop = 0;
-      input.scrollLeft = 0;
-      onScroll();
       // An externally-seeded document is a discrete event, not a keystroke: count it
       // straight away so the header is right before the user can look at it.
       wordCount = countWords(text);
@@ -587,6 +599,9 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       search.setInput(input);
       search.sourceChanged(true);
       if (restoreFocus) input.focus({ preventScroll: true });
+      restorePosition(position ?? (switched && !adoptingPosition
+        ? { start: 0, end: 0, direction: "none", scrollTop: 0, scrollLeft: 0 }
+        : previousPosition));
     },
     setCodeTheme(next): void {
       if (next === codeTheme) return;
@@ -596,7 +611,7 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
       scheduleRecolor(input.value);
     },
     focus(): void {
-      input.focus();
+      input.focus({ preventScroll: true });
     },
     destroy(): void {
       destroyed = true;

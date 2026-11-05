@@ -49,6 +49,7 @@ import type { BannerController } from "../ui/Banner";
 import { DocStore, hasProtectableWork } from "./state";
 import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
+import type { DocumentPosition } from "./positions";
 import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
@@ -131,6 +132,7 @@ export class App {
   /** Metadata for the actual laid-out pages, never the mutable current editor. */
   private renderedSnapshot: { id: string; text: string; name: string; settings: Settings } | null = null;
   private currentPane: Pane = "empty";
+  private editorDocumentId: string | null = null;
 
   private constructor(root: HTMLElement) {
     this.root = root;
@@ -160,11 +162,16 @@ export class App {
       onTooLarge: (name) => app.onTooLarge(name),
     });
 
-    // "change" = a different document is active → re-seed the editor and re-render.
+    app.store.on("beforechange", () => app.captureDocumentPosition());
+    // An inactive import changes the picker, but cannot disturb the current source
+    // selection or ask Paged.js to lay out the same document again.
     app.store.on("change", () => {
-      app.editor.setDocument(app.store.active);
+      const doc = app.store.active;
+      const switched = app.editorDocumentId !== (doc?.id ?? null);
+      app.editor.setDocument(doc, switched && doc ? app.store.positions.get(doc.id)?.editor : undefined);
+      app.editorDocumentId = doc?.id ?? null;
       app.emitExportState();
-      app.scheduleRender("content");
+      if (switched) app.scheduleRender("content");
     });
     // "text" = the active document was edited in the editor. The editor is already
     // showing that text, so only the pipeline needs waking.
@@ -331,6 +338,7 @@ export class App {
   updateSettings(patch: Partial<Settings>): void {
     const prev = this.settings;
     const next = migrateSettings({ ...prev, ...patch });
+    if (next.viewMode !== prev.viewMode) this.captureDocumentPosition();
     this.settings = next;
     saveSettings(next);
     for (const listener of this.settingsListeners) listener(next);
@@ -353,6 +361,10 @@ export class App {
     if (patch.viewMode !== undefined) {
       if (next.viewMode !== prev.viewMode) pulseViewMode(next.viewMode);
       this.workspaceEl.setAttribute(ATTRS.viewMode, next.viewMode);
+      this.restoreDocumentPosition();
+      if (next.viewMode !== "editor" && this.renderedSnapshot?.id === this.store.activeId) {
+        this.canvas.restorePosition(this.store.positions.get(this.store.activeId!)?.preview ?? null);
+      }
     }
     if (patch.splitRatio !== undefined) {
       this.applySplitRatio(next.splitRatio);
@@ -536,6 +548,7 @@ export class App {
     // A settings change during an async preparation belongs to the NEXT run.
     // Mixing new margins with old source typography makes preview/export disagree.
     const name = doc.name;
+    const previousDocumentId = this.renderedSnapshot?.id;
     // Retain old pages for reading on preparation failure, but never export them
     // as though they represented the newly requested document.
     this.renderedSnapshot = null;
@@ -546,9 +559,9 @@ export class App {
     // scrollTop to 0, so without this every tweak (and every keystroke past the
     // debounce) throws the reader back to page 1 (UX-4 ii). Both reasons restore:
     // a settings change and an edit are equally disorienting to lose your place in.
-    const restoreTo: CanvasPosition | null = this.hasGoodRender
+    const restoreTo: CanvasPosition | null = this.hasGoodRender && previousDocumentId === doc.id && this.settings.viewMode !== "editor"
       ? this.canvas.capturePosition()
-      : null;
+      : this.store.positions.get(doc.id)?.preview ?? { page: 1, offset: 0 };
 
     // The empty pane sits UNDER the 70%-alpha paginating overlay (z-10 vs z-40), so
     // leaving it up during the first pagination shows the dropzone card ghosted
@@ -696,6 +709,27 @@ export class App {
     this.editor.focus();
   }
 
+  /** Capture live coordinates before a document or desktop mode boundary. */
+  captureDocumentPosition(): DocumentPosition | undefined {
+    const doc = this.store.active;
+    if (!doc || this.editorDocumentId !== doc.id) return undefined;
+    const position: DocumentPosition = {};
+    if (this.settings.viewMode !== "preview") position.editor = this.editor.capturePosition();
+    if (this.settings.viewMode !== "editor" && this.renderedSnapshot?.id === doc.id) {
+      const preview = this.canvas.capturePosition();
+      if (preview) position.preview = preview;
+    }
+    this.store.positions.set(doc.id, position);
+    return this.store.positions.get(doc.id);
+  }
+
+  /** Used when the lazy desktop workspace receives an existing session. */
+  restoreDocumentPosition(): void {
+    const id = this.store.activeId;
+    const position = id ? this.store.positions.get(id) : undefined;
+    if (position?.editor && this.settings.viewMode !== "preview") this.editor.restorePosition(position.editor);
+  }
+
   /** Detach global listeners — used by tests/teardown. */
   destroy(): void {
     this.detachInput?.();
@@ -710,6 +744,7 @@ export class App {
     this.exportStatus.destroy();
     this.settingsListeners.clear();
     this.exportListeners.clear();
+    this.store.positions.clear();
   }
 
   get pane(): Pane {

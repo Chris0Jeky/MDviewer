@@ -10,6 +10,7 @@ import { native, type OpenBatch } from "./native";
 import { ReaderSession, decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { renderReaderDocument } from "./render";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
+import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -46,6 +47,10 @@ let textSize = 17;
 let nativeSaveBusy = false;
 const queuedBatches: Array<{ batch: OpenBatch; request: number }> = [];
 let workspaceOriginals = new Map<string, { name: string; text: string; dirty: boolean }>();
+let renderedReaderId: string | null = null;
+const readerNavigation = mountDocumentNavigation(shell, select,
+  element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
+  shell.querySelector<HTMLElement>(".reader-footer")!);
 
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
@@ -71,13 +76,15 @@ function workspaceDirty(doc: Doc): boolean {
 function syncDocuments(): void {
   const docs = app ? app.store.openDocs.map(doc => ({ ...doc, dirty: workspaceDirty(doc) })) : session.documents;
   const active = app ? app.store.active : session.active;
+  const labels = documentLabels(docs);
   select.replaceChildren(...docs.map(doc => {
-    const option = new Option(`${doc.dirty ? "• " : ""}${doc.name}`, doc.id);
+    const option = new Option(`${doc.dirty ? "• " : ""}${labels.get(doc.id)!}`, doc.id);
     option.selected = doc.id === active?.id;
     return option;
   }));
   if (!docs.length) select.append(new Option("No document open", ""));
-  select.disabled = !docs.length;
+  select.disabled = !docs.length || changingMode;
+  readerNavigation.sync();
   closeButton.disabled = !active;
   workspaceButton.disabled = !active || changingMode;
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
@@ -88,7 +95,15 @@ function syncDocuments(): void {
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
+function rememberReaderPosition(): void {
+  if (renderedReaderId && session.documents.some(doc => doc.id === renderedReaderId)) {
+    session.positions.set(renderedReaderId, { reader: { scrollTop: scroll.scrollTop, scrollLeft: scroll.scrollLeft } });
+  }
+}
+
 function render(importErrors: readonly string[] = []): Promise<void> {
+  rememberReaderPosition();
+  renderedReaderId = null;
   const current = ++renderGeneration;
   const currentNotice = noticeGeneration;
   const doc = session.active;
@@ -114,7 +129,13 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       content.replaceChildren(...result.document.childNodes);
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
-      scroll.scrollTop = 0;
+      const position = session.positions.get(doc.id)?.reader;
+      const previousBehavior = scroll.style.scrollBehavior;
+      scroll.style.scrollBehavior = "auto";
+      scroll.scrollTop = position?.scrollTop ?? 0;
+      scroll.scrollLeft = position?.scrollLeft ?? 0;
+      scroll.style.scrollBehavior = previousBehavior;
+      renderedReaderId = doc.id;
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
         const link = document.createElement("a");
         link.href = `#${encodeURIComponent(heading.id)}`;
@@ -143,6 +164,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
+  const previousActiveId = session.activeId;
   if (app) {
     const bounded = new ReaderSession();
     // Seed the gate without dropping existing edits that have grown since opening.
@@ -154,10 +176,11 @@ function commitBatch(batch: OpenBatch, request: number): void {
     syncDocuments(); // addBatch emits before the imported clean baselines are recorded.
   } else {
     errors.push(...session.append(batch.documents, request === generation));
+    syncDocuments();
   }
   if (errors.length) report(errors.join(" "));
   // Capture the notices for this batch only, after publishing its immediate errors.
-  if (!app && batch.documents.length) void render(errors);
+  if (!app && batch.documents.length && session.activeId !== previousActiveId) void render(errors);
 }
 
 function canRestoreDocument(doc: Readonly<Pick<Doc, "name" | "text">>): boolean {
@@ -222,6 +245,7 @@ async function createDocument(): Promise<void> {
 
 async function enterWorkspace(revealEditor = false): Promise<void> {
   if (app || changingMode || !session.active) return;
+  rememberReaderPosition();
   changingMode = true; ++generation; ++renderGeneration;
   // Layout needs a visible workspace, but its controls must not accept input
   // until the initial render and source handoff have finished.
@@ -236,10 +260,18 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     document.body.classList.add("desktop-editing");
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
+    renderedReaderId = null;
     const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument);
     app = mounted.app;
     const selected = session.documents.findIndex(doc => doc.id === session.activeId);
     const added = app.store.addBatch(session.documents);
+    for (const [index, doc] of added.entries()) {
+      const position = session.positions.get(session.documents[index]!.id);
+      if (position) app.store.positions.set(doc.id, position);
+    }
+    // addBatch initially activates the first document. Restore it before changing
+    // selection so beforechange cannot replace its transferred coordinates with 0.
+    app.restoreDocumentPosition();
     workspaceOriginals = new Map(added.map((doc, index) => [doc.id, session.documents[index]!]));
     if (added[selected]) app.store.setActive(added[selected]!.id);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
@@ -258,6 +290,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // Keep the old session intact until that handoff succeeds, then release it.
     session.documents.length = 0;
     session.activeId = null;
+    session.positions.clear();
     content.replaceChildren(); // Release the reader DOM while the PDF workspace owns the document.
     await app.flushRender();
     focusWhenReady = true;
@@ -281,12 +314,17 @@ async function returnToReader(): Promise<void> {
   syncDocuments();
   try {
     await app.flushRender();
+    app.captureDocumentPosition();
     const next = new ReaderSession();
     const errors = next.append(app.store.openDocs.map(doc => ({
       name: doc.name, text: doc.text,
       dirty: workspaceDirty(doc),
     })));
     if (errors.length) throw new Error(errors.join(" "));
+    for (const [index, doc] of app.store.openDocs.entries()) {
+      const position = app.store.positions.get(doc.id);
+      if (position) next.positions.set(next.documents[index]!.id, position);
+    }
     const index = app.store.openDocs.findIndex(doc => doc.id === app!.store.activeId);
     next.activeId = next.documents[index]?.id ?? next.activeId;
     const previousDocs = [...app.store.openDocs];
@@ -301,7 +339,12 @@ async function returnToReader(): Promise<void> {
       const previousIds = new Set(previousDocs.map(doc => doc.id));
       app.store.openDocs = [...previousDocs, ...app.store.openDocs.filter(doc => !previousIds.has(doc.id))];
       for (const [id, original] of previousOriginals) workspaceOriginals.set(id, original);
+      for (const [index, doc] of previousDocs.entries()) {
+        const position = next.positions.get(next.documents[index]!.id);
+        if (position) app.store.positions.set(doc.id, position);
+      }
       if (previousActive) app.store.setActive(previousActive);
+      app.restoreDocumentPosition();
       throw error;
     }
     detachWorkspace?.(); detachWorkspace = null;
@@ -316,7 +359,7 @@ async function returnToReader(): Promise<void> {
     session = next;
     report("");
     await render();
-    content.focus();
+    content.focus({ preventScroll: true });
   } catch (error) { report(`Could not return to reading: ${errorText(error)}`); }
   finally { appRoot.inert = false; finishMode(); }
 }
@@ -356,7 +399,10 @@ appRoot.addEventListener("click", event => {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
-select.addEventListener("change", () => { ++generation; session.activeId = select.value; report(""); void render(); });
+select.addEventListener("change", () => {
+  if (changingMode || session.activeId === select.value) return;
+  ++generation; session.activeId = select.value; report(""); void render();
+});
 closeButton.addEventListener("click", closeDocument);
 workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 returnButton.addEventListener("click", () => { void returnToReader(); });

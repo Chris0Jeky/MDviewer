@@ -21,7 +21,11 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
   const hint = root.ownerDocument.createElement("span");
   hint.className = "workspace-shortcuts";
   hint.style.display = "block";
-  hint.textContent = `${create.length ? "Ctrl/Cmd+N for new · " : ""}Ctrl/Cmd+O to open · Ctrl/Cmd+S to save Markdown.`;
+  hint.textContent = create.length
+    ? "Ctrl/Cmd+N/O/S: new/open/save Markdown"
+    : "Ctrl/Cmd+O/S: open/save Markdown";
+  const navigationHint = privacy.querySelector<HTMLElement>(".workspace-navigation-shortcuts");
+  if (navigationHint) hint.append(" · ", navigationHint);
   privacy.append(hint);
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -41,6 +45,7 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
     if (disposed) return;
     disposed = true;
     target.removeEventListener("keydown", onKeyDown);
+    if (navigationHint?.isConnected) privacy.append(navigationHint);
     hint.remove();
     for (const { button, title, keys } of previous) {
       if (title === null) button.removeAttribute("title");

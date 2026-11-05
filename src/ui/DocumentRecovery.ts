@@ -1,5 +1,6 @@
 import { el } from "../app/dom";
 import type { Doc, DocStore } from "../app/state";
+import type { DocumentPosition } from "../app/positions";
 
 export interface DocumentRecoveryController {
   closeActive(): void;
@@ -15,7 +16,7 @@ export function mountDocumentRecovery(
   returnFocus: () => void,
   canRestore?: RestoreAdmission,
 ): DocumentRecoveryController {
-  let closed: Pick<Doc, "name" | "text"> | null = null;
+  let closed: (Pick<Doc, "name" | "text"> & { position?: DocumentPosition }) | null = null;
   let destroyed = false;
   const filename = el("strong", { class: "document-recovery-name" });
   const status = el("span", { class: "document-recovery-status" });
@@ -46,11 +47,11 @@ export function mountDocumentRecovery(
     if (destroyed || !root.isConnected || !closed) return;
     const snapshot = closed;
     // Refusal must preserve the exact snapshot and its offer for a later retry.
-    if (canRestore && !canRestore(snapshot)) return;
+    if (canRestore && !canRestore({ name: snapshot.name, text: snapshot.text })) return;
     // Consume once before store events can re-enter. A new identity cannot
     // overwrite another document that was opened or edited after this close.
     clear();
-    store.add(snapshot.name, snapshot.text);
+    store.add(snapshot.name, snapshot.text, snapshot.position);
     returnFocus();
   }
 
@@ -69,7 +70,7 @@ export function mountDocumentRecovery(
       const doc = store.active;
       if (!doc) return;
       closed = { name: doc.name, text: doc.text };
-      store.remove(doc.id);
+      closed.position = store.remove(doc.id);
       row.hidden = false;
       filename.textContent = doc.name;
       filename.title = doc.name;
