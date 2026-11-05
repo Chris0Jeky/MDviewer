@@ -15,6 +15,21 @@ function setup(canRestore?: (doc: { name: string; text: string }) => boolean) {
 }
 
 describe("one-close recovery", () => {
+  it("moves position through the single close snapshot without retaining a closed ID", () => {
+    const t = setup();
+    const doc = t.store.add("same.md", "λ😀 source");
+    const position = { editor: { start: 1, end: 3, direction: "backward" as const, scrollTop: 240, scrollLeft: 0 },
+      reader: { scrollTop: 350, scrollLeft: 0 } };
+    t.store.on("beforechange", () => { if (t.store.activeId === doc.id) t.store.positions.set(doc.id, position); });
+    t.controller.closeActive();
+    expect(t.store.positions.size).toBe(0);
+    t.undo.click();
+    expect(t.store.positions.get(t.store.activeId!)).toEqual(position);
+    expect(t.store.positions.get(doc.id)).toBeUndefined();
+    t.controller.closeActive(); t.discard.click(); t.undo.click();
+    expect(t.store.openDocs).toHaveLength(0); expect(t.store.positions.size).toBe(0);
+  });
+
   it("checks admission before consuming recovery and allows a refused snapshot to be retried", () => {
     const admit = vi.fn(() => false);
     const t = setup(admit);

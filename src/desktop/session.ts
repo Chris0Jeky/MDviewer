@@ -1,4 +1,6 @@
 /** Bounded, memory-only document state for the standalone reader. */
+import { SessionPositions } from "../app/positions";
+
 export interface ReaderDocument {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ export function nextUntitledName(docs: readonly { name: string }[]): string {
 
 export class ReaderSession {
   readonly documents: ReaderDocument[] = [];
+  readonly positions = new SessionPositions();
   activeId: string | null = null;
   private sequence = 0;
 
@@ -52,6 +55,7 @@ export class ReaderSession {
   close(id: string): void {
     const index = this.documents.findIndex(doc => doc.id === id);
     if (index < 0) return;
+    this.positions.take(id);
     this.documents.splice(index, 1);
     if (this.activeId === id) this.activeId = this.documents[Math.max(0, index - 1)]?.id ?? null;
   }

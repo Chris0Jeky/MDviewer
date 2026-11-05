@@ -38,6 +38,13 @@ available name (`Untitled.md`, `Untitled 2.md`, and so on), and the source pane 
 shown and focused. An untouched blank note can close without a discard prompt.
 
 Choose **Edit & PDF** to edit an opened file and use the existing page-safe preview.
+The previous/next arrow buttons cycle open documents. On Windows/Linux, use
+**Alt+Shift+P/N** to switch or **Alt+Shift+D** to focus the document picker. Equal
+filenames are numbered in the picker. Source selections and source, preview and
+reader scroll positions are kept for this session, including reader/workspace
+round trips and Undo Close; they are not stored on disk. Apple platforms retain
+native Option-key behavior and use the keyboard-reachable buttons/picker.
+
 **Reading view** returns with your open documents and edits preserved. **Save Markdown**
 saves a copy of the source. The session still compares edits with the original text
 that was opened or created, so saving a copy does not clear an edited document's

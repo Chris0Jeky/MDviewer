@@ -133,7 +133,7 @@ Unchanged exports retain the signatures in foundation section 7 and its section 
 
 ```typescript
 // src/app/state.ts: DocStore additionally supports atomic imports
-addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate?: boolean): Doc[];
+addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate?: boolean, position?: DocumentPosition): Doc[];
 // Defaults to selecting the first added document; false preserves the current selection.
 
 // src/app/state.ts: adds to the existing scheduler surface
@@ -233,6 +233,26 @@ The primary toolbar row contains identity, optional desktop New, Open, View, Scr
 
 ## 9. Persistence and navigation
 
+`SessionPositions` holds at most 64 LRU entries of source selection/direction and
+source/preview/reader scroll coordinates, keyed by document ID. It stores no source,
+DOM nodes, undo history or disk/browser state. `DocStore.beforechange` captures the
+outgoing identity before append, switch or remove; close prunes that entry and the
+single Undo Close snapshot may transfer its coordinates to a fresh restored ID.
+Same-ID selection and inactive imports do not trigger pagination. Desktop mode
+handoffs transfer coordinates explicitly between owners, including failed-return
+recovery, without loading the editor or paginator during reader navigation.
+
+Previous/Next buttons and the native picker remain keyboard reachable. Windows/Linux
+use Alt+Shift+P/N for previous/next and Alt+Shift+D for the picker, with visible hints
+and `aria-keyshortcuts`. Apple platforms leave these Option chords unbound, preserving
+native text entry and selection. Composition, handled events, held-key repeats,
+detached/hidden/inert controls and disabled selection cannot navigate. Duplicate
+filenames receive ordinal picker labels; identity never comes from the label.
+Source restoration clamps UTF-16 offsets and browser scroll geometry in a fresh
+textarea; preview positions restore only after the corresponding identity renders.
+See `SESSION_NAVIGATION.md`, position/navigation units and both production
+`session-navigation.spec.ts` suites. This is session navigation, not persisted recents.
+
 Settings persist under `mdviewer.settings.v1`; the approved SDK keys are the separate exception described in §1. Open document bytes, latest-close recovery, source-download state and export snapshots remain in memory. Explicit user-selected saves/exports write their requested files without adding automatic/app-managed document or session storage. Preserve validation/clamping for view mode, split ratio and title-page settings described in foundation sections 9 and 12. Preserve the pristine-sample exemption in `hasProtectableWork`; modifying the sample restores protection.
 
 Worker activation and document reload are distinct. UpdatePrompt remains dismissible during activation; it recovers after failure or timeout. A cancelled reload can be retried without waiting for a second controllerchange. Dismissal removes owned listeners/timers and invalidates queued activation work. Plugin and native readiness converge idempotently; another tab's activation is not consent to reload this one.
@@ -295,6 +315,9 @@ App supplies the stable DocStore ID and legacy callers fall back to the name.
 Same-document, same-text notifications preserve live selection and native undo.
 A different identity fences delayed edits even when text and filename are equal;
 every real identity boundary replaces the textarea to isolate native undo history.
+`setDocument(doc, position?: EditorPosition)` may restore that identity's bounded
+coordinates. `capturePosition()` and `restorePosition(position)` expose coordinates
+without editing source or rebuilding the host; native undo remains per textarea.
 The read-only `input` getter returns the current node; integrations must rebind
 node listeners after a switch. App's synchronous adoption of the first typed
 document preserves its node and first undo entry.

@@ -19,6 +19,7 @@ import type { App } from "../app/App";
 import { downloadMarkdown } from "../export/markdown";
 import { SaveCanceled, getDownloadDestination } from "../export/destination";
 import { mountDocumentRecovery, type RestoreAdmission } from "./DocumentRecovery";
+import { documentLabels, mountDocumentNavigation } from "./DocumentNavigation";
 
 export interface ToolbarController {
   destroy(): void;
@@ -257,7 +258,11 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
   );
   docCloseBtn.addEventListener("click", () => recovery.closeActive());
 
-  const docGroup = group("Document", docField, docCloseBtn);
+  const previousDoc = el("button", { type: "button", class: CLASSES.workspaceAction,
+    attrs: { "aria-label": "Previous document" } }, "↑");
+  const nextDoc = el("button", { type: "button", class: CLASSES.workspaceAction,
+    attrs: { "aria-label": "Next document" } }, "↓");
+  const docGroup = group("Document", previousDoc, docField, nextDoc, docCloseBtn);
   const brand = el("div", { class: "workspace-brand" },
     el("strong", {}, "MDviewer"), el("span", {}, "Markdown to print"));
   const newBtn = createDocument ? el("button", { type: "button", class: CLASSES.workspaceAction,
@@ -484,18 +489,20 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
     sessionStatus, saveBtn);
   bar.append(primaryRow, layoutDetails, sessionRow);
   root.append(bar);
+  const navigation = mountDocumentNavigation(bar, docSelect, previousDoc, nextDoc, sessionRow.querySelector<HTMLElement>(".workspace-privacy")!);
   const recovery = mountDocumentRecovery(bar, app.store, () => {
     if (!app.store.active) openBtn.focus();
     else if (app.settings.viewMode === "preview") docSelect.focus();
-    else root.querySelector<HTMLTextAreaElement>(`#${IDS.editorInput}`)?.focus();
+    else root.querySelector<HTMLTextAreaElement>(`#${IDS.editorInput}`)?.focus({ preventScroll: true });
   }, canRestoreDocument);
 
   // ---- Keep the document switcher and stateful controls in sync ----
   function syncDocSwitcher(): void {
     const docs = app.store.openDocs;
+    const labels = documentLabels(docs);
     docSelect.replaceChildren();
     for (const doc of docs) {
-      const option = el("option", { value: doc.id }, doc.name);
+      const option = el("option", { value: doc.id }, labels.get(doc.id)!);
       if (doc.id === app.store.activeId) option.selected = true;
       docSelect.append(option);
     }
@@ -511,6 +518,7 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
       activeName ? `Close ${activeName}` : "Close document",
     );
     docCloseBtn.title = activeName ? `Close ${activeName}` : "Close document";
+    navigation.sync();
   }
 
   /** Export controls are inert with nothing to export, and while one is running. */
@@ -562,6 +570,7 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
   return {
     destroy(): void {
       recovery.destroy();
+      navigation.destroy();
       unsubscribe();
       unsubscribeSettings();
       unsubscribeExport();

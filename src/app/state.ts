@@ -5,12 +5,16 @@
  * event emitter — UI subscribes and re-reads. The scheduler coalesces rapid render
  * requests: settings tweaks are the hot path (120ms), content swaps 250ms.
  *
- * Two events, deliberately separate:
+ * Three events, deliberately separate:
+ *  - `"beforechange"` — capture the current document's live coordinates before
+ *    an identity mutation. Closed coordinates are removed after this capture.
  *  - `"change"` — the document *set* or the active document changed (open, close,
  *    switch). Listeners rebuild document-identity UI (switcher, editor contents).
  *  - `"text"`   — the active document's text was edited in place. Fires once per
  *    keystroke, so only the render pipeline listens; identity UI must not churn.
  */
+
+import { SessionPositions, type DocumentPosition } from "./positions";
 
 export interface Doc {
   id: string;
@@ -21,7 +25,7 @@ export interface Doc {
 export type RenderReason = "content" | "settings";
 
 /** Store event names. See the module comment for who should listen to which. */
-export type DocEvent = "change" | "text";
+export type DocEvent = "beforechange" | "change" | "text";
 
 let idCounter = 0;
 function nextId(): string {
@@ -32,7 +36,9 @@ function nextId(): string {
 export class DocStore {
   openDocs: Doc[] = [];
   activeId: string | null = null;
+  readonly positions = new SessionPositions();
   private listeners: Record<DocEvent, Set<() => void>> = {
+    beforechange: new Set(),
     change: new Set(),
     text: new Set(),
   };
@@ -41,22 +47,25 @@ export class DocStore {
     return this.openDocs.find((d) => d.id === this.activeId) ?? null;
   }
 
-  add(name: string, text: string): Doc {
-    return this.addBatch([{ name, text }])[0]!;
+  add(name: string, text: string, position?: DocumentPosition): Doc {
+    return this.addBatch([{ name, text }], true, position)[0]!;
   }
 
   /** Append once, selecting only the first document when this import still owns focus. */
-  addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate = true): Doc[] {
+  addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate = true, position?: DocumentPosition): Doc[] {
     const added = docs.map(({ name, text }) => ({ id: nextId(), name, text }));
     if (added.length === 0) return added;
+    this.emit("beforechange");
     this.openDocs.push(...added);
+    if (position) this.positions.set(added[0]!.id, position);
     if (activate) this.activeId = added[0]!.id;
     this.emit("change");
     return added;
   }
 
   setActive(id: string): void {
-    if (this.openDocs.some((d) => d.id === id)) {
+    if (this.activeId !== id && this.openDocs.some((d) => d.id === id)) {
+      this.emit("beforechange");
       this.activeId = id;
       this.emit("change");
     }
@@ -76,14 +85,17 @@ export class DocStore {
     return true;
   }
 
-  remove(id: string): void {
+  remove(id: string): DocumentPosition | undefined {
     const idx = this.openDocs.findIndex((d) => d.id === id);
     if (idx === -1) return;
+    this.emit("beforechange");
+    const position = this.positions.take(id);
     this.openDocs.splice(idx, 1);
     if (this.activeId === id) {
       this.activeId = this.openDocs[Math.max(0, idx - 1)]?.id ?? null;
     }
     this.emit("change");
+    return position;
   }
 
   on(ev: DocEvent, cb: () => void): () => void {
