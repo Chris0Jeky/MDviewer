@@ -112,7 +112,7 @@ it("loads CSS in the controlled document without changing its cascade or generat
   expect(observed.bodyOrder).toEqual(["generated-pseudos", "authored-body"]);
   expect(observed.media).toBe("screen");
   expect(document.head.innerHTML + host.outerHTML).toBe(before);
-  expect(save).toHaveBeenCalledWith("document.pdf");
+  expect(save).toHaveBeenCalledWith("document.pdf", { returnPromise: true });
   expect(document.querySelector("iframe.html2canvas-container")).toBeNull();
 });
 
@@ -156,7 +156,7 @@ it("preserves inactive and empty-href CSS links without waiting for their load e
   document.head.insertAdjacentHTML("beforeend", '<link rel="alternate stylesheet" href="/assets/alternate.css"><link rel="stylesheet">');
   stagedCapture();
   const results = await Promise.allSettled([exportPaginatedToPdf(host, DEFAULT_SETTINGS), settleStyles("load")]);
-  expect(results[0]).toEqual({ status: "fulfilled", value: undefined });
+  expect(results[0]).toEqual({ status: "fulfilled", value: "download-requested" });
   expect(results[1]).toEqual({ status: "fulfilled", value: undefined });
   expect(save).toHaveBeenCalledOnce();
   expect(disabled.disabled).toBe(true);

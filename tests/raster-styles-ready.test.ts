@@ -132,7 +132,7 @@ it.each(["empty", "inaccessible"])("accepts successful %s CSS and waits for font
   expect(save).not.toHaveBeenCalled();
   releaseFonts();
   await pending;
-  expect(save).toHaveBeenCalledWith("document.pdf");
+  expect(save).toHaveBeenCalledWith("document.pdf", { returnPromise: true });
 });
 
 it("requires every active stylesheet while ignoring disabled, alternate and empty-href links", async () => {

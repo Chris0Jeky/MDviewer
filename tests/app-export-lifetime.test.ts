@@ -4,9 +4,10 @@ import { createRenderScheduler, DocStore, type RenderReason } from "../src/app/s
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 import { SaveCanceled } from "../src/export/destination";
 import { mountBanner } from "../src/ui/Banner";
+import type { FallbackPdfOptions, PdfExportResult } from "../src/export/download";
 
 const mocks = vi.hoisted(() => ({
-  exportPdf: vi.fn(async (_host: HTMLElement, _settings: unknown, _options: unknown) => {}),
+  exportPdf: vi.fn<(host: HTMLElement, settings: unknown, options: FallbackPdfOptions) => Promise<PdfExportResult | void>>(async () => {}),
   highlighter: vi.fn(async () => { throw new Error("Preparation failed"); }),
 }));
 vi.mock("../src/export/download", () => ({ exportPaginatedToPdf: mocks.exportPdf }));
@@ -37,6 +38,48 @@ function fixture(afterRender?: (banner: ReturnType<typeof mountBanner>) => void)
 beforeEach(() => { mocks.exportPdf.mockReset().mockResolvedValue(undefined); });
 
 describe("App export ownership and completed-render metadata", () => {
+  it("publishes preparation before the lease and waits for native save before claiming success", async () => {
+    const t = fixture();
+    let release!: () => void;
+    let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const saving = new Promise<void>(resolve => { release = resolve; });
+    const states: string[] = [];
+    t.app.onExportStateChange(state => { if (state.pdf) states.push(state.pdf.phase); });
+    mocks.exportPdf.mockImplementationOnce(async (_host, _settings, options) => {
+      options.onProgress?.(1, 2);
+      options.onProgress?.(2, 2);
+      options.onSaving?.("native");
+      started();
+      await saving;
+      return "saved";
+    });
+    const pending = t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("preparing");
+    await entered;
+    expect(t.app.exportState.pdf.phase).toBe("saving");
+    expect(t.app.exportState.busy).toBe(true);
+    expect(states).not.toContain("saved");
+    release();
+    await pending;
+    expect(t.app.exportState.pdf.phase).toBe("saved");
+    expect(t.app.exportState.busy).toBe(false);
+    expect(states).toContain("rendering");
+  });
+
+  it("reports failure, then a successful retry without changing the captured document", async () => {
+    const t = fixture();
+    mocks.exportPdf.mockRejectedValueOnce(new Error("Capture failed"));
+    await t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("failed");
+    expect(t.app.exportState.busy).toBe(false);
+    mocks.exportPdf.mockResolvedValueOnce("download-requested");
+    await t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("download-requested");
+    expect(t.errorCard.hidden).toBe(true);
+    expect(t.store.active?.text).toBe("Original");
+  });
+
   it("releases the export lease after native save cancellation without a fatal error", async () => {
     const t = fixture();
     t.banner.fatal("Earlier capture failure");
@@ -47,6 +90,7 @@ describe("App export ownership and completed-render metadata", () => {
     expect(t.errorCard.hidden).toBe(false);
     expect(t.errorCard.textContent).toContain("Earlier capture failure");
     expect(t.app.exportState.busy).toBe(false);
+    expect(t.app.exportState.pdf.phase).toBe("canceled");
     t.scheduler.schedule("content");
     await t.scheduler.flush();
     expect(t.host.textContent).toBe("");

@@ -24,6 +24,8 @@ export const IDS = {
   pageChip: "page-chip",
   zoomControl: "zoom-control",
   statusLive: "status-live",
+  exportStatus: "export-status",
+  exportStatusLive: "export-status-live",
   fileInput: "file-input",
 } as const;
 

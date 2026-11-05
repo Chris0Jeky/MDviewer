@@ -47,6 +47,12 @@ discard confirmation. You may still be asked before closing it after a successfu
 fallback. Exports do not overwrite the original file automatically. Wait for an
 export to finish before returning to the reader or closing the app.
 
+PDF progress stays visible at the bottom of the workspace, including Markdown-only
+and short Find layouts. It reports completed pages, then the pending native Save
+dialog, and distinguishes saved, canceled and failed outcomes. Failures include a
+short reason and permit retry; focus and source position stay where you left them.
+The browser build reports “download requested” after handing the file to the browser.
+
 **Document layout** starts collapsed to leave more room for writing. Open it to
 adjust typography, paper, margins and page furniture; press Escape within the
 controls to collapse it and return focus to its heading. Collapsing the controls

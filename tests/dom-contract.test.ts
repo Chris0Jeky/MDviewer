@@ -131,7 +131,7 @@ describe("dom-contract: screen-only chrome is suppressed in print", () => {
     expect(printBlocks.length).toBeGreaterThan(0);
   });
 
-  for (const id of [IDS.editorPane, IDS.splitHandle, IDS.toolbar] as const) {
+  for (const id of [IDS.editorPane, IDS.splitHandle, IDS.toolbar, IDS.exportStatus] as const) {
     it(`hides #${id} when printing`, () => {
       expect(
         new RegExp(`#${id}\\b[^{]*\\{[^}]*display:\\s*none`).test(printCss),
