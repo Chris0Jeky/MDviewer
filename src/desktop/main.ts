@@ -80,10 +80,11 @@ function syncDocuments(): void {
   select.disabled = !docs.length;
   closeButton.disabled = !active;
   workspaceButton.disabled = !active || changingMode;
-  const creationBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
-  for (const button of newButtons) button.disabled = creationBusy;
+  const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
+  returnButton.disabled = workspaceBusy;
+  for (const button of newButtons) button.disabled = workspaceBusy;
   const workspaceNew = appRoot.querySelector<HTMLButtonElement>('.workspace-actions > button[data-document-command="new"]');
-  if (workspaceNew) workspaceNew.disabled = creationBusy;
+  if (workspaceNew) workspaceNew.disabled = workspaceBusy;
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
@@ -222,7 +223,11 @@ async function createDocument(): Promise<void> {
 async function enterWorkspace(revealEditor = false): Promise<void> {
   if (app || changingMode || !session.active) return;
   changingMode = true; ++generation; ++renderGeneration;
+  // Layout needs a visible workspace, but its controls must not accept input
+  // until the initial render and source handoff have finished.
+  appRoot.inert = true;
   syncDocuments();
+  let focusWhenReady = false;
   try {
     await renderChain;
     const { startWorkspace } = await import("./workspace");
@@ -247,10 +252,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
       if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
       syncDocuments();
     });
-    const offExport = app.onExportStateChange(state => {
-      returnButton.disabled = state.busy || nativeSaveBusy;
-      syncDocuments();
-    });
+    const offExport = app.onExportStateChange(() => syncDocuments());
     detachWorkspace = () => { mounted.detachShortcuts(); offText(); offChange(); offExport(); };
     // The App, selection and dirty baselines now own every transferred source.
     // Keep the old session intact until that handoff succeeds, then release it.
@@ -258,7 +260,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     session.activeId = null;
     content.replaceChildren(); // Release the reader DOM while the PDF workspace owns the document.
     await app.flushRender();
-    app.focusEditor();
+    focusWhenReady = true;
   } catch (error) {
     const failure = `Could not open the editing workspace: ${errorText(error)}`;
     report(failure);
@@ -266,14 +268,17 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
       workspace.hidden = true; shell.hidden = false; document.body.classList.remove("desktop-editing");
       void render([failure]);
     }
-  } finally { finishMode(); }
+  } finally { appRoot.inert = false; finishMode(); }
+  // An inert textarea cannot receive focus. Also finish queued imports before
+  // announcing entry by focusing the current editor.
+  if (focusWhenReady) app?.focusEditor();
 }
 
 async function returnToReader(): Promise<void> {
   if (!app || changingMode || app.exportState.busy || nativeSaveBusy) return;
   changingMode = true; ++generation;
-  returnButton.disabled = true;
   appRoot.inert = true; // No edits or sample actions may race the ownership snapshot.
+  syncDocuments();
   try {
     await app.flushRender();
     const next = new ReaderSession();
@@ -313,7 +318,7 @@ async function returnToReader(): Promise<void> {
     await render();
     content.focus();
   } catch (error) { report(`Could not return to reading: ${errorText(error)}`); }
-  finally { appRoot.inert = false; returnButton.disabled = false; finishMode(); }
+  finally { appRoot.inert = false; finishMode(); }
 }
 
 function finishMode(): void {
@@ -417,14 +422,12 @@ if (native.available) {
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
-    returnButton.disabled = true;
     syncDocuments();
     try {
       const result = await native.save(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;
-      returnButton.disabled = changingMode || !!app?.exportState.busy;
       syncDocuments();
     }
   });
