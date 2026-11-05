@@ -16,6 +16,16 @@ The product invariant remains page-break-safe output: keep normal-size code bloc
 
 The scoped `@vscode/markdown-it-katex` override uses npm's `$katex` reference to align the wrapper's fallback with the direct renderer and CSS. The app already injects the direct renderer with `trust: false`; removing the old fallback also closes [GHSA-238p-pmpm-9mq7](https://github.com/KaTeX/KaTeX/security/advisories/GHSA-238p-pmpm-9mq7) in the installed graph. `fast-uri` is locked to a patched 3.1.x release for [GHSA-hrr3-gc8f-f4qj](https://github.com/fastify/fast-uri/security/advisories/GHSA-hrr3-gc8f-f4qj). `tests/dependency-security.test.ts` checks inherited KaTeX trust and encoded-host normalization behavior. Reassess the override when the wrapper adopts a patched dependency range.
 
+Development-only parent overrides coordinate minimatch 11.0.4 for ESLint,
+config-array and typescript-estree with glob 14.0.3 for Workbox. Glob 11 cannot
+consume minimatch 11's compiled matcher representation. Preserve the direct
+tooling versions, production dependency graph and unaffected filelist/minimatch 5
+branch. `tests/dev-dependency-compatibility.test.ts` exercises the actual installed
+consumers, filesystem cancellation and precache output. See
+[`DEVELOPMENT_DEPENDENCIES.md`](../DEVELOPMENT_DEPENDENCIES.md) for advisory sources,
+override removal criteria and the primary rejection of deepmerge CVE-2026-93753;
+raw audit results may still contain that invalid development-only residue.
+
 ## 3. The load-bearing render order (NEVER reorder)
 
 ```text
