@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-10-02.
+> Last updated: 2026-10-21.
 
 ## Status legend
 
@@ -84,6 +84,13 @@ export paths.
 
 ### P3 — Hardening and distribution — `IN PROGRESS`
 
+- **Experimental Windows distribution (2026-10-21):** a Tauri/WebView2 host opens local
+  Markdown in a continuous reader, with a lazy transition to the existing editing/PDF
+  workspace. Includes bounded file handling, single-instance forwarding, a per-user
+  installer, a portable artifact and Windows process-tree measurements in CI. This is
+  a separate entry point; it does not replace the web/PWA build. Native acceptance on
+  an ordinary desktop and comparative memory targets remain open. See
+  [`WINDOWS_DESKTOP.md`](WINDOWS_DESKTOP.md) and `design/WINDOWS_READER.md`.
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),

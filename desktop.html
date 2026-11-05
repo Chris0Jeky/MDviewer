@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-app-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>MDviewer</title>
+    <meta name="description" content="A local Markdown reader with editing and page-safe PDF export on demand." />
+  </head>
+  <body class="desktop-reader">
+    <a class="reader-skip" href="#reader-document">Skip to document</a>
+    <main id="reader-shell">
+      <header class="reader-toolbar" aria-label="Reader controls">
+        <span class="reader-brand">MD<span>viewer</span></span>
+        <button id="reader-open" type="button" title="Open Markdown (Ctrl+O)">Open</button>
+        <label class="reader-document-picker">Document <select id="reader-documents" aria-label="Open documents"><option>No document open</option></select></label>
+        <button id="reader-close" type="button" title="Close document (Ctrl+W)" disabled>Close</button>
+        <label>Screen <select id="reader-theme" aria-label="Screen theme"><option value="light">Light</option><option value="dark">Dark</option><option value="sepia">Sepia</option></select></label>
+        <button id="reader-smaller" type="button" aria-label="Smaller text">A−</button>
+        <button id="reader-larger" type="button" aria-label="Larger text">A+</button>
+        <button id="reader-workspace" class="reader-primary" type="button" disabled>Edit &amp; PDF</button>
+      </header>
+      <p id="reader-notice" class="reader-notice" role="status" aria-live="polite" hidden></p>
+      <div class="reader-layout">
+        <nav id="reader-outline" class="reader-outline" aria-label="Document headings" hidden></nav>
+        <div id="reader-scroll" class="reader-scroll">
+          <section id="reader-empty" class="reader-empty">
+            <span class="reader-eyebrow">MDVIEWER DESKTOP · EXPERIMENTAL</span>
+            <h1>Your Markdown. Ready to read.</h1>
+            <p>Drop a .md file here, or open one from your computer.</p>
+            <p>Code, math and diagrams render locally. Editing and PDF tools are a click away.</p>
+            <button id="reader-sample" type="button">Try a sample</button>
+            <small>Files stay in memory. Save edits from the PDF workspace before closing.</small>
+          </section>
+          <article id="reader-document" class="doc reader-document" aria-label="Markdown document" tabindex="-1" hidden></article>
+        </div>
+      </div>
+      <footer class="reader-footer"><span id="reader-status" aria-live="polite">Local files · No uploads</span><span>Ctrl+O Open · Ctrl+F Find · Ctrl+W Close</span></footer>
+    </main>
+    <div id="desktop-workspace" hidden>
+      <div class="reader-workspace-bar"><button id="reader-return" type="button">← Reading view</button><span>Save Markdown downloads your edits; files are never overwritten automatically.</span></div>
+      <p id="workspace-notice" class="reader-notice" role="status" aria-live="polite" hidden></p>
+      <div id="app"></div>
+    </div>
+    <input id="reader-file-input" type="file" accept=".md,.markdown,text/markdown" multiple hidden />
+    <input id="file-input" type="file" accept=".md,.markdown,text/markdown" multiple hidden />
+    <script type="module" src="/src/desktop/main.ts"></script>
+  </body>
+</html>

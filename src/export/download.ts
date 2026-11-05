@@ -15,6 +15,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas-pro";
 import type { Settings } from "../app/settings";
 import { IDS, PAGEDJS } from "../app/dom";
+import { getDownloadDestination } from "./destination";
 import { paintFootnoteMarkers } from "./footnoteMarkers";
 
 export interface FallbackPdfOptions {
@@ -226,5 +227,8 @@ export async function exportPaginatedToPdf(
     opts.onProgress?.(i + 1, pages.length);
   }
 
-  pdf.save(opts.fileName ?? "document.pdf");
+  const filename = opts.fileName ?? "document.pdf";
+  const destination = getDownloadDestination();
+  if (destination) await destination(pdf.output("blob"), filename);
+  else pdf.save(filename);
 }

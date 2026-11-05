@@ -17,7 +17,8 @@ import type {
 } from "../app/settings";
 import type { App } from "../app/App";
 import { downloadMarkdown } from "../export/markdown";
-import { mountDocumentRecovery } from "./DocumentRecovery";
+import { SaveCanceled, getDownloadDestination } from "../export/destination";
+import { mountDocumentRecovery, type RestoreAdmission } from "./DocumentRecovery";
 
 export interface ToolbarController {
   destroy(): void;
@@ -217,7 +218,7 @@ function divider(): HTMLElement {
  * Mount the toolbar into `root` and wire every control to the App. Returns a
  * controller whose `destroy()` removes the DOM and unsubscribes from the store.
  */
-export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
+export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: RestoreAdmission): ToolbarController {
   const s: Settings = app.settings;
 
   const bar = el("div", {
@@ -263,11 +264,15 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
   const saveBtn = el("button", { type: "button", class: CLASSES.workspaceAction,
     title: "Download the current source. Documents are not saved by this app." }, "Save Markdown");
   const sessionStatus = el("span", { class: "workspace-session-status", attrs: { role: "status" } });
-  saveBtn.addEventListener("click", () => {
+  saveBtn.addEventListener("click", async () => {
     const doc = app.store.active;
     if (!doc) return;
-    try { downloadMarkdown(doc.name, doc.text); sessionStatus.textContent = "Markdown download requested."; }
-    catch { sessionStatus.textContent = "Download failed. Copy your Markdown before closing."; }
+    const nativeSave = getDownloadDestination() !== null;
+    saveBtn.disabled = true;
+    try { await downloadMarkdown(doc.name, doc.text); sessionStatus.textContent = nativeSave ? "Markdown saved." : "Markdown download requested."; }
+    catch (error) { sessionStatus.textContent = error instanceof SaveCanceled
+      ? "Save canceled. Your document is still open." : "Download failed. Copy your Markdown before closing."; }
+    finally { saveBtn.disabled = !app.store.active; }
   });
 
   // ---- Group A2: which panes are visible (screen layout only) ----
@@ -477,7 +482,7 @@ export function mountToolbar(root: HTMLElement, app: App): ToolbarController {
     if (!app.store.active) openBtn.focus();
     else if (app.settings.viewMode === "preview") docSelect.focus();
     else root.querySelector<HTMLTextAreaElement>(`#${IDS.editorInput}`)?.focus();
-  });
+  }, canRestoreDocument);
 
   // ---- Keep the document switcher and stateful controls in sync ----
   function syncDocSwitcher(): void {

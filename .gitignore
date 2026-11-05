@@ -1,8 +1,13 @@
 # Dependencies
 node_modules/
+node_modules
 
 # Build output
 dist/
+dist-desktop/
+src-tauri/target/
+src-tauri/gen/
+desktop-artifacts/
 deployment-artifact/
 deployment-manifest.json
 .vite/
