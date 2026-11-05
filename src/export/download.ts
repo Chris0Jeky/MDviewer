@@ -24,7 +24,11 @@ export interface FallbackPdfOptions {
   fileName?: string;
   /** Called once per rasterized page with the 1-based page and the total. */
   onProgress?(done: number, total: number): void;
+  /** Capture is complete; the native save or browser download is about to start. */
+  onSaving?(destination: "native" | "browser"): void;
 }
+
+export type PdfExportResult = "saved" | "download-requested";
 
 /** Paper dimensions in millimetres for the supported sizes. */
 const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
@@ -266,7 +270,7 @@ export async function exportPaginatedToPdf(
   host: HTMLElement,
   settings: Settings,
   opts: FallbackPdfOptions = {},
-): Promise<void> {
+): Promise<PdfExportResult> {
   const [w, h] = PAGE_MM[settings.paperSize];
   const pages = Array.from(host.querySelectorAll<HTMLElement>(`.${PAGEDJS.pageClass}`));
   if (pages.length === 0) {
@@ -299,6 +303,13 @@ export async function exportPaginatedToPdf(
 
   const filename = opts.fileName ?? "document.pdf";
   const destination = getDownloadDestination();
-  if (destination) await destination(pdf.output("blob"), filename);
-  else pdf.save(filename);
+  opts.onSaving?.(destination ? "native" : "browser");
+  if (destination) {
+    await destination(pdf.output("blob"), filename);
+    return "saved";
+  }
+  // jsPDF's promise covers generating and handing off the file, not a browser's
+  // eventual disk write or download-prompt cancellation.
+  await pdf.save(filename, { returnPromise: true });
+  return "download-requested";
 }

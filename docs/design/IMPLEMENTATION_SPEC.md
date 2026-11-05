@@ -73,6 +73,21 @@ Paged.js replaces a floated note's ID and retains its source identity in `data-i
 
 ## 5. Export ownership and source saving
 
+Raster progress and outcomes live in the direct `#app > #export-status` shell row,
+outside the hidden preview and scrolling toolbar. `ExportState.pdf` exposes
+Preparing, completed-page Rendering, native Saving, browser Downloading and
+Saved/Download requested/Canceled/Failed outcomes. The mounted polite atomic
+`#export-status-live` announces the first page and quarter milestones (at most five
+progress messages); the visible count updates for every completed capture. A native
+save is successful only after its destination settles; jsPDF browser handoff says
+“download requested,” which does not claim disk persistence. The visible failure
+reason is text-only and capped at 180 characters; the existing fatal card keeps its
+full detail. Status updates do not change focus, source selection/scroll or page
+identity. The strip is excluded from print/capture, and selectors are scoped to the
+shell so an authored `#export-status` heading remains printable. No Cancel control
+or overall capture timeout is introduced. See `EXPORT_STATUS.md` and
+`tests/e2e/export-status.spec.ts`; #201 remains separate.
+
 Vector `exportViaPrint` remains primary. Raster `exportPaginatedToPdf` remains a best-effort fallback, one canvas per existing page. Keep print sheets dark-on-white, html2canvas logging disabled, and task checkbox pseudo-elements off form controls. Foundation section 5's rendering constraints still apply.
 
 Raster normalization changes only html2canvas's disposable clone. Remove the preview's ancestor scale/envelope and reveal the copied sheet. Restore authored SVG visibility declarations after the cloner has inlined computed hiding from Markdown-only mode; explicit author hiding must remain hidden. Materialized TOC leaders retain an automatic flex width so copied used widths cannot wrap titles and reflow the page. Capture styled task checkboxes as static spans with their computed paint, bypassing the renderer's native-control painter. The embedded tick SVG has intrinsic dimensions for canvas resizing. The live sheet, controls, transforms and document source remain untouched.
@@ -131,6 +146,11 @@ export interface RenderScheduler {
 
 // src/paginate/footnoteLinks.ts
 export function repairFootnoteLinks(host: ParentNode): void;
+
+// src/export/download.ts
+export type PdfExportResult = "saved" | "download-requested";
+// FallbackPdfOptions additionally accepts onSaving?(destination: "native" | "browser"): void;
+// exportPaginatedToPdf now returns Promise<PdfExportResult>; native cancellation rejects SaveCanceled.
 
 // src/export/markdown.ts
 export function markdownFilename(name: string): string;

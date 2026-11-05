@@ -78,14 +78,36 @@ it("keeps the export pending until its native destination settles", async () => 
     await saving;
   });
   let done = false;
-  const pending = exportPaginatedToPdf(hostWithPages(2), settings(), { fileName: "native.pdf" }).then(() => { done = true; });
+  const onSaving = vi.fn();
+  const pending = exportPaginatedToPdf(hostWithPages(2), settings(), { fileName: "native.pdf", onSaving }).then(result => { done = true; return result; });
   await entered;
   expect(done).toBe(false);
+  expect(onSaving).toHaveBeenCalledExactlyOnceWith("native");
   expect(save).not.toHaveBeenCalled();
   expect(output).toHaveBeenCalledWith("blob");
   release();
-  await pending;
+  expect(await pending).toBe("saved");
   expect(done).toBe(true);
+});
+
+it("waits for the browser download handoff and reports it without claiming a disk save", async () => {
+  let release!: () => void;
+  save.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
+  const onSaving = vi.fn();
+  const pending = exportPaginatedToPdf(hostWithPages(1), settings(), { onSaving });
+  await vi.waitFor(() => expect(save).toHaveBeenCalled());
+  expect(onSaving).toHaveBeenCalledExactlyOnceWith("browser");
+  let settled = false;
+  void pending.then(() => { settled = true; });
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  release();
+  await expect(pending).resolves.toBe("download-requested");
+});
+
+it("propagates a browser download handoff failure", async () => {
+  save.mockRejectedValueOnce(new Error("Download unavailable"));
+  await expect(exportPaginatedToPdf(hostWithPages(1), settings())).rejects.toThrow("Download unavailable");
 });
 
 it("propagates native cancellation without falling through to browser saving", async () => {
@@ -143,7 +165,7 @@ describe("exportPaginatedToPdf: options", () => {
   it("passes the requested fileName through to save()", async () => {
     const host = hostWithPages(1);
     await exportPaginatedToPdf(host, settings(), { fileName: "my-paper.pdf" });
-    expect(save).toHaveBeenCalledWith("my-paper.pdf");
+    expect(save).toHaveBeenCalledWith("my-paper.pdf", { returnPromise: true });
   });
 
   it("forwards a custom scale to html2canvas", async () => {
@@ -240,7 +262,7 @@ describe("exportPaginatedToPdf: progress reporting", () => {
 
   it("stays optional — omitting onProgress still exports", async () => {
     const host = hostWithPages(2);
-    await expect(exportPaginatedToPdf(host, settings())).resolves.toBeUndefined();
+    await expect(exportPaginatedToPdf(host, settings())).resolves.toBe("download-requested");
     expect(save).toHaveBeenCalledTimes(1);
   });
 });

@@ -28,9 +28,14 @@ production bundle, CSS and desktop lazy-entry failures.
 
 ## Qualification
 
-Local Node 24.22.1 verification passes typecheck, lint, all 832 units, four server
-tests, the Observatory guard, both production builds, hook smoke and all 14 skill
-validations. The production Firefox 157.0 lane passes **39 tests without retries**.
+The initial isolated authoring change passed local Node 24.22.1 typecheck, lint,
+all 832 units, four server tests, the Observatory guard, both production builds,
+hook smoke and all 14 skill validations. With the authored-heading correction,
+the production Firefox 157.0 lane passes **40 tests without retries**. The merged
+export-status specification also joins this bounded lane so its shell row and
+short-window behavior stay covered alongside editor accessibility. Subsequent
+combined-head receipts belong in the PR rather than implying this isolated count
+qualifies a different source revision.
 The forced-colors regression first failed against the unmodified stylesheet;
 the before screenshot has no visible match cue, while the fixed screenshot shows
 a system-colored outline and readable native text. The same test remains in the

@@ -148,11 +148,11 @@ body {
 }
 
 /* -----------------------------------------------------------------------------
- * #app — the grid shell. Two rows: the toolbar (auto) and the canvas (1fr).
+ * #app — toolbar, workspace, and the normally collapsed PDF status strip.
  * -------------------------------------------------------------------------- */
 #app {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -576,7 +576,8 @@ body {
 }
 
 /* The aria-live status node is off-screen but announced. */
-#status-live {
+#status-live,
+#app > #export-status > #export-status-live {
   position: absolute;
   width: 1px;
   height: 1px;

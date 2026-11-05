@@ -81,7 +81,7 @@ test.describe("export paths over one paginated DOM", () => {
     expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
 
     // …and the completion has to be announced and the controls handed back.
-    await expect(page.locator("#status-live")).toContainText(/pdf downloaded/i, {
+    await expect(page.locator("#export-status-live")).toContainText(/pdf download requested/i, {
       timeout: 30_000,
     });
     await expect(downloadBtn).toBeEnabled();
