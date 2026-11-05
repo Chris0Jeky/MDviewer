@@ -17,7 +17,8 @@ For a highlighted source, a DOM Range covers the full active match across the
 existing syntax text nodes. Its client rectangles are merged where nested spans
 repeat a row. For the existing large plain-text mode, a temporary hidden text-only
 mirror copies the textarea's exact font, padding and wrapping metrics and ends at
-the final matched logical line. It uses the textarea client width so the native
+the final matched logical line. Line height retains the shared authored
+`--editor-line-height` value instead of its computed pixel serialization. It uses the textarea client width so the native
 scrollbar gutter is excluded exactly once. The mirror is removed immediately
 after measurement. A zero-width newline gets a two-pixel cue.
 
@@ -58,3 +59,30 @@ require a visible cue while Find keeps focus, including both short-window sizes.
 Actual browser results and screenshot review must be recorded against the
 published candidate before this change is qualified. No rendering claim follows
 from jsdom tests alone.
+
+## Plain-source browser regression and correction
+
+The first hosted candidate (`20d0792`) passed its initial checks, but screenshot
+review showed the large plain-source cue below the matched phrase. The test had
+checked that multiple cue rows were in bounds and that native caret movement did
+not jump; neither condition established that the cue covered the source glyphs.
+
+The diagnostic candidate (`eb03992`, CI run `42043607529`) added an independent
+native-textarea reference. The fixture ends with the matched phrase followed by
+one unwrapped `-->` line, so its native scroll height, bottom padding and final
+line advance locate the last matched row without laying out a second document.
+The retained three-pixel alignment threshold failed on both attempts by
+46.08125 pixels. The apparently second visible cue was only 0.1875 pixels tall.
+
+The persisted geometry files show identical initial, font/RAF-settled and
+post-screenshot measurements. The cause was line-height serialization, not
+timing: reapplying computed `21.45px` produced a 21.453125-pixel row advance,
+whereas the editor's authored unitless `1.65` produced 21.4375 pixels. After
+4,803 preceding visual rows that difference placed the first cue 75.046875
+pixels too low. The diagnostic authored-value mirror placed the final match
+center only 0.1375 pixels from the native reference.
+
+The correction preserves the shared authored value in the temporary mirror.
+A focused unit regression first failed with `21.45px` instead of `1.65`. The
+hosted native alignment threshold and diagnostic screenshot remain unchanged;
+the corrected candidate still requires their actual-browser verification.

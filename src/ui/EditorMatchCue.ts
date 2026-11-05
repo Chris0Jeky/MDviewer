@@ -61,6 +61,10 @@ function measureMatch(input: HTMLTextAreaElement, backdrop: HTMLElement, match: 
     "word-spacing", "tab-size", "white-space", "overflow-wrap", "word-break",
     "padding", "text-indent", "text-transform", "direction", "text-align"];
   for (const property of properties) mirror.style.setProperty(property, styles.getPropertyValue(property));
+  // Keep the shared authored number. Chromium can round its resolved px string
+  // to a different row advance, accumulating a visible error in long sources.
+  const lineHeight = styles.getPropertyValue("--editor-line-height").trim();
+  if (lineHeight) mirror.style.lineHeight = lineHeight;
   Object.assign(mirror.style, {
     position: "fixed", top: `${box.top}px`, left: `${box.left}px`,
     width: `${input.clientWidth}px`, boxSizing: "border-box", margin: "0", border: "0",

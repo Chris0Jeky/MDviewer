@@ -251,4 +251,22 @@ describe("active source-match geometry and lifecycle", () => {
     expect(layer.hidden).toBe(true);
     expect(readRects).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves authored unitless line height instead of its lossy computed pixel serialization", () => {
+    backdrop.replaceChildren();
+    input.style.setProperty("--editor-line-height", "1.65");
+    input.style.lineHeight = "var(--editor-line-height)";
+    const styles = getComputedStyle(input);
+    const property = styles.getPropertyValue.bind(styles);
+    // Chromium reports 21.45px for both declarations, but its native unitless
+    // rows advance 21.4375px while reapplying that px string advances 21.453125px.
+    vi.spyOn(styles, "getPropertyValue").mockImplementation(name => name === "line-height" ? "21.45px" : property(name));
+    vi.spyOn(window, "getComputedStyle").mockReturnValue(styles);
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) {
+      expect(this.parentElement!.style.lineHeight).toBe("1.65");
+      return [new DOMRect(26, 114, 40, 20)] as unknown as DOMRectList;
+    });
+    cue.show({ start: 0, end: 5 });
+    expect(layer.hidden).toBe(false);
+  });
 });

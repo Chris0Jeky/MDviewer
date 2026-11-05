@@ -279,6 +279,9 @@ accessibility-hidden, pointer-transparent rectangle layer while query focus stay
 in Find. It measures existing backdrop ranges across syntax spans; large sources
 with highlighting disabled use a temporary text-only mirror through the matched
 logical line, removed immediately after measurement. Cached content-coordinate
+geometry preserves the shared authored `--editor-line-height` rather than its
+computed pixel serialization, which can accumulate a different row advance in
+long sources. The measured
 rectangles serve both reveal and paint. Scroll only translates and clips that
 cache; active layout/font changes remeasure once per animation frame. Source or
 query changes, close, input rebinding and destroy clear geometry and pending work.
