@@ -392,12 +392,15 @@ if (native.available) {
     }
   });
   const drain = drainSerially(async () => {
-    const request = ++generation;
+    const startedAt = generation;
     try {
       const batch = await native.takePending();
       // Coalesced notifications may produce an empty second drain. Only a new
-      // batch replaces notices; an empty queue must not hide a real failure.
-      if (batch.documents.length || batch.errors.length) report("");
+      // batch owns selection or notices; an empty queue must not invalidate an
+      // in-flight picker. A real batch remains passive after a newer user action.
+      if (!batch.documents.length && !batch.errors.length) return;
+      const request = startedAt === generation ? ++generation : startedAt;
+      report("");
       commitBatch(batch, request);
     }
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }

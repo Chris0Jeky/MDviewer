@@ -38,6 +38,43 @@ beforeEach(async () => {
 afterEach(() => { removeListeners.splice(0).forEach(remove => remove()); document.body.replaceChildren(); });
 
 describe("forwarded-file notice lifetime", () => {
+  it.each([false, true])("only a nonempty forwarded batch takes selection from a pending picker (nonempty: %s)", async nonempty => {
+    boundary.pending.mockResolvedValueOnce({ ...empty(), documents: [{ name: "existing.md", text: "# Existing", bytes: 10 }] });
+    boundary.notify();
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Existing"));
+
+    let complete!: (batch: OpenBatch) => void;
+    boundary.open.mockReturnValueOnce(new Promise<OpenBatch>(resolve => { complete = resolve; }));
+    document.getElementById("reader-open")!.click();
+    boundary.pending.mockResolvedValueOnce(nonempty
+      ? { ...empty(), documents: [{ name: "forwarded.md", text: "# Forwarded", bytes: 11 }] }
+      : empty());
+    boundary.notify();
+    await vi.waitFor(() => expect(boundary.pending).toHaveBeenCalledTimes(3));
+    if (nonempty) await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Forwarded"));
+
+    complete({ ...empty(), documents: [{ name: "picked.md", text: "# Picked", bytes: 8 }] });
+    await vi.waitFor(() => expect(document.querySelectorAll("#reader-documents option")).toHaveLength(nonempty ? 3 : 2));
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe(nonempty ? "# Forwarded" : "# Picked"));
+    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
+    expect(picker.selectedOptions[0]!.textContent).toBe(nonempty ? "forwarded.md" : "picked.md");
+  });
+
+  it("keeps a newer picker selection when an earlier forwarded read completes", async () => {
+    let complete!: (batch: OpenBatch) => void;
+    boundary.pending.mockReturnValueOnce(new Promise<OpenBatch>(resolve => { complete = resolve; }));
+    boundary.notify();
+    await vi.waitFor(() => expect(boundary.pending).toHaveBeenCalledTimes(2));
+    boundary.open.mockResolvedValueOnce({ ...empty(), documents: [{ name: "picked.md", text: "# Picked", bytes: 8 }] });
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Picked"));
+    complete({ ...empty(), documents: [{ name: "forwarded.md", text: "# Forwarded", bytes: 11 }] });
+    await vi.waitFor(() => expect(document.querySelectorAll("#reader-documents option")).toHaveLength(2));
+    expect(document.getElementById("reader-document")!.textContent).toBe("# Picked");
+    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
+    expect(picker.selectedOptions[0]!.textContent).toBe("picked.md");
+  });
+
   it("clears the previous failure when a clean forwarded document opens", async () => {
     boundary.pending.mockResolvedValueOnce({ ...empty(), documents: [{ name: "forwarded.md", text: "# Forwarded clean", bytes: 17 }] });
     boundary.notify();

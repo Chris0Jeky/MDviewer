@@ -44,6 +44,9 @@ does not erase them. Each render captures its notice revision, so a late warning
 failure cannot overwrite a newer action or errors-only batch. No notice history or
 document text is persisted. Regression coverage includes picker/forwarded batches,
 obsolete renders and the production browser's empty-plus-invalid-file case.
+An empty native drain also leaves pending picker selection intact. A real forwarded
+batch claims selection only if no newer user action occurred during its read;
+otherwise its documents are appended without replacing the current selection.
 Workspace-entry failures also accompany recovery-render warnings or failures, and
 Sample admission errors accompany warnings for the retained document. These paths
 use the same notice-revision and render-generation fences as imported batches.
