@@ -1,7 +1,11 @@
 # Desktop workspace readiness
 
-Issue: [#190](https://github.com/Chris0Jeky/MDviewer/issues/190). Candidate based on
-main `4976f289e4a46e83a4ae88228ada726757fbe018` (tree prefix `286fb812`).
+**Completed:** [#192](https://github.com/Chris0Jeky/MDviewer/pull/192), merged as
+`7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`, closes
+[#190](https://github.com/Chris0Jeky/MDviewer/issues/190). The original candidate was
+based on main `4976f289e4a46e83a4ae88228ada726757fbe018` (tree prefix `286fb812`).
+This note retains the failure evidence and correction; later combined-main
+qualification is recorded in the [authoring checkpoint](2026-11-05-authoring-checkpoint.md).
 
 ## Evidence and cause
 
@@ -63,13 +67,15 @@ pagination completes.
 3. Local verification passes: 803 unit tests across 68 files, typecheck, lint, four
    server tests, both production web builds and discovery of all 27 desktop
    browser tests. Builds identify themselves as a local source-archive candidate.
-4. Hosted qualification is pending publication. Qualify the tree with the existing production desktop browser suite
-   and actual Windows smoke. The native smoke must create the real Save dialogs,
-   verify the exact Markdown bytes, and verify the saved PDF header and EOF. Keep
-   the original failure artifacts for comparison.
+4. Hosted qualification completed for reviewed head `a54b1ef5`: all five jobs passed
+   in [CI 42041994651](https://github.com/Chris0Jeky/MDviewer/actions/runs/42041994651)
+   and [Windows 42041994720](https://github.com/Chris0Jeky/MDviewer/actions/runs/42041994720).
+   The actual native smoke verified two Save dialogs, exact UTF-8 Markdown bytes,
+   the saved PDF header/EOF, and clean teardown. Independent review and source-tree
+   verification passed before merge. The original failure artifacts remain evidence.
 
-Local Chromium, Rust and PowerShell are unavailable in this environment. Local
-checks cannot establish WebView2's UI Automation behavior or native save success;
-the hosted browser and Windows jobs are required qualification, not optional
-reruns of the failed main. Manual Windows checks in #169 and AI-6 through AI-9
-remain open.
+The local implementation environment lacked Chromium, Rust and PowerShell. The
+hosted browser and Windows jobs supplied the required qualification of WebView2 UI
+Automation and native saves; local tests alone did not establish it. Manual Windows
+checks in #169 and AI-6 through AI-9 remain open. Further work is tracked in
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).

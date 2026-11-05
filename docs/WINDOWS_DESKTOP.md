@@ -39,10 +39,13 @@ shown and focused. An untouched blank note can close without a discard prompt.
 
 Choose **Edit & PDF** to edit an opened file and use the existing page-safe preview.
 **Reading view** returns with your open documents and edits preserved. **Save Markdown**
-saves a copy of the source; **Print / Save as PDF** uses the print dialog, and **Download
-PDF** creates the raster fallback. Exports do not overwrite the original file
-automatically. Closing an edited document asks before discarding changes. Wait for
-an export to finish before returning to the reader or closing the app.
+saves a copy of the source. The session still compares edits with the original text
+that was opened or created, so saving a copy does not clear an edited document's
+discard confirmation. You may still be asked before closing it after a successful save.
+
+**Print / Save as PDF** uses the print dialog, and **Download PDF** creates the raster
+fallback. Exports do not overwrite the original file automatically. Wait for an
+export to finish before returning to the reader or closing the app.
 
 **Document layout** starts collapsed to leave more room for writing. Open it to
 adjust typography, paper, margins and page furniture; press Escape within the
@@ -58,8 +61,9 @@ keeps every layout setting and your Markdown unchanged.
 | `Ctrl+H` | Open source replacement controls | Workspace with the source pane visible |
 | `Ctrl+W` | Close the current document | Reader |
 
-Native window controls close the app.
-New is unavailable while a mode change, export or native save dialog is in progress.
+Native window controls close the app. Workspace controls stay unavailable while a
+mode change is completing. New is unavailable during a mode change, export or native
+save dialog.
 
 ### Find and change source text
 
@@ -144,9 +148,13 @@ port is occupied, so an older checkout cannot supply a misleading passing result
 The smoke test opens ordinary and Unicode filenames, verifies rendered headings,
 forwards a second launch to the original app, and records the host **and all of its
 WebView2 descendants**. The `windows-desktop-smoke` artifact contains `metrics.json`
-and screenshots where the runner supports capture. Browser tests cover the reading
-path, absent initial editor/pagination, hostile Markdown, file limits, repeated
-edit/read transitions, and both PDF paths under the production CSP.
+and screenshots where the runner supports capture. The same smoke enters the
+editing workspace, verifies both actual native Save dialogs, compares every saved
+Markdown UTF-8 byte with its fixture, and checks the saved PDF header and EOF marker.
+Those file checks are separate from the production browser's saved-PDF visual tests.
+Browser tests cover the reading path, absent initial editor/pagination, hostile
+Markdown, file limits, repeated edit/read transitions, and both PDF paths under the
+production CSP.
 
 Memory figures from a hosted runner are diagnostic observations. A useful comparison
 on your PC should include cold start, an ordinary file, a large code/diagram file,
@@ -159,6 +167,14 @@ behavior and your preferred print driver still need acceptance on a normal Windo
 desktop. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169) tracks those
 checks, representative performance measurements and the signing/distribution decision.
 Existing web human acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open.
+
+## Future work
+
+[Future work](FUTURE_WORK.md) and [tracker #195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+record the remaining improvements and product decisions. Native file saving
+([#196](https://github.com/Chris0Jeky/MDviewer/issues/196)) and optional recovery
+([#197](https://github.com/Chris0Jeky/MDviewer/issues/197)) are design-first proposals.
+This preview continues to save copies and does not store documents automatically.
 
 See [the design](design/WINDOWS_READER.md) and [native host contract](../src-tauri/README.md)
 for implementation details.

@@ -4,7 +4,7 @@
 
 Keep Markdown-to-PDF editing and output local, while making the workspace easier to navigate. The primary action row contains document identity, opening, view mode, screen theme and export. A native Document layout disclosure groups typography, paper and page furniture. A separate local-session row explains the in-memory document lifetime and offers Save Markdown for an exact source download.
 
-Layout controls start expanded on desktop and collapsed at widths up to 760 px. Escape closes the disclosure and restores its summary focus without resetting document settings. Existing keyboard controls and accessible names remain in use. Screen themes remain separate from document styling.
+In the web app, layout controls start expanded above 760 px and collapsed at narrower widths. The Windows app starts them collapsed at every width, as delivered in [#187](https://github.com/Chris0Jeky/MDviewer/pull/187). Escape closes the disclosure and restores its summary focus without resetting document settings. Existing keyboard controls and accessible names remain in use. Screen themes remain separate from document styling.
 
 ## Preview correctness (#57)
 

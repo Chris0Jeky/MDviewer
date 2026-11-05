@@ -6,6 +6,19 @@ correctly. The existing raster-resolution test compares captures of the same
 renderer at different preview states. A defect shared by all those captures can
 pass that comparison.
 
+## Current qualification
+
+Main `203c09798b01061ceb0c00f0937c22beeafb1a55` uses html2canvas-pro 2.6.0 with the
+capture correction merged in [#178](https://github.com/Chris0Jeky/MDviewer/pull/178).
+Its [production Chromium push job](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540/job/127336535492)
+passed 130 cases with five existing optional performance skips, including the
+online/offline saved-PDF pixels, damaged-output controls and real CSS/font
+cache-loss refusal, cleanup and recovery. All five jobs passed, and the source
+artifact's literal main commit, tree and all 330 blobs were verified. The
+[offline capture note](design/RASTER_OFFLINE_CAPTURE.md#completed-qualification--2026-11-05)
+records this final-main receipt and the earlier integrated `a9664f9b` qualification.
+These results do not establish second-engine or live-deployment acceptance.
+
 ## Reproduce the durable check
 
 ```sh
@@ -58,7 +71,8 @@ failures outside the callback, unrelated iframes, source preservation and retry.
 The existing clone/content/pseudo tests invoke their callback during a mounted
 capture; they retain their visibility, geometry and content assertions.
 Upstream font/image waits precede `onclone`; neither readiness deadline is a
-timeout for the whole export.
+timeout for the whole export. [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)
+tracks bounded capture/cancellation without weakening these failure controls.
 
 `test-results/` retains the PDF, extracted page PNG, native browser reference,
 pixel measurements and damaged-control PDF/PNG. The existing CI browser-artifact

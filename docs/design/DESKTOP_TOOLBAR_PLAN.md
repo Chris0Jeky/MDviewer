@@ -1,21 +1,28 @@
 # Desktop writing-space polish
 
-The merged New-document screenshots at 1280 × 720 show the source pane beginning
-around y=340 while Document layout is expanded. Start the desktop disclosure
-collapsed at every width so normal writing has more room. Keep its existing
-summary, one-click expansion, Escape focus behavior, saved settings and PDF
-controls. Pass an explicit optional `layoutInitiallyOpen` preference from the
-desktop workspace through App to Toolbar; the web entry keeps its adaptive
-default. Disclosure state is not a new persisted setting.
+**Completed:** [#187](https://github.com/Chris0Jeky/MDviewer/pull/187), merged as
+`3e3733d4e3265d39ed1736dd291f88650d08cc19`, closes
+[#186](https://github.com/Chris0Jeky/MDviewer/issues/186). This note retains the
+original design and local candidate evidence. Hosted checks and screenshot review
+are recorded in the [authoring checkpoint](2026-11-05-authoring-checkpoint.md).
 
-Shorten the desktop return-bar hint to “Save Markdown saves a copy.” This describes
-native saving accurately and leaves source-copy/dirty-baseline behavior intact.
+The initial New-document screenshots at 1280 × 720 showed the source pane beginning
+around y=340 while Document layout was expanded. The Windows desktop disclosure now
+starts collapsed at every width so normal writing has more room. It keeps its
+existing summary, one-click expansion, Escape focus behavior, saved settings and PDF
+controls. An explicit optional `layoutInitiallyOpen` preference passes from the
+desktop workspace through App to Toolbar; the web entry keeps its adaptive default.
+Disclosure state is not a new persisted setting.
 
-Prove the desktop default and retained settings through real workspace mounting,
-then add production browser checks for source height, disclosure interaction,
-unchanged page/source state and screenshots. No Editor/Search, export or document
-rendering changes are included. Hosted browser/native evidence and independent
-review remain required; AI-6/AI-7/AI-8/AI-9 and Windows issue #169 remain open.
+The desktop return-bar hint says “Save Markdown saves a copy.” It describes native
+saving accurately and leaves source-copy/dirty-baseline behavior intact.
+
+Real workspace tests cover the desktop default and retained settings. Production
+browser checks cover source height, disclosure interaction, unchanged page/source
+state and screenshots. This slice changed no Editor/Search, export or document
+rendering behavior. Hosted browser/native evidence and independent review passed;
+AI-6/AI-7/AI-8/AI-9 and Windows issue #169 remain open. Further work is tracked in
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
 
 ## Local candidate verification — 2026-11-05
 
@@ -31,4 +38,5 @@ The browser scenarios require at least 450px of workspace and 420px of source
 height at 1280 × 720. They compare page identities, geometry, text and settings
 across disclosure changes and exercise retained controls at 560px. They capture
 collapsed/expanded 1280px and collapsed 560px screenshots. Browser/native checks
-have not run locally; no publication, geometry result or Windows result is claimed.
+could not run locally; the completed #187 hosted checks and screenshot review
+supply that evidence, separately from the local candidate counts above.

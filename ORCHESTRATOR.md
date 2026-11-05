@@ -3,7 +3,33 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (authoring and offline PDF capture qualified):**
+> **CURRENT CHECKPOINT — 2026-11-05 (verified application and explicit future backlog):**
+> Application baseline [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
+> tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`. All nine PRs
+> #183/#187/#185/#188/#192/#178/#191/#193/#194 are merged. Postmerge
+> [CI 42053738540](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540)
+> and [Windows 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244)
+> passed all five jobs: 832 units per Node lane, 130 web cases with five optional
+> performance skips, 27 desktop cases, and 22 Rust tests plus actual native smoke.
+> All 330 source blobs match the authoritative tree; the portable executable hash
+> matches the native-tested executable. Exact downloads/checksums are in #169.
+> New, guarded undo, Find/Replace and visible matches, compact desktop controls,
+> readiness-safe Save, offline PDF qualification and Shiki 4.6 are implemented.
+> Documents remain memory-only except explicit user-requested saves; Save Markdown
+> writes a copy and does not reset the original-source dirty baseline.
+> **Next work:** [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) and [tracker #195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+> Start with hidden-preview export feedback (#200) or the file-lifecycle design
+> (#196); optional recovery (#197) depends on a reviewed identity/storage contract.
+> Formatting (#198), in-session navigation (#199), second-engine/accessibility
+> regressions (#203), raster cancellation (#201) and measured responsiveness (#202)
+> have separate acceptance criteria. The tracker also links the remaining ledger work.
+> **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** No live deployment, signed release,
+> automatic updater or comparative RAM/startup claim follows. Older checkpoints below
+> are history, not live queue state; re-read GitHub before starting any issue.
+
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT - 2026-11-05 (authoring and offline PDF capture qualified):**
 > Last merged authoring baseline verified for this record:
 > [280c73e2](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969),
 > tree `89d93bf31fbdff3db87725cd6726d57199a09b56`. New (#183), guarded editor
@@ -34,8 +60,6 @@
 > Windows acceptance/performance #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No live
 > deployment, signed release, automatic updater or comparative RAM/startup claim follows.
 > Exact anchors and remaining work: `docs/design/2026-11-05-authoring-checkpoint.md`.
-
-## Historical checkpoints
 
 > **HISTORICAL CHECKPOINT - 2026-11-05 (desktop authoring and offline capture):**
 > Integration basis is merged main `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`.
@@ -440,24 +464,21 @@
 
 ### 1. Re-establish live truth before changing anything
 
-Follow the first-five-minutes order in `AGENTS.md`, then run this state reconciliation from the
-primary checkout. GitHub mergeability, check results, review state, and deployment state are snapshots;
-never carry them forward after a head change.
+Follow the first-five-minutes order in `AGENTS.md`, then read
+[the issue-backed queue](docs/FUTURE_WORK.md). GitHub main, issue/PR status,
+review threads and current-head CI are authoritative. Verify the default-branch SHA
+and relevant branches before editing. A changed head invalidates earlier CI/review.
 
-```powershell
-git fetch --prune
-git status --short --branch
-git rev-parse HEAD
-git rev-parse origin/main
-gh pr list --state open --json number,title,headRefOid,mergeable,mergeStateStatus,statusCheckRollup,url
-gh run list --branch main --limit 5 --json databaseId,headSha,status,conclusion,url
-gh api repos/Chris0Jeky/MDviewer/branches/main/protection
-npm exec --yes wrangler@4.114.0 -- pages deployment list --project-name mdviewer --json
-```
+When connected GitHub tools are available, use their repository/ref/tree/file,
+issue/PR and Actions APIs first. An uploaded or connector-downloaded source archive
+is a local analysis workspace only after its commit/tree is reconciled with GitHub.
+Do not probe equivalent shell-network workarounds when GitHub networking is blocked.
 
-Use a project-local isolated worktree created with `git worktree add --detach <path> origin/main`,
-then create a branch inside it. Keep the primary checkout clean. Any changed PR head invalidates its
-older CI and independent-review evidence.
+In an already authenticated local Git checkout, inspect status and fetch the current
+main before creating an isolated branch/worktree. Preserve existing work and use
+merge commits, not rebases or force pushes. Read existing check results before
+running or dispatching more jobs. Deployments and human environment decisions remain
+separate; this session-start procedure does not authorize a live promotion.
 
 ### 2. Historical launch snapshot
 
@@ -541,16 +562,10 @@ dependency or superseding relationship. For each slice: exact-head diff review, 
 independent adversarial review, all bot/human comments triaged, hosted CI green, then merge-commit
 only. Never treat these snapshot results as current proof.
 
-If dependency maintenance is intentionally deferred, the highest-value product choices are:
-
-1. Profile very large documents and establish render-time, main-thread, and memory budgets (the only
-   remaining P3 roadmap item).
-2. Pick one narrow P2 UX/accessibility slice and preserve the no-slice/render-order invariants.
-3. Optionally automate the existing Pages project with a GitHub Actions workflow using pinned
-   Wrangler plus scoped Cloudflare secrets. A Direct Upload project cannot later switch to Pages Git
-   integration; that alternative requires a new Pages project and an explicit URL/domain migration.
-4. Consider installable PWA packaging only as optional product polish. A remote `POST /convert` API
-   is a separate security/privacy product and must not be slipped into this client-only app.
+The launch-era suggestions in this historical section are superseded: the PWA,
+Pages dry-deploy workflow and performance ladder have shipped. Current work is
+explicitly linked in [Future work](docs/FUTURE_WORK.md) / #195, including the still-open
+human gates. Do not reopen completed packaging work from this historical queue.
 
 ## Historical run header — 2026-09-27
 
@@ -582,9 +597,9 @@ above and refresh GitHub state for the current queue, verification and next work
 
 ## Environment / verification commands
 
-- Stack: Vanilla TypeScript + Vite 8, Vitest 4, Playwright (Chromium), ESLint 10. Node v24.13.1, npm 11.8.0.
+- Stack authority: `package.json` and `package-lock.json`. Current toolchain: Vanilla TypeScript + Vite 8, Vitest 5, Playwright Chromium and ESLint 10. Supported Node range: `^24.15.0 || >=26`; Node 24 is the strict-install CI lane.
 - Package manager: npm. Default branch: `main` (protected: no force-push/rebase/amend/reset per CLAUDE.md).
-- VCS host: GitHub (`Chris0Jeky/MDviewer`), `gh` CLI authed as Chris0Jeky.
+- VCS host: GitHub (`Chris0Jeky/MDviewer`). Verify the active connector/checkout; do not assume a prior session's CLI authentication or native runtimes are present.
 - Verification commands (the merge gate):
   - `npm run typecheck` — tsc --noEmit
   - `npm run lint` — eslint src tests
@@ -593,8 +608,7 @@ above and refresh GitHub state for the current queue, verification and next work
   - `npm run build` — tsc + vite build
   - `npm run agent:check` — typecheck + lint + unit in one shot
   - `npm run agent:hooks:smoke` / `npm run agent:skills:validate` — agentic tooling, before handoff
-- `.github/workflows/ci.yml` runs verification on Node 22/24 plus production-bundle Chromium E2E
-  (Node 20 dropped 2026-09-03: EOL 2026-04-30, jsdom 30 requires `^22.22.2 || ^24.15.0`; #60).
+- `.github/workflows/ci.yml` runs Node 24 supported verification, the retained Node 22 legacy compatibility context and production web Chromium. `.github/workflows/desktop.yml` adds production desktop Chromium and native Windows build/smoke: five required jobs in total. The five opt-in performance cases are reported separately; required checks are not skipped.
 
 ## Baseline (cycle 1 start, commit fe085b0)
 
@@ -675,14 +689,14 @@ above and refresh GitHub state for the current queue, verification and next work
   render — a careful addition to the load-bearing render order in `App.ts` (do NOT paginate before langs
   settle). Also fix the matching broken recipe in `LIBRARY_NOTES.md:125` and add a real test that loads
   an unbundled-but-known language (folds in T-11; keep `ensureLang`, don't delete it).
-### Remaining backlog
+### Current backlog pointer
 
-- Consult #193 for the Shiki 4.6 compatibility correction and exact-head qualification
-  before further dependency work.
-- Apply the existing `docs/PERF_BUDGET.md` ladder to concrete regressions and complete
-  representative Windows comparisons in #169 before claiming efficiency improvements.
-- Evaluate further Mermaid/Shiki splitting against those measurements; reader grammar
-  admission/selective preparation is already merged in #162/#172.
+Use [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+Shiki 4.6 (#193), reader admission/selective grammars (#162/#172), offline capture
+(#178) and active-match visibility (#191) are merged. Their historical task notes
+are retained for design/evidence, not pending implementation. Each new issue records
+scope, dependency and completion evidence; every open failure-ledger row points to
+one of those issues or its existing AI gate.
 
 ## Deferred questions — ALL ANSWERED 2026-06-25
 

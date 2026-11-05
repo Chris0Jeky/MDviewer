@@ -2,11 +2,15 @@
 
 This file owns the current render, export, workspace and navigation contracts. Change code and this specification together. The detailed pre-workspace specification is retained **byte-for-byte** in [IMPLEMENTATION_FOUNDATION.md](IMPLEMENTATION_FOUNDATION.md), including its original title. It is a retained foundation, not a competing current specification: its unchanged module signatures, no-slice mechanics and editor details are incorporated here; the explicit replacements and additions below take precedence. Its dependency inventory is historical, not a current installation claim.
 
-Companions: [Product vision](../PRODUCT_VISION.md), [Architecture](../ARCHITECTURE.md), [Agent index](../../autodoc/AGENT_INDEX.md), [Workspace refresh](WORKSPACE_REFRESH.md), [Export/update lifetime](EXPORT_UPDATE_LIFETIME.md), [Offline raster capture](RASTER_OFFLINE_CAPTURE.md).
+Companions: [Product vision](../PRODUCT_VISION.md), [Architecture](../ARCHITECTURE.md), [Agent index](../../autodoc/AGENT_INDEX.md), [Workspace refresh](WORKSPACE_REFRESH.md), [Export/update lifetime](EXPORT_UPDATE_LIFETIME.md), [Offline raster capture](RASTER_OFFLINE_CAPTURE.md), [Future work](../FUTURE_WORK.md).
 
 ## 1. What MDviewer is
 
-A browser-based, local-first Markdown editor and PDF preview/export tool for research and technical documents. Documents arrive through file picker, drop, paste or direct editing. Document content stays in memory. Only settings persist. No upload, document persistence, remote conversion or document request is permitted. The single permitted runtime request is the Pulseboard SDK 3.3 (`public/pulseboard.js`, locked by `observatory.lock.json`, active only on the production origin), and product code reaches it only through `src/app/pulse.ts`, whose events carry closed enums, size buckets and page counts; error events are shielded from it (`installErrorShield`). Document text, file names, titles, headings, document URLs and export contents never reach it (`tests/pulse.test.ts`). Any other runtime request or telemetry still needs an owner decision.
+A local-first Markdown reader/editor and paginated PDF workspace for the web and an experimental Windows desktop app. The Windows entry starts in continuous reading and loads the shared editing/PDF workspace on demand (§14). Documents arrive through file picker, drop, paste or direct editing. Open documents and latest-close recovery stay in memory; there is no automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports are supported (§5, §14). Persisted app-managed user state is limited to settings and the approved Pulseboard consent/visit/region/session keys. No upload, remote conversion or document request is permitted.
+
+The approved runtime-network exception is the Pulseboard SDK 3.3 (`public/pulseboard.js`, locked by `observatory.lock.json`, active only on the production origin), and product code reaches it only through `src/app/pulse.ts`, whose events carry closed enums, size buckets and page counts; error events are shielded from it (`installErrorShield`). Document text, file names, titles, headings, document URLs and export contents never reach it (`tests/pulse.test.ts`). Any other runtime request or telemetry still needs an owner decision.
+
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195) index proposed scopes. Save/Save As ownership [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) require reviewed designs and coordinated operating/privacy contracts before implementation. They do not change the current Save Copy or memory-only behavior.
 
 The product invariant remains page-break-safe output: keep normal-size code blocks, figures, tables and callouts intact; use the foundation's explicit graceful-split/shrink/forced-split tiers for genuinely oversize content. Both PDF paths consume the same prepared page DOM.
 
@@ -38,7 +42,7 @@ raw audit results may still contain that invalid development-only residue.
 4  await renderAllMermaid(source, 'default')
 4b stampAtomicBlocks(source)
 5  await awaitFontsAndImages(source)
-6  retain fully prepared source
+6  fully prepared source for this run
 7  registerHandlersOnce; await paginate(source, css, host)
    inside paginate: await Previewer.preview; repairFootnoteLinks(host); return flow
 ```
@@ -52,6 +56,8 @@ check, using the settings captured for this run.
 The final link repair changes **href attributes only**, after Paged.js has generated destinations. It is not another layout pass and must never change geometry. All height-affecting work still precedes the single pagination call. Paged.js handlers remain globally registered once; a fresh Previewer is used per run, and stylesheet Blob URLs are revoked in `finally`.
 
 Reflow keys are `codeTheme`, `docFont`, `fontSizePt`, `paperSize`, `margins`, `showToc`, `showPageNumbers`, `titlePage`, `runningHeader`, `showLineNumbers`. Screen theme, zoom, view mode and split ratio are screen-only. Content debounce remains 250 ms and settings debounce 120 ms. Rendering is serialized, not merely debounced.
+
+Every scheduled content/settings render builds a fresh fragment from its captured input. Export can reuse a matching completed paginated render under the scheduler lease (§5); prepared source is not retained as a re-pagination cache.
 
 ## 4. No-slice, TOC and footnote identity
 
@@ -87,7 +93,7 @@ Inside the lease, App compares the completed snapshot's id, name, text and reflo
 
 Closing the final document calls `teardownPagination`, removing injected Paged.js styles and sheets. A close during export is processed after capture finishes.
 
-`downloadMarkdown` is a separate source download, not PDF rendering or persistence. It downloads the exact current text with a portable Markdown filename, removes its transient anchor and revokes its Blob URL after download initiation. It never marks the in-memory session durably saved or disables navigation protection.
+`downloadMarkdown(name, text): void | Promise<void>` exports the exact captured text with a portable Markdown filename. The web path removes its transient anchor and revokes its Blob URL after download initiation. The native destination returns a promise that the source-save action awaits (§14). This explicit Save Copy does not adopt an original-file binding, clear the dirty baseline, persist a session or disable navigation protection.
 
 ## 6. File tree and ownership
 
@@ -207,7 +213,7 @@ The primary toolbar row contains identity, optional desktop New, Open, View, Scr
 
 ## 9. Persistence and navigation
 
-Only settings persist under `mdviewer.settings.v1`; document bytes, source-download state and export snapshots remain in memory. Preserve validation/clamping for view mode, split ratio and title-page settings described in foundation sections 9 and 12. Preserve the pristine-sample exemption in `hasProtectableWork`; modifying the sample restores protection.
+Settings persist under `mdviewer.settings.v1`; the approved SDK keys are the separate exception described in §1. Open document bytes, latest-close recovery, source-download state and export snapshots remain in memory. Explicit user-selected saves/exports write their requested files without adding automatic/app-managed document or session storage. Preserve validation/clamping for view mode, split ratio and title-page settings described in foundation sections 9 and 12. Preserve the pristine-sample exemption in `hasProtectableWork`; modifying the sample restores protection.
 
 Worker activation and document reload are distinct. UpdatePrompt remains dismissible during activation; it recovers after failure or timeout. A cancelled reload can be retried without waiting for a second controllerchange. Dismissal removes owned listeners/timers and invalidates queued activation work. Plugin and native readiness converge idempotently; another tab's activation is not consent to reload this one.
 
@@ -221,15 +227,17 @@ Keep foundation section 10's unit/real-browser distinction. Added regressions co
 
 Required check names remain Node 22 and 24 typecheck/lint/unit/build plus the production Chromium suite and Observatory guard. Node 24 is the supported strict-install lane; Node 22 remains a legacy compatibility probe until branch protection is updated. Chromium and deployment run on Node 24. Browser artifacts are uploaded on both success and failure. Do not weaken no-slice or export assertions to make a UI change pass.
 
+Required tests must pass. Report the existing opt-in performance-ladder cases and their skips separately; optional measurement coverage does not replace any required gate.
+
 Offline capture also has real resource-loss controls: `raster-styles-ready.spec.ts` deletes the exact cached app stylesheet after the source is styled; `raster-fonts-ready.spec.ts` deletes the cached KaTeX Main-Regular woff2 after the source's corresponding font face is loaded. Each requires two no-save failures with complete iframe cleanup, restores the original cached response, and parses the actual PDF saved on retry. HTTP/memory cache is disabled so it cannot conceal the missing CacheStorage entry. The extra CDP session agrees with the context's offline emulation; the source offline hint and controller, a failed uncached request, controlled-frame resource errors, and worker-served recovery are asserted. No route supplies CSS or fonts. `raster-offline-frame.spec.ts` separately checks controller inheritance through adoption, CSS/font worker responses and a missing-cache error. That primitive proof does not replace saved-PDF pixels and damaged controls. Unit coverage in `tests/raster-offline-capture.test.ts` checks cascade order, generated styles, controller refusal, bounded navigation, inactive links and cleanup/retry. Exact-head evidence and limits are recorded in `docs/design/RASTER_OFFLINE_CAPTURE.md`.
 
 An isolated component probe is not a production-app test. A local dependency-install failure is not a successful suite. Validation applies to the exact tested head; integration needs its own checks even when constituent heads are green. Independent latest-head review and resolved actionable threads remain merge gates.
 
 ## 11. Known risks and release gates
 
-All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster and editor-tokenizing risks remain. The source archive provenance part of #62 is closed by the `MDVIEWER_SOURCE_ID` build labelling (a supplied release tag or archive checksum names the archive in `dist/SOURCE.txt`; runtime export fixes alone never could). #59's historical deployment-evidence inconsistency also requires reconciliation rather than invented operator evidence.
+All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster and editor-tokenizing risks remain. The source archive provenance part of #62 is closed by the `MDVIEWER_SOURCE_ID` build labelling (a supplied release tag or archive checksum names the archive in `dist/SOURCE.txt`; runtime export fixes alone never could). #59's historical deployment-evidence inconsistency is closed; its reconciled header evidence does not close the separate AI-7 live/PWA acceptance work. Preserve the dated deployment and failure-ledger records.
 
-**AI-6 second-engine/manual-feel and AI-7 live deployment/two-version PWA operator verification remain open.** Hosted Chromium success does not close them. This specification makes no deployment, Safari/Firefox acceptance, live cache-header, installed-PWA or operator-sign-off claim.
+**AI-6 second-engine/manual-feel, AI-7 live/PWA verification, AI-8 live Pulseboard acceptance, AI-9 production promotion, and Windows acceptance/performance #169 remain OPEN.** Hosted Chromium success does not close them. This specification makes no new deployment, Safari/Firefox acceptance, live cache-header, installed-PWA or operator-sign-off claim.
 
 ## 12. Split workspace and preview geometry
 

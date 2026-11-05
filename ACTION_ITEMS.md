@@ -15,6 +15,27 @@
 
 ## Current State (snapshot)
 
+- **2026-11-05 (combined application verified; future work indexed)** —
+  [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
+  tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`, includes all nine authoring,
+  export, Shiki and documentation PRs through #194. Postmerge
+  [CI 42053738540](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540)
+  and [Windows 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244)
+  passed all five jobs: 832 unit tests on each Node lane, 130 web cases with five
+  optional performance skips, 27 desktop cases and 22 Rust tests plus native smoke.
+  All 330 tracked source blobs match GitHub; the packaged portable executable
+  matches the executable exercised by the two-dialog native save smoke.
+  [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) records downloads,
+  checksums, artifact retention and the still-unchecked Windows acceptance work.
+  [Future work](docs/FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
+  now track the scoped development queue. Save/Save As and optional recovery are
+  design-first proposals; current documents stay in memory and Save Markdown saves
+  a copy. **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** No live deployment, signed
+  release, automatic updater or comparative RAM/startup result is claimed. The
+  deployed-source history and human checklists below are unchanged.
+
+### Earlier snapshots (historical)
+
 - **2026-11-05 (qualified desktop authoring and offline capture)** — the last merged
   authoring baseline verified for this record is
   [280c73e2](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969).
@@ -41,8 +62,6 @@
   **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** No live deployment, signed release or
   representative performance result is claimed. The deployed-source anchor and exact
   human checklists below are unchanged.
-
-### Earlier snapshots (historical)
 
 - **2026-11-05 (Windows preview integrated; acceptance open)** — the experimental
   Windows reader is merged through [#158](https://github.com/Chris0Jeky/MDviewer/pull/158),

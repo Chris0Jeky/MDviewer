@@ -6,6 +6,30 @@
 > library snippets in [`design/LIBRARY_NOTES.md`](./design/LIBRARY_NOTES.md). If this doc and the
 > spec disagree, the spec wins — fix one of them in the same change.
 
+## Web and Windows ownership
+
+The web entry opens the shared source/PDF workspace. The experimental Windows entry
+starts with `src/desktop/main.ts` and its in-memory `ReaderSession`; the continuous
+reader uses the shared rendering modules without Paged.js. New or Edit & PDF lazily
+loads `src/desktop/workspace.ts` and the App workspace. Entry and return transfer
+document ownership, preserve dirty baselines, and keep controls inert through the
+handoff. Entry drains queued imports before focusing the editor. The reader's old source
+list is released after successful transfer; failed transitions retain the owned text for retry.
+
+The Rust host owns OS-selected paths. The webview receives names/text and sends bounded
+export bytes plus a safe basename; it cannot supply an arbitrary write path. Explicit
+native saves use a dialog and atomic replacement. The ordinary web build uses browser
+downloads. Save Markdown writes a copy and does not adopt an original-file binding or
+clear the dirty baseline. Open documents and latest-close recovery stay in memory;
+there is no automatic/app-managed document or session persistence. Settings and the
+approved Pulseboard keys are the existing exceptions for app-managed user state.
+
+The next scopes are indexed in [Future work](FUTURE_WORK.md) and
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Save ownership
+[#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and optional recovery
+[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) require design and coordinated
+contract/privacy updates before implementation.
+
 ## The pipeline (load-bearing order)
 
 Pagination measures real, laid-out heights. Every earlier step changes those heights, so
@@ -31,7 +55,7 @@ follows this order and must never reorder it:
        │
   5  await awaitFontsAndImages(src)      document.fonts.ready + img.decode  ->  heights final
        │
-  6  retain fully prepared source        fresh fragment for this render
+  6  fully prepared source               fresh fragment for this render
        │
   7  registerHandlersOnce();             PAGINATION LAST — Paged.js over the settled DOM
      await paginate(source,                afterParsed  -> shrinkToFit (Tier 3)
@@ -42,11 +66,12 @@ follows this order and must never reorder it:
    one paginated DOM  ──►  export: print (vector)  OR  download (rasterized)
 ```
 
-**Re-pagination** (full reflow, debounced ~120ms) is triggered by anything that changes layout:
-paper size, margins, font, font size, and the TOC / page-numbers / running-header / line-numbers
-toggles. Purely visual changes — screen theme, same-family code light/dark flip — are CSS-only and
-do **not** re-paginate. Content changes debounce at ~250ms. Each reflow rebuilds a fresh
-fragment through the serialized pipeline, so prepared transforms do not accumulate.
+**Re-pagination** (debounced about 120 ms) runs for code-theme family, typography,
+paper, margins and page-furniture changes. Screen theme, zoom, view mode and split
+ratio change screen presentation without scheduling pagination. Content changes
+debounce about 250 ms. Each run rebuilds a fresh fragment through the serialized
+pipeline, so prepared transforms do not accumulate. Paginated document code remains
+on the light side in every screen theme.
 
 ## Module responsibilities by folder
 
@@ -55,6 +80,10 @@ fragment through the serialized pipeline, so prepared transforms do not accumula
   scheduler. `settings.ts` is the persisted settings type, defaults, and load/save/migrate.
   `dom.ts` is the single source of truth for DOM ids and class names (`IDS`, `CLASSES`, `ATTRS`,
   `PAGEDJS`, plus the `el()` helper). `input.ts` validates and ingests dropped/pasted/picked files.
+- **`src/desktop/`** — continuous reading, bounded session admission, dirty baselines,
+  lazy App handoff, native event/save adapters and reading-view controls.
+- **`src-tauri/`** — bounded file, link, save and window capabilities, single-instance
+  forwarding, atomic explicit writes and Windows packaging. Filesystem paths stay in the host.
 - **`src/ui/`** — DOM builders, each returning a small handle. `Toolbar` binds controls to
   settings and the export buttons; `Editor` is the Markdown source pane (a `<textarea>` over a
   Shiki syntax backdrop); `Splitter` is the `role="separator"` divider; `Canvas` hosts
@@ -145,22 +174,30 @@ recomputed:
    dialog.
 2. **Fallback — `exportPaginatedToPdf(host, settings, opts)`**: iterate the `.pagedjs_page` nodes,
    rasterize each with html2canvas-pro (white background), and assemble with jsPDF
-   (`addImage`/`addPage`/`save`). One canvas equals one already-broken page, so breaks are
-   preserved. Rasterized output (non-selectable, larger) — best-effort.
+   (`addImage`/`addPage`), then use the browser download or installed native save destination.
+   One canvas equals one already-broken page, so breaks are preserved. Rasterized output
+   (non-selectable, larger) — best-effort.
+
+An export captures document identity, source and settings when requested. The scheduler
+holds the render host through capture/print and native save settlement. It reuses a
+matching completed paginated render; otherwise it prepares the captured input through
+the normal pipeline. Later renders, switches and closes remain queued behind that lease.
 
 The exported PDF is **always dark-on-white** regardless of the screen theme, because `@media print`
 forces the Shiki light side and light callout backgrounds.
 
 ## Threading and performance model
 
-Everything runs on the **main thread**; there is no worker. The cost centers are the one-time Shiki
-WASM load (singleton, amortized across renders) and Paged.js layout (which can briefly block on
-large documents). Mitigations:
+Rendering and pagination run on the browser/WebView **main thread**; there is no rendering
+worker. Native file dialogs and filesystem operations run off the WebView callback thread.
+The cost centers are the one-time Shiki WASM load (singleton, requested when needed) and
+Paged.js layout, which can block on large documents. Mitigations:
 
 - **Paginate once**, after all async content settles (the render order above).
 - **Debounce** setting changes and content changes, and show a "Paginating…" state so the UI stays
   honest during a reflow.
-- **Keep a pristine clone** so re-pagination never re-runs render and never compounds transforms.
+- **Reuse a matching completed render for export** under the scheduler lease. Each scheduled
+  content/settings render rebuilds a fresh fragment, so prepared transforms never accumulate.
 - **Lazy-load** the export code and the Shiki langs/themes (Vite code-splits the dynamic imports),
   keeping the initial bundle small.
 - **Surface incremental page count** from the Paged.js `page` event for large-document feedback.

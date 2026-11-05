@@ -17,6 +17,11 @@ paginated preview. Explorer file opening, multiple documents and screen themes a
 built in. The source editor and pagination load only when you choose New or Edit & PDF.
 [Download/build instructions, shortcuts and current limits](docs/WINDOWS_DESKTOP.md).
 
+**Next development:** [prioritized work and acceptance criteria](docs/FUTURE_WORK.md),
+tracked in [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Save/Save As and
+optional crash recovery are design-first proposals; the current app saves explicit
+copies and keeps open documents in memory.
+
 - [What it is](#what-it-is)
 - [Why it exists](#why-it-exists)
 - [Privacy and usage data](#privacy-and-usage-data)
@@ -37,7 +42,7 @@ built in. The source editor and pagination load only when you choose New or Edit
 
 MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
 
-The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. The only thing the app persists is a small settings object in `localStorage` (`mdviewer.settings.v1`). There is no conversion API, no automatic document storage, and no account.
+The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. Apart from explicit user-requested Markdown/PDF saves, the app stores only a small settings object in `localStorage` (`mdviewer.settings.v1`); the public-site SDK has the separate keys described below. There is no conversion API, no automatic document storage, and no account.
 
 The public site also sends pseudonymous, content-free usage data to the owner's first-party Pulseboard collector — never document text, file names or exports. See [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
 
@@ -234,17 +239,17 @@ From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) and the open GitHub is
 | --- | --- | --- |
 | P0 Scaffolding | Done | Repo, Vite/Vitest/Playwright, pinned design specs |
 | P1 Core pipeline | Done | Render → paginate → both export paths; no-slice e2e; Gate 3 (manual Chrome PDF inspection) accepted |
-| P2 UX polish | In progress | Split workspace, QA-sweep fixes, responsive toolbar, screen-theme / title-page / header work shipped. Remaining polish is tracked as issues, not a second product. |
-| P3 Hardening and distribution | In progress | Sanitization, PWA/offline, large-doc budget + 250 kB confirm gate, production-egress proofs shipped. Live app is at the URL above. Automated Pages promotion is written; the first live dispatch still needs the `production` environment hardened. Canonical custom hostname is blocked until a name is owned. |
+| P2 Desktop authoring and UX | In progress | New, compact writing controls, guarded undo, Find/Replace, visible matches and readiness-safe saves are shipped. Formatting, in-session navigation, hidden-preview progress and accessibility follow-ups are linked in [Future work](docs/FUTURE_WORK.md). |
+| P3 Hardening and distribution | In progress | Windows reader/installer preview, sanitization, offline PDF qualification and performance tooling are shipped. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) retains native acceptance; [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)/[#202](https://github.com/Chris0Jeky/MDviewer/issues/202) track cancellation and measured responsiveness. Live/PWA and first automated promotion remain human gates. |
 | P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
 
-**Windows direction:** the standalone reading path and CI-built installer are an experimental P3 distribution. Native desktop acceptance and measured memory work are described in [the Windows guide](docs/WINDOWS_DESKTOP.md). The live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) is authoritative for remaining work; the late-file focus race in #131 is already fixed.
+**Windows direction:** a simple, efficient desktop Markdown reader/editor with dependable local files and page-safe PDFs. The [future-work map](docs/FUTURE_WORK.md) separates concrete fixes, planned writing improvements and design-first storage proposals. Native acceptance and measured memory work remain in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169); the live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) owns execution status.
 
 Operator-only live-site and deploy gates (split-workspace feel, PWA update toast, Beta-bar acceptance, first automated promotion) live in [`ACTION_ITEMS.md`](ACTION_ITEMS.md). They are not product gaps in the code path above.
 
 ## Security
 
-- **Documents do not leave the device.** No document `fetch` / XHR / WebSocket. No document persistence. The one runtime network exception is the Pulseboard SDK on the production origin, reached only through [`src/app/pulse.ts`](src/app/pulse.ts) with closed enums, size buckets and counts. [`tests/pulse.test.ts`](tests/pulse.test.ts) and [`tests/pulse-egress.test.ts`](tests/pulse-egress.test.ts) guard that seam.
+- **Documents do not leave the device.** No document `fetch` / XHR / WebSocket. No automatic or app-managed document/session storage; explicit user-requested local saves are supported. The one runtime network exception is the Pulseboard SDK on the production origin, reached only through [`src/app/pulse.ts`](src/app/pulse.ts) with closed enums, size buckets and counts. [`tests/pulse.test.ts`](tests/pulse.test.ts) and [`tests/pulse-egress.test.ts`](tests/pulse-egress.test.ts) guard that seam.
 - **Untrusted Markdown is sanitized** before it hits the DOM (`src/render/sanitize.ts`). Executable tags, event handlers and automatic remote resource URLs are stripped; Mermaid SVG is sanitized again. User-initiated `https:` links remain clickable.
 - **Error messages are kept off telemetry.** `installErrorShield` stops `error` / `unhandledrejection` reaching the SDK so a KaTeX or Mermaid parse error cannot leak document text.
 - **Production `dist/` carries the GPL text**, the exact corresponding-source link, the project notice, and installed dependency licence texts (`THIRD_PARTY_NOTICES.md`; written by `npm run build`). Preserve those files when you redistribute a build.
@@ -258,9 +263,10 @@ Start with [`ACTION_ITEMS.md`](ACTION_ITEMS.md) (human-only gates + current-stat
 - [`docs/design/LIBRARY_NOTES.md`](docs/design/LIBRARY_NOTES.md) — version-correct integration notes for each library.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — pipeline, module responsibilities, CSS split.
 - [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) — phase status and gates.
+- [`docs/FUTURE_WORK.md`](docs/FUTURE_WORK.md) — prioritized issues, dependencies, acceptance and deferred choices.
 - [`autodoc/AGENT_INDEX.md`](autodoc/AGENT_INDEX.md) — code-seam map.
 
-Do not reorder the render pipeline. Do not add a document network call or persist document bytes. PRs merge with a merge commit (no squash). `main` is protected: no rebase, force-push, or history rewrite.
+Do not reorder the render pipeline or add a document network call. Current document writes are explicit user-requested saves; automatic storage remains outside the shipped contract. The proposed file/recovery work must update that contract and privacy documentation through review before implementation. PRs merge with a merge commit (no squash). `main` is protected: no rebase, force-push, or history rewrite.
 
 ## License
 

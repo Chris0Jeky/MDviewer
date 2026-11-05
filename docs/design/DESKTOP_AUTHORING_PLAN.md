@@ -1,6 +1,11 @@
 # Desktop New document
 
-Tracking: [#181](https://github.com/Chris0Jeky/MDviewer/issues/181).
+**Completed:** [#183](https://github.com/Chris0Jeky/MDviewer/pull/183), merged as
+`3e67112850422fbd05a004323ad39a4e026c2481`, closes
+[#181](https://github.com/Chris0Jeky/MDviewer/issues/181). The implementation sequence
+and local candidate evidence below are historical. Hosted qualification and later
+combined-main verification are recorded in the
+[authoring checkpoint](2026-11-05-authoring-checkpoint.md).
 
 ## Design
 
@@ -22,7 +27,7 @@ editor when the saved layout is Preview-only, preserves Markdown/Split otherwise
 and focuses the source pane. No new persistence, native capability or rendering
 pipeline is introduced.
 
-## Implementation sequence
+## Historical implementation sequence
 
 1. Reproduce missing empty-reader creation and shortcut routing with regressions.
 2. Add bounded desktop creation, an optional toolbar callback and explicit
@@ -32,15 +37,17 @@ pipeline is introduced.
 4. Add production desktop coverage for New, editing, preview, source saving and
    Preview-only layout recovery; retain the existing lazy-startup controls.
 5. Run local typecheck, lint, unit tests and both builds. Hosted Chromium and native
-   Windows checks, screenshot review and independent exact-head review remain
-   publication/merge gates. No local Chromium, Rust or PowerShell is available.
+   Windows checks, screenshot review and independent exact-head review were required
+   before merge. The local environment had no Chromium, Rust or PowerShell.
 
-## Documentation handoff
+## Documentation and remaining work
 
-Update `docs/WINDOWS_DESKTOP.md`. Send the public callback/command contract additions to
-the coordinator for the shared implementation specification and agent index,
-alongside its independent Find/Replace work. AI-6/AI-7/AI-8/AI-9 and Windows issue
-#169 stay open. This slice does not qualify the blocked offline raster PDF work.
+The Windows guide, implementation specification and agent index now document New,
+its callback and the explicit command selectors. AI-6/AI-7/AI-8/AI-9 and Windows
+issue #169 stay open. This slice did not qualify offline raster PDF capture; that
+separate work subsequently completed in [#178](https://github.com/Chris0Jeky/MDviewer/pull/178).
+Further authoring work is tracked in [Future work](../FUTURE_WORK.md) and
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
 
 ## Local candidate verification — 2026-11-05
 
@@ -54,5 +61,5 @@ large-chunk build warnings remain; no dependency change is included.
 
 Production browser coverage records the empty reader, a newly written note and
 the revealed source pane as screenshots. Those browser tests and native Windows
-checks have not run locally; their exact-head hosted evidence and independent
-review remain required before merge. This record does not claim publication.
+checks could not run locally. The completed #183 hosted checks, screenshot review
+and independent review are linked from the authoring checkpoint above.

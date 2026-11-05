@@ -6,10 +6,12 @@ other). Each runtime uses its native tools; the intent here is shared. See
 
 ## What this project is
 
-A browser-based, drag-and-drop **Markdown → PDF** tool whose defining job is to export
-PDFs where **no code block, figure, table, or callout is ever sliced across a page
-boundary**. For research and code-heavy documents. 100% client-side, local-first. Vanilla
-TypeScript + Vite. Canonical build contract: `docs/design/IMPLEMENTATION_SPEC.md`.
+A local Markdown reader and editor for the web and an experimental Windows desktop app,
+with a paginated **Markdown → PDF** workspace for research and code-heavy documents.
+The Windows reader loads editing and pagination on demand. The defining export contract
+keeps code blocks, figures, tables and callouts whole when they fit on a page; oversized
+content uses the canonical shrink/split tiers. Vanilla TypeScript + Vite, with a bounded
+Tauri/Rust host on Windows. Canonical build contract: `docs/design/IMPLEMENTATION_SPEC.md`.
 
 ## Authority Order
 
@@ -30,10 +32,19 @@ When sources conflict, follow the higher source and report the conflict.
 safe, reviewable slice and state blockers, assumptions, verification target, and docs-sync
 target before editing.
 
+The issue-backed queue is [Future work](docs/FUTURE_WORK.md) and
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Proposed native Save/Save As
+[#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery
+[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) require reviewed designs and
+coordinated contract/privacy updates before implementation; they do not change today's
+Save Copy or memory-only session behavior.
+
 ## Project Structure
 
 ```
 src/app/        controller, state, settings, dom constants, input, sample doc
+src/desktop/    continuous reader, in-memory session, lazy workspace and native adapter
+src-tauri/      bounded native file/link/save capabilities and Windows packaging
 src/render/     markdown-it + Shiki + KaTeX + Mermaid + source builder
 src/paginate/   Paged.js engine wiring, @page/break CSS builder, shrink-to-fit, handlers
 src/export/     window.print path + programmatic html2canvas/jsPDF path
@@ -61,7 +72,7 @@ read md + capture settings → await getHighlighter() → createMarkdown(null,se
 → await ensureLang for parsedFenceLanguages(md,tokens)
 → installMarkdownHighlighter → renderMarkdownTokens(md,tokens,env) (Shiki+KaTeX, sync)
 → buildPaginationSource (TOC + footnote transform) → await renderAllMermaid
-→ await awaitFontsAndImages → retain prepared source → paginate() LAST
+→ await awaitFontsAndImages → fresh prepared source for this run → paginate() LAST
 ```
 Pagination measures real heights; any earlier step changes them. Paginating early misplaces
 page breaks and breaks the no-slice guarantee. This is the single most important invariant.
@@ -69,9 +80,11 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 ## Default Work Style
 
 - Narrow diffs; preserve behavior unless asked.
-- Local-first: no document network calls, no document persistence (only `Settings`). The one runtime
-  request is the owner-approved Pulseboard SDK, reached only through `src/app/pulse.ts` (closed enums,
-  size buckets, counts; never document content or names; `tests/pulse.test.ts`). No other telemetry.
+- Local-first: no document network calls or automatic/app-managed document or session persistence.
+  Explicit user-selected Markdown copies and PDF saves/exports are supported. Persisted app-managed
+  user state is limited to `Settings` and the approved SDK keys below. The content-free Pulseboard SDK is reached
+  only through `src/app/pulse.ts` (closed enums, size buckets, counts; never document content or names;
+  `tests/pulse.test.ts`). No other telemetry.
 - Don't mix render / pagination / export / UI concerns in one slice unless the seam requires it.
 - Surface every failure; classify it (blocker / non-blocking risk / pre-existing noise / invalid signal).
 - Record workarounds and their future-fix path.
@@ -94,10 +107,12 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 ## Security / Privacy Guardrails
 
-- Document content never leaves the device and is never written to storage: no document
-  network calls, no document persistence — only the small `Settings` object plus the SDK
-  keys below. Bundle Shiki themes/langs, KaTeX fonts, and Mermaid locally so the tool
-  works offline.
+- Document content never leaves the device. Open documents and latest-close recovery stay in
+  memory; there is no automatic/app-managed document or session storage. Explicit user-selected
+  Markdown copies and PDF saves/exports write the requested output. Save Copy does not adopt an
+  original-file write binding or clear the dirty baseline. Only the small `Settings` object and
+  SDK keys below persist as app-managed user state. Bundle Shiki themes/langs, KaTeX fonts, and
+  Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK
   (`public/pulseboard.js`, called only through `src/app/pulse.ts`): closed enums, size
   buckets, and page counts to the Pulseboard collector — never document text, file names,
