@@ -350,6 +350,34 @@
   -webkit-text-fill-color: var(--fg);
 }
 
+/* Forced-color engines discard translucent fills and shadows. Use native
+   system text and a real outline so source, caret and Find remain perceivable
+   independently of the decorative syntax layer. This is screen chrome only. */
+@media screen and (forced-colors: active) {
+  #editor-highlight { visibility: hidden; }
+
+  #editor-input,
+  #editor-pane[data-highlight="off"] #editor-input {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+    caret-color: CanvasText;
+    background: Canvas;
+  }
+
+  #editor-input::selection {
+    color: HighlightText;
+    -webkit-text-fill-color: HighlightText;
+    background: Highlight;
+  }
+
+  .editor-match-rect {
+    background: transparent;
+    box-shadow: none;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
 /* Dark chrome: swap each token's inline light color for its --shiki-dark
    counterpart. This is the ONLY surviving dark-side swap in the app, and the
    scope is the point (UX-3). The editor is chrome, so it follows the chosen app

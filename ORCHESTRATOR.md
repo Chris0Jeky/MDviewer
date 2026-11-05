@@ -3,6 +3,14 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
+> **CANDIDATE SLICE — 2026-11-05, #203:** production Firefox authoring lane and
+> accessible keyboard/contrast/reflow regressions prepared from main `5cb2dbb3`.
+> Local 832 units, four server tests, types/lint/Observatory, both builds and 39
+> Firefox 157.0 cases pass. Forced-colors Find visibility is corrected. Exact-head
+> hosted CI and independent review are still required before merge; see the PR
+> and `docs/design/AUTHORING_QUALITY.md`. This does not clear any human gate or
+> change the verified application/deployment anchors below.
+
 > **CURRENT CHECKPOINT — 2026-11-05 (verified application and explicit future backlog):**
 > Application baseline [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
 > tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`. All nine PRs

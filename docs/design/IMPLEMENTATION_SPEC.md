@@ -229,6 +229,17 @@ Required check names remain Node 22 and 24 typecheck/lint/unit/build plus the pr
 
 Required tests must pass. Report the existing opt-in performance-ladder cases and their skips separately; optional measurement coverage does not replace any required gate.
 
+`playwright.authoring.config.ts` adds a bounded production Firefox lane for native
+textarea undo, source/backdrop geometry, Find/Replace, shortcuts and desktop New/
+layout behavior. `authoring-accessibility.spec.ts` in both browser suites checks
+accessible names/state, keyboard focus, status exposure, composition guards and
+short reflow. Forced-colors mode uses native system-colored source text with the
+decorative backdrop hidden, and an actual outline for Find because forced colors
+can suppress translucent fills and shadows. The rule is screen-only. The lane
+records actual browser versions and retains failures without retries. Synthetic
+composition/paste payloads exercise application guards, not operating-system IME
+or clipboard UI. See `AUTHORING_QUALITY.md`; AI-6 and #169 remain human gates.
+
 Offline capture also has real resource-loss controls: `raster-styles-ready.spec.ts` deletes the exact cached app stylesheet after the source is styled; `raster-fonts-ready.spec.ts` deletes the cached KaTeX Main-Regular woff2 after the source's corresponding font face is loaded. Each requires two no-save failures with complete iframe cleanup, restores the original cached response, and parses the actual PDF saved on retry. HTTP/memory cache is disabled so it cannot conceal the missing CacheStorage entry. The extra CDP session agrees with the context's offline emulation; the source offline hint and controller, a failed uncached request, controlled-frame resource errors, and worker-served recovery are asserted. No route supplies CSS or fonts. `raster-offline-frame.spec.ts` separately checks controller inheritance through adoption, CSS/font worker responses and a missing-cache error. That primitive proof does not replace saved-PDF pixels and damaged controls. Unit coverage in `tests/raster-offline-capture.test.ts` checks cascade order, generated styles, controller refusal, bounded navigation, inactive links and cleanup/retry. Exact-head evidence and limits are recorded in `docs/design/RASTER_OFFLINE_CAPTURE.md`.
 
 An isolated component probe is not a production-app test. A local dependency-install failure is not a successful suite. Validation applies to the exact tested head; integration needs its own checks even when constituent heads are green. Independent latest-head review and resolved actionable threads remain merge gates.

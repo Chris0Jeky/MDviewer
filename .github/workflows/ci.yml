@@ -53,6 +53,34 @@ jobs:
       - name: Build
         run: npm run build
 
+  authoring:
+    name: Authoring (Firefox · production builds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --engine-strict
+      - name: Install the locked Firefox engine and OS dependencies
+        run: npx playwright install --with-deps firefox
+      - run: npm run build
+      - run: npm run desktop:build:web
+      - name: Production authoring and accessibility regressions
+        run: npm run test:authoring
+      - name: Upload Firefox browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: firefox-authoring-evidence
+          path: test-results/authoring/
+          if-no-files-found: error
+          retention-days: 14
+
   e2e:
     name: E2E (Playwright · Chromium · production build)
     runs-on: ubuntu-latest

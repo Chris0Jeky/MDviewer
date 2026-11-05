@@ -60,6 +60,7 @@ Export click → capture document id/name/text and settings NOW
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
 | Patched transitive dependencies and supported Node floor | `package.json`, `package-lock.json` | `tests/dependency-security.test.ts` checks the wrapper-resolved KaTeX trust boundary and encoded-host normalization; spec §2 |
 | Required verification and browser artifacts | `.github/workflows/ci.yml` | Node 24 verification and production Chromium; retained Node 22 compatibility probe |
+| Second-engine authoring and accessibility | `playwright.authoring.config.ts`, `.github/workflows/ci.yml`, `src/styles/editor.css` | Production Firefox plus both `authoring-accessibility.spec.ts` suites; actual undo/focus, forced-colors Find outline, native source paint and short reflow; `docs/design/AUTHORING_QUALITY.md`; AI-6/#169 remain open |
 
 ## New or changed public seams
 
