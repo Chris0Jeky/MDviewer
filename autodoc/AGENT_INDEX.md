@@ -53,7 +53,7 @@ Export click → capture document id/name/text and settings NOW
 | Local Open/Save and optional desktop New keyboard adapter and hint | `src/ui/DocumentShortcuts.ts`, `src/main.ts` | `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`; spec §§6-8 |
 | Action hierarchy, layout disclosure, source-save UI | `src/ui/Toolbar.ts`, `src/styles/workspace.css` | Workspace and existing export/editor E2E |
 | Preview zoom envelope, horizontal reach, pinned feedback | `src/ui/Canvas.ts`, `src/styles/{preview,workspace}.css` | `tests/e2e/workspace-design.spec.ts` and canvas E2E |
-| Textarea/backdrop, native editing, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
+| Textarea/backdrop, native editing/ownership, split layout | `src/ui/{Editor,Splitter}.ts`, `src/styles/editor.css` | Editor/splitter unit and `tests/e2e/editor.spec.ts` |
 | Empty state, warnings, error feedback | `src/ui/{EmptyState,Banner}.ts`, `src/app/App.ts` | `tests/app-ingestion-notices.test.ts`, `tests/app-export-lifetime.test.ts`, `tests/e2e/{empty-error,raster-styles-ready}.spec.ts`; spec §7 pins independent notice/warning lifetimes and visible, recoverable fatal feedback |
 | Offline precache and worker policy | `vite.config.ts`, `src/main.ts`, `src/styles/pwa.css` | PWA tests; operator gates still apply |
 | Patched transitive dependencies and supported Node floor | `package.json`, `package-lock.json` | `tests/dependency-security.test.ts` checks the wrapper-resolved KaTeX trust boundary and encoded-host normalization; spec §2 |
@@ -153,6 +153,21 @@ dirty, and a failed teardown flush restores the same identities and baselines. T
 and reader picker metadata follow the current workspace store, including queued input.
 
 Screen-only `.document-recovery` and its status/name/action/hint classes live in `workspace.css`, with explicit hidden/print handling. Do not borrow New/Open/Save `data-document-command` identities for recovery buttons. Close focuses Undo; completion returns focus to an appropriate visible editor/document/Open control without changing view mode. Unit coverage: `tests/document-recovery.test.ts`; production geometry, exact source, multi-document, discard and focus: `tests/e2e/undo-close*.spec.ts`.
+
+
+## Guarded source editing
+
+`EditorController.setDocument` accepts an optional stable `id`; App's DocStore
+supplies it. Same-ID/same-text notifications preserve caret and undo. Equal-text
+identity switches invalidate delayed work and clear the previous document's native
+undo history; first-input adoption is preserved. `replaceRange(start, end, text,
+signal?): Promise<boolean>` replaces UTF-16 ranges through shared UTF-8 admission,
+selection/document/revision guards and native insertText. False means refused,
+stale, unavailable, unchanged or aborted. The manual fallback emits one input event.
+Abort prevents commitment but does not settle or dismiss the host confirmation.
+See spec §12, `tests/editor-edit-safety.test.ts`,
+`tests/e2e/editor-edit-safety.spec.ts` and
+`docs/design/2026-11-05-editor-edit-ownership.md`.
 
 
 ## Desktop New document
