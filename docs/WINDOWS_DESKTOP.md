@@ -38,6 +38,11 @@ available name (`Untitled.md`, `Untitled 2.md`, and so on), and the source pane 
 shown and focused. An untouched blank note can close without a discard prompt.
 
 Choose **Edit & PDF** to edit an opened file and use the existing page-safe preview.
+Use **Format** beside Find for Bold, Italic, code spans/blocks, headings, links,
+bullets, numbered lists and tasks. Ctrl/Cmd+B, I and K apply Bold, Italic and Link
+while writing in the source. Each command is one Undo step; selected placeholder
+text is ready to replace. Escape closes the controls and returns to the source.
+
 **Reading view** returns with your open documents and edits preserved. **Save Markdown**
 saves a copy of the source. The session still compares edits with the original text
 that was opened or created, so saving a copy does not clear an edited document's

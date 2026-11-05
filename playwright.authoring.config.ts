@@ -23,7 +23,7 @@ export default defineConfig({
     {
       name: "authoring-firefox",
       testDir: "tests/e2e",
-      testMatch: ["**/editor.spec.ts", "**/editor-edit-safety.spec.ts", "**/editor-search.spec.ts", "**/document-shortcuts.spec.ts", "**/authoring-accessibility.spec.ts", "**/export-status.spec.ts"],
+      testMatch: ["**/editor.spec.ts", "**/editor-formatting.spec.ts", "**/editor-edit-safety.spec.ts", "**/editor-search.spec.ts", "**/document-shortcuts.spec.ts", "**/authoring-accessibility.spec.ts", "**/export-status.spec.ts"],
       use: { ...devices["Desktop Firefox"], baseURL: "http://localhost:5185" },
     },
     {

@@ -284,7 +284,10 @@ node listeners after a switch. App's synchronous adoption of the first typed
 document preserves its node and first undo entry.
 
 `EditorController.replaceRange(start: number, end: number, text: string,
-signal?: AbortSignal): Promise<boolean>` uses native textarea UTF-16 offsets. It
+signal?: AbortSignal, selectionAfter?: MarkdownSelection): Promise<boolean>` uses
+native textarea UTF-16 offsets. The optional final selection is validated before
+admission and applied only to the same editing host after its one accepted input
+event, with value/revision/focus fencing; reentrant input cannot redirect it. It
 shares byte admission and the undo-aware insertion path with intercepted paste,
 text drop and Tab. A delayed confirmation captures document identity, edit/source
 revision, exact text, selection/revision/direction and focused element. Focus must
@@ -296,6 +299,26 @@ remain native. Abort prevents commitment but does not dismiss a host confirmatio
 UI or settle an unresolved host promise. Native insertText owns its single input
 event; the manual fallback dispatches one observable input event. Coverage:
 `tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
+
+### Source Markdown formatting
+
+A collapsed Format disclosure beside Find exposes Bold, Italic, inline Code, Code
+block, H1–H3, Link, Bullets, Numbers and Tasks. Ctrl/Cmd+B, I and K act only in the
+source textarea. The labelled button group remains keyboard accessible; Escape
+closes it and returns source focus. The panel wraps/scrolls within a bounded height
+and uses the existing short-window measurable-preview parking behavior. Opening
+controls never changes source or requests pagination; formatting stays out of print.
+
+`MarkdownCommands.ts` produces pure UTF-16 range replacements and final selections;
+`EditorFormatting.ts` applies them exclusively through guarded `replaceRange`.
+Commands reject split surrogate boundaries and multiline inline code/link requests.
+The exact empty-selection, multiline, indentation, toggle and placeholder rules
+are pinned in `MARKDOWN_COMMANDS.md`; no parser or rich editor dependency is added.
+Each accepted command has one input event and one native undo edit. A delayed
+confirmation, document switch, IME, aborted command or reentrant observer must not
+modify a different host or apply a stale final selection. Coverage:
+`tests/markdown-commands.test.ts`, `tests/editor-formatting.test.ts` and the real
+production `tests/e2e/editor-formatting.spec.ts` Undo/geometry/keyboard matrix.
 
 ### Source Find and Replace
 
