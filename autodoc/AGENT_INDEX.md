@@ -173,3 +173,13 @@ Modules with optional embeds explicitly await the workspace gate to preserve exi
 embedded-language colors; that compatibility path is excluded from workspace preparation.
 Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/highlight-reader.test.ts`,
 `tests/desktop-e2e/startup.spec.ts`.
+
+## Development dependency compatibility
+
+Canonical dependency authority remains implementation spec section 2. Scoped
+minimatch/glob overrides are coupled because glob 11 consumes the old compiled
+pattern representation. `tests/dev-dependency-compatibility.test.ts` resolves the
+installed ESLint, config-array, typescript-estree and Workbox consumers through
+CommonJS and checks bounded preprocessing, matching/ignores, real precache output
+and canceled filesystem traversal. Advisory evidence and rejected deepmerge audit
+residue are documented in `docs/DEVELOPMENT_DEPENDENCIES.md`.
