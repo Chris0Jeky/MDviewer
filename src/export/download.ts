@@ -31,40 +31,72 @@ const PAGE_MM: Record<Settings["paperSize"], readonly [number, number]> = {
   letter: [215.9, 279.4],
 };
 
-/**
- * html2canvas-pro closes its iframe before adopting the cloned DOM. The iframe's
- * load/readyState check can therefore finish before newly adopted CSS links load.
- * A capture with missing document/KaTeX styles is valid PDF data but wrong output.
- */
-async function waitForClonedStyles(document: Document, deadline: number): Promise<void> {
-  const links = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]'))
-    .filter(link => !link.disabled && !link.sheet);
-  if (!links.length) return;
-  await new Promise<void>((resolve, reject) => {
-    const pending = new Set(links);
-    const cleanup = () => {
-      window.clearTimeout(timeout);
-      for (const link of links) {
-        link.removeEventListener("load", onLoad);
-        link.removeEventListener("error", onError);
-      }
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error("The PDF capture stylesheet could not load. Try Print / Save as PDF."));
-    };
-    const onLoad = (event: Event) => {
-      const link = event.currentTarget as HTMLLinkElement;
-      if (!link.sheet) { onError(); return; }
-      pending.delete(link);
-      if (!pending.size) { cleanup(); resolve(); }
-    };
-    const timeout = window.setTimeout(onError, Math.max(0, deadline - Date.now()));
-    for (const link of links) {
-      link.addEventListener("load", onLoad);
-      link.addEventListener("error", onError);
-    }
+function requiredClonedStyles(document: Document): HTMLLinkElement[] {
+  return Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"]')).filter(link => {
+    const alternate = link.rel.toLowerCase().split(/\s+/).includes("alternate");
+    return !link.disabled && !alternate && Boolean(link.getAttribute("href"));
   });
+}
+
+function captureLifecycleError(): Error {
+  return new Error("The PDF capture lifecycle could not be verified. Try Print / Save as PDF.");
+}
+
+/**
+ * Observe the mounted clone before resource event tasks can dispatch. A failed
+ * CSS request can retain a non-null sheet (including inaccessible cssRules), so
+ * only an observed load event establishes success. Never inspect rule contents:
+ * empty stylesheets and cross-origin sheets can both be valid.
+ */
+function observeClonedStyles(container: HTMLElement) {
+  const frame = container.querySelector("iframe");
+  const document = frame?.contentDocument;
+  if (!frame || !document) return;
+
+  const links = requiredClonedStyles(document);
+  const deadline = Date.now() + 10_000;
+  const records = links.map(link => {
+    const href = link.href;
+    let finish!: (loaded: boolean) => void;
+    // An error can arrive long before onclone. Store a resolved outcome rather
+    // than rejecting an as-yet-unawaited promise.
+    const outcome = new Promise<boolean>(resolve => { finish = resolve; });
+    let settled = false;
+    const settle = (loaded: boolean) => {
+      if (settled) return;
+      settled = true;
+      link.removeEventListener("load", onLoad);
+      link.removeEventListener("error", onError);
+      window.clearTimeout(timeout);
+      finish(loaded);
+    };
+    const onLoad = () => settle(true);
+    const onError = () => settle(false);
+    link.addEventListener("load", onLoad);
+    link.addEventListener("error", onError);
+    const timeout = window.setTimeout(onError, Math.max(0, deadline - Date.now()));
+    return { link, href, outcome, dispose: onError };
+  });
+
+  return {
+    async ready(cloneDocument: Document): Promise<void> {
+      if (cloneDocument !== document || frame.contentDocument !== document || !container.contains(frame)) {
+        throw captureLifecycleError();
+      }
+      const current = requiredClonedStyles(document);
+      if (current.length !== links.length || current.some((link, i) => link !== links[i])) {
+        throw captureLifecycleError();
+      }
+      // Upstream's sheet polling can finish before the queued load/error event.
+      // Await every outcome, rejecting promptly when any required link fails.
+      await Promise.all(records.map(async ({ link, href, outcome }) => {
+        if (!await outcome || link.href !== href || !link.sheet) {
+          throw new Error("The PDF capture stylesheet could not load. Try Print / Save as PDF.");
+        }
+      }));
+    },
+    dispose() { records.forEach(record => record.dispose()); },
+  };
 }
 
 async function waitForClonedFonts(document: Document, deadline: number): Promise<void> {
@@ -169,6 +201,53 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement, sourceS
   }
 }
 
+async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvasElement> {
+  const container = page.ownerDocument.createElement("div");
+  container.setAttribute("data-html2canvas-ignore", "true");
+  container.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none";
+  page.ownerDocument.body.append(container);
+  let styles: ReturnType<typeof observeClonedStyles>;
+  let prepared = false;
+  try {
+    const capture = html2canvas(page, {
+      scale,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      iframeContainer: container,
+      onclone: async (cloneDocument, sheet) => {
+        if (!styles || sheet.ownerDocument !== cloneDocument) throw captureLifecycleError();
+        await styles.ready(cloneDocument);
+        prepareRasterClone(cloneDocument, sheet, page);
+        // Revealing the sheet can use fonts after html2canvas's fonts.ready
+        // wait. Resolve layout first, then start a fresh font deadline.
+        sheet.getBoundingClientRect();
+        await waitForClonedFonts(cloneDocument, Date.now() + 10_000);
+        paintFootnoteMarkers(sheet, page);
+        prepared = true;
+      },
+      // Progress is surfaced by onProgress, not per-element console chatter.
+      logging: false,
+    }).then(
+      canvas => ({ ok: true as const, canvas }),
+      error => ({ ok: false as const, error }),
+    );
+    // In html2canvas-pro 2.6, renderElement -> toIFrame -> mountCloneInIFrame
+    // mounts the final Document synchronously before renderElement's first
+    // await. Attach now, in the same task; resource events and onclone run later.
+    // Observing the capture rejection above also covers failures before mount.
+    styles = observeClonedStyles(container);
+    const result = await capture;
+    if (!result.ok) throw result.error;
+    if (!prepared) throw captureLifecycleError();
+    return result.canvas;
+  } finally {
+    styles?.dispose();
+    // Own the entire capture lifetime, including failures outside onclone.
+    // Never query/remove unrelated library frames in the source document.
+    container.remove();
+  }
+}
+
 export async function exportPaginatedToPdf(
   host: HTMLElement,
   settings: Settings,
@@ -198,30 +277,7 @@ export async function exportPaginatedToPdf(
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     if (!page) continue;
-    const canvas = await html2canvas(page, {
-      scale,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      onclone: async (cloneDocument, sheet) => {
-        try {
-          const deadline = Date.now() + 10_000;
-          await waitForClonedStyles(cloneDocument, deadline);
-          prepareRasterClone(cloneDocument, sheet, page);
-          // Loading CSS may introduce fonts after html2canvas's own fonts.ready
-          // wait. Resolve layout first so newly used faces are included here.
-          sheet.getBoundingClientRect();
-          await waitForClonedFonts(cloneDocument, deadline);
-          paintFootnoteMarkers(sheet, page);
-        } catch (error) {
-          // The library's container cleanup begins only after onclone resolves.
-          // Do not retain a failed full-document capture in the live workspace.
-          cloneDocument.defaultView?.frameElement?.remove();
-          throw error;
-        }
-      },
-      // Progress is surfaced by onProgress, not per-element console chatter.
-      logging: false,
-    });
+    const canvas = await capturePage(page, scale);
     if (i > 0) pdf.addPage(settings.paperSize, "portrait");
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, w, h, undefined, "FAST");
     opts.onProgress?.(i + 1, pages.length);
