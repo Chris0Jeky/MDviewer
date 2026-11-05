@@ -29,7 +29,9 @@ authoring performance (#202) are separately scoped work.
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Their human checklists are unchanged.
 Current documents remain memory-only except explicit user-requested saves; planning
-file/recovery features does not enable persistence.
+file/recovery features does not enable persistence. Proposed contracts now have concrete
+[Save / Save As](design/FILE_LIFECYCLE.md) and [optional recovery](design/RECOVERY.md)
+designs. Native compare/replace evidence and implementation remain outstanding.
 
 ## Active gate
 

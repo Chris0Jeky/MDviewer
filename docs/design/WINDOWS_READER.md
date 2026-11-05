@@ -86,5 +86,7 @@ Existing AI-6/7/8/9 remain open and separate.
 
 [Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 track further improvements. Native file saving in #196 and optional recovery in #197
-are design-first proposals; they do not change the current copy-saving or memory-only
-document contracts.
+have concrete [file lifecycle](FILE_LIFECYCLE.md) and [recovery](RECOVERY.md) proposals.
+They do not change the current copy-saving or memory-only document contracts. Owned
+writes remain gated on a tested Windows conflict-safe commit primitive; recovery
+remains default-off design work with explicit storage/deletion bounds.

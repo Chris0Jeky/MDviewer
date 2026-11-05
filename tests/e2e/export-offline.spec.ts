@@ -102,7 +102,7 @@ test.describe("export with the network cut", () => {
     await expect(downloadBtn).toBeDisabled();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
-    await expect(page.locator("#status-live")).toContainText(/pdf downloaded/i, {
+    await expect(page.locator("#app > #export-status > #export-status-live")).toHaveText("PDF download requested.", {
       timeout: 30_000,
     });
     await expect(downloadBtn).toBeEnabled();

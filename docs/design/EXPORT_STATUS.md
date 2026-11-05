@@ -108,3 +108,11 @@ aside and building committed source produced a successful clean production build
 Native Windows save-dialog behavior, manual assistive technology speech, hosted
 Chromium/Firefox, and exact-head CI remain separate acceptance gates; these local
 tests do not claim those checks passed.
+
+Hosted Chromium at the first PR head passed 136 cases, including the seven new
+status scenarios, and found one stale offline-suite assertion still watching the
+old canvas live region and “downloaded” wording. That assertion now requires the
+new external live region and exact “PDF download requested.” outcome; its real
+network cut, downloaded file and re-enabled controls remain required. Both Node
+lanes, desktop Chromium and the actual Windows native/save smoke passed that head.
+A changed head still requires fresh full CI and review before merge.
