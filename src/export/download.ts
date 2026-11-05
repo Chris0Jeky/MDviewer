@@ -184,6 +184,18 @@ export async function exportPaginatedToPdf(
       useCORS: true,
       onclone: async (cloneDocument, sheet) => {
         try {
+          // Temporary issue #167 diagnostic; removed before qualification.
+          console.info("MDVIEWER_RASTER_DIAGNOSTIC", JSON.stringify({
+            sourceDocument: cloneDocument === page.ownerDocument,
+            hasFrame: Boolean(cloneDocument.defaultView?.frameElement),
+            readyState: cloneDocument.readyState,
+            styleSheetCount: cloneDocument.styleSheets.length,
+            links: Array.from(cloneDocument.querySelectorAll("link")).map(link => {
+              let rules: number | string | null;
+              try { rules = link.sheet?.cssRules.length ?? null; } catch { rules = "inaccessible"; }
+              return { rel: link.rel, href: link.href, disabled: link.disabled, sheet: Boolean(link.sheet), rules };
+            }),
+          }));
           const deadline = Date.now() + 10_000;
           requireClonedStyles(cloneDocument);
           prepareRasterClone(cloneDocument, sheet, page);
