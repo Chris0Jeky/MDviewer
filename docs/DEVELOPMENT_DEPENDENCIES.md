@@ -1,5 +1,36 @@
 # Development dependency advisory handling
 
+## Shiki 4.6 and jsdom byte streams — 2026-11-05
+
+Shiki 4.6 keeps its Oniguruma WASM bytes inside the bundled JavaScript module,
+but compresses them with gzip and decompresses asynchronously using
+`Blob.stream()`, `DecompressionStream` and `Response.bytes()`. The default
+`shiki/wasm` instantiator used by the application remains asynchronous; the
+removed named `wasmBinary` export was not used here. The upstream
+[release](https://github.com/shikijs/shiki/releases/tag/v4.6.0) and
+[WASM change](https://github.com/shikijs/shiki/commit/a1fea5609d0ccb6bf61ae5dedeb4475dcccd5b3f)
+describe this transition. It does not introduce a separate WASM download or
+change the application's explicit lazy grammar imports.
+
+The installed jsdom supplies `Blob.arrayBuffer()` but lacks `Blob.stream()`.
+The unchanged real-highlighter tests therefore fail at WASM module evaluation
+with `stream is not a function`. `tests/setup-dom.ts` supplies only that missing
+method, converting the Blob's actual bytes into the existing native
+`ReadableStream`. It preserves jsdom's Blob/File constructors so DOM FileReader
+still accepts them. Native Response and gzip decompression, WASM instantiation,
+real Shiki imports, and existing assertions remain in use. This test setup does
+not enter either application build. It leaves an existing stream method alone;
+remove the bridge when the selected jsdom implements the required API.
+
+`tests/blob-stream.test.ts` checks binary and Unicode bytes through real gzip
+decompression, reads the same File with DOM FileReader, and requires malformed
+gzip bytes to reject. The existing highlighting, lazy grammar, retry and exact
+Markdown-download tests cover their actual consumers. The focused controls
+failed before the bridge and pass with it. Full agent checks, both production
+builds, and fresh Node 22/24 and browser CI remain qualification gates; native
+`Response.bytes()` and decompression are deliberately not mocked. Production
+offline tests must still prove that the changed bundled assets are cached.
+
 ## Scoped glob and minimatch migration — 2026-11-05
 
 The lockfile previously resolved minimatch 10.2.6 for ESLint, config-array,
