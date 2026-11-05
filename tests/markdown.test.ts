@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { HighlighterCore } from "shiki/core";
 import { createMarkdown, renderMarkdown, SLUGIFY } from "../src/render/markdown";
-import { getHighlighter } from "../src/render/highlight";
+import { ensureLang, getHighlighter } from "../src/render/highlight";
 import { DEFAULT_SETTINGS, type Settings } from "../src/app/settings";
 import { sanitizeMermaidSvg } from "../src/render/sanitize";
 
@@ -22,6 +22,41 @@ function frag(html: string): HTMLElement {
   div.innerHTML = html;
   return div;
 }
+
+describe("markdown: decoded fence labels", () => {
+  it("preserves lowercase alias classes and decoded metadata", async () => {
+    await ensureLang(hl, "cs");
+    const result = render("```cs&#32;{2}&#32;title=example\npublic class Person {}\npublic class Other {}\n```");
+    const root = frag(result.html);
+    expect(root.querySelector("pre.shiki code")?.className).toBe("language-cs");
+    expect(root.querySelector(".line.highlighted")?.textContent).toBe("public class Other {}");
+    expect(root.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it.each(["&#109;ermaid", "language-&#109;ermaid"])("preserves %s as diagram source with Shiki active", label => {
+    const result = render(`\`\`\`${label}\ngraph TD\nA-->B\n\`\`\``);
+    const root = frag(result.html);
+    expect(root.querySelector("code.language-mermaid")).not.toBeNull();
+    expect(root.querySelector("code.language-mermaid")?.textContent).toContain("graph TD");
+    expect(root.querySelector("pre.shiki")).toBeNull();
+    expect(result.warnings).toEqual([]);
+  });
+
+  it.each([
+    ["&amp;#99;s", "&#99;s"],
+    ["&amp;#109;ermaid", "&#109;ermaid"],
+  ])("decodes %s only once for rendering and warnings", async (info, decoded) => {
+    await ensureLang(hl, "cs");
+    const result = render(`\`\`\`${info}\npublic record Person(string Name);\n\`\`\``);
+    const root = frag(result.html);
+    expect(root.querySelector("pre code")?.className).toBe("language-text");
+    expect(root.querySelectorAll("pre span[style]")).toHaveLength(0);
+    expect(result.warnings).toEqual([{
+      kind: "lang", message: `Code language "${decoded}" is not bundled; rendered as plain text.`,
+    }]);
+  });
+});
 
 describe("SLUGIFY", () => {
   it("lowercases, collapses whitespace runs to a single hyphen, and strips punctuation", () => {

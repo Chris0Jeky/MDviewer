@@ -41,8 +41,13 @@ const mocks = vi.hoisted(() => ({
     },
   ),
 }));
-vi.mock("../src/render/highlight", () => ({ getHighlighter: async () => ({}), ensureMarkdownLanguages: async () => {} }));
-vi.mock("../src/render/markdown", () => ({ createMarkdown: () => ({}), renderMarkdown: (_md: unknown, src: string) => ({ html: src, warnings: [] }) }));
+vi.mock("../src/render/highlight", () => ({ getHighlighter: async () => ({}), ensureLang: async () => {} }));
+vi.mock("../src/render/markdown", () => ({
+  createMarkdown: () => ({ parse: (src: string) => [src] }),
+  installMarkdownHighlighter: () => {},
+  parsedFenceLanguages: () => [],
+  renderMarkdownTokens: (_md: unknown, tokens: string[]) => ({ html: tokens.join(""), warnings: [] }),
+}));
 vi.mock("../src/render/buildSource", () => ({
   buildPaginationSource: (html: string) => { const f = document.createDocumentFragment(); f.append(document.createTextNode(html)); return f; },
   awaitFontsAndImages: async () => {}, stampAtomicBlocks: () => 0,

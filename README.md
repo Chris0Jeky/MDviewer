@@ -41,6 +41,9 @@ The public site also sends pseudonymous, content-free usage data to the owner's 
 
 Same-origin application assets (Paged.js, Mermaid, extra Shiki grammars, KaTeX fonts) may load lazily as features run. The production build is an installable PWA and works offline once those assets are cached.
 
+Offline styling in PDFs saved with **Download PDF** is still being qualified in
+[#174](https://github.com/Chris0Jeky/MDviewer/issues/174); a successful download alone does not establish visual fidelity.
+
 ## Why it exists
 
 Typical Markdown-to-PDF converters render HTML and let the print engine break pages wherever it likes. A listing gets cut in half. A table header is stranded. A diagram is sliced down the middle. Fine for a grocery list. Not fine for a paper or a code-heavy design note.
@@ -220,7 +223,7 @@ Versions from [`package.json`](package.json) at this commit. CI (`.github/workfl
 
 ## Status and roadmap
 
-From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) (last updated 2026-10-02) and the open GitHub issue list.
+From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) and the open GitHub issue list.
 
 | Phase | Status | Notes |
 | --- | --- | --- |

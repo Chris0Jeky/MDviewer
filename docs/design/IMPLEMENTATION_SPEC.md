@@ -31,8 +31,9 @@ raw audit results may still contain that invalid development-only residue.
 ```text
 0  capture raw Markdown and settings for this render
 1  await getHighlighter()
-1b await ensureMarkdownLanguages(hl, src)
-2  createMarkdown + synchronous renderMarkdown (Shiki and KaTeX)
+1b createMarkdown(null, settings); parse once, retaining tokens and environment
+1c await ensureLang for each parsedFenceLanguages(md, tokens) label
+2  installMarkdownHighlighter; synchronous renderMarkdownTokens (Shiki and KaTeX)
 3  buildPaginationSource (TOC and inline footnote transformation)
 4  await renderAllMermaid(source, 'default')
 4b stampAtomicBlocks(source)
@@ -41,6 +42,12 @@ raw audit results may still contain that invalid development-only residue.
 7  registerHandlersOnce; await paginate(source, css, host)
    inside paginate: await Previewer.preview; repairFootnoteLinks(host); return flow
 ```
+
+Grammar preparation uses decoded parser-recognized fences, including nested blockquotes,
+lists and footnotes. Fence-shaped text inside code examples does not request a grammar.
+Attach Shiki only after preparation settles: its Markdown plugin snapshots the loaded
+languages when installed. Render the same tokens and environment after the stale-render
+check, using the settings captured for this run.
 
 The final link repair changes **href attributes only**, after Paged.js has generated destinations. It is not another layout pass and must never change geometry. All height-affecting work still precedes the single pagination call. Paged.js handlers remain globally registered once; a fresh Previewer is used per run, and stylesheet Blob URLs are revoked in `finally`.
 
@@ -349,15 +356,20 @@ on that same parser; it does not parse or replace the structural plugin stack.
 `renderMarkdownTokens(md, tokens, env)` must receive the exact tokens and environment from
 that parser's parse. This retains heading, TOC, footnote and math plugin state and applies
 the same sanitization and warning pass as `renderMarkdown(md, src)`. The latter remains the
-public synchronous web path and delegates to parse plus token rendering. Unknown-language
+public synchronous convenience path and delegates to parse plus token rendering. Unknown-language
 warnings now describe real parsed fences, not examples inside code or HTML blocks.
 `parsedFenceLanguages(md, tokens)` returns distinct normalized labels in parser traversal
 order. Language and transformer admission decode fence-info escapes and character references
 with that parser's `utils.unescapeAll`, matching markdown-it's fence renderer. Warnings use
 those same decoded language labels.
 
-The paginated workspace still awaits its highlighter and grammar preparation before the
-unchanged no-slice pipeline in section 3. No document tokens are cached or persisted. This
+Shared fence rendering applies that same case and optional `language-` prefix normalization
+to Shiki and Mermaid. Shiki's highlight callback already receives a decoded label, so it
+must not decode again: `&amp;#109;ermaid` stays an unknown literal label. Existing lowercase
+aliases such as `cs` retain their rendered classes, and code metadata remains unchanged.
+
+The paginated workspace uses the same parsed-fence preparation and late Shiki installation
+before the unchanged no-slice layout stages in section 3. No document tokens are cached or persisted. This
 change proves avoided engine initialization and asset requests, not a measured RAM or
 startup-time improvement. Unit admission/transformer controls and production browser asset
 checks live in `tests/desktop-lazy-highlight.test.ts` and `tests/desktop-e2e/startup.spec.ts`.

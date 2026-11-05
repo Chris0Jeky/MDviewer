@@ -12,8 +12,13 @@ const mocks = vi.hoisted(() => ({
 }));
 // jsdom has no layout. Keep the real App warning lifecycle and Banner DOM while
 // replacing the unrelated renderer and pagination engine, as in the export tests.
-vi.mock("../src/render/highlight", () => ({ getHighlighter: mocks.highlighter, ensureMarkdownLanguages: async () => {} }));
-vi.mock("../src/render/markdown", () => ({ createMarkdown: () => ({}), renderMarkdown: () => ({ html: "<p>Document</p>", warnings: mocks.warnings }) }));
+vi.mock("../src/render/highlight", () => ({ getHighlighter: mocks.highlighter, ensureLang: async () => {} }));
+vi.mock("../src/render/markdown", () => ({
+  createMarkdown: () => ({ parse: () => [] }),
+  installMarkdownHighlighter: () => {},
+  parsedFenceLanguages: () => [],
+  renderMarkdownTokens: () => ({ html: "<p>Document</p>", warnings: mocks.warnings }),
+}));
 vi.mock("../src/render/buildSource", () => ({
   buildPaginationSource: () => document.createDocumentFragment(),
   awaitFontsAndImages: async () => {}, stampAtomicBlocks: () => 0,

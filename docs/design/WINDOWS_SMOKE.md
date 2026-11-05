@@ -18,6 +18,13 @@ The actual smoke must subsequently find the newly saved Markdown file and compar
 
 Run 39775474433 captured matching UIA/native HWND identities without reading window text. Run 39777243620 confirmed successful filename write/readback and isolated Save-button selection failure. Run 39783780956 closed the dialog and the app reported saved Markdown, but the expected destination was absent; its actual saved path was not established. Run 39786113293, with the filename-change notification, produced the exact expected Markdown file, then exposed the second PDF dialog's missing UIA children. None of those is a fully passed native export run. Keep subsequent exact-head evidence with the PR.
 
+The subsequent exact-head run for #158 at `08ce00a6f0ab6c45f3554599fd696354f1ffd284`
+passed native Markdown/PDF saved-file verification:
+[Windows Desktop 41948007431](https://github.com/Chris0Jeky/MDviewer/actions/runs/41948007431).
+The same smoke passed for #172 at `42244b9f79162d303f012315fab6f3fe42b3325d`
+in [Windows Desktop 41953423405](https://github.com/Chris0Jeky/MDviewer/actions/runs/41953423405).
+These are executable/export checks; the human acceptance limits below remain open.
+
 The `desktop-source` artifact contains a tracked-source ZIP, checkout commit, tree and SHA-256. Native smoke evidence includes owned-window screenshots, exact export hashes, process-tree samples and bounded worker checkpoints. Measurements include UI Automation/accessibility overhead and are not controlled startup or comparative RAM benchmarks.
 
 This automation does not clear the separate human acceptance gates: installation/uninstallation, Explorer default-handler behavior, print-driver output, screen-reader acceptance, or performance on representative hardware. Previews remain unsigned; no release/deployment/updater is implied.

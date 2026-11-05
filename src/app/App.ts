@@ -18,8 +18,8 @@
  * ./pulse.ts only (enums, size buckets and page counts; never document text or names).
  */
 
-import { ensureMarkdownLanguages, getHighlighter } from "../render/highlight";
-import { createMarkdown, renderMarkdown } from "../render/markdown";
+import { ensureLang, getHighlighter } from "../render/highlight";
+import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, renderMarkdownTokens } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
 import {
@@ -547,13 +547,18 @@ export class App {
       const hl = await getHighlighter();
       if (stale()) return;
 
-      // Pre-load curated fenced-code grammars before markdown-it's synchronous render.
-      await ensureMarkdownLanguages(hl, src);
+      // Parse once so grammar preparation sees the same decoded and nested fences
+      // as rendering, without treating fence-shaped code examples as languages.
+      const md = createMarkdown(null, settings);
+      const env = {};
+      const tokens = md.parse(src, env);
+      for (const lang of parsedFenceLanguages(md, tokens)) await ensureLang(hl, lang);
       if (stale()) return;
 
       // 2 — markdown → html (SYNC: Shiki via fromHighlighter + KaTeX inline)
-      const md = createMarkdown(hl, settings);
-      const { html, warnings } = renderMarkdown(md, src);
+      // Shiki snapshots its loaded languages when attached to this parser.
+      installMarkdownHighlighter(md, hl, settings);
+      const { html, warnings } = renderMarkdownTokens(md, tokens, env);
 
       // 3 — pagination source (inject TOC nav; end-of-doc footnotes → inline float spans)
       const source = buildPaginationSource(html, settings);

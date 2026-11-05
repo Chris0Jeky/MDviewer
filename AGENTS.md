@@ -57,9 +57,11 @@ autodoc/        AGENT_INDEX.md code map
 ## The Load-Bearing Render Order (never reorder)
 
 ```
-read md → await getHighlighter() → createMarkdown(hl,settings).render() (Shiki+KaTeX, sync)
+read md + capture settings → await getHighlighter() → createMarkdown(null,settings) + parse
+→ await ensureLang for parsedFenceLanguages(md,tokens)
+→ installMarkdownHighlighter → renderMarkdownTokens(md,tokens,env) (Shiki+KaTeX, sync)
 → buildPaginationSource (TOC + footnote transform) → await renderAllMermaid
-→ await awaitFontsAndImages → capture pristine clone → paginate() LAST
+→ await awaitFontsAndImages → retain prepared source → paginate() LAST
 ```
 Pagination measures real heights; any earlier step changes them. Paginating early misplaces
 page breaks and breaks the no-slice guarantee. This is the single most important invariant.
