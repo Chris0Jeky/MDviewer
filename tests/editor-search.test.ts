@@ -100,6 +100,37 @@ describe("source Find and Replace", () => {
     expect(button("Next match").disabled).toBe(true);
   });
 
+  it("shows an active match cue without focusing or editing the source, and clears stale cues", async () => {
+    const box = new DOMRect(10, 100, 600, 400);
+    const match = new DOMRect(26, 114, 24, 20);
+    vi.spyOn(editor.input, "getBoundingClientRect").mockReturnValue(box);
+    Object.defineProperties(editor.input, {
+      clientWidth: { value: 600, configurable: true },
+      clientHeight: { value: 400, configurable: true },
+    });
+    vi.spyOn(document, "createRange").mockReturnValue({
+      setStart: vi.fn(), setEnd: vi.fn(),
+      getBoundingClientRect: () => match,
+      getClientRects: () => [match],
+    } as unknown as Range);
+    button("Find").click();
+    await query("cat");
+    const cue = root.querySelector<HTMLElement>("#editor-match-cue");
+    expect(cue).not.toBeNull();
+    expect(cue!.hidden).toBe(false);
+    expect(cue!.getAttribute("aria-hidden")).toBe("true");
+    expect(cue!.children.length).toBeGreaterThan(0);
+    expect(document.activeElement).toBe(field("Find in Markdown"));
+    expect(editor.input.value).toBe("Cat cat cat");
+    expect(onInput).not.toHaveBeenCalled();
+    field("Find in Markdown").value = "not here";
+    field("Find in Markdown").dispatchEvent(new Event("input"));
+    expect(cue!.hidden).toBe(true);
+    expect(cue!.children).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(cue!.hidden).toBe(true);
+  });
+
   it("finishes counting without stealing a source caret chosen after the query", async () => {
     button("Find").click();
     field("Find in Markdown").value = "cat";

@@ -11,6 +11,7 @@ export const IDS = {
   editorPane: "editor-pane",
   editorInput: "editor-input",
   editorHighlight: "editor-highlight",
+  editorMatchCue: "editor-match-cue",
   editorSearch: "editor-search",
   editorReplaceRow: "editor-replace-row",
   splitHandle: "split-handle",
@@ -72,6 +73,7 @@ export const CLASSES = {
   editorSearchField: "editor-search-field",
   editorSearchFooter: "editor-search-footer",
   editorSearchStatus: "editor-search-status",
+  editorMatchRect: "editor-match-rect",
   // rendered document
   doc: "doc",
   codeFigure: "code-figure",

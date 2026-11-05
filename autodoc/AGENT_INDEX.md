@@ -238,6 +238,13 @@ listeners to the current textarea, `sourceChanged(true)` aborts stale edits, and
 `destroy` removes timers/listeners. Canonical IDs/classes are in `src/app/dom.ts`;
 responsive geometry is in `src/styles/editor.css`. Search is memory-only, scans
 only while open, preserves source/native undo ownership and never prints.
+`src/ui/EditorMatchCue.ts` owns the visible active-match rectangle layer. It shares
+cached geometry between reveal and paint, uses existing syntax ranges or an
+ephemeral plain-source mirror, and translates the cache on scroll. Clear/rebind/
+destroy release geometry and pending work; it never owns source, focus or undo.
+See `tests/editor-match-cue.test.ts`, `tests/e2e/editor-search-cue.spec.ts` and
+`docs/design/2026-11-05-active-search-match-cue.md` for the lifecycle and real-browser
+coverage. The canonical DOM ID is `editor-match-cue`.
 See spec §12, `tests/{editor-search,editor-search-model}.test.ts`,
 `tests/e2e/editor-search.spec.ts`, `tests/desktop-e2e/editor-search.spec.ts` and
 `docs/superpowers/specs/2026-11-05-editor-find-replace-design.md`.
