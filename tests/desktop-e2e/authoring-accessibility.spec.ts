@@ -59,3 +59,53 @@ test("an invalid Open announces a recoverable error and keyboard retry opens the
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-status")).toContainText("Reading view");
 });
+
+test("desktop Find and Format retain usable source space together at 560×420", async ({ page }, info) => {
+  await page.setViewportSize({ width: 560, height: 420 });
+  await page.keyboard.press("Control+n");
+  const input = page.getByRole("textbox", { name: "Markdown source", exact: true });
+  await expect(input).toBeFocused({ timeout: 30_000 });
+  const text = "# Both panels\n\nSource remains available.";
+  await page.keyboard.insertText(text);
+  await readyWorkspace(page, text);
+  const output = page.locator("#paged-output");
+  // New may still have its completed blank draft page while typing is debounced.
+  // Capture the actual typed document before checking that panel controls keep it.
+  await expect(output.locator("h1")).toHaveText("Both panels");
+  await readyWorkspace(page, text);
+  const rendered = await output.innerHTML();
+  const originalInput = await input.elementHandle();
+  await page.getByRole("button", { name: "Format Markdown", exact: true }).click();
+  await input.focus();
+  await input.press("Control+f");
+  await expect(page.getByRole("searchbox", { name: "Find in Markdown" })).toBeFocused();
+  await expect(page.locator(".workspace-shortcuts")).toBeHidden();
+  await expect(page.locator(".workspace-privacy")).toBeVisible();
+  await expect(page.locator(".workspace-privacy")).toContainText("Documents stay in memory");
+  await expect(page.getByRole("button", { name: "Save Markdown", exact: true })).toBeVisible();
+  const source = (await input.boundingBox())!;
+  expect(source.height).toBeGreaterThanOrEqual(60);
+  expect(source.y + source.height).toBeLessThanOrEqual(421);
+  for (const button of await page.locator("#editor-formatting button").all()) {
+    await button.scrollIntoViewIfNeeded();
+    const bounds = (await button.boundingBox())!;
+    expect(bounds.width).toBeGreaterThanOrEqual(30);
+    expect(bounds.height).toBeGreaterThanOrEqual(30);
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(561);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(560);
+  expect(await output.innerHTML()).toBe(rendered);
+  expect(await input.evaluate((node, old) => node === old, originalInput)).toBe(true);
+  const canvas = page.locator("#app > #workspace > #canvas");
+  await expect(canvas).toBeHidden();
+  expect((await canvas.boundingBox())!.width).toBeGreaterThan(0);
+  await input.focus();
+  await input.press("End");
+  await input.press("!");
+  await expect(input).toHaveValue(text + "!");
+  await expect(input).toBeFocused();
+  await page.screenshot({ path: info.outputPath("desktop-find-format-short.png") });
+  await page.getByRole("button", { name: "Close formatting", exact: true }).click();
+  await expect(page.locator(".workspace-shortcuts")).toBeVisible();
+});

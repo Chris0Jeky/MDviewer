@@ -14,6 +14,8 @@
  * from the characters the user is typing. Change one, change both.
  *
  * Tokens come from app.css. Ids/classes match dom.ts (IDS / CLASSES / ATTRS).
+ * Chrome ID selectors follow the mounted parent chain: Markdown headings may
+ * legitimately use the same IDs, including in the paginated and printed DOM.
  * ========================================================================== */
 
 :root {
@@ -27,11 +29,11 @@
 }
 
 /* -----------------------------------------------------------------------------
- * #workspace — row 2 of the #app grid. Three columns in split mode; a single
+ * #app > #workspace — row 2 of the #app grid. Three columns in split mode; a single
  * column in the two solo modes. `--split-ratio` (dom.ts SPLIT_RATIO_VAR) is
  * written by App from settings.splitRatio and live-updated during a drag.
  * -------------------------------------------------------------------------- */
-#workspace {
+#app > #workspace {
   /* Positioned so the parked-but-measurable #canvas below can anchor to it. */
   position: relative;
   display: grid;
@@ -41,7 +43,7 @@
   overflow: hidden;
 }
 
-#workspace[data-view-mode="split"] {
+#app > #workspace[data-view-mode="split"] {
   grid-template-columns:
     minmax(0, calc(var(--split-ratio, 0.42) * 100%))
     auto
@@ -50,7 +52,7 @@
 
 /* Solo modes: the hidden panes are removed from the grid, never unmounted, so
    switching modes costs no re-render and never loses editor state or scroll. */
-#workspace[data-view-mode="editor"] #split-handle {
+#app > #workspace[data-view-mode="editor"] > #split-handle {
   display: none;
 }
 
@@ -62,7 +64,7 @@
    lifted out of the grid onto the workspace's own box, at full size and fully
    laid out, with `visibility: hidden` making it invisible and inert. Layout and
    getBoundingClientRect keep working; only the paint is suppressed. */
-#workspace[data-view-mode="editor"] #canvas {
+#app > #workspace[data-view-mode="editor"] > #canvas {
   position: absolute;
   inset: 0;
   visibility: hidden;
@@ -70,13 +72,13 @@
 }
 
 /* Fatal feedback must remain actionable without revealing the parked preview. */
-#workspace[data-view-mode="editor"] #error-card:not([hidden]) {
+#app > #workspace[data-view-mode="editor"] > #canvas > #error-card:not([hidden]) {
   visibility: visible;
   pointer-events: auto;
 }
 
-#workspace[data-view-mode="preview"] #editor-pane,
-#workspace[data-view-mode="preview"] #split-handle {
+#app > #workspace[data-view-mode="preview"] > #editor-pane,
+#app > #workspace[data-view-mode="preview"] > #split-handle {
   display: none;
 }
 
@@ -84,7 +86,7 @@
  * #editor-pane — the Markdown source column: a compact header over the
  * scrolling text surface.
  * -------------------------------------------------------------------------- */
-#editor-pane {
+#app > #workspace > #editor-pane {
   container: source-editor / inline-size;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
@@ -129,7 +131,7 @@
 
 /* Search is an optional row, not a second scroll surface. Explicit row numbers
    preserve the source's remaining-height track when the panel is hidden. */
-#workspace > #editor-pane > #editor-search {
+#app > #workspace > #editor-pane > #editor-search {
   grid-row: 2;
   display: grid;
   gap: 6px;
@@ -139,9 +141,9 @@
   min-width: 0;
 }
 
-#workspace > #editor-pane > #editor-search[hidden],
-#workspace > #editor-pane > #editor-search #editor-replace-row[hidden],
-#workspace > #editor-pane > #editor-formatting[hidden] {
+#app > #workspace > #editor-pane > #editor-search[hidden],
+#app > #workspace > #editor-pane > #editor-search #editor-replace-row[hidden],
+#app > #workspace > #editor-pane > #editor-formatting[hidden] {
   display: none;
 }
 
@@ -221,7 +223,7 @@
 
 /* Formatting stays collapsed until requested. Its own bounded row can scroll in
    a short window without taking the remaining source track away. */
-#workspace > #editor-pane > #editor-formatting {
+#app > #workspace > #editor-pane > #editor-formatting {
   grid-row: 3;
   display: flex;
   flex-wrap: wrap;
@@ -246,7 +248,7 @@
 
 @container source-editor (max-width: 360px) {
   .editor-head .editor-stat { display: none; }
-  #workspace > #editor-pane > #editor-search { padding-inline: 8px; }
+  #app > #workspace > #editor-pane > #editor-search { padding-inline: 8px; }
   .editor-search-field { flex-basis: 100%; }
 }
 
@@ -262,7 +264,7 @@
 
 /* Only the active Find match is painted. This layer never owns text, selection,
    focus, or pointer input; it remains visible while the query field has focus. */
-#editor-match-cue {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-match-cue {
   position: absolute;
   z-index: 2;
   overflow: hidden;
@@ -270,7 +272,7 @@
   user-select: none;
 }
 
-#editor-match-cue[hidden] { display: none; }
+#app > #workspace > #editor-pane > .editor-scroll > #editor-match-cue[hidden] { display: none; }
 
 .editor-match-rect {
   position: absolute;
@@ -280,8 +282,8 @@
 }
 
 /* The shared box metrics. Both layers get exactly these values. */
-#workspace > #editor-pane > .editor-scroll > #editor-highlight,
-#workspace > #editor-pane > .editor-scroll > #editor-input {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-highlight,
+#app > #workspace > #editor-pane > .editor-scroll > #editor-input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -308,7 +310,7 @@
 
 /* The painted backdrop. Never interactive; scrolled programmatically from the
    textarea's scroll event so the two layers cannot drift apart. */
-#workspace > #editor-pane > .editor-scroll > #editor-highlight {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-highlight {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
@@ -338,7 +340,7 @@
 
 /* The real input. Glyphs are transparent so the backdrop shows through; the
    caret and the selection band stay visible. */
-#workspace > #editor-pane > .editor-scroll > #editor-input {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-input {
   z-index: 1;
   overflow: auto;
   resize: none;
@@ -348,17 +350,17 @@
   -webkit-text-fill-color: transparent;
 }
 
-#workspace > #editor-pane > .editor-scroll > #editor-input::selection {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
-#workspace > #editor-pane > .editor-scroll > #editor-input::placeholder {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-input::placeholder {
   color: var(--fg-faint);
   -webkit-text-fill-color: var(--fg-faint);
   opacity: 1;
 }
 
-#workspace > #editor-pane > .editor-scroll > #editor-input:focus-visible {
+#app > #workspace > #editor-pane > .editor-scroll > #editor-input:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -367,11 +369,11 @@
    Editor.HIGHLIGHT_MAX_CHARS, or a tokenizer failure): hide the empty backdrop
    and let the textarea paint its own plain text. The metrics are unchanged, so
    the switch is invisible apart from the colors. */
-#workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-highlight {
+#app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-highlight {
   visibility: hidden;
 }
 
-#workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
+#app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
   color: var(--fg);
   -webkit-text-fill-color: var(--fg);
 }
@@ -380,17 +382,17 @@
    system text and a real outline so source, caret and Find remain perceivable
    independently of the decorative syntax layer. This is screen chrome only. */
 @media screen and (forced-colors: active) {
-  #workspace > #editor-pane > .editor-scroll > #editor-highlight { visibility: hidden; }
+  #app > #workspace > #editor-pane > .editor-scroll > #editor-highlight { visibility: hidden; }
 
-  #workspace > #editor-pane > .editor-scroll > #editor-input,
-  #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
+  #app > #workspace > #editor-pane > .editor-scroll > #editor-input,
+  #app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
     color: CanvasText;
     -webkit-text-fill-color: CanvasText;
     caret-color: CanvasText;
     background: Canvas;
   }
 
-  #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
+  #app > #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
     color: HighlightText;
     -webkit-text-fill-color: HighlightText;
     background: Highlight;
@@ -419,11 +421,11 @@
    inline style (Shiki's `defaultColor: "light"`), and an inline declaration beats
    any selector without it. Without this the pane would paint light-theme token
    colors onto a dark surface. */
-:root[data-app-theme="dark"] #workspace > #editor-pane > .editor-scroll > #editor-highlight span {
+:root[data-app-theme="dark"] #app > #workspace > #editor-pane > .editor-scroll > #editor-highlight span {
   color: var(--shiki-dark, inherit) !important;
 }
 
-:root[data-app-theme="dark"] #editor-pane {
+:root[data-app-theme="dark"] #app > #workspace > #editor-pane {
   background: var(--bg-sunken);
 }
 
@@ -431,7 +433,7 @@
  * #split-handle — the draggable divider. A real role="separator" with keyboard
  * resizing (Splitter.ts), so the split is operable without a pointer.
  * -------------------------------------------------------------------------- */
-#split-handle {
+#app > #workspace > #split-handle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -443,7 +445,7 @@
   user-select: none;
 }
 
-#split-handle .split-handle-grip {
+#app > #workspace > #split-handle > .split-handle-grip {
   width: 2px;
   height: 30px;
   border-radius: 1px;
@@ -451,13 +453,13 @@
   transition: background-color 120ms ease;
 }
 
-#split-handle:hover .split-handle-grip,
-#split-handle.is-dragging .split-handle-grip,
-#split-handle:focus-visible .split-handle-grip {
+#app > #workspace > #split-handle:hover > .split-handle-grip,
+#app > #workspace > #split-handle.is-dragging > .split-handle-grip,
+#app > #workspace > #split-handle:focus-visible > .split-handle-grip {
   background: var(--accent);
 }
 
-#split-handle:focus-visible {
+#app > #workspace > #split-handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -469,7 +471,7 @@ body.is-splitting {
   user-select: none;
 }
 
-body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
+body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-input {
   pointer-events: none;
 }
 
@@ -480,16 +482,16 @@ body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
  * to give either surface the full window).
  * -------------------------------------------------------------------------- */
 @media (max-width: 720px) {
-  #workspace[data-view-mode="split"] {
+  #app > #workspace[data-view-mode="split"] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
   }
 
-  #workspace[data-view-mode="split"] #split-handle {
+  #app > #workspace[data-view-mode="split"] > #split-handle {
     display: none;
   }
 
-  #editor-pane {
+  #app > #workspace > #editor-pane {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -500,38 +502,38 @@ body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
    selected view or split setting. The preview stays measurable, as in Markdown
    mode; closing the panels restores the prior split immediately. */
 @media screen and (max-height: 600px) {
-  #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) {
+  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) {
     --editor-pad-y: 8px;
   }
 
-  #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) > .editor-head {
+  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) > .editor-head {
     display: none;
   }
 
-  #workspace > #editor-pane > #editor-search {
+  #app > #workspace > #editor-pane > #editor-search {
     gap: 2px;
     padding-block: 2px;
   }
 
-  #workspace > #editor-pane > #editor-formatting { padding-block: 2px; }
+  #app > #workspace > #editor-pane > #editor-formatting { padding-block: 2px; }
 
-  #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
 
-  #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #split-handle {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #split-handle {
     display: none;
   }
 
-  #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas {
     position: absolute;
     inset: 0;
     visibility: hidden;
     pointer-events: none;
   }
 
-  #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas > #error-card:not([hidden]) {
+  #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) > #canvas > #error-card:not([hidden]) {
     visibility: visible;
     pointer-events: auto;
   }
@@ -543,13 +545,13 @@ body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
  * exported PDF identical to the preview-only output.
  * -------------------------------------------------------------------------- */
 @media print {
-  #workspace {
+  #app > #workspace {
     display: block !important;
     overflow: visible !important;
   }
 
-  #editor-pane,
-  #split-handle {
+  #app > #workspace > #editor-pane,
+  #app > #workspace > #split-handle {
     display: none !important;
   }
 
@@ -557,7 +559,7 @@ body.is-splitting #workspace > #editor-pane > .editor-scroll > #editor-input {
      be fired while the canvas is parked (the editor-mode rule above). Restoring
      it here is what stops Print from Markdown mode emitting a blank PDF —
      un-park it explicitly rather than relying on the parking rule not matching. */
-  #canvas {
+  #app > #workspace > #canvas {
     position: static !important;
     visibility: visible !important;
     pointer-events: auto !important;

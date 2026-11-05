@@ -49,6 +49,7 @@ import type { BannerController } from "../ui/Banner";
 import { DocStore, hasProtectableWork } from "./state";
 import type { Doc, RenderReason, RenderScheduler } from "./state";
 import { createRenderScheduler } from "./state";
+import type { DocumentPosition } from "./positions";
 import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
@@ -130,7 +131,11 @@ export class App {
   private hasGoodRender = false;
   /** Metadata for the actual laid-out pages, never the mutable current editor. */
   private renderedSnapshot: { id: string; text: string; name: string; settings: Settings } | null = null;
+  /** Owner of complete visible pages, retained while new preparation is pending/failed.
+   * This is navigation state only; renderedSnapshot remains the export-readiness gate. */
+  private visiblePreviewId: string | null = null;
   private currentPane: Pane = "empty";
+  private editorDocumentId: string | null = null;
 
   private constructor(root: HTMLElement) {
     this.root = root;
@@ -160,11 +165,16 @@ export class App {
       onTooLarge: (name) => app.onTooLarge(name),
     });
 
-    // "change" = a different document is active → re-seed the editor and re-render.
+    app.store.on("beforechange", () => app.captureDocumentPosition());
+    // An inactive import changes the picker, but cannot disturb the current source
+    // selection or ask Paged.js to lay out the same document again.
     app.store.on("change", () => {
-      app.editor.setDocument(app.store.active);
+      const doc = app.store.active;
+      const switched = app.editorDocumentId !== (doc?.id ?? null);
+      app.editor.setDocument(doc, switched && doc ? app.store.positions.get(doc.id)?.editor : undefined);
+      app.editorDocumentId = doc?.id ?? null;
       app.emitExportState();
-      app.scheduleRender("content");
+      if (switched) app.scheduleRender("content");
     });
     // "text" = the active document was edited in the editor. The editor is already
     // showing that text, so only the pipeline needs waking.
@@ -331,6 +341,7 @@ export class App {
   updateSettings(patch: Partial<Settings>): void {
     const prev = this.settings;
     const next = migrateSettings({ ...prev, ...patch });
+    if (next.viewMode !== prev.viewMode) this.captureDocumentPosition();
     this.settings = next;
     saveSettings(next);
     for (const listener of this.settingsListeners) listener(next);
@@ -353,6 +364,10 @@ export class App {
     if (patch.viewMode !== undefined) {
       if (next.viewMode !== prev.viewMode) pulseViewMode(next.viewMode);
       this.workspaceEl.setAttribute(ATTRS.viewMode, next.viewMode);
+      this.restoreDocumentPosition();
+      if (next.viewMode !== "editor" && this.visiblePreviewId && this.visiblePreviewId === this.store.activeId) {
+        this.canvas.restorePosition(this.store.positions.get(this.store.activeId!)?.preview ?? null);
+      }
     }
     if (patch.splitRatio !== undefined) {
       this.applySplitRatio(next.splitRatio);
@@ -524,6 +539,7 @@ export class App {
       // transparent overlay outside its card, and it sits BELOW the page chip and zoom
       // control, so leaving the sheets in #paged-output would show the closed document
       // through the empty state while the chip kept reporting its stale "Page n / N".
+      this.visiblePreviewId = null;
       teardownPagination(this.canvas.host);
       this.renderedSnapshot = null;
       this.canvas.setPageCount(0);
@@ -541,14 +557,6 @@ export class App {
     this.renderedSnapshot = null;
     const token = ++this.renderToken;
     const stale = (): boolean => token !== this.renderToken;
-
-    // Where the reader is right now. Pagination tears the host down, which collapses
-    // scrollTop to 0, so without this every tweak (and every keystroke past the
-    // debounce) throws the reader back to page 1 (UX-4 ii). Both reasons restore:
-    // a settings change and an edit are equally disorienting to lose your place in.
-    const restoreTo: CanvasPosition | null = this.hasGoodRender
-      ? this.canvas.capturePosition()
-      : null;
 
     // The empty pane sits UNDER the 70%-alpha paginating overlay (z-10 vs z-40), so
     // leaving it up during the first pagination shows the dropzone card ghosted
@@ -605,8 +613,16 @@ export class App {
         if (!stale()) this.canvas.setProgress(page);
       });
       let flow;
+      // Preparation leaves the old complete pages readable. Sample their latest
+      // coordinates immediately before pagination can replace them, including a
+      // scroll or document switch while Mermaid/fonts were still pending.
+      this.captureVisiblePreviewPosition();
+      const restoreTo: CanvasPosition = this.store.positions.get(doc.id)?.preview ?? { page: 1, offset: 0 };
       try {
         this.renderedSnapshot = null;
+        // During pagination the host may contain partial new pages. Do not assign
+        // those coordinates to either document until a complete run succeeds.
+        this.visiblePreviewId = null;
         flow = await paginate(source, css, this.canvas.host);
       } finally {
         setPaginationProgress(null);
@@ -616,6 +632,7 @@ export class App {
       // Success: swap to loaded pane, report page count + warnings.
       this.hasGoodRender = true;
       this.renderedSnapshot = { id: doc.id, text: src, name, settings };
+      this.visiblePreviewId = doc.id;
       this.showPane("loaded");
       this.canvas.setPageCount(flow.total);
       // Put the reader back where they were, clamped to the new page count.
@@ -649,7 +666,8 @@ export class App {
     // The canvas is always present; #empty-state overlays it until a document loads.
     this.emptyEl.hidden = pane !== "empty";
     if (pane !== "error") {
-      const errorCard = document.getElementById(IDS.errorCard);
+      // Authored headings can reuse these IDs before the actual feedback nodes.
+      const errorCard = this.workspaceEl.querySelector<HTMLElement>(`:scope > #${IDS.canvas} > #${IDS.errorCard}`);
       if (errorCard) errorCard.hidden = true;
     }
   }
@@ -687,13 +705,39 @@ export class App {
   }
 
   private announce(message: string): void {
-    const live = document.getElementById(IDS.statusLive);
+    const live = this.workspaceEl.querySelector<HTMLElement>(`:scope > #${IDS.canvas} > #${IDS.statusLive}`);
     if (live) live.textContent = message;
   }
 
   /** Move keyboard focus into the Markdown source pane. */
   focusEditor(): void {
     this.editor.focus();
+  }
+
+  /** Capture live coordinates before a document or desktop mode boundary. */
+  captureDocumentPosition(): DocumentPosition | undefined {
+    this.captureVisiblePreviewPosition();
+    const doc = this.store.active;
+    if (!doc || this.editorDocumentId !== doc.id) return undefined;
+    const position: DocumentPosition = {};
+    if (this.settings.viewMode !== "preview") position.editor = this.editor.capturePosition();
+    this.store.positions.set(doc.id, position);
+    return this.store.positions.get(doc.id);
+  }
+
+  /** The visible pages can still belong to A while the editor/preparation owns B. */
+  private captureVisiblePreviewPosition(): void {
+    const id = this.visiblePreviewId;
+    if (!id || this.settings.viewMode === "editor" || !this.store.openDocs.some(doc => doc.id === id)) return;
+    const preview = this.canvas.capturePosition();
+    if (preview) this.store.positions.set(id, { preview });
+  }
+
+  /** Used when the lazy desktop workspace receives an existing session. */
+  restoreDocumentPosition(): void {
+    const id = this.store.activeId;
+    const position = id ? this.store.positions.get(id) : undefined;
+    if (position?.editor && this.settings.viewMode !== "preview") this.editor.restorePosition(position.editor);
   }
 
   /** Detach global listeners — used by tests/teardown. */
@@ -710,6 +754,8 @@ export class App {
     this.exportStatus.destroy();
     this.settingsListeners.clear();
     this.exportListeners.clear();
+    this.store.positions.clear();
+    this.visiblePreviewId = null;
   }
 
   get pane(): Pane {

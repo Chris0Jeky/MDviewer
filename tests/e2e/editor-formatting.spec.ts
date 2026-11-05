@@ -140,6 +140,135 @@ test.describe("Markdown writing commands", () => {
     }
   });
 
+  for (const [name, key, marker, opposite] of [
+    ["Bold", "b", "**", "*"], ["Italic", "i", "*", "**"],
+  ] as const) {
+    test(name + " boundary refusals preserve native Undo and valid nested formatting", async ({ page }) => {
+      await page.goto("/");
+      await loadMarkdownIntoApp(page, "foobar");
+      const input = page.locator("#editor-input");
+      await expect(input).toHaveValue("foobar");
+      await select(page, 3, 3);
+      await page.keyboard.insertText("-");
+      await expect(input).toHaveValue("foo-bar");
+      await select(page, 3, 4, "backward");
+      await input.press("ControlOrMeta+" + key);
+      await expect(input).toHaveValue("foo-bar");
+      await expect(input).toBeFocused();
+      expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
+        .toEqual([3, 4, "backward"]);
+      await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+      await input.press("ControlOrMeta+z");
+      await expect(input).toHaveValue("foobar");
+
+      for (const [source, start, end] of [
+        [opposite + "ab", 0, opposite.length + 2],
+        [`foo${marker}-${marker}bar`, 3, 4 + marker.length * 2],
+      ] as const) {
+        await loadMarkdownIntoApp(page, source, "literal.md");
+        await expect(input).toHaveValue(source);
+        await select(page, start, end, "backward");
+        await input.press("ControlOrMeta+" + key);
+        await expect(input).toHaveValue(source);
+        await expect(input).toBeFocused();
+        expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
+          .toEqual([start, end, "backward"]);
+        await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+      }
+
+      const nested = `${opposite}word${opposite}`;
+      await loadMarkdownIntoApp(page, nested, "nested.md");
+      await expect(input).toHaveValue(nested);
+      await select(page, 0, nested.length, "backward");
+      await input.press("ControlOrMeta+" + key);
+      await expect(input).toHaveValue("***word***");
+      await expect(page.locator("#paged-output .doc strong")).toHaveText("word");
+      await expect(page.locator("#paged-output .doc em")).toHaveText("word");
+      await input.press("ControlOrMeta+z");
+      await expect(input).toHaveValue(nested);
+    });
+  }
+
+  test("Link refuses an image opener without an Undo entry and accepts escaped exclamation", async ({ page }) => {
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, "word");
+    const input = page.locator("#editor-input");
+    await expect(input).toHaveValue("word");
+    await select(page, 0, 0);
+    await page.keyboard.insertText("!");
+    await expect(input).toHaveValue("!word");
+    for (const [start, end, direction] of [[1, 5, "backward"], [1, 1, "forward"]] as const) {
+      await select(page, start, end, direction);
+      await input.press("ControlOrMeta+k");
+      await expect(input).toHaveValue("!word");
+      await expect(input).toBeFocused();
+      expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
+        .toEqual([start, end, direction]);
+      await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+    }
+    await input.press("ControlOrMeta+z");
+    await expect(input).toHaveValue("word");
+
+    await loadMarkdownIntoApp(page, "\\!word", "escaped.md");
+    await expect(input).toHaveValue("\\!word");
+    await select(page, 2, 6);
+    await input.press("ControlOrMeta+k");
+    await expect(input).toHaveValue("\\![word](url)");
+    await expect(page.locator("#paged-output .doc a")).toHaveText("word");
+    await expect(page.locator("#paged-output .doc img")).toHaveCount(0);
+    await input.press("ControlOrMeta+z");
+    await expect(input).toHaveValue("\\!word");
+  });
+
+  for (const [name, key, text, tag] of [
+    ["Bold", "b", "**word\\\\**", "strong"],
+    ["Italic", "i", "*word\\\\*", "em"],
+    ["Link", "k", "[word\\\\](url)", "a"],
+  ] as const) {
+    test(name + " refuses an escaped closer without an Undo entry and accepts even backslashes", async ({ page }) => {
+      await page.goto("/");
+      await loadMarkdownIntoApp(page, "word");
+      const input = page.locator("#editor-input");
+      await expect(input).toHaveValue("word");
+      await select(page, 4, 4);
+      await page.keyboard.insertText("\\");
+      await expect(input).toHaveValue("word\\");
+      const selections: Array<readonly [number, number, "forward" | "backward"]> = key === "k"
+        ? [[0, 5, "backward"]] : [[5, 5, "forward"], [0, 5, "backward"]];
+      for (const [start, end, direction] of selections) {
+        await select(page, start, end, direction);
+        await input.press("ControlOrMeta+" + key);
+        await expect(input).toHaveValue("word\\");
+        await expect(input).toBeFocused();
+        expect(await input.evaluate((node: HTMLTextAreaElement) => [node.selectionStart, node.selectionEnd, node.selectionDirection]))
+          .toEqual([start, end, direction]);
+        await expect(page.locator(".editor-format-status")).toContainText("cannot be formatted safely");
+        await expect(page.getByRole("group", { name: "Markdown formatting", exact: true })).toBeVisible();
+      }
+      await input.press("ControlOrMeta+z");
+      await expect(input).toHaveValue("word");
+
+      await loadMarkdownIntoApp(page, "word\\\\", "even.md");
+      await expect(input).toHaveValue("word\\\\");
+      await select(page, 0, 6, "backward");
+      await input.press("ControlOrMeta+" + key);
+      await expect(input).toHaveValue(text);
+      await expect(page.locator("#paged-output .doc " + tag)).toHaveText("word\\");
+      await input.press("ControlOrMeta+z");
+      await expect(input).toHaveValue("word\\\\");
+      if (key !== "k") {
+        const marker = key === "b" ? "**" : "*";
+        await select(page, 6, 6);
+        await input.press("ControlOrMeta+" + key);
+        await expect(input).toHaveValue(`word\\\\${marker}text${marker}`);
+        expect(await input.evaluate((node: HTMLTextAreaElement) => node.value.slice(node.selectionStart, node.selectionEnd))).toBe("text");
+        await expect(page.locator("#paged-output .doc " + tag)).toHaveText("text");
+        await input.press("ControlOrMeta+z");
+        await expect(input).toHaveValue("word\\\\");
+      }
+    });
+  }
+
   test("Find and Format together retain usable source space in a short window", async ({ page }) => {
     await page.setViewportSize({ width: 560, height: 420 });
     await page.goto("/");

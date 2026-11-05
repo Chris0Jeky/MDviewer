@@ -47,6 +47,33 @@ opens the Format disclosure with an accurate explanation while retaining source
 focus and selection; multiline code/link guidance is reserved for multiline
 selections.
 
+Bold, Italic, and Link also refuse a new wrapper when an odd trailing backslash
+would escape its closing marker. Emphasis checks the content boundary before
+surrounding whitespace on every selected line; one unsafe segment refuses the
+whole multiline operation. Even backslash runs remain supported. A trailing
+backslash remains valid inside inline code, where it does not escape a backtick.
+Bold and Italic also refuse a placeholder at a collapsed caret after an odd
+backslash run, which would escape the new opening marker.
+
+Emphasis checks the opening and closing delimiter runs against the surrounding
+Unicode code points before adding or removing markers. The checks use Markdown's
+whitespace, punctuation, and symbol categories, including astral characters and
+underscore's intraword restrictions. A punctuation selection that would stay
+literal, such as the hyphen in `foo-bar`, is refused; literal existing markers
+such as `foo**-**bar` are not removed. An active opposite-width marker at a
+selected edge must belong to one recognized span before another style can be
+added. Balanced nested styles and escaped literal edge markers remain supported.
+An escaped multi-marker run remains ambiguous because only its first marker is
+escaped; the remaining markers can consume part of an outer delimiter. Single
+escaped interior markers remain supported. An interior opposite-width run that
+can only open or only close is also refused; recognized nested boundaries and
+literal runs that flank content on both sides remain supported.
+Each trimmed multiline segment must pass these checks before any edit occurs.
+
+Link insertion immediately after an unescaped `!` is refused because the result
+would be an image. An escaped `\!` remains a valid link context; the existing
+complete-link and selected-label toggle rules are unchanged.
+
 ## Transaction and ownership contract
 
 `MarkdownCommands.ts` is a pure transformation from source, selection, and command
@@ -62,7 +89,9 @@ validated before admission and applied synchronously after the one native
 expected value/revision, source focus, and untouched native insertion caret. The
 revision check counts the input events belonging to the native command, because
 a multiline insertion may produce more than one event. Re-entrant host callbacks
-and nested commands invalidate that count's ownership. A
+and nested commands invalidate that count's ownership. The manual fallback owns
+one exact Event instance; another listener's synthetic edit-away-and-back cannot
+be counted as part of that command, even after the host callback returns. A
 re-entrant document switch, edit, or selection change cannot receive an old
 command's selection. The first typed-document adoption is the sole ownership
 transition allowed to keep that native editing host.
@@ -109,3 +138,5 @@ styles and parking selectors are scoped to the actual editor children.
 
 Chromium, native Windows, and the integrated final branch remain CI gates owned
 by the parent integration task. These local results do not claim those gates.
+
+At viewport heights up to 600px, the toolbar key legend temporarily hides while Format is open. Shortcut titles and `aria-keyshortcuts` remain available, and the memory warning and Save action stay visible. The desktop 560×420 regression opens Find and Format together and requires at least 60px of editable source, 30px command targets, reachable controls, stable textarea/page identity, and a measurable parked canvas.

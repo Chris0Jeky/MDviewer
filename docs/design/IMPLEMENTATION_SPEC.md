@@ -133,7 +133,7 @@ Unchanged exports retain the signatures in foundation section 7 and its section 
 
 ```typescript
 // src/app/state.ts: DocStore additionally supports atomic imports
-addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate?: boolean): Doc[];
+addBatch(docs: readonly Pick<Doc, "name" | "text">[], activate?: boolean, position?: DocumentPosition): Doc[];
 // Defaults to selecting the first added document; false preserves the current selection.
 
 // src/app/state.ts: adds to the existing scheduler surface
@@ -229,9 +229,29 @@ Import order in `main.ts` is **app → editor → preview → document → works
 
 The primary toolbar row contains identity, optional desktop New, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting. The web entry starts it expanded above 760 px and collapsed at narrower widths. The experimental Windows desktop starts it collapsed at every width to preserve writing space. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
 
-`DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
+`DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. At viewport heights up to 600px, opening Format hides only this redundant key legend to retain usable source space with both Find and Format open; the memory warning, document count, Save action and every command remain visible. Closing Format restores the legend. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
 
 ## 9. Persistence and navigation
+
+`SessionPositions` holds at most 64 LRU entries of source selection/direction and
+source/preview/reader scroll coordinates, keyed by document ID. It stores no source,
+DOM nodes, undo history or disk/browser state. `DocStore.beforechange` captures the
+outgoing identity before append, switch or remove; close prunes that entry and the
+single Undo Close snapshot may transfer its coordinates to a fresh restored ID.
+Same-ID selection and inactive imports do not trigger pagination. Desktop mode
+handoffs transfer coordinates explicitly between owners, including failed-return
+recovery, without loading the editor or paginator during reader navigation.
+
+Previous/Next buttons and the native picker remain keyboard reachable. Windows/Linux
+use Alt+Shift+P/N for previous/next and Alt+Shift+D for the picker, with visible hints
+and `aria-keyshortcuts`. Apple platforms leave these Option chords unbound, preserving
+native text entry and selection. Composition, handled events, held-key repeats,
+detached/hidden/inert controls and disabled selection cannot navigate. Duplicate
+filenames receive ordinal picker labels; identity never comes from the label.
+Source restoration clamps UTF-16 offsets and browser scroll geometry in a fresh
+textarea; preview positions restore only after the corresponding identity renders.
+See `SESSION_NAVIGATION.md`, position/navigation units and both production
+`session-navigation.spec.ts` suites. This is session navigation, not persisted recents.
 
 Settings persist under `mdviewer.settings.v1`; the approved SDK keys are the separate exception described in §1. Open document bytes, latest-close recovery, source-download state and export snapshots remain in memory. Explicit user-selected saves/exports write their requested files without adding automatic/app-managed document or session storage. Preserve validation/clamping for view mode, split ratio and title-page settings described in foundation sections 9 and 12. Preserve the pristine-sample exemption in `hasProtectableWork`; modifying the sample restores protection.
 
@@ -274,11 +294,30 @@ All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster
 
 Foundation section 12 remains the detailed editor contract: mounted panes, an invisible but measurable parked canvas in Markdown mode, in-place text events, native textarea editing, synchronous backdrop freshness, matched layer metrics, glued scrolling, bounded tokenization and editor-free print output.
 
+Workspace chrome selectors follow the mounted `#app > #workspace` parent chain;
+pane, splitter and canvas rules address its direct children, and the active-match
+cue belongs to the source pane's `.editor-scroll`. The app root is a direct child
+of `body` on the web or the body's `#desktop-workspace` on desktop. Desktop shell
+rules address the body's actual shells. These IDs are not reserved document
+names: the literal 17-heading fixture in `tests/helpers/chromeHeadings.ts` retains
+authored text and ordinary document flow in Split, Preview, forced colors and
+print, including App, Status live, Error card and Reader shell. App feedback
+lookups also target the actual canvas's direct error/live children, never a
+heading inside the paginated document. Print hides only actual chrome.
+Short-window Find layout matches the pane's direct search panel, never an
+authored heading with the same ID. A parked canvas remains measurable and its
+direct fatal card remains visible and actionable. Production web and desktop
+`chrome-heading-scope.spec.ts` cases run beside the existing editor geometry,
+search cue and failed-export recovery specifications.
+
 The editor accepts `setDocument({ id?: string, name: string, text: string } | null)`;
 App supplies the stable DocStore ID and legacy callers fall back to the name.
 Same-document, same-text notifications preserve live selection and native undo.
 A different identity fences delayed edits even when text and filename are equal;
 every real identity boundary replaces the textarea to isolate native undo history.
+`setDocument(doc, position?: EditorPosition)` may restore that identity's bounded
+coordinates. `capturePosition()` and `restorePosition(position)` expose coordinates
+without editing source or rebuilding the host; native undo remains per textarea.
 The read-only `input` getter returns the current node; integrations must rebind
 node listeners after a switch. App's synchronous adoption of the first typed
 document preserves its node and first undo entry.
@@ -286,8 +325,8 @@ document preserves its node and first undo entry.
 `EditorController.replaceRange(start: number, end: number, text: string,
 signal?: AbortSignal, selectionAfter?: MarkdownSelection): Promise<boolean>` uses
 native textarea UTF-16 offsets. The optional final selection is validated before
-admission and applied only to the same editing host after its one accepted input
-event, with value/revision/focus fencing; reentrant input cannot redirect it. It
+admission and applied only to the same editing host after its accepted command's
+owned input-event sequence, with value/revision/focus fencing; reentrant input cannot redirect it. It
 shares byte admission and the undo-aware insertion path with intercepted paste,
 text drop and Tab. A delayed confirmation captures document identity, edit/source
 revision, exact text, selection/revision/direction and focused element. Focus must
@@ -296,8 +335,9 @@ rechecked after focusing the source. Refusal, rejection, abortion, composition, 
 detachment, invalid range and unchanged replacement return false. A configured
 hard limit refuses even if the host accepts; ordinary typing and small paste/drop
 remain native. Abort prevents commitment but does not dismiss a host confirmation
-UI or settle an unresolved host promise. Native insertText owns its single input
-event; the manual fallback dispatches one observable input event. Coverage:
+UI or settle an unresolved host promise. Native insertText supplies the browser's
+input-event sequence. The manual fallback dispatches one exact owned Event;
+foreign or reentrant events cannot earn a stale final selection. Coverage:
 `tests/editor-edit-safety.test.ts` and `tests/e2e/editor-edit-safety.spec.ts`.
 
 ### Source Markdown formatting
@@ -314,7 +354,9 @@ controls never changes source or requests pagination; formatting stays out of pr
 Commands reject split surrogate boundaries and multiline inline code/link requests.
 The exact empty-selection, multiline, indentation, toggle and placeholder rules
 are pinned in `MARKDOWN_COMMANDS.md`; no parser or rich editor dependency is added.
-Each accepted command has one input event and one native undo edit. A delayed
+Each accepted command makes one native undo edit in supporting engines; a native
+multiline insertion can emit several input events. The manual fallback emits one
+owned event and cannot supply native history. A delayed
 confirmation, document switch, IME, aborted command or reentrant observer must not
 modify a different host or apply a stale final selection. Coverage:
 `tests/markdown-commands.test.ts`, `tests/editor-formatting.test.ts` and the real

@@ -30,14 +30,19 @@ vi.mock("../src/paginate/paginate", () => ({ paginate: async () => ({ total: 1 }
 
 function fixture() {
   const root = document.createElement("div");
-  document.body.append(root);
+  root.id = IDS.canvas;
+  const host = document.createElement("div");
+  root.append(host);
+  const workspaceEl = document.createElement("div");
+  workspaceEl.append(root);
+  document.body.append(workspaceEl);
   const store = new DocStore();
   store.add("Valid.md", "# Document");
   const app = Object.create(App.prototype) as App;
   Object.assign(app, {
-    store, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
+    store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
     banner: mountBanner(root), emptyEl: document.createElement("div"),
-    canvas: { host: root, setPaginating: () => {}, setProgress: () => {}, setPageCount: () => {},
+    canvas: { host, setPaginating: () => {}, setProgress: () => {}, setPageCount: () => {},
       capturePosition: () => null, restorePosition: () => {} },
   });
   const lifecycle = app as unknown as {

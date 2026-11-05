@@ -125,6 +125,25 @@ describe("editor formatting ownership and controls", () => {
       expect(onInput).not.toHaveBeenCalled();
     });
 
+  it.each([
+    ["b", "word\\"], ["i", "word\\"], ["k", "word\\"],
+    ["b", "safe\nword\\  "], ["i", "word\\\nsafe"],
+  ] as const)("refuses an escaped closing boundary for %s with visible guidance and no edit", async (key, source) => {
+    editor.setDocument({ id: "a", name: "a.md", text: source });
+    editor.input.focus();
+    editor.input.setSelectionRange(0, source.length, "backward");
+    shortcut(key);
+    await settle();
+    expect(editor.input.value).toBe(source);
+    expect([editor.input.selectionStart, editor.input.selectionEnd, editor.input.selectionDirection])
+      .toEqual([0, source.length, "backward"]);
+    expect(root.querySelector(".editor-format-status")?.textContent).toContain("cannot be formatted safely");
+    expect(root.querySelector(".editor-format-status")?.textContent).not.toContain("one line");
+    expect(button("Format Markdown").getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(editor.input);
+    expect(onInput).not.toHaveBeenCalled();
+  });
+
   it("restores the final multiline selection when one native command emits multiple input events", async () => {
     editor.setDocument({ id: "a", name: "a.md", text: "first\nsecond" });
     editor.input.focus();
@@ -228,5 +247,22 @@ describe("editor formatting ownership and controls", () => {
     await settle();
     expect(editor.input.value).toBe("**word**");
     expect([editor.input.selectionStart, editor.input.selectionEnd]).toEqual([1, 1]);
+  });
+
+  it("does not count an external observer's fallback edit-away-and-back as its own input", async () => {
+    let reentered = false;
+    editor.input.addEventListener("input", () => {
+      if (reentered) return;
+      reentered = true;
+      editor.input.value = "intervening edit";
+      editor.input.dispatchEvent(new Event("input", { bubbles: true }));
+      editor.input.value = "**word**";
+      editor.input.setSelectionRange(8, 8);
+      editor.input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    button("Bold").click();
+    await settle();
+    expect(editor.input.value).toBe("**word**");
+    expect([editor.input.selectionStart, editor.input.selectionEnd]).toEqual([8, 8]);
   });
 });

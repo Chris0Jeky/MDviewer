@@ -173,6 +173,64 @@ describe("Markdown writing commands", () => {
     expect(markdownCommand("*word\\*", { start: 0, end: 7, direction: "forward" }, "italic")).toBeNull();
   });
 
+  it.each(["bold", "italic"] as const)("refuses %s placeholder insertion at a caret after odd backslash runs", (command) => {
+    for (const count of [1, 3]) {
+      const source = "word" + "\\".repeat(count);
+      expect(markdownCommand(source, { start: source.length, end: source.length, direction: "none" }, command)).toBeNull();
+    }
+  });
+
+  it.each(["bold", "italic"] as const)("inserts a %s placeholder after even backslash runs", (command) => {
+    const marker = command === "bold" ? "**" : "*";
+    for (const count of [2, 4]) {
+      const source = "word" + "\\".repeat(count);
+      expect(apply(source, command, source.length, source.length, "none")).toEqual({
+        text: `${source}${marker}text${marker}`, selected: "text",
+        selection: { start: source.length + marker.length, end: source.length + marker.length + 4, direction: "forward" },
+      });
+    }
+  });
+
+  it.each(["bold", "italic", "link"] as const)(
+    "refuses %s wrapping when an odd trailing backslash would escape its closer", (command) => {
+      for (const source of ["word\\", "word\\\\\\"]) {
+        expect(markdownCommand(source, { start: 0, end: source.length, direction: "backward" }, command)).toBeNull();
+        const surrounded = "before " + source + " after";
+        expect(markdownCommand(surrounded, { start: 7, end: 7 + source.length, direction: "forward" }, command)).toBeNull();
+      }
+    });
+
+  it.each(["bold", "italic"] as const)(
+    "checks the actual trimmed %s closing boundary and refuses unsafe multiline edits atomically", (command) => {
+      for (const source of ["  word\\ \t", "safe\nword\\", "word\\ \t\r\nsafe", "safe\nword\\\\\\\nlast"]) {
+        expect(markdownCommand(source, { start: 0, end: source.length, direction: "backward" }, command)).toBeNull();
+      }
+    });
+
+  it.each([
+    ["bold", "**already**\nword\\"], ["italic", "*already*\nword\\"],
+  ] as const)("does not partially apply %s when a mixed multiline selection has an unsafe closer", (command, source) => {
+    expect(markdownCommand(source, { start: 0, end: source.length, direction: "forward" }, command)).toBeNull();
+  });
+
+  it.each([
+    ["bold", "word\\\\", "**word\\\\**", "word\\\\"],
+    ["italic", "word\\\\\\\\", "*word\\\\\\\\*", "word\\\\\\\\"],
+    ["link", "word\\\\", "[word\\\\](url)", "url"],
+    ["bold", "  first\\\\ \t\n\nsecond", "  **first\\\\** \t\n\n**second**", "  **first\\\\** \t\n\n**second**"],
+    ["italic", "  first\\\\ \t\n\nsecond", "  *first\\\\* \t\n\n*second*", "  *first\\\\* \t\n\n*second*"],
+  ] as const)("accepts safe even backslashes for %s and keeps the operation reversible", (command, source, text, selected) => {
+    const result = apply(source, command);
+    expect(result).toMatchObject({ text, selected });
+    expect(apply(text, command).text).toBe(source);
+  });
+
+  it("keeps a literal trailing backslash valid inside inline code", () => {
+    const result = apply("word\\", "inline-code");
+    expect(result).toMatchObject({ text: "`word\\`", selected: "word\\" });
+    expect(apply(result.text, "inline-code").text).toBe("word\\");
+  });
+
   it.each(["_", "__"])("does not strip literal %s inside an identifier", (marker) => {
     const source = `prefix${marker}word${marker}suffix`;
     const start = source.indexOf("word");

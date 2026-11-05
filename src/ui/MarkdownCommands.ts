@@ -44,11 +44,50 @@ function acceptsEmphasis(count: number, width: number): boolean {
   return count <= 3 && (width === 1 ? count % 2 === 1 : count >= 2);
 }
 
+function boundaryCharacter(source: string, offset: number): string {
+  const point = source.codePointAt(offset) ?? 32;
+  // Match the renderer's replacement of an unpaired surrogate at a boundary.
+  return String.fromCodePoint(point >= 0xd800 && point <= 0xdfff ? 0xfffd : point);
+}
+
+/** CommonMark delimiter flanking, using complete code points and Markdown whitespace. */
+function delimiterFlanking(source: string, start: number, end: number, symbol: string): { open: boolean; close: boolean } {
+  const before = boundaryCharacter(source, start - (splitsSurrogate(source, start - 1) ? 2 : 1));
+  const after = boundaryCharacter(source, end);
+  const beforeSpace = /[\p{Zs}\t-\r]/u.test(before);
+  const afterSpace = /[\p{Zs}\t-\r]/u.test(after);
+  const beforePunctuation = /[\p{P}\p{S}]/u.test(before);
+  const afterPunctuation = /[\p{P}\p{S}]/u.test(after);
+  const left = !afterSpace && (!afterPunctuation || beforeSpace || beforePunctuation);
+  const right = !beforeSpace && (!beforePunctuation || afterSpace || afterPunctuation);
+  return {
+    open: left && (symbol !== "_" || !right || beforePunctuation),
+    close: right && (symbol !== "_" || !left || afterPunctuation),
+  };
+}
+
+function activeClosingRun(source: string, end: number, symbol: string): number {
+  const count = markerRun(source, end - 1, -1, symbol);
+  return count && escaped(source, end - count) ? count - 1 : count;
+}
+
 /** Any possible closer makes an exterior-only toggle unsafe without a full parser. */
 function hasEmphasisCloser(source: string, start: number, end: number, width: number, symbol?: string): boolean {
+  const nested = !symbol && singleEmphasis(source, start, end, width === 1 ? 2 : 1);
   for (const match of source.slice(start, end).matchAll(/\*+|_+/g)) {
-    if ((!symbol || match[0][0] === symbol) && !escaped(source, start + match.index) &&
-      (match[0].length > 3 || acceptsEmphasis(match[0].length, width))) return true;
+    if (symbol && match[0][0] !== symbol) continue;
+    const from = start + match.index;
+    const escapedFirst = escaped(source, from);
+    const count = match[0].length - (escapedFirst ? 1 : 0);
+    if (!count) continue;
+    // Escaping only the first marker changes the remainder's flanking; even an
+    // opposite-width remainder can consume part of a newly added outer closer.
+    if (escapedFirst || count > 3 || acceptsEmphasis(count, width)) return true;
+    if (nested && (from === start || from + count === end)) continue;
+    const flanking = delimiterFlanking(source, from, from + count, match[0][0]!);
+    // A one-sided opposite-width run can also consume an outer delimiter;
+    // only both-flanking literals or the recognized nested boundaries are safe.
+    if (flanking.open !== flanking.close) return true;
   }
   return false;
 }
@@ -61,15 +100,33 @@ function singleEmphasis(source: string, start: number, end: number, width: numbe
   const closing = markerRun(source, end - 1, -1, symbol);
   const extraBefore = markerRun(source, start - 1, -1, symbol);
   const extraAfter = markerRun(source, end, 1, symbol);
-  if (symbol === "_" && /[\p{L}\p{N}\p{M}]/u.test(
-    (source[start - extraBefore - 1] ?? "") + (source[end + extraAfter] ?? ""))) return false;
   if (opening !== closing || extraBefore !== extraAfter || opening + extraBefore > 3 ||
     !acceptsEmphasis(opening, width) || !acceptsEmphasis(opening + extraBefore, width) ||
     start + opening >= end - closing ||
-    escaped(source, start - extraBefore) || escaped(source, end - closing)) return false;
+    escaped(source, start - extraBefore) || escaped(source, end - closing) ||
+    !delimiterFlanking(source, start - extraBefore, start + opening, symbol).open ||
+    !delimiterFlanking(source, end - closing, end + extraAfter, symbol).close) return false;
   const content = source.slice(start + opening, end - closing);
   return content.trim() === content &&
     !hasEmphasisCloser(source, start + opening, end - closing, width, symbol);
+}
+
+function canWrapEmphasis(source: string, start: number, end: number, width: number): boolean {
+  // An active marker at either selected edge must be one complete opposite style.
+  // Otherwise new markers can leave literal edge characters outside the style.
+  for (const symbol of ["*", "_"]) {
+    if ((markerRun(source, start, 1, symbol) || activeClosingRun(source, end, symbol)) &&
+      !singleEmphasis(source, start, end, width === 1 ? 2 : 1)) return false;
+  }
+  const before = markerRun(source, start - 1, -1, "*");
+  const after = markerRun(source, end, 1, "*");
+  const opening = markerRun(source, start, 1, "*");
+  const closing = activeClosingRun(source, end, "*");
+  // Include adjacent runs when the new * markers merge with existing markup.
+  const total = before + width + opening;
+  return total <= 3 && total === after + width + closing && start + opening < end - closing &&
+    delimiterFlanking(source, start - before, start + opening, "*").open &&
+    delimiterFlanking(source, end - closing, end + after, "*").close;
 }
 
 function emphasis(source: string, selection: MarkdownSelection, marker: string): MarkdownEdit | null {
@@ -86,7 +143,8 @@ function emphasis(source: string, selection: MarkdownSelection, marker: string):
       return { part, from, to, wrapped: singleEmphasis(source, from, to, width) };
     });
     if (parts.some(({ part, from, to, wrapped }) => part?.[2] && !wrapped &&
-      (escaped(source, from) || hasEmphasisCloser(source, from, to, width)))) return null;
+      (escaped(source, from) || escaped(source, to) || hasEmphasisCloser(source, from, to, width) ||
+        !canWrapEmphasis(source, from, to, width)))) return null;
     const active = parts.filter(({ part }) => !!part?.[2]);
     const remove = active.length > 0 && active.every(({ wrapped }) => wrapped);
     const text = parts.map(({ part, wrapped }) => {
@@ -112,6 +170,7 @@ function emphasis(source: string, selection: MarkdownSelection, marker: string):
     const unwrapped = body.slice(width, -width);
     return edit(start, end, unwrapped, 0, unwrapped.length, direction);
   }
+  if (!body && escaped(source, start)) return null;
   if (!body) return edit(start, end, `${marker}text${marker}`, width, width + 4, "forward");
   const parts = /^(\s*)(.*?)(\s*)$/.exec(body);
   if (!parts?.[2]) return edit(start, end, body, 0, body.length, direction);
@@ -120,7 +179,9 @@ function emphasis(source: string, selection: MarkdownSelection, marker: string):
   const from = start + leading.length;
   const to = end - trailing.length;
   const remove = singleEmphasis(source, from, to, width);
-  if (!remove && (escaped(source, from) || hasEmphasisCloser(source, from, to, width))) return null;
+  // A trailing odd backslash would escape the new closer, including before whitespace.
+  if (!remove && (escaped(source, from) || escaped(source, to) || hasEmphasisCloser(source, from, to, width) ||
+    !canWrapEmphasis(source, from, to, width))) return null;
   const content = remove ? parts[2].slice(width, -width) : parts[2];
   const prefix = leading + (remove ? "" : marker);
   const text = `${prefix}${content}${remove ? "" : marker}${trailing}`;
@@ -275,7 +336,9 @@ function link(source: string, selection: MarkdownSelection): MarkdownEdit | null
   if (surrounding?.labelStart === start && surrounding.labelEnd === end) {
     return edit(start - 1, surrounding.end, body, 0, body.length, direction);
   }
-  if (body.includes("[") || body.includes("]") || source[start - 1] === "[" || source[end] === "]" || escaped(source, start)) return null;
+  if (body.includes("[") || body.includes("]") || source[start - 1] === "[" || source[end] === "]" ||
+    escaped(source, start) || escaped(source, end) ||
+    (source[start - 1] === "!" && !escaped(source, start - 1))) return null;
   const label = body || "text";
   const text = `[${label}](url)`;
   return body ? edit(start, end, text, label.length + 3, label.length + 6, "forward")
