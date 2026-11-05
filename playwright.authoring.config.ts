@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Both servers below always serve production bundles. Keep production-only
+// fixture assertions enabled even when callers do not provide E2E_TARGET.
+process.env.E2E_TARGET = "preview";
+
 // A bounded, real second-engine lane for the shared authoring surface. The full
 // Chromium and native Windows suites remain the pagination/export release gates.
 export default defineConfig({
