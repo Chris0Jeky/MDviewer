@@ -184,12 +184,14 @@ export function installMarkdownHighlighter(
 }
 
 /** Actual parser-recognized fences, including nested quotes/lists/footnotes. */
-export function parsedFenceLanguages(tokens: Token[]): string[] {
+export function parsedFenceLanguages(md: MarkdownIt, tokens: Token[]): string[] {
   const languages = new Set<string>();
   const visit = (items: Token[]): void => {
     for (const token of items) {
       if (token.type === "fence") {
-        const language = token.info.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
+        // Match markdown-it's fence renderer: decode escapes and character
+        // references before separating the language from its metadata.
+        const language = md.utils.unescapeAll(token.info).trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
         if (language) languages.add(language);
       }
       if (token.children) visit(token.children);
@@ -238,7 +240,7 @@ export function renderMarkdownTokens(
   }
 
   // Inspect tokens, not fence-shaped text inside code/HTML examples.
-  for (const lang of parsedFenceLanguages(tokens)) {
+  for (const lang of parsedFenceLanguages(md, tokens)) {
     if (!isSupportedLanguage(lang)) {
       warnings.push({
         kind: "lang",

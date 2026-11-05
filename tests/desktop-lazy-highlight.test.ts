@@ -79,6 +79,43 @@ describe("reader syntax highlighting admission", () => {
     expect(getHighlighter).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["c\\+\\+", "int main() { return 0; }"],
+    ["&#106;s", "const answer = 42;"],
+  ])("preserves existing highlighting for decoded fence info %s", async (info, code) => {
+    const source = `\`\`\`${info}\n${code}\n\`\`\``;
+    const eager = renderMarkdown(createMarkdown(await getHighlighter(), DEFAULT_SETTINGS), source);
+    const reference = document.createElement("div");
+    reference.innerHTML = eager.html;
+    expect(reference.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
+    vi.mocked(getHighlighter).mockClear();
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
+    expect(result.document.querySelectorAll("pre.shiki span[style]").length).toBeGreaterThan(1);
+    expect(result.warnings).toEqual([]);
+    expect(getHighlighter).toHaveBeenCalledOnce();
+  });
+
+  it("preserves metadata separated by decoded spaces", async () => {
+    const source = "```text&#32;{2}&#32;title=example\nalpha\nbeta\n```";
+    const eager = renderMarkdown(createMarkdown(await getHighlighter(), DEFAULT_SETTINGS), source);
+    const reference = document.createElement("div");
+    reference.innerHTML = eager.html;
+    expect(reference.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
+    vi.mocked(getHighlighter).mockClear();
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
+    expect(result.document.querySelector("pre.shiki .line.highlighted")?.textContent).toBe("beta");
+    expect(result.warnings).toEqual([]);
+    expect(getHighlighter).toHaveBeenCalledOnce();
+  });
+
+  it("warns once for the decoded unknown language without loading Shiki", async () => {
+    const source = "```unknown\\-example\nliteral\n```\n\n```unknown-example\nother\n```";
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
+    expect(result.document.querySelectorAll("pre code")).toHaveLength(2);
+    expect(result.warnings).toEqual(['Code language "unknown-example" is not bundled; rendered as plain text.']);
+    expect(getHighlighter).not.toHaveBeenCalled();
+  });
+
   it("does not warn for unknown fence labels that are only literal code examples", async () => {
     const result = await renderReaderDocument("# Literal example\n\n````text\n```not-a-language\nexample\n```\n````", DEFAULT_SETTINGS);
     expect(result.document.querySelector("pre code")?.textContent).toContain("not-a-language");

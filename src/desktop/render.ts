@@ -1,5 +1,5 @@
 import { ensureLang, getHighlighter, isSupportedLanguage } from "../render/highlight";
-import type { Token } from "markdown-it";
+import type { MarkdownIt, Token } from "markdown-it";
 import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, renderMarkdownTokens } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
 import type { Settings } from "../app/settings";
@@ -13,11 +13,11 @@ export async function renderReaderDocument(text: string, settings: Settings): Pr
   const md = createMarkdown(null, settings);
   const env = {};
   const tokens = md.parse(text, env);
-  const languages = parsedFenceLanguages(tokens).filter(language =>
+  const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
   // use the existing transformers even when the fence has no syntax grammar.
-  if (languages.length || needsCodeTransformers(tokens, settings.showLineNumbers)) {
+  if (languages.length || needsCodeTransformers(md, tokens, settings.showLineNumbers)) {
     const highlighter = await getHighlighter();
     for (const language of languages) await ensureLang(highlighter, language);
     installMarkdownHighlighter(md, highlighter, settings);
@@ -34,11 +34,12 @@ export async function renderReaderDocument(text: string, settings: Settings): Pr
   return { document, warnings };
 }
 
-function needsCodeTransformers(tokens: Token[], lineNumbers: boolean): boolean {
+function needsCodeTransformers(md: MarkdownIt, tokens: Token[], lineNumbers: boolean): boolean {
   return tokens.some(token => {
-    const language = token.info.trim().split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
+    const info = md.utils.unescapeAll(token.info).trim();
+    const language = info.split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
     return (token.type === "fence" && language !== "mermaid"
-      && (lineNumbers || token.content.includes("[!code") || /\S\s+\S/.test(token.info.trim())))
-      || !!(token.children && needsCodeTransformers(token.children, lineNumbers));
+      && (lineNumbers || token.content.includes("[!code") || /\S\s+\S/.test(info)))
+      || !!(token.children && needsCodeTransformers(md, token.children, lineNumbers));
   });
 }

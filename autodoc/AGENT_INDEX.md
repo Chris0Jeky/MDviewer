@@ -158,8 +158,9 @@ Screen-only `.document-recovery` and its status/name/action/hint classes live in
 ## Reader-only lazy highlighting
 
 Canonical contract: implementation spec section 15. `createMarkdown` accepts a nullable
-highlighter for the continuous reader. `parsedFenceLanguages(Token[])` reads only real
-parser fences. `installMarkdownHighlighter(md, hl, settings)` enables synchronous Shiki
+highlighter for the continuous reader. `parsedFenceLanguages(md, tokens)` reads only real
+parser fences and decodes their info with the parser's own utility, matching rendering.
+`installMarkdownHighlighter(md, hl, settings)` enables synchronous Shiki
 without changing parsed structural state. `renderMarkdownTokens(md, tokens, env)` shares
 the sanitizer and warnings with `renderMarkdown(md, src)` and requires the same parser's
 tokens/environment. `src/desktop/render.ts` owns admission; line-number/notation/metadata

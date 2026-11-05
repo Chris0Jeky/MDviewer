@@ -326,7 +326,10 @@ that parser's parse. This retains heading, TOC, footnote and math plugin state a
 the same sanitization and warning pass as `renderMarkdown(md, src)`. The latter remains the
 public synchronous web path and delegates to parse plus token rendering. Unknown-language
 warnings now describe real parsed fences, not examples inside code or HTML blocks.
-`parsedFenceLanguages(tokens)` returns distinct normalized labels in parser traversal order.
+`parsedFenceLanguages(md, tokens)` returns distinct normalized labels in parser traversal
+order. Language and transformer admission decode fence-info escapes and character references
+with that parser's `utils.unescapeAll`, matching markdown-it's fence renderer. Warnings use
+those same decoded language labels.
 
 The paginated workspace still awaits its highlighter and grammar preparation before the
 unchanged no-slice pipeline in section 3. No document tokens are cached or persisted. This
