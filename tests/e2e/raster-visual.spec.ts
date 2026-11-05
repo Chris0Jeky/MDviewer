@@ -10,6 +10,109 @@ interface Evidence {
   ink: Array<{ name: string; dark: number; colored: number; light: number }>;
 }
 
+type DiagnosticEvent = { at: number; stage: string } & Record<string, unknown>;
+const offlineDiagnostics = new WeakMap<Page, () => Promise<DiagnosticEvent[]>>();
+
+function observeOfflineCapture(page: Page): () => Promise<void> {
+  const network: DiagnosticEvent[] = [];
+  const record = (stage: string, detail: Record<string, unknown>) => {
+    if (network.length < 128) network.push({ at: Date.now(), stage, ...detail });
+  };
+  const relevant = (request: import("@playwright/test").Request) =>
+    ["stylesheet", "font"].includes(request.resourceType()) || request.url().includes("__offline-visual-probe-");
+  page.on("request", request => {
+    if (!relevant(request)) return;
+    let frameUrl: string | undefined;
+    try { frameUrl = request.frame().url(); } catch { /* Service-worker requests have no frame. */ }
+    record("request", { url: request.url(), resourceType: request.resourceType(), frameUrl });
+  });
+  page.on("response", response => {
+    if (relevant(response.request())) record("response", {
+      url: response.url(), status: response.status(), fromServiceWorker: response.fromServiceWorker(),
+    });
+  });
+  page.on("requestfailed", request => {
+    if (relevant(request)) record("requestfailed", { url: request.url(), error: request.failure()?.errorText });
+  });
+  page.on("download", () => record("download", {}));
+  offlineDiagnostics.set(page, async () => {
+    const browser = await page.evaluate(() =>
+      (window as Window & { __offlineCaptureEvents?: DiagnosticEvent[] }).__offlineCaptureEvents ?? [],
+    ).catch(error => [{ at: Date.now(), stage: "diagnostic-read-failed", error: String(error) }]);
+    return [...network, ...browser].sort((a, b) => a.at - b.at);
+  });
+  return () => page.evaluate(() => {
+    const events: DiagnosticEvent[] = [];
+    (window as Window & { __offlineCaptureEvents?: DiagnosticEvent[] }).__offlineCaptureEvents = events;
+    const record = (stage: string, doc: Document, detail: Record<string, unknown> = {}) => {
+      if (events.length >= 128) return;
+      let controller: string | null | undefined;
+      let controllerError: string | undefined;
+      try { controller = doc.defaultView?.navigator.serviceWorker.controller?.scriptURL ?? null; }
+      catch (error) { controllerError = String(error); }
+      events.push({ at: Date.now(), stage, url: doc.URL, origin: doc.defaultView?.origin,
+        locationOrigin: doc.defaultView?.location.origin, baseURI: doc.baseURI, readyState: doc.readyState,
+        controller, controllerError, fontStatus: doc.fonts.status, ...detail });
+    };
+    record("source-before-export", document, {
+      styles: [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+        .map(link => ({ href: link.href, sheet: link.sheet !== null })),
+    });
+    let frameNumber = 0;
+    const appendChild = Node.prototype.appendChild;
+    // Observe the synchronous mount before document.open() runs. Do not replace
+    // requests, wait for events, or change the renderer's own event handlers.
+    Node.prototype.appendChild = function<T extends Node>(this: Node, node: T): T {
+      const result = appendChild.call(this, node) as T;
+      if (!(node instanceof HTMLIFrameElement) || !node.classList.contains("html2canvas-container")) return result;
+      const doc = node.contentDocument;
+      if (!doc) return result;
+      const frame = ++frameNumber;
+      const snapshot = (stage: string, detail: Record<string, unknown> = {}) => record(stage, doc, { frame, ...detail });
+      snapshot("clone-inserted");
+      node.addEventListener("load", () => snapshot("iframe-load"));
+      for (const name of ["open", "write", "close", "adoptNode", "replaceChild"] as const) {
+        const original = doc[name];
+        Object.defineProperty(doc, name, { configurable: true, writable: true,
+          value: function(this: Document, ...args: unknown[]) {
+            snapshot(`document-${name}-before`);
+            const value: unknown = Reflect.apply(original, this, args);
+            snapshot(`document-${name}-after`, { sameDocument: node.contentDocument === doc });
+            if (name === "open") {
+              // document.open() removes document listeners, so observe its new
+              // lifecycle only after it has returned, without setting onload.
+              doc.addEventListener("readystatechange", () => snapshot("readystatechange"));
+              try {
+                doc.defaultView?.navigator.serviceWorker?.addEventListener("controllerchange", () => snapshot("controllerchange"));
+              } catch (error) { snapshot("controller-observer-unavailable", { error: String(error) }); }
+              for (const event of ["load", "error"] as const) doc.addEventListener(event, e => {
+                const target = e.target as HTMLLinkElement | null;
+                if (target?.tagName === "LINK" && target.relList.contains("stylesheet")) {
+                  snapshot(`stylesheet-${event}`, { href: target.href, sheet: target.sheet !== null });
+                }
+              }, true);
+            }
+            return value;
+          },
+        });
+      }
+      return result;
+    };
+  });
+}
+
+test.afterEach(async ({ page }, info) => {
+  const read = offlineDiagnostics.get(page);
+  if (!read) return;
+  const events = await read();
+  const path = info.outputPath("offline-capture-diagnostic.json");
+  await writeFile(path, JSON.stringify({ events }, null, 2));
+  await info.attach("offline-capture-diagnostic", { path, contentType: "application/json" });
+  if (info.status !== info.expectedStatus) {
+    console.log("Offline capture diagnostic:", JSON.stringify(events.slice(-24)));
+  }
+});
+
 // Expectations are independent of html2canvas and previous captures. Interior
 // samples avoid font antialiasing and gradient edges; a four-level channel budget
 // allows only rounding, not a lost filter, wrong HSL color or missing content.
@@ -106,6 +209,7 @@ for (const offline of [false, true]) {
     test.skip(offline && process.env.E2E_TARGET !== "preview", "Offline capture requires the production service worker.");
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1400, height: 1500 });
+    const installDiagnostic = offline ? observeOfflineCapture(page) : undefined;
     const foreignRequests: string[] = [];
     const ownOrigin = new URL(baseURL!).origin;
     page.on("request", request => {
@@ -125,6 +229,7 @@ for (const offline of [false, true]) {
       const network = await page.evaluate(() => fetch(`/__offline-visual-probe-${Date.now()}`)
         .then(response => `online-${response.status}`).catch(() => "offline"));
       expect(network).toBe("offline");
+      await installDiagnostic!();
     }
     await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: 1 }));
     const markdown = await readFile(new URL("../fixtures/raster-visual.md", import.meta.url), "utf8");
