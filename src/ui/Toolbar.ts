@@ -219,7 +219,7 @@ function divider(): HTMLElement {
  * controller whose `destroy()` removes the DOM and unsubscribes from the store.
  */
 export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: RestoreAdmission,
-  createDocument?: () => void): ToolbarController {
+  createDocument?: () => void, layoutInitiallyOpen?: boolean): ToolbarController {
   const s: Settings = app.settings;
 
   const bar = el("div", {
@@ -462,7 +462,7 @@ export function mountToolbar(root: HTMLElement, app: App, canRestoreDocument?: R
     el("div", { class: CLASSES.toolbarSpacer, attrs: { "aria-hidden": "true" } }),
     viewGroup, themeGroup, exportGroup);
   const layoutDetails = el("details", { class: "workspace-formatting" });
-  layoutDetails.open = typeof matchMedia !== "function" || !matchMedia("(max-width: 760px)").matches;
+  layoutDetails.open = layoutInitiallyOpen ?? (typeof matchMedia !== "function" || !matchMedia("(max-width: 760px)").matches);
   const layoutSummary = el("summary", {}, "Document layout",
     el("span", { class: "workspace-formatting-hint" }, "Typography, paper & page furniture"));
   const formattingRow = el("div", { class: "workspace-formatting-controls" },

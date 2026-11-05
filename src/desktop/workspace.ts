@@ -11,7 +11,10 @@ import { mountDocumentShortcuts } from "../ui/DocumentShortcuts";
 export function startWorkspace(root: HTMLElement, openFilePicker: () => void, canRestoreDocument: RestoreAdmission,
   createDocument: () => void): { app: App; detachShortcuts: () => void } {
   // The desktop host keeps one bounded input adapter alive across both modes.
-  const app = App.init(root, { inputHandlers: false, openFilePicker, canRestoreDocument, createDocument });
+  const app = App.init(root, {
+    inputHandlers: false, openFilePicker, canRestoreDocument, createDocument,
+    layoutInitiallyOpen: false,
+  });
   const detachShortcuts = mountDocumentShortcuts(root);
   return { app, detachShortcuts };
 }
