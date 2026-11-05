@@ -427,13 +427,17 @@ body.is-splitting #editor-input {
    selected view or split setting. The preview stays measurable, as in Markdown
    mode; closing Find restores the prior split immediately. */
 @media screen and (max-height: 600px) {
+  #editor-pane:has(#editor-search:not([hidden])) {
+    --editor-pad-y: 8px;
+  }
+
   #editor-pane:has(#editor-search:not([hidden])) .editor-head {
     display: none;
   }
 
   #editor-search {
-    gap: 4px;
-    padding-block: 6px;
+    gap: 2px;
+    padding-block: 2px;
   }
 
   #workspace[data-view-mode="split"]:has(#editor-search:not([hidden])) {
