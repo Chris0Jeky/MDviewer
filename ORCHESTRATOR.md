@@ -3,7 +3,27 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (workspace labels and dependency handoff):**
+> **CURRENT CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
+> Based on merged main 8265edd4, including the workspace correction #177 and CLI
+> update #176. This checkpoint implements #179 in PR #180: fatal feedback is visible
+> and actionable in Markdown-only mode while the preview remains parked. Showing
+> a fatal error returns only the canvas to its origin instantly; view mode, Markdown
+> text, and the source editor's selection and scroll remain unchanged. A successful
+> raster save clears only fatal feedback before releasing export ownership, preserving
+> render warnings and ingestion notices. Failed or canceled saves retain feedback.
+> Test-only head 59a5166 reproduced hidden and stale cards in
+> [CI 41960323747](https://github.com/Chris0Jeky/MDviewer/actions/runs/41960323747).
+> The second test-only head dcb9ef5 reproduced an error above the scrolled canvas
+> before any test click/focus in [CI 41961453874](https://github.com/Chris0Jeky/MDviewer/actions/runs/41961453874).
+> Local qualification passes 706 unit tests, four server tests, typecheck, lint,
+> Observatory and both production builds. Final exact-head hosted qualification
+> and failure/recovery screenshot review are recorded in PR #180.
+> html2canvas-pro remains pinned to 2.5.2. Draft #178 and offline raster fidelity
+> issue #174 remain blocked/open; this feedback fix does not qualify their output.
+> Windows acceptance/performance issue #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.
+> No deployment, signed-release or comparative performance claim is made.
+
+> **PREVIOUS CHECKPOINT - 2026-11-05 (workspace labels and dependency handoff):**
 > Base main 2a26940d includes merged reader grammar PR #172 and development dependency
 > PR #173. This checkpoint implements the independently reviewed workspace/shared
 > parsed-fence correction for #171. Final exact-head hosted qualification is recorded

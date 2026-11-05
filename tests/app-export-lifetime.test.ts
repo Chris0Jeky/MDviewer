@@ -3,6 +3,7 @@ import { App } from "../src/app/App";
 import { createRenderScheduler, DocStore, type RenderReason } from "../src/app/state";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 import { SaveCanceled } from "../src/export/destination";
+import { mountBanner } from "../src/ui/Banner";
 
 const mocks = vi.hoisted(() => ({
   exportPdf: vi.fn(async (_host: HTMLElement, _settings: unknown, _options: unknown) => {}),
@@ -11,22 +12,26 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/export/download", () => ({ exportPaginatedToPdf: mocks.exportPdf }));
 vi.mock("../src/render/highlight", () => ({ getHighlighter: mocks.highlighter }));
 
-function fixture() {
+function fixture(afterRender?: (banner: ReturnType<typeof mountBanner>) => void) {
   const host = document.createElement("div");
   host.textContent = "Completed pages";
   const store = new DocStore();
   store.add("Original.md", "Original");
   const snapshot = { id: store.activeId!, text: "Original", name: "Original.md", settings: { ...DEFAULT_SETTINGS } };
-  const fatal = vi.fn();
-  const scheduler = createRenderScheduler(async () => { host.replaceChildren(); });
+  const bannerRoot = document.createElement("div");
+  const banner = mountBanner(bannerRoot);
+  const fatal = vi.spyOn(banner, "fatal");
+  const scheduler = createRenderScheduler(async () => { host.replaceChildren(); afterRender?.(banner); });
   const app = Object.create(App.prototype) as App;
   Object.assign(app, {
     store, settings: { ...DEFAULT_SETTINGS }, scheduler, renderedSnapshot: snapshot,
     exportBusy: false, exportListeners: new Set(), renderToken: 0, hasGoodRender: true,
     canvas: { host, setBusy: vi.fn(), setPaginating: vi.fn(), capturePosition: () => null },
-    banner: { fatal }, emptyEl: document.createElement("div"),
+    banner, emptyEl: document.createElement("div"),
   });
-  return { app, host, store, snapshot, scheduler, fatal };
+  return { app, host, store, snapshot, scheduler, fatal, banner,
+    errorCard: bannerRoot.querySelector<HTMLElement>("#error-card")!,
+    warningBanner: bannerRoot.querySelector<HTMLElement>("#warning-banner")! };
 }
 
 beforeEach(() => { mocks.exportPdf.mockReset().mockResolvedValue(undefined); });
@@ -34,13 +39,63 @@ beforeEach(() => { mocks.exportPdf.mockReset().mockResolvedValue(undefined); });
 describe("App export ownership and completed-render metadata", () => {
   it("releases the export lease after native save cancellation without a fatal error", async () => {
     const t = fixture();
+    t.banner.fatal("Earlier capture failure");
+    t.fatal.mockClear();
     mocks.exportPdf.mockRejectedValueOnce(new SaveCanceled());
     await t.app.exportPdf();
     expect(t.fatal).not.toHaveBeenCalled();
+    expect(t.errorCard.hidden).toBe(false);
+    expect(t.errorCard.textContent).toContain("Earlier capture failure");
     expect(t.app.exportState.busy).toBe(false);
     t.scheduler.schedule("content");
     await t.scheduler.flush();
     expect(t.host.textContent).toBe("");
+  });
+
+  it("clears only fatal feedback after a successful PDF retry finishes", async () => {
+    const t = fixture();
+    t.banner.notice([{ kind: "content", message: "Skipped unreadable.md" }]);
+    t.banner.warn([{ kind: "lang", message: "Unknown code language" }]);
+    t.banner.fatal("Earlier capture failure");
+    let release!: () => void;
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const capture = new Promise<void>((resolve) => { release = resolve; });
+    mocks.exportPdf.mockImplementationOnce(async () => { started(); await capture; });
+
+    const exported = t.app.exportPdf();
+    await entered;
+    expect(t.errorCard.hidden).toBe(false);
+    expect(t.errorCard.textContent).toContain("Earlier capture failure");
+    release();
+    await exported;
+
+    expect(t.errorCard.hidden).toBe(true);
+    expect(t.errorCard.textContent).not.toContain("Earlier capture failure");
+    expect(t.warningBanner.hidden).toBe(false);
+    expect(t.warningBanner.textContent).toContain("Skipped unreadable.md");
+    expect(t.warningBanner.textContent).toContain("Unknown code language");
+  });
+
+  it("preserves a newer render failure when an export hands off its lease", async () => {
+    const t = fixture(banner => banner.fatal("Newer render failed"));
+    t.banner.fatal("Earlier capture failure");
+    let release!: () => void;
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const capture = new Promise<void>((resolve) => { release = resolve; });
+    mocks.exportPdf.mockImplementationOnce(async () => { started(); await capture; });
+
+    const exported = t.app.exportPdf();
+    await entered;
+    t.scheduler.schedule("content");
+    const rendered = t.scheduler.flush();
+    release();
+    await Promise.all([exported, rendered]);
+
+    expect(t.errorCard.hidden).toBe(false);
+    expect(t.errorCard.textContent).toContain("Newer render failed");
+    expect(t.errorCard.textContent).not.toContain("Earlier capture failure");
   });
   it("keeps pages alive while a close waits and uses their original metadata", async () => {
     const t = fixture();
