@@ -234,6 +234,25 @@
   overflow: hidden;
 }
 
+/* Only the active Find match is painted. This layer never owns text, selection,
+   focus, or pointer input; it remains visible while the query field has focus. */
+#editor-match-cue {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+#editor-match-cue[hidden] { display: none; }
+
+.editor-match-rect {
+  position: absolute;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
 /* The shared box metrics. Both layers get exactly these values. */
 #editor-highlight,
 #editor-input {
