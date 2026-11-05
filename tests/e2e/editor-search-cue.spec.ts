@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 import { loadFilesIntoApp, loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
 
 /** Independent full-range coverage against the actual painted syntax text. */
@@ -45,6 +46,59 @@ async function highlightedCoverage(page: Page) {
       selected: input.value.slice(input.selectionStart, input.selectionEnd),
     };
   });
+}
+
+async function plainGeometry(page: Page, measureMirrors = false) {
+  return page.locator("#editor-input").evaluate((node, withMirrors) => {
+    const textarea = node as HTMLTextAreaElement;
+    const box = node.getBoundingClientRect();
+    const styles = getComputedStyle(textarea);
+    const lineHeight = parseFloat(styles.lineHeight);
+    const marks = [...document.querySelectorAll(".editor-match-rect")].map(mark => {
+      const rect = mark.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+        width: rect.width, height: rect.height };
+    });
+    // This fixture ends with the match, then exactly one short unwrapped '-->'
+    // row and no trailing newline. Native textarea scrollHeight independently
+    // anchors its final line box, without accumulating thousands of div rows.
+    const nativeLastMatchCenter = box.top + textarea.scrollHeight - textarea.scrollTop -
+      parseFloat(styles.paddingBottom) - 1.5 * lineHeight;
+    const last = [...marks].sort((a, b) => a.top - b.top).at(-1);
+    const mirrors: Array<{ mode: string; authored: string; lineHeight: string; height: number;
+      rects: Array<{ top: number; bottom: number; left: number; right: number }> }> = [];
+    if (withMirrors) {
+      for (const mode of ["computed-pixels", "authored-unitless"]) {
+        const mirror = document.createElement("div");
+        for (const property of ["font-family", "font-size", "font-weight", "font-style", "font-stretch",
+          "font-variant-ligatures", "line-height", "letter-spacing", "word-spacing", "tab-size",
+          "white-space", "overflow-wrap", "word-break", "padding", "text-indent", "text-transform",
+          "direction", "text-align"]) mirror.style.setProperty(property, styles.getPropertyValue(property));
+        const authored = styles.getPropertyValue("--editor-line-height").trim();
+        if (mode === "authored-unitless") mirror.style.lineHeight = authored;
+        Object.assign(mirror.style, { position: "fixed", top: `${box.top}px`, left: `${box.left}px`,
+          width: `${textarea.clientWidth}px`, boxSizing: "border-box", margin: "0", border: "0",
+          visibility: "hidden", pointerEvents: "none", overflow: "hidden" });
+        const marker = document.createElement("span");
+        marker.textContent = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
+        mirror.append(document.createTextNode(textarea.value.slice(0, textarea.selectionStart)), marker);
+        document.body.append(mirror);
+        try {
+          mirrors.push({ mode, authored, lineHeight: getComputedStyle(mirror).lineHeight, height: mirror.scrollHeight,
+            rects: [...marker.getClientRects()].map(rect => ({ top: rect.top - textarea.scrollTop,
+              bottom: rect.bottom - textarea.scrollTop, left: rect.left, right: rect.right })) });
+        } finally { mirror.remove(); }
+      }
+    }
+    return { count: marks.length, rows: new Set(marks.map(mark => Math.round(mark.top))).size, marks,
+      inside: marks.every(mark => mark.width > 0 && mark.height > 0 && mark.left >= box.left - 1 &&
+        mark.right <= box.left + textarea.clientWidth + 1 && mark.top >= box.top - 1 &&
+        mark.bottom <= box.top + textarea.clientHeight + 1), top: textarea.scrollTop,
+      selected: textarea.value.slice(textarea.selectionStart, textarea.selectionEnd), lineHeight,
+      clientWidth: textarea.clientWidth, clientHeight: textarea.clientHeight, scrollHeight: textarea.scrollHeight,
+      paddingTop: styles.paddingTop, paddingBottom: styles.paddingBottom, font: styles.font,
+      nativeLastMatchCenter, cueLastMatchCenter: last ? (last.top + last.bottom) / 2 : null, mirrors };
+  }, measureMirrors);
 }
 
 test("active Find cue covers wrapped syntax text while the query keeps focus, including scroll and resize", async ({ page }) => {
@@ -108,23 +162,27 @@ test("large plain source shows the complete wrapped active cue without moving qu
   await expect(page.locator("#editor-match-cue")).toBeVisible();
   await expect(query).toBeFocused();
   const input = page.locator("#editor-input");
-  const geometry = await input.evaluate(node => {
-    const textarea = node as HTMLTextAreaElement;
-    const box = node.getBoundingClientRect();
-    const marks = [...document.querySelectorAll(".editor-match-rect")].map(mark => mark.getBoundingClientRect());
-    return { count: marks.length, rows: new Set(marks.map(mark => Math.round(mark.top))).size,
-      inside: marks.every(mark => mark.width > 0 && mark.height > 0 && mark.left >= box.left - 1 &&
-        mark.right <= box.left + textarea.clientWidth + 1 && mark.top >= box.top - 1 &&
-        mark.bottom <= box.top + textarea.clientHeight + 1), top: textarea.scrollTop,
-      selected: textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
-      lineHeight: parseFloat(getComputedStyle(textarea).lineHeight) };
-  });
+  const geometry = await plainGeometry(page);
   expect(geometry.count).toBeGreaterThan(1);
   expect(geometry.rows).toBeGreaterThan(1);
   expect(geometry.inside).toBe(true);
   expect(geometry.top).toBeGreaterThan(0);
   expect(geometry.selected).toBe(phrase);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+  const settled = await plainGeometry(page, true);
   await page.screenshot({ path: test.info().outputPath("find-active-large-plain-cue.png"), fullPage: true });
+  const afterScreenshot = await plainGeometry(page);
+  const evidencePath = test.info().outputPath("plain-cue-geometry.json");
+  await writeFile(evidencePath, JSON.stringify({ initial: geometry, settled, afterScreenshot }, null, 2));
+  await test.info().attach("plain-cue-geometry.json", { contentType: "application/json", path: evidencePath });
+  expect(settled.cueLastMatchCenter).not.toBeNull();
+  expect(Math.abs(settled.cueLastMatchCenter! - settled.nativeLastMatchCenter),
+    "the active cue must align with the native textarea's last matched row").toBeLessThan(3);
+  expect(Math.abs(afterScreenshot.cueLastMatchCenter! - afterScreenshot.nativeLastMatchCenter),
+    "cue alignment must survive settled browser rendering").toBeLessThan(3);
   // Native caret movement is the independent visibility check for a textarea
   // whose source is deliberately absent from the syntax backdrop.
   await input.focus();

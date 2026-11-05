@@ -366,9 +366,18 @@ a failed teardown flush restores the same document objects, IDs, selection and
 baselines so the user can retry. The temporary rollback snapshot ends with that
 transition. The separate one-close recovery source is released by Discard, a later
 close or workspace teardown. These ownership rules do not claim a total heap cap.
-The App subtree is inert during return, and desktop captures action clicks during
-mode changes (including shortcut-generated clicks), so new edits, sample loads or
-native saves cannot race the handoff. The interaction guard is released in `finally`.
+The App subtree is inert during entry as well as return. Entry keeps it visible
+for layout but unavailable until the initial flush completes, then releases the
+guard, drains queued imports and focuses the current editor. Desktop also captures
+action clicks during mode changes (including shortcut-generated clicks), so new
+edits, sample loads or native saves cannot race the handoff. The interaction guard
+is released in `finally`, including mount/flush failures. Reading view and New
+derive availability from the same transition/export/native-save state; an immediate
+idle export notification cannot expose them during entry. The Windows smoke polls
+visible, enabled UI Automation controls and records/rechecks that state before
+invocation, with no fixed settling delay or replayed Save action. See
+`docs/design/2026-11-05-desktop-workspace-readiness.md` for the retained failure and
+deterministic delayed-render regression.
 
 `App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission, createDocument?: () => void, layoutInitiallyOpen?: boolean })` retains the
 ordinary web defaults. Desktop disables App's second input adapter and supplies its

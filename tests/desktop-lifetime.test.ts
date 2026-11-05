@@ -158,9 +158,64 @@ describe("desktop source ownership", () => {
     await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("Mount refused"));
     expect(before.session.documents.map(({ name, text }) => ({ name, text }))).toEqual(before.documents);
     expect(document.getElementById("reader-shell")!.hidden).toBe(false);
+    expect(document.getElementById("app")!.inert).toBe(false);
     const app = mount(); await entered(app);
     expect(before.session.documents).toEqual([]);
     expect(app.store.openDocs).toHaveLength(2);
+  });
+
+  it("keeps the mounted workspace unavailable until entry finishes, then releases it before focusing", async () => {
+    await openReader();
+    const root = document.getElementById("app")!;
+    const returnButton = document.getElementById("reader-return") as HTMLButtonElement;
+    const input = document.createElement("textarea");
+    const save = document.createElement("button"); save.textContent = "Save Markdown";
+    root.append(input, save);
+    const invoke = vi.fn(); save.addEventListener("click", invoke);
+    let finishRender!: () => void;
+    const app = mount();
+    app.flushRender.mockImplementationOnce(() => new Promise<void>(resolve => { finishRender = resolve; }));
+    const focusStates: Array<{ inert: boolean; returnDisabled: boolean }> = [];
+    app.focusEditor.mockImplementation(() => {
+      focusStates.push({ inert: root.inert, returnDisabled: returnButton.disabled });
+      input.focus();
+    });
+    await vi.waitFor(() => expect(app.flushRender).toHaveBeenCalledOnce());
+    expect(document.getElementById("desktop-workspace")!.hidden).toBe(false);
+    expect(root.inert, "visible controls must be unavailable while their clicks would be discarded").toBe(true);
+    expect(returnButton.disabled).toBe(true);
+    expect(app.focusEditor).not.toHaveBeenCalled();
+    save.click(); // Keyboard shortcuts can dispatch clicks even within an inert root.
+    returnButton.click();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(app.destroy).not.toHaveBeenCalled();
+    finishRender(); await entered(app);
+    expect(focusStates).toEqual([{ inert: false, returnDisabled: false }]);
+    expect(document.activeElement).toBe(input);
+    save.click(); expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it("releases entry availability after a failed first render without losing transferred documents", async () => {
+    const before = await openReader();
+    const root = document.getElementById("app")!;
+    const returnButton = document.getElementById("reader-return") as HTMLButtonElement;
+    const action = document.createElement("button"); root.append(action);
+    const invoke = vi.fn(); action.addEventListener("click", invoke);
+    let reject!: (error: Error) => void;
+    const app = mount();
+    app.flushRender.mockImplementationOnce(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    await vi.waitFor(() => expect(app.flushRender).toHaveBeenCalledOnce());
+    expect(root.inert).toBe(true);
+    reject(new Error("Initial render refused"));
+    await vi.waitFor(() => expect(document.getElementById("workspace-notice")!.textContent).toContain("Initial render refused"));
+    expect(root.inert).toBe(false);
+    expect(returnButton.disabled).toBe(false);
+    expect(app.focusEditor).not.toHaveBeenCalled();
+    expect(app.store.openDocs.map(({ name, text }) => ({ name, text }))).toEqual(before.documents);
+    action.click(); expect(invoke).toHaveBeenCalledOnce();
+    returnButton.click();
+    await vi.waitFor(() => expect(app.destroy).toHaveBeenCalledOnce());
+    expect(boundary.sessions.at(-1)!.documents.map(({ name, text }) => ({ name, text }))).toEqual(before.documents);
   });
 
   it("keeps workspace selection and clean metadata when a queued import completes during handoff", async () => {

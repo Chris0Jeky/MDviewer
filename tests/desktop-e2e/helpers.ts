@@ -93,6 +93,7 @@ export async function readyWorkspace(page: Page, text: string): Promise<void> {
   await expect(page.locator("#editor-input")).toHaveValue(text);
   await expect(page.locator("#paged-output .pagedjs_page").first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".is-paginating")).toHaveCount(0);
+  await expect(page.locator("#app")).toHaveJSProperty("inert", false);
 }
 
 export async function dropFiles(page: Page, files: Array<{ name: string; text: string }>, target = "#reader-shell"): Promise<void> {
