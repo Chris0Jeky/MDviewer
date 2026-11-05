@@ -67,6 +67,9 @@ for (const viewMode of ["split", "editor"] as const) {
         expect(box.left).toBeGreaterThanOrEqual(viewport.left);
         expect(box.right).toBeLessThanOrEqual(viewport.right);
       }
+      if (attempt === 0) {
+        await page.screenshot({ path: test.info().outputPath(`failed-export-${viewMode}.png`), fullPage: true });
+      }
       // Exercise hit testing without activating the destructive reload action.
       await reload.click({ trial: true });
       await reload.focus();
@@ -102,5 +105,6 @@ for (const viewMode of ["split", "editor"] as const) {
     await expect(workspace).toHaveAttribute("data-view-mode", viewMode);
     await expect(page.locator("#editor-input")).toHaveValue(markdown);
     expect(await readEditorPosition()).toEqual(editorPosition);
+    await page.screenshot({ path: test.info().outputPath(`recovered-export-${viewMode}.png`), fullPage: true });
   });
 }

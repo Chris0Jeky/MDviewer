@@ -4,7 +4,7 @@
  *  - `#warning-banner` aggregates non-fatal render warnings into a single line
  *    ("Rendered with N warnings — X diagrams, Y math, Z languages").
  *  - `#error-card` is the fatal pane: a message plus a Reload button, used when
- *    the pipeline cannot produce a document at all.
+ *    rendering or export cannot complete.
  *
  * Both regions are assertive live regions so assistive tech is notified. The
  * banner only renders state — it performs no rendering work itself.
@@ -25,8 +25,10 @@ export interface BannerController {
   warn(warnings: RenderWarning[]): void;
   /** Replace the latest ingestion notice; retained until dismissed or replaced. */
   notice(warnings: RenderWarning[]): void;
-  /** Show the fatal error card with `msg` and a Reload action. */
+  /** Show the fatal card at the canvas viewport origin with `msg` and Reload. */
   fatal(msg: string): void;
+  /** Clear only fatal feedback, preserving render warnings and ingestion notices. */
+  clearFatal(): void;
   /** Clear render warnings and the error card, preserving ingestion notices. */
   clear(): void;
 }
@@ -187,6 +189,16 @@ export function mountBanner(root: HTMLElement): BannerController {
     fatal(msg: string): void {
       errorMessage.textContent = msg;
       errorCard.hidden = false;
+      // The absolute card starts at the canvas origin, which may be offscreen.
+      // Keep this instant and local: the editor's selection and scroll stay intact.
+      const previous = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+      root.scrollTop = 0;
+      root.scrollLeft = 0;
+      root.style.scrollBehavior = previous;
+    },
+    clearFatal(): void {
+      hideError();
     },
     clear(): void {
       renderWarnings = [];

@@ -46,7 +46,7 @@ function fixture() {
     exportBusy: false, exportListeners: new Set(), renderToken: 0, hasGoodRender: false,
     canvas: { host, setBusy: vi.fn(), setPaginating: vi.fn(), setProgress: vi.fn(), setPageCount: vi.fn(),
       capturePosition: () => null, restorePosition: vi.fn() },
-    banner: { fatal: vi.fn(), clear: vi.fn(), warn: vi.fn() }, emptyEl: document.createElement("div"),
+    banner: { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn() }, emptyEl: document.createElement("div"),
   });
   return { app, host, store, doc, scheduler };
 }

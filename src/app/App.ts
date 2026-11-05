@@ -457,6 +457,8 @@ export class App {
               }
             },
           });
+          // Clear this capture's failure before a queued render can publish newer feedback.
+          this.banner.clearFatal();
           this.announce("PDF downloaded.");
           pulsePdfCompleted(pages);
         } finally {
