@@ -194,7 +194,7 @@ Existing IDs and named contracts stay in `src/app/dom.ts`; Paged.js-owned names 
 
 Import order in `main.ts` is **app → editor → preview → document → workspace → print → shiki → pwa**. Workspace styles are chrome, not document typography. Print overrides the screen envelope, and the generated Paged.js stylesheet remains independent.
 
-The primary toolbar row contains identity, optional desktop New, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting; it starts expanded on desktop and collapsed at widths up to 760 px. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
+The primary toolbar row contains identity, optional desktop New, Open, View, Screen and PDF actions. A native `details`/`summary` groups document formatting. The web entry starts it expanded above 760 px and collapsed at narrower widths. The experimental Windows desktop starts it collapsed at every width to preserve writing space. Escape closes it and returns focus to its summary without resetting settings. The local-session row explains the document lifetime and provides Save Markdown. The active filename is visible even with one document. Controls remain reachable at narrow widths: at widths up to 760px the primary row is a single-row horizontal strip (no wrap; swipe/focus scrolls controls into view) so the toolbar stays compact and the preview keeps its height. Cover: `tests/e2e/responsive-toolbar.spec.ts`.
 
 `DocumentShortcuts` requires exactly one direct `button[data-document-command="open"]` in `.workspace-actions`, one `button[data-document-command="save"]` in `.workspace-session`, and the session's `.workspace-privacy` hint host. An optional unique `button[data-document-command="new"]` in `.workspace-actions` adds desktop New. Missing required or ambiguous controls are an explicit mount error; styling classes do not determine routing. Shortcuts call these existing buttons synchronously; they do not duplicate creation/input/download logic. Ctrl/Cmd+N creates a document when supplied; Ctrl/Cmd+O opens Markdown; Ctrl/Cmd+S saves current source. A visible `.workspace-shortcuts` hint, button titles and `aria-keyshortcuts` expose the available actions. Already-handled events, IME composition, Alt/Shift, unrelated keys and combined Ctrl+Meta remain untouched. Matched disabled/repeated events are prevented without clicking, so browser Save never downloads app HTML in the empty state. Teardown removes the listener/hint and restores attributes; detached roots are inert. `main.ts` owns the lifetime and registers HMR disposal. Tests: `tests/document-shortcuts.test.ts`, `tests/e2e/document-shortcuts.spec.ts`.
 
@@ -296,7 +296,7 @@ The App subtree is inert during return, and desktop captures action clicks durin
 mode changes (including shortcut-generated clicks), so new edits, sample loads or
 native saves cannot race the handoff. The interaction guard is released in `finally`.
 
-`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission, createDocument?: () => void })` retains the
+`App.init(root, { inputHandlers?: boolean, openFilePicker?: () => void, canRestoreDocument?: RestoreAdmission, createDocument?: () => void, layoutInitiallyOpen?: boolean })` retains the
 ordinary web defaults. Desktop disables App's second input adapter and supplies its
 own picker; both modes use one bounded importer. The web fallback caches the genuine
 body file input before authored IDs can collide with it. The desktop passes its
@@ -309,7 +309,12 @@ production controls for count/UTF-8-byte refusal, retry and dirty round trips.
 
 Desktop owns New from the reader toolbar, empty state, workspace toolbar and
 Ctrl/Cmd+N. `App.init` forwards its optional `createDocument` callback through
-`buildShell` and `mountToolbar`; the ordinary web entry omits it.
+`buildShell` and `mountToolbar`; the ordinary web entry omits it. Desktop also
+passes `layoutInitiallyOpen: false` through that same shell boundary. This is a
+transient initial disclosure preference, not a persisted setting. One-click
+expansion and Escape focus return retain every document layout setting, Markdown
+source, paginated sheet identity and export behavior. See
+`tests/desktop-toolbar.test.ts` and `tests/desktop-e2e/toolbar.spec.ts`.
 `nextUntitledName(docs: readonly { name: string }[]): string` chooses the first
 available case-insensitive `Untitled.md` / `Untitled N.md` name. Creation admits
 through the current 32-document / 25,000,000 UTF-8-byte limits, records a clean

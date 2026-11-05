@@ -43,6 +43,11 @@ PDF** creates the raster fallback. Exports do not overwrite the original file
 automatically. Closing an edited document asks before discarding changes. During
 export, returning to the reader or closing the app waits for the operation to finish.
 
+**Document layout** starts collapsed to leave more room for writing. Open it to
+adjust typography, paper, margins and page furniture; press Escape within the
+controls to collapse it and return focus to its heading. Collapsing the controls
+keeps every layout setting and your Markdown unchanged.
+
 `Ctrl+N` starts a new document; `Ctrl+O` opens a file. In the editing workspace,
 `Ctrl+S` saves Markdown. In the
 reader, `Ctrl+W` closes the current document. Native window controls close the app.
