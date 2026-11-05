@@ -3,7 +3,41 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT - 2026-11-05 (desktop authoring and offline capture):**
+> **CURRENT CHECKPOINT - 2026-11-05 (authoring and offline PDF capture qualified):**
+> Last merged authoring baseline verified for this record:
+> [280c73e2](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969),
+> tree `89d93bf31fbdff3db87725cd6726d57199a09b56`. New (#183), guarded editor
+> mutations (#185), compact writing space (#187), Find/Replace (#188), and desktop
+> entry readiness (#192) are merged. Save Markdown continues to save a copy; reader
+> startup stays lazy and human acceptance remains separate from automated checks.
+> Offline [#178](https://github.com/Chris0Jeky/MDviewer/pull/178) merged from reviewed
+> head `a9664f9b`; #174 is closed. The exact html2canvas-pro 2.6.0 pin and removal of
+> its temporary Dependabot exclusion are now on main. All five final jobs passed:
+> 818 units, 127 web cases with five existing optional performance skips, 27 desktop
+> cases, and 22 Rust tests plus actual native smoke. Review checked saved-PDF pixels,
+> damaged-output controls, real CSS/font cache-loss refusal and restored-cache recovery,
+> persisted recovery JSON, the 323-blob source artifact/TREE, two native Save dialogs,
+> exact Markdown bytes, PDF header/EOF and clean teardown. See
+> `docs/design/RASTER_OFFLINE_CAPTURE.md` and PR #178 for the evidence and scope.
+> Main `85f7361e` postmerge CI `42046588461` and Windows `42046589174` also passed all five jobs.
+> Active-match [#191](https://github.com/Chris0Jeky/MDviewer/pull/191) is merged and
+> #189 closed. Reviewed head `e8ef574a` includes capture/readiness and the measured line-height correction.
+> The original green candidate was held because real screenshots showed the cue
+> below matching text in a large plain source. All five corrected-head jobs passed:
+> 830 units, 130 web cases with five optional skips, 27 desktop cases, and 22 Rust tests plus native smoke.
+> Independent source/visual review approved the actual corrected screenshot and matched
+> all 327 source blobs/TREE, including desktop screenshots at short and laptop sizes.
+> Shiki 4.6 dependency qualification is recorded separately in
+> [#193](https://github.com/Chris0Jeky/MDviewer/pull/193). Its initial Node failure was
+> traced to jsdom's missing `Blob.stream()`; a normal supported-Node install worked.
+> Consult that PR for the test-environment correction, final head and qualification receipts.
+> Windows acceptance/performance #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No live
+> deployment, signed release, automatic updater or comparative RAM/startup claim follows.
+> Exact anchors and remaining work: `docs/design/2026-11-05-authoring-checkpoint.md`.
+
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT - 2026-11-05 (desktop authoring and offline capture):**
 > Integration basis is merged main `7f6db5d2d6ee541e6ab2fc7baf8250f03f76fd78`.
 > New documents (#183), guarded native editor mutations (#185), compact desktop
 > writing space (#187), Find/Replace (#188), and desktop entry readiness (#192)
@@ -25,8 +59,6 @@
 > regression must pass and the actual screenshots must align before that work merges.
 > Windows acceptance/performance #169 and AI-6/AI-7/AI-8/AI-9 remain OPEN. No live
 > deployment, signed release, automatic updater or comparative RAM/startup claim follows.
-
-## Historical checkpoints
 
 > **HISTORICAL CHECKPOINT - 2026-11-05 (recoverable export error feedback):**
 > Based on merged main 8265edd4, including the workspace correction #177 and CLI
@@ -427,7 +459,10 @@ Use a project-local isolated worktree created with `git worktree add --detach <p
 then create a branch inside it. Keep the primary checkout clean. Any changed PR head invalidates its
 older CI and independent-review evidence.
 
-### 2. Durable launch snapshot
+### 2. Historical launch snapshot
+
+The launch details below are historical. The current checkpoint above and
+`ACTION_ITEMS.md` Current State supersede its repository, deployment and human-queue anchors.
 
 - **Repository anchor:** `main` was `43af438a47df08030cf0e6eafcc7b6ec7c580ea1` after PR #29; CI run
   `30060892316` passed Node 20, Node 22, and production Chromium.
@@ -454,7 +489,7 @@ older CI and independent-review evidence.
   Local PDF evidence was retained at
   `C:\Users\Public\codex-shell-home\mdviewer-pdf-evidence-20260724` on the maintainer machine.
 
-### 3. Hosting preparation queue — OPEN
+### 3. Hosting preparation queue — dry path done; remaining gates open
 
 The reference-only intake in [`.hosting/manifest.json`](./.hosting/manifest.json) does not deploy
 or activate anything. These follow-on tasks are part of the resumable queue and retain the
@@ -462,9 +497,9 @@ browser-only, local-document boundary:
 
 | Task | Status | Acceptance gate |
 | --- | --- | --- |
-| MD1 — prepare CI-compatible direct upload | **OPEN** | Reuse the existing Pages project and approved `dist` build; production requires a reviewed promotion and scoped credentials supplied outside Git. |
+| MD1 — prepare CI-compatible direct upload | **DONE — dry acceptance; AI-9 live gate OPEN** | The reviewed artifact handoff and credential-free dry path passed on 2026-10-02. Production environment protection, scoped credentials and the first live dispatch remain AI-9. |
 | MD2 — prepare canonical-origin metadata | **BLOCKED — hostname not selected/owned** | Verify direct entry, refresh and lazy same-origin assets at the proposed base before setting a canonical hostname. |
-| MD3 — protect the browser-only boundary | **OPEN** | Re-run render/export and runtime-egress checks; introduce no converter backend, document upload or new runtime network path. |
+| MD3 — protect the browser-only boundary | **DONE — regression and per-deploy checks retained** | Render/export and runtime-egress checks are established; re-run the deployment smoke for each promotion. No converter backend, document upload or new runtime network path. |
 
 Use [`.hosting/README.md`](./.hosting/README.md) for the bounded implementation notes. The existing
 Direct Upload project remains authoritative; a Git push is not a production deployment trigger.
@@ -590,7 +625,7 @@ above and refresh GitHub state for the current queue, verification and next work
   PR #36. Automated coverage cannot judge how typing feels or confirm the Print/Save-as-PDF output
   by eye. Step-by-step instructions are in `ACTION_ITEMS.md`; only the maintainer may close it.
 
-## Task board
+## Historical task board
 
 | id | title | status | prio | deps | branch/PR | review | outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -642,8 +677,12 @@ above and refresh GitHub state for the current queue, verification and next work
   an unbundled-but-known language (folds in T-11; keep `ensureLang`, don't delete it).
 ### Remaining backlog
 
-- Profile very large documents and set a render-time/main-thread budget.
-- Evaluate additional Mermaid/Shiki code-splitting after real-user performance measurements.
+- Consult #193 for the Shiki 4.6 compatibility correction and exact-head qualification
+  before further dependency work.
+- Apply the existing `docs/PERF_BUDGET.md` ladder to concrete regressions and complete
+  representative Windows comparisons in #169 before claiming efficiency improvements.
+- Evaluate further Mermaid/Shiki splitting against those measurements; reader grammar
+  admission/selective preparation is already merged in #162/#172.
 
 ## Deferred questions — ALL ANSWERED 2026-06-25
 

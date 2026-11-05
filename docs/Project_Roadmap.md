@@ -47,6 +47,38 @@ export paths.
 
 ### P2 — UX polish — `IN PROGRESS`
 
+- **Done (2026-11-05): desktop authoring entry and space.**
+  [New document #183](https://github.com/Chris0Jeky/MDviewer/pull/183) adds New from
+  the reader/workspace and Ctrl/Cmd+N, preserving existing documents, native admission,
+  lazy workspace entry and Save Copy semantics. [#187](https://github.com/Chris0Jeky/MDviewer/pull/187)
+  starts desktop Document layout collapsed while retaining settings, keyboard operation
+  and the web default. Production desktop checks cover useful writing height, stable
+  source/page state and screenshots at laptop and narrow-window sizes.
+- **Done (2026-11-05): source edit ownership.**
+  [#185](https://github.com/Chris0Jeky/MDviewer/pull/185) fences delayed paste/drop and
+  range replacements to their original document, value, selection and focus. Fresh
+  textarea identity boundaries isolate native undo; passive updates and first-input
+  adoption preserve it. These three authoring PRs are merged in main `f0faf7c6`.
+- **Done (2026-11-05): Find/Replace [#188](https://github.com/Chris0Jeky/MDviewer/pull/188),
+  closes #182.** Literal search, keyboard navigation, bounded results and guarded
+  replacements use the native edit seam. Reviewed head `c5733297` passed all five
+  jobs, including 123 web and 27 desktop browser cases, and merged as main `4976f289`.
+- **Done (2026-11-05): active-match visibility [#191](https://github.com/Chris0Jeky/MDviewer/pull/191),
+  closes #189; merge `280c73e2`.** A visible source-match cue keeps Find focused while
+  preserving source, native undo and editor geometry. Screenshot review caught the
+  original large-source misalignment; measured line height and stronger geometry
+  checks corrected it. All five reviewed-head jobs passed: 830 units, 130 web cases
+  with five optional skips, 27 desktop cases, and 22 Rust tests plus native smoke.
+  Independent source/screenshot review verified the corrected alignment and source TREE.
+- **Done (2026-11-05): workspace readiness [#192](https://github.com/Chris0Jeky/MDviewer/pull/192),
+  closes #190; merge `7f6db5d2`.** A postmerge native smoke exposed enabled Save
+  controls before entry finished, while the transition guard still discarded clicks.
+  Entry now stays inert through rendering and releases readiness before focus.
+  Delayed-render regressions and 803 local units pass. Reviewed head `a54b1ef5` passed
+  all five hosted jobs; actual native smoke verified two Save dialogs, exact Markdown,
+  PDF header/EOF and clean teardown. The correction is inherited by current main.
+  AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain open.
+
 - **Done (2026-08-16): the QA-sweep fixes.** A full manual QA pass (`mdviewerqareport.md`,
   run against the July deployment) drove a coordinated fix sweep: working zoom controls with
   true fit-to-width; a live, pinned page-position chip; visible warning banner / error card
@@ -96,9 +128,20 @@ export paths.
   on an ordinary desktop and comparative memory targets remain open in
   [#169](https://github.com/Chris0Jeky/MDviewer/issues/169). See
   [`WINDOWS_DESKTOP.md`](WINDOWS_DESKTOP.md) and `design/WINDOWS_READER.md`.
-- Offline raster PDF styling and the blocked html2canvas-pro 2.6 follow-up remain open in
-  [#174](https://github.com/Chris0Jeky/MDviewer/issues/174). Retaining the qualified exporter
-  does not establish offline saved-PDF visual fidelity.
+- **Done (2026-11-05): offline raster capture [#178](https://github.com/Chris0Jeky/MDviewer/pull/178),
+  closes #174; merge `85f7361e`.** Main pins html2canvas-pro 2.6.0 and removes its narrow
+  temporary Dependabot exclusion. Final reviewed head `a9664f9b` passed all five jobs:
+  818 units, **127 web cases with five existing optional performance skips**, 27 desktop
+  cases, and 22 Rust tests plus real native smoke. Saved-PDF pixels, damaged-output
+  controls and real CSS/font cache-loss refusal/cleanup/recovery pass. Review inspected
+  persisted recovery JSON, the matching source artifact/TREE, both native Save dialogs,
+  exact Markdown bytes and PDF header/EOF with clean teardown. See
+  [offline capture evidence](design/RASTER_OFFLINE_CAPTURE.md). Human cross-engine,
+  live/PWA and representative Windows acceptance remain separate open gates.
+- **Dependency qualification:** [#193](https://github.com/Chris0Jeky/MDviewer/pull/193)
+  records the six-package Shiki 4.6 update, the initial jsdom `Blob.stream()` compatibility
+  finding, and the correction/review/CI receipts. Consult that record for its final
+  head and merge state; authoring acceptance and human gates remain separate.
 - Large-document performance (incremental page count, layout responsiveness, memory).
 - Render-time budget and main-thread blocking mitigation.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
@@ -106,8 +149,9 @@ export paths.
 - **Done:** Mermaid fences bypass Shiki and render to sanitized, styled SVG text across flowchart and
   non-flowchart diagrams; remote URLs in SVG presentation attributes are removed and diagram output
   remains light so screen-theme changes cannot degrade printed PDFs.
-- **Done:** broader Shiki language coverage via pre-scan + on-demand curated grammar chunks, with
-  graceful unknown-language fallback.
+- **Done:** broader Shiki language coverage via parsed-fence preparation and on-demand
+  curated grammar chunks, with graceful unknown-language fallback. Merged #177 aligns
+  workspace preparation with the actual decoded tokens; reader selection is covered by #172.
 - **Done:** E2E suite in CI on real Chromium (no-cutoff, golden-path, export, empty/error), plus
   configurable isolated ports to prevent stale-server false positives. Stable source atomic IDs now
   detect short logical blocks incorrectly split into individually well-fitting page fragments.
@@ -117,10 +161,12 @@ export paths.
 - **Done:** tested dependency-free production server, one-command/one-click Windows launch, secure
   static-host headers, no public source maps, and deployment/runbook documentation.
 - **Done:** public Cloudflare Pages deployment at **https://mdviewer-c9r.pages.dev/** (AI-4).
-- **Done (2026-08-16):** installable PWA with full offline support — Workbox precache covering
+- **Done (2026-08-16):** installable PWA with offline app-shell/rendering support — Workbox precache covering
   every lazy chunk and the KaTeX fonts, prompt-based updates, favicon/manifest icons, and
   OG/Twitter metadata; offline behavior proven by `tests/e2e/offline.spec.ts` on the
-  production bundle.
+  production bundle. Production-Chromium saved-PDF visual and CSS/font recovery
+  qualification completed in #178 (closes #174); live/PWA and second-engine human
+  acceptance remain open in AI-7 and AI-6.
 - **Done (2026-09-26):** profiled very large documents and set the production
   performance budget (`docs/PERF_BUDGET.md`): deterministic generator
   (`tests/perf/generateLargeDoc.ts`) plus an opt-in Playwright ladder
@@ -168,8 +214,10 @@ Explicitly out of scope for now; revisit only after P1–P3 land.
 
 ## Priorities
 
-1. Land P1 and clear its exit gate — the no-slice guarantee is the product. **Done.**
-2. P2 UX polish once the core path is trustworthy. **In progress** — the split workspace landed
-   first because authoring in-app was an explicit owner request.
+1. Preserve the completed P1 no-slice export gate. **Done.**
+2. P2 everyday desktop authoring. **In progress** — New, writing space, edit ownership,
+   Find/Replace and visible matches are merged. Complete the remaining manual typing
+   and browser acceptance, then address observed usability findings while keeping the
+   reader lightweight.
 3. P3 hardening before claiming production readiness.
 4. P4 stays deferred until explicitly reprioritized.

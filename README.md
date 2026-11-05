@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/assets/mdviewer-loop.svg" alt="MDviewer workflow, animated" width="100%"></p>
 
-A local Markdown reader and Markdown → PDF tool whose one hard rule is that no code block, figure, table, or callout is ever sliced across a page.
+A local Markdown reader and editor with a paginated PDF preview. Code blocks, figures, tables and callouts stay whole when they fit on a page.
 
 [![CI](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Chris0Jeky/MDviewer/actions/workflows/ci.yml)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
@@ -11,9 +11,11 @@ A local Markdown reader and Markdown → PDF tool whose one hard rule is that no
 
 **Live app:** https://mdviewer-c9r.pages.dev/
 
-**Windows desktop preview:** a separate reading window with Explorer file opening,
-multiple documents, themes and an optional editing/PDF workspace. The editor and
-pagination load only when requested. [Download/build instructions and current limits](docs/WINDOWS_DESKTOP.md).
+**Windows desktop preview:** read local files in a continuous view, start a blank
+document with **New**, or use **Edit & PDF** for source editing, Find/Replace and
+paginated preview. Explorer file opening, multiple documents and screen themes are
+built in. The source editor and pagination load only when you choose New or Edit & PDF.
+[Download/build instructions, shortcuts and current limits](docs/WINDOWS_DESKTOP.md).
 
 - [What it is](#what-it-is)
 - [Why it exists](#why-it-exists)
@@ -41,8 +43,9 @@ The public site also sends pseudonymous, content-free usage data to the owner's 
 
 Same-origin application assets (Paged.js, Mermaid, extra Shiki grammars, KaTeX fonts) may load lazily as features run. The production build is an installable PWA and works offline once those assets are cached.
 
-Offline styling in PDFs saved with **Download PDF** is still being qualified in
-[#174](https://github.com/Chris0Jeky/MDviewer/issues/174); a successful download alone does not establish visual fidelity.
+Production-build Chromium tests cover offline PDFs saved with **Download PDF**,
+including styled output, refusal when required CSS or fonts are missing, and retry
+after those cached assets are restored. See [offline capture evidence and limits](docs/design/RASTER_OFFLINE_CAPTURE.md).
 
 ## Why it exists
 
@@ -103,6 +106,8 @@ Only what the code actually does:
 
 - **No-slice pagination.** Code blocks, figures, tables and callouts stay on one page when they fit. Oversize blocks shrink slightly (≤ 1.15×) or split cleanly; tables repeat their header. List items fragment like paragraphs so a long checklist does not leave half-blank sheets.
 - **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
+- **New documents on Windows.** **New** (`Ctrl+N`) opens a blank source with an available `Untitled.md` name and keeps existing documents open. The desktop reader loads the editing workspace on demand; **Reading view** returns with your open documents and edits preserved. Document layout starts collapsed to leave more room for writing.
+- **Find and Replace.** Choose **Find** or press `Ctrl/Cmd+F` in the source workspace. Search literal text, match case, see result counts and wrap through matches; the current match stays visibly marked while Find keeps keyboard focus. `Ctrl/Cmd+H` opens replacement controls. In the Find field, `Enter` / `Shift+Enter` moves forward / backward and `Escape` returns to the source. Replace all is one undoable edit. Reader and Preview-only modes keep the host's normal Find.
 - **Two PDF paths from one layout.** [Print / Save as PDF](#how-export-works) is the vector path. Download PDF is the raster fallback. Both consume the same already-broken page DOM. The PDF is always dark-on-white, whatever screen theme you are using.
 - **Syntax-highlighted code** via [Shiki](https://shiki.style/) — TextMate grammars, six theme families (GitHub, VS Code, Nord, Min, One, Catppuccin), each a light/dark pair. Print forces the light side. Optional CSS line numbers. Unknown fence languages fall back to plain text and surface a warning.
 - **Math** via [KaTeX](https://katex.org/) (inline and display). Bad TeX renders as a red inline error instead of aborting the document.
