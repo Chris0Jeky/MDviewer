@@ -39,7 +39,7 @@ function needsCodeTransformers(md: MarkdownIt, tokens: Token[], lineNumbers: boo
     const info = md.utils.unescapeAll(token.info).trim();
     const language = info.split(/\s+/, 1)[0]?.toLowerCase().replace(/^language-/, "");
     return (token.type === "fence" && language !== "mermaid"
-      && (lineNumbers || token.content.includes("[!code") || /\S\s+\S/.test(info)))
+      && (lineNumbers || /\[!code/i.test(token.content) || /\S\s+\S/.test(info)))
       || !!(token.children && needsCodeTransformers(md, token.children, lineNumbers));
   });
 }

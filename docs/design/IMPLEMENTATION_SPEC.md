@@ -316,7 +316,7 @@ The continuous reader parses once with `createMarkdown(null, settings)`. It insp
 `fence` tokens (including their nested children), not fence-shaped source lines. Prose,
 math, Mermaid-only documents and ordinary plaintext/unknown fences do not initialize Shiki
 or request its WASM, themes or grammars. Actual supported code fences await the shared
-highlighter and curated language loaders. Explicit line numbering, notation directives or
+highlighter and curated language loaders. Explicit line numbering, case-insensitive notation directives or
 fence metadata also enable the existing code transformers, including for plaintext.
 
 `installMarkdownHighlighter(md, hl, settings)` installs the synchronous highlight callback

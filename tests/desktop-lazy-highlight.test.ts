@@ -65,6 +65,19 @@ describe("reader syntax highlighting admission", () => {
     expect(getHighlighter).toHaveBeenCalledOnce();
   });
 
+  it.each(["text", "", "unbundled-example"])("preserves case-insensitive notation in %s fences", async language => {
+    const source = `\`\`\`${language}\n// [!CODE highlight]\nalpha\n\`\`\``;
+    const eager = renderMarkdown(createMarkdown(await getHighlighter(), DEFAULT_SETTINGS), source);
+    const reference = document.createElement("div");
+    reference.innerHTML = eager.html;
+    expect(reference.querySelector(".line.highlighted")?.textContent).toBe("alpha");
+    vi.mocked(getHighlighter).mockClear();
+    const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
+    expect(result.document.querySelector(".line.highlighted")?.textContent).toBe("alpha");
+    expect(result.document.querySelector("pre code")?.textContent).not.toContain("[!CODE");
+    expect(getHighlighter).toHaveBeenCalledOnce();
+  });
+
   it("preserves plaintext metadata highlighting", async () => {
     // A trailing {...} is consumed by markdown-it-attrs before highlighting.
     // Keep a trailing metadata word so this exercises actual Shiki metadata.
