@@ -42,7 +42,7 @@ copies and keeps open documents in memory.
 
 MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
 
-The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. Apart from explicit user-requested Markdown/PDF saves, the app stores only a small settings object in `localStorage` (`mdviewer.settings.v1`); the public-site SDK has the separate keys described below. There is no conversion API, no automatic document storage, and no account.
+The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. Apart from explicit user-requested Markdown/PDF saves, app-managed user state consists of a small settings object in `localStorage` (`mdviewer.settings.v1`) and the public-site SDK keys described below. The PWA separately caches application assets for offline use. There is no conversion API, no automatic document storage, and no account.
 
 The public site also sends pseudonymous, content-free usage data to the owner's first-party Pulseboard collector — never document text, file names or exports. See [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
 
