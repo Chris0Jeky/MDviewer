@@ -41,7 +41,8 @@ Do not bulk-read `node_modules`, `dist`, build output, or generated artifacts un
 
 Use [Future work](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 for the issue-backed queue. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
-and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) are design-first proposals.
+and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs
+merged in #209; native proof, measurement and implementation gates remain open.
 Current Save Copy, memory-only sessions and privacy contracts remain in force until their
 reviewed implementation updates those contracts together.
 

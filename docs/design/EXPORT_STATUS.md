@@ -70,11 +70,16 @@ a real failed capture followed by a successful download. The matrix covers
 Markdown/Split/Preview at 1280×800, Find/Replace at 1280×420 and 560×420, and
 Markdown at 375×667. Screenshots and geometry attachments are emitted by the spec.
 
-## Local qualification (2026-11-05)
+## Historical isolated qualification (2026-11-05)
 
-The production Firefox matrix passes **7/7 without retries** (51.9 seconds) using
+The feature merged in [#210](https://github.com/Chris0Jeky/MDviewer/pull/210).
+The [current checkpoint](2026-11-05-editor-followup-checkpoint.md) records the
+combined application qualification; the receipts below describe earlier isolated
+revisions.
+
+The production Firefox matrix passed **7/7 without retries** (51.9 seconds) using
 the locked Playwright Firefox engine and the application code at local commit
-`0a9e34a`. TypeScript and ESLint also pass. The final full unit suite passes
+`0a9e34a`. TypeScript and ESLint also passed. That isolated full unit suite passed
 **843 tests across 72 files**, including native/browser save settlement and
 cancellation, bounded failure detail, and the existing export/clone invariants.
 
@@ -115,4 +120,5 @@ old canvas live region and “downloaded” wording. That assertion now requires
 new external live region and exact “PDF download requested.” outcome; its real
 network cut, downloaded file and re-enabled controls remain required. Both Node
 lanes, desktop Chromium and the actual Windows native/save smoke passed that head.
-A changed head still requires fresh full CI and review before merge.
+The corrected final head subsequently passed fresh full CI and review before
+merging; see the current checkpoint for its exact head, merge and workflow links.

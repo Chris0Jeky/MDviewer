@@ -1,11 +1,10 @@
 # Desktop editor: future work
 
-Planning baseline: **2026-11-05**, verified application commit
-[`203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55).
-Tracker: [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
-The [roadmap](Project_Roadmap.md) owns phase status; the issues below own execution,
-acceptance criteria and dependencies. Check GitHub before starting: this table is a
-dated priority map, not a claim that issue state never changes.
+Updated **2026-11-05**. Qualified application revision: [`18afeeb8`](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697).
+Exact checks, reviewed heads and Windows artifacts are recorded in the
+[editor follow-up checkpoint](design/2026-11-05-editor-followup-checkpoint.md). Tracker: [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+The [roadmap](Project_Roadmap.md) owns phase status; each issue owns its acceptance
+criteria and dependencies. Re-read GitHub before starting new work.
 
 **Human acceptance remains OPEN:** [Windows #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
 and [AI-6, AI-7, AI-8, AI-9](../ACTION_ITEMS.md#open-items). Code merges and automated
@@ -19,20 +18,32 @@ workflows, fast everyday writing, accessible controls and page-safe PDF output.
 Keep reader startup light and reveal advanced controls when needed. The web/PWA
 build remains supported; the desktop host stays separate from the shared renderer.
 
-New documents, compact writing controls, guarded native editing/undo, Find/Replace,
-visible matches, workspace readiness, offline PDF qualification and Shiki 4.6 are
-already merged through #183/#187/#185/#188/#192/#178/#191/#193/#194. The final
-application baseline passed both [CI](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540)
-and [Windows Desktop](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244):
-832 units on each Node lane, 130 web cases with five optional performance skips,
-27 desktop cases, and 22 Rust tests plus actual native launch/save smoke.
+New, Find/Replace, native edit ownership and offline PDF qualification are joined
+by compact Markdown commands (#211/#198), bounded session positions and document
+navigation (#212/#199), visible PDF progress in every workspace layout (#210/#200),
+and production Firefox/accessibility coverage (#208/#203). Authored heading names
+are isolated from application styles and feedback (#213). These changes preserve
+the native textarea, lazy reader/workspace entry and the existing render pipeline.
+No new editor or Markdown-parser dependency was added.
 
 Today, document/session content stays in memory. Explicit Markdown/PDF saving is
 available; **Save Markdown saves a copy and does not clear the original-source
 dirty baseline**. There is no automatic document storage, crash recovery, in-place
 save, file watcher or persistent recent-file list. The reader already has an
-outline, and progress already exists when the preview is visible. Future issues
+outline, and PDF progress remains visible even when the preview is hidden. Future issues
 must not misdescribe those shipped capabilities as missing.
+
+## Delivered in this follow-up
+
+| Work | Completion evidence |
+| --- | --- |
+| Markdown writing commands #198 | [#211](https://github.com/Chris0Jeky/MDviewer/pull/211); [command contract](design/MARKDOWN_COMMANDS.md) |
+| Session positions and navigation #199 | [#212](https://github.com/Chris0Jeky/MDviewer/pull/212); [ownership contract](design/SESSION_NAVIGATION.md) |
+| Visible PDF feedback #200 | [#210](https://github.com/Chris0Jeky/MDviewer/pull/210); [phase/announcement contract](design/EXPORT_STATUS.md) |
+| Second-engine/accessibility automation #203 | [#208](https://github.com/Chris0Jeky/MDviewer/pull/208); [coverage matrix](design/AUTHORING_QUALITY.md). Human acceptance remains open. |
+| Authored heading isolation | [#213](https://github.com/Chris0Jeky/MDviewer/pull/213); runtime CSS/feedback fix, separate from Unicode ID design #204 |
+| Native probe snapshot publication | [#214](https://github.com/Chris0Jeky/MDviewer/pull/214); atomic diagnostic snapshots and real held-reader fixtures in both PowerShell runtimes |
+| File ownership and recovery designs | [#209](https://github.com/Chris0Jeky/MDviewer/pull/209); designs merged, implementations #196/#197 remain open |
 
 ## Ordered work
 
@@ -43,12 +54,8 @@ identifies a dependency; **Deferred** is deliberately lower priority.
 
 | Priority / stage | Issue | Completion target and dependency |
 | --- | --- | --- |
-| Implementation prepared · review/CI pending | [#200 — Export feedback with a hidden preview](https://github.com/Chris0Jeky/MDviewer/issues/200) | External visible progress/status, bounded announcements, exact capture/save phases and failure/cancel/retry feedback are implemented. See [design and evidence](design/EXPORT_STATUS.md); exact-head review/CI remains required. Raster cancellation stays separate in #201. |
-| Design drafted · native primitive gate | [#196 — Save / Save As and file ownership](https://github.com/Chris0Jeky/MDviewer/issues/196) | Review the [Save / Save As design](design/FILE_LIFECYCLE.md): capability ownership, saved revisions, encoding and conflict outcomes. Prove the Windows compare/replace primitive before implementing owned writes; current Save Copy remains unchanged. |
-| Design drafted · depends on #196 | [#197 — Optional crash/session recovery](https://github.com/Chris0Jeky/MDviewer/issues/197) | Review the [optional recovery design](design/RECOVERY.md): default off, bounded native generations, revocable writers, explicit restore/discard and deletion. Implementation still depends on the identity contract and Windows fault/restart evidence. |
-| Implementation prepared · review/CI pending | [#198 — Markdown formatting commands](https://github.com/Chris0Jeky/MDviewer/issues/198) | Collapsed Format controls and source shortcuts implement eleven Markdown commands through the guarded edit seam. Exact toggles, selections and tests: [command design](design/MARKDOWN_COMMANDS.md). Final hosted checks/review remain required. |
-| Implementation prepared · review/CI pending | [#199 — In-session positions and document navigation](https://github.com/Chris0Jeky/MDviewer/issues/199) | Bounded ID-keyed caret/scroll positions, compact previous/next controls and Windows/Linux shortcuts are implemented, with reader/workspace and Undo Close transfer. See [navigation contract](design/SESSION_NAVIGATION.md); final hosted checks/review remain required. |
-| Implementation prepared · review/CI pending | [#203 — Second-engine and accessibility regressions](https://github.com/Chris0Jeky/MDviewer/issues/203) | Production Firefox authoring lane, keyboard/accessibility regressions and forced-colors Find correction. Local 39-case Firefox evidence and exact coverage: [design note](design/AUTHORING_QUALITY.md). Human AI-6/#169 acceptance remains separate. |
+| Next · Design merged; native proof required | [#196 — Save / Save As and file ownership](https://github.com/Chris0Jeky/MDviewer/issues/196) | Implement the reviewed [file-lifecycle contract](design/FILE_LIFECYCLE.md) after proving conflict-safe Windows compare/replace. A hash check followed by atomic replacement alone is insufficient; current Save Copy remains available. |
+| Next · Design merged; depends on #196 | [#197 — Optional crash/session recovery](https://github.com/Chris0Jeky/MDviewer/issues/197) | Implement the reviewed [recovery contract](design/RECOVERY.md) after identity agreement, bounded-write measurements and Windows fault/restart/deletion evidence. Default remains off and no recovery storage has shipped. |
 | Soon · Design first | [#201 — Bounded raster cancellation](https://github.com/Chris0Jeky/MDviewer/issues/201) | Stop or safely isolate queued/stalled/multi-page work without a late save or premature render-lease release; reuse #200's feedback surface. |
 | Soon · Measure first | [#202 — Measured authoring responsiveness](https://github.com/Chris0Jeky/MDviewer/issues/202) | Refresh workloads and profile actual bottlenecks before choosing an optimization; preserve output/ownership and demonstrate improvement against the same baseline. Native comparisons stay in #169. |
 | Later · Ready | [#204 — Unicode heading/TOC identity](https://github.com/Chris0Jeky/MDviewer/issues/204) | Consistent heading IDs and encoded fragments across reader, TOC/page numbers and vector/Print PDF links; preserve raster visual output. Include duplicates and compatibility. CSS selector escaping already exists. |
@@ -115,4 +122,4 @@ and record its own commit/tree/checksums instead of carrying forward old evidenc
    the three-minute head age before a merge commit. New evidence belongs to its
    actual commit; do not claim tests on an older commit prove a changed head.
 
-No feature in this future-work table is implemented by the documentation pass itself.
+This map records merged application work and the remaining implementation gates. Updating the map does not ship the pending features.

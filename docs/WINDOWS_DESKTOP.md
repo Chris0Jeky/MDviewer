@@ -6,6 +6,10 @@ PDF workspace load when you choose **New** or **Edit & PDF**.
 
 ## Get the app
 
+The [qualified editor follow-up](design/2026-11-05-editor-followup-checkpoint.md) and
+[Windows acceptance issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169) identify
+the exact installer, portable executable, source revision and checksums to exercise.
+
 Open the [Windows Desktop workflow](https://github.com/Chris0Jeky/MDviewer/actions/workflows/desktop.yml)
 and select a successful run for the commit you want to try. Download the
 `mdviewer-windows-x64` artifact and extract it. GitHub may require you to sign in to
@@ -41,7 +45,10 @@ Choose **Edit & PDF** to edit an opened file and use the existing page-safe prev
 Use **Format** beside Find for Bold, Italic, code spans/blocks, headings, links,
 bullets, numbered lists and tasks. Ctrl/Cmd+B, I and K apply Bold, Italic and Link
 while writing in the source. Each command is one Undo step; selected placeholder
-text is ready to replace. Escape closes the controls and returns to the source.
+text is ready to replace. Unsafe or ambiguous Markdown boundaries leave source and
+selection unchanged and explain the refusal. Escape closes the controls and returns
+to the source. In a short window, the shortcut legend temporarily yields space while
+Format is open; the memory warning, Save action and all command controls remain available.
 
 The previous/next arrow buttons cycle open documents. On Windows/Linux, use
 **Alt+Shift+P/N** to switch or **Alt+Shift+D** to focus the document picker. Equal
@@ -77,6 +84,9 @@ keeps every layout setting and your Markdown unchanged.
 | `Ctrl+S` | Save a Markdown copy | Editing workspace |
 | `Ctrl+F` | Find source text | Workspace with the source pane visible; reader and Preview-only keep WebView Find |
 | `Ctrl+H` | Open source replacement controls | Workspace with the source pane visible |
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | Bold / Italic / Link | Source textarea |
+| `Alt+Shift+P` / `Alt+Shift+N` | Previous / next document | Reader and editing workspace |
+| `Alt+Shift+D` | Focus the document picker | Reader and editing workspace |
 | `Ctrl+W` | Close the current document | Reader |
 
 Native window controls close the app. Workspace controls stay unavailable while a
@@ -101,7 +111,7 @@ Replace all until the search is narrowed. Search text is limited to 2,000
 characters. The usual document size and confirmation limits still apply to edits.
 Search state stays in memory and is never added to saved Markdown or PDF output.
 In short windows, Find temporarily uses the workspace for source text; closing it
-restores your Split layout.
+restores your Split layout when Format is also closed.
 
 The current match stays visibly marked in the source while the Find field keeps
 keyboard focus, so you can follow repeated results without leaving the query.
@@ -203,7 +213,9 @@ Existing web human acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open
 [Future work](FUTURE_WORK.md) and [tracker #195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 record the remaining improvements and product decisions. Native file saving
 ([#196](https://github.com/Chris0Jeky/MDviewer/issues/196)) and optional recovery
-([#197](https://github.com/Chris0Jeky/MDviewer/issues/197)) are design-first proposals.
+([#197](https://github.com/Chris0Jeky/MDviewer/issues/197)) have reviewed designs merged
+in #209. Safe native replacement, measured recovery overhead and fault/restart tests
+remain implementation gates.
 This preview continues to save copies and does not store documents automatically.
 
 See [the design](design/WINDOWS_READER.md) and [native host contract](../src-tauri/README.md)

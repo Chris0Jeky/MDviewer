@@ -14,24 +14,22 @@
 
 ## Current delivery and next work
 
-Verified application baseline: [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
-including merged #183/#187/#185/#188/#192/#178/#191/#193/#194. Postmerge
-[CI](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053738540) and
-[Windows Desktop](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244)
-passed all five jobs. This is an application checkpoint, not a live deployment.
+Qualified application revision: [`18afeeb8`](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697). The [editor follow-up checkpoint](design/2026-11-05-editor-followup-checkpoint.md)
+records the merged PRs, exact-head review, all six hosted jobs and the matching
+Windows executable/source evidence. This is application qualification; the live
+site retains its separate deployment record.
 
 Use [Future work](FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
-for the ordered issue queue and acceptance criteria. Next: fix hidden-preview export
-feedback (#200), design file ownership/Save semantics (#196), then coordinate optional
-recovery design (#197). Formatting (#198), in-session navigation (#199), second-engine/
-accessibility regressions (#203), bounded raster cancellation (#201), and measured
-authoring performance (#202) are separately scoped work.
+for the next implementation work: prove safe Windows compare/replace for #196,
+then implement the reviewed optional recovery contract #197; design bounded raster
+cancellation #201 and profile measured authoring bottlenecks #202. Unicode heading
+identity #204, upstream engagement accounting #206 and pagination whitespace
+research #205 remain separate.
 
-**#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Their human checklists are unchanged.
-Current documents remain memory-only except explicit user-requested saves; planning
-file/recovery features does not enable persistence. Proposed contracts now have concrete
-[Save / Save As](design/FILE_LIFECYCLE.md) and [optional recovery](design/RECOVERY.md)
-designs. Native compare/replace evidence and implementation remain outstanding.
+**#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
+explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
+[optional recovery](design/RECOVERY.md) designs merged in #209; no in-place writes
+or recovery storage were implemented by that design PR.
 
 ## Active gate
 
@@ -69,24 +67,25 @@ export paths.
 
 ### P2 — Desktop authoring and UX — `IN PROGRESS`
 
-- **Implementation prepared (2026-11-05): Markdown writing commands #198.** A
-  compact Format disclosure and source-only shortcuts use guarded native edits
-  for eleven common commands, with one-step Undo, placeholder selections and
-  explicit multiline/toggle behavior. See `design/MARKDOWN_COMMANDS.md`; final
-  hosted checks and independent review remain required before merge.
-- **Implementation prepared (2026-11-05): session positions/navigation #199.**
-  Bounded ID-keyed source/preview/reader positions survive document switching,
-  Undo Close and reader/workspace transfers while textarea undo stays isolated.
-  Compact previous/next controls and Windows/Linux shortcuts preserve native
-  Apple Option behavior. See `design/SESSION_NAVIGATION.md`; final hosted checks
-  and independent review remain required before merge.
-- **Implementation prepared (2026-11-05): authoring quality #203.** A bounded
-  production Firefox lane reuses actual editor/undo/search/shortcut and desktop
-  New/layout tests. New accessibility tests cover keyboard focus and state,
-  composition guards, short reflow and forced-colors Find. Forced colors now use
-  native system text and an outlined match cue. Exact-head CI/review is required
-  before merge; this automation does not clear AI-6 or Windows acceptance #169.
-  Coverage and local environment limits: `design/AUTHORING_QUALITY.md`.
+- **Done (2026-11-05): Markdown writing commands [#211](https://github.com/Chris0Jeky/MDviewer/pull/211), closes #198.**
+  A collapsed Format disclosure and source-only shortcuts provide eleven guarded
+  commands, native Undo, placeholder selections and conservative boundary refusal.
+  Both editing panels remain usable in a 560×420 desktop window. See
+  `design/MARKDOWN_COMMANDS.md` and the final checkpoint for qualification.
+- **Done (2026-11-05): session navigation [#212](https://github.com/Chris0Jeky/MDviewer/pull/212), closes #199.**
+  Bounded ID-keyed source/preview/reader positions survive switching, Undo Close and
+  reader/workspace transfers while native undo stays isolated. Equal filenames
+  are distinguished; Windows/Linux shortcuts leave Apple Option typing alone.
+  Near-end restoration uses final outline geometry and a stable reader box model.
+- **Done (2026-11-05): authoring quality [#208](https://github.com/Chris0Jeky/MDviewer/pull/208), closes #203.**
+  A production Firefox lane covers real editing, focus/state, composition guards,
+  short reflow and forced colors alongside Chromium and native Windows. The source
+  uses system text colors and an outlined Find cue in high-contrast mode. This
+  automation does not clear AI-6 or #169; see `design/AUTHORING_QUALITY.md`.
+- **Done (2026-11-05): authored heading isolation [#213](https://github.com/Chris0Jeky/MDviewer/pull/213).**
+  Shell CSS and feedback lookups follow actual application parents, preserving
+  authored headings named Workspace, Error card, Status live and other chrome names
+  in normal, forced-color and print output. Unicode ID semantics remain #204.
 - **Done (2026-11-05): export feedback [#210](https://github.com/Chris0Jeky/MDviewer/pull/210).** A compact shell
   status row remains visible in Markdown, Split, Preview and short-window Find.
   It reports actual completed pages and native-save/browser-handoff outcomes with
@@ -156,10 +155,13 @@ export paths.
   **promotes the P4 "optional split editor" item on explicit owner request** and reverses the
   former "no editor pane" non-goal in [`PRODUCT_VISION.md`](./PRODUCT_VISION.md).
   Spec: `design/IMPLEMENTATION_SPEC.md` §12.
-- **Planned writing improvements:** compact formatting commands [#198](https://github.com/Chris0Jeky/MDviewer/issues/198) and bounded in-session position/keyboard navigation [#199](https://github.com/Chris0Jeky/MDviewer/issues/199).
-- **Confirmed feedback gap:** [#200](https://github.com/Chris0Jeky/MDviewer/issues/200) keeps existing PDF progress visible and exposed when the preview is hidden; fatal-error recovery and ordinary preview progress already ship.
-- **Design first:** file ownership/Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196), then optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197). Existing Save Copy and in-memory Undo Close behavior remain current until a reviewed implementation changes them.
-- **Acceptance and regressions:** second-engine/accessibility automation [#203](https://github.com/Chris0Jeky/MDviewer/issues/203), with manual typing, Narrator and Windows acceptance retained in AI-6/#169. Existing themes, toolbar disclosure and empty/error flows are implemented, not unstarted features.
+- **Implementation pending after reviewed designs:** file ownership/Save/Save As
+  [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) requires a bounded Windows
+  conflict-safe replacement proof. Optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
+  requires that identity contract plus fault/restart/deletion and overhead evidence.
+  Existing Save Copy and in-memory Undo Close behavior remain current.
+- **Human acceptance pending:** typing feel, Narrator and ordinary Windows behavior
+  remain in AI-6/#169. The delivered automation supplies regression evidence only.
 
 ### P3 — Hardening and distribution — `IN PROGRESS`
 
@@ -185,7 +187,7 @@ export paths.
   exact Markdown bytes and PDF header/EOF with clean teardown. See
   [offline capture evidence](design/RASTER_OFFLINE_CAPTURE.md). Human cross-engine,
   live/PWA and representative Windows acceptance remain separate open gates.
-- **Done (2026-11-05): Shiki 4.6 [#193](https://github.com/Chris0Jeky/MDviewer/pull/193), merge `5fbb219c`.** The real compressed WASM loader is qualified with a test-only jsdom byte-stream compatibility bridge. The generated WASM JavaScript asset is smaller; this does not establish representative runtime performance. Both Node lanes pass 832 units at the final combined application checkpoint.
+- **Done (2026-11-05): Shiki 4.6 [#193](https://github.com/Chris0Jeky/MDviewer/pull/193), merge `5fbb219c`.** The real compressed WASM loader is qualified with a test-only jsdom byte-stream compatibility bridge. The generated WASM JavaScript asset is smaller; this does not establish representative runtime performance. Both Node lanes passed 832 units at the historical `203c0979` application checkpoint.
 - **Measured responsiveness:** [#202](https://github.com/Chris0Jeky/MDviewer/issues/202) refreshes the existing performance ladder and profiles authoring bottlenecks. Incremental page feedback already ships; whole-process native comparisons and budgets stay in #169.
 - **Export lifetime:** [#201](https://github.com/Chris0Jeky/MDviewer/issues/201) designs bounded cancellation beyond the current per-phase CSS/font/frame deadlines. Offline output qualification is already complete.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
@@ -259,8 +261,8 @@ Explicitly out of scope for now; revisit only after P1–P3 land.
 ## Priorities
 
 1. Preserve the shipped no-slice, sanitization, edit-ownership and export-lifetime contracts.
-2. Fix the confirmed export-feedback gap (#200); review the next file-lifecycle design (#196) before changing Save behavior.
-3. Add bounded writing/navigation improvements (#198/#199) and accessibility/second-engine regressions (#203); coordinate optional recovery design (#197) with file identity.
+2. Prove the Windows compare/replace and conflict behavior in the reviewed file-lifecycle design (#196) before implementing Save changes.
+3. Implement and fault-test the reviewed opt-in recovery design (#197), coordinated with file identity, revocation and storage limits.
 4. Qualify cancellation (#201) and improve measured authoring bottlenecks (#202). Keep representative native acceptance and efficiency evidence in #169.
 5. Resolve the remaining ledger-backed follow-ups in [Future work](FUTURE_WORK.md), including Unicode IDs, the upstream SDK issue and the explicitly deferred pagination trade-off.
 6. Keep P4 options, canonical-host selection and human release/deployment decisions explicit; do not infer their completion from green CI.

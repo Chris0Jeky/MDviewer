@@ -1,5 +1,7 @@
 # Desktop authoring checkpoint and tracking reconciliation
 
+**Historical authoring record.** The later Format/navigation/export/quality qualification is in the [editor follow-up checkpoint](2026-11-05-editor-followup-checkpoint.md). Earlier source identities, test counts and the Combined-main verification anchor below are preserved.
+
 Record date: **2026-11-05**. The original authoring baseline for the historical
 feature evidence below is
 [`280c73e26487b16d7de607c269b2839636b0b969`](https://github.com/Chris0Jeky/MDviewer/commit/280c73e26487b16d7de607c269b2839636b0b969),

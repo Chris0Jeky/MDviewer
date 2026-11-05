@@ -1,9 +1,15 @@
 # Optional desktop crash recovery design
 
-Status: **design proposal, default-off implementation not started**. Issue
+Status: **design reviewed and merged; default-off implementation not started**. Issue
 [#197](https://github.com/Chris0Jeky/MDviewer/issues/197), depending on the reviewed
 [file-lifecycle design](FILE_LIFECYCLE.md) in #196. Prepared 2026-11-05. Current
 documents, latest-close recovery and session positions remain memory-only.
+
+The identity, revocation, capacity and deletion contracts were independently
+reviewed with #196 and merged in [#209](https://github.com/Chris0Jeky/MDviewer/pull/209),
+commit `2aec9104c7f35f4ac230705e4ba6775e0ee3e7ec`. No recovery storage was enabled.
+The implementation, fault-injection and measurement gates below remain open;
+see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
 
 ## User contract
 
@@ -102,7 +108,7 @@ the narrowly opted-in desktop exception, while retaining the default and web rul
 
 ## Required proof before enabling the feature
 
-- [ ] Review #196's identity/revision design first. Recovery must never serialize its
+- [x] Review #196's identity/revision design first (#209). Recovery must never serialize its
       writable capabilities or change original-file behavior.
 - [ ] Pure generation/epoch and bounded-admission tests, with an old writer completing
       after disable, discard, Save, Save Copy and reader/workspace transitions.
@@ -117,5 +123,5 @@ the narrowly opted-in desktop exception, while retaining the default and web rul
 - [ ] Coordinate `AGENTS.md`, `CLAUDE.md`, implementation/native/privacy contracts,
       agent index and Windows guide; exact-head CI and independent review.
 
-This proposal advances the storage/retention decision without adding disk persistence.
+This reviewed design advances the storage/retention decision without adding disk persistence.
 Keep #197 open until the reviewed implementation and these checks are complete.

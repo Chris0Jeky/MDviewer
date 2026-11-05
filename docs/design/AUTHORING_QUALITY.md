@@ -28,10 +28,16 @@ production bundle, CSS and desktop lazy-entry failures.
 
 ## Qualification
 
+The automation in #203 merged through #208, and heading isolation followed in #213.
+See the [editor follow-up checkpoint](2026-11-05-editor-followup-checkpoint.md) for
+the latest combined hosted source and counts. Human acceptance remains open.
+
+### Historical isolated qualification
+
 The initial isolated authoring change passed local Node 24.22.1 typecheck, lint,
 all 832 units, four server tests, the Observatory guard, both production builds,
 hook smoke and all 14 skill validations. With the authored-heading correction,
-the production Firefox 157.0 lane passes **40 tests without retries**. The merged
+the isolated production Firefox 157.0 lane passed **40 tests without retries**. The merged
 export-status specification also joins this bounded lane so its shell row and
 short-window behavior stay covered alongside editor accessibility. Subsequent
 combined-head receipts belong in the PR rather than implying this isolated count
@@ -39,8 +45,8 @@ qualifies a different source revision.
 The forced-colors regression first failed against the unmodified stylesheet;
 the before screenshot has no visible match cue, while the fixed screenshot shows
 a system-colored outline and readable native text. The same test remains in the
-full Chromium suite. Exact-head hosted Chromium/Windows/Firefox and independent
-review remain required before merge; the PR records those receipts.
+full Chromium suite. The final hosted Chromium/Windows/Firefox and independent
+review receipts are recorded in #208 and the linked follow-up checkpoint.
 
 `chrome-heading-scope.spec.ts` extends the authored-heading controls to the 17
 literal shell names in `tests/helpers/chromeHeadings.ts`, in both web and desktop

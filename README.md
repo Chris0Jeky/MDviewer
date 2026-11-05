@@ -12,14 +12,15 @@ A local Markdown reader and editor with a paginated PDF preview. Code blocks, fi
 **Live app:** https://mdviewer-c9r.pages.dev/
 
 **Windows desktop preview:** read local files in a continuous view, start a blank
-document with **New**, or use **Edit & PDF** for source editing, Find/Replace and
-paginated preview. Explorer file opening, multiple documents and screen themes are
+document with **New**, or use **Edit & PDF** for source editing, Find/Replace,
+compact Format commands and paginated preview. Session positions and keyboard
+document navigation help you move among open notes. Explorer file opening, multiple documents and screen themes are
 built in. The source editor and pagination load only when you choose New or Edit & PDF.
 [Download/build instructions, shortcuts and current limits](docs/WINDOWS_DESKTOP.md).
 
 **Next development:** [prioritized work and acceptance criteria](docs/FUTURE_WORK.md),
 tracked in [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Save/Save As and
-optional crash recovery are design-first proposals; the current app saves explicit
+optional crash recovery have reviewed designs and remain implementation work; the current app saves explicit
 copies and keeps open documents in memory.
 
 - [What it is](#what-it-is)
@@ -113,6 +114,9 @@ Only what the code actually does:
 - **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
 - **New documents on Windows.** **New** (`Ctrl+N`) opens a blank source with an available `Untitled.md` name and keeps existing documents open. The desktop reader loads the editing workspace on demand; **Reading view** returns with your open documents and edits preserved. Document layout starts collapsed to leave more room for writing.
 - **Find and Replace.** Choose **Find** or press `Ctrl/Cmd+F` in the source workspace. Search literal text, match case, see result counts and wrap through matches; the current match stays visibly marked while Find keeps keyboard focus. `Ctrl/Cmd+H` opens replacement controls. In the Find field, `Enter` / `Shift+Enter` moves forward / backward and `Escape` returns to the source. Replace all is one undoable edit. Reader and Preview-only modes keep the host's normal Find.
+- **Markdown formatting.** Open **Format** beside Find for Bold, Italic, inline/fenced code, H1–H3, links and bullet/number/task lists. Source-only `Ctrl/Cmd+B/I/K` shortcuts preserve native Undo. Ambiguous marker boundaries are refused without changing source or selection.
+- **Session navigation.** Caret, selection and source/preview/reader positions follow stable document IDs in a bounded memory cache. Equal names are distinguished; Windows/Linux use `Alt+Shift+P/N/D` for previous/next/picker. Closing the app clears session positions.
+- **Visible PDF progress.** Actual completed-page counts and save outcomes remain visible and politely announced even in Markdown-only and short Find layouts, while source/Find focus stays put. Browser handoff says “download requested”; native Save reports its actual result.
 - **Two PDF paths from one layout.** [Print / Save as PDF](#how-export-works) is the vector path. Download PDF is the raster fallback. Both consume the same already-broken page DOM. The PDF is always dark-on-white, whatever screen theme you are using.
 - **Syntax-highlighted code** via [Shiki](https://shiki.style/) — TextMate grammars, six theme families (GitHub, VS Code, Nord, Min, One, Catppuccin), each a light/dark pair. Print forces the light side. Optional CSS line numbers. Unknown fence languages fall back to plain text and surface a warning.
 - **Math** via [KaTeX](https://katex.org/) (inline and display). Bad TeX renders as a red inline error instead of aborting the document.
@@ -239,11 +243,11 @@ From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) and the open GitHub is
 | --- | --- | --- |
 | P0 Scaffolding | Done | Repo, Vite/Vitest/Playwright, pinned design specs |
 | P1 Core pipeline | Done | Render → paginate → both export paths; no-slice e2e; Gate 3 (manual Chrome PDF inspection) accepted |
-| P2 Desktop authoring and UX | In progress | New, compact writing controls, guarded undo, Find/Replace, visible matches and readiness-safe saves are shipped. Formatting, in-session navigation, hidden-preview progress and accessibility follow-ups are linked in [Future work](docs/FUTURE_WORK.md). |
+| P2 Desktop authoring and UX | In progress | New, Format, guarded undo, Find/Replace, session positions/navigation, visible PDF progress and second-engine/accessibility regressions are shipped. File ownership/recovery implementation and human acceptance remain in [Future work](docs/FUTURE_WORK.md). |
 | P3 Hardening and distribution | In progress | Windows reader/installer preview, sanitization, offline PDF qualification and performance tooling are shipped. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) retains native acceptance; [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)/[#202](https://github.com/Chris0Jeky/MDviewer/issues/202) track cancellation and measured responsiveness. Live/PWA and first automated promotion remain human gates. |
 | P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
 
-**Windows direction:** a simple, efficient desktop Markdown reader/editor with dependable local files and page-safe PDFs. The [future-work map](docs/FUTURE_WORK.md) separates concrete fixes, planned writing improvements and design-first storage proposals. Native acceptance and measured memory work remain in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169); the live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) owns execution status.
+**Windows direction:** a simple, efficient desktop Markdown reader/editor with dependable local files and page-safe PDFs. The [future-work map](docs/FUTURE_WORK.md) separates delivered writing improvements, reviewed storage designs and remaining implementation gates. Native acceptance and measured memory work remain in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169); the live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) owns execution status.
 
 Operator-only live-site and deploy gates (split-workspace feel, PWA update toast, Beta-bar acceptance, first automated promotion) live in [`ACTION_ITEMS.md`](ACTION_ITEMS.md). They are not product gaps in the code path above.
 

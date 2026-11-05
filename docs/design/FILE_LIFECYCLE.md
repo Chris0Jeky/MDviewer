@@ -1,11 +1,17 @@
 # Native Save / Save As design
 
-Status: **design proposal, implementation gated**. Issue
+Status: **design reviewed and merged; implementation gated**. Issue
 [#196](https://github.com/Chris0Jeky/MDviewer/issues/196); companion
 [optional recovery design](RECOVERY.md). Prepared against main `5cb2dbb3` on
 2026-11-05. This document changes no application behavior. The current native
 `save_export` still writes a user-selected copy, and Save Markdown still leaves
 the original dirty baseline intact.
+
+The behavior, capability and recovery boundaries were independently reviewed and
+merged in [#209](https://github.com/Chris0Jeky/MDviewer/pull/209), commit
+`2aec9104c7f35f4ac230705e4ba6775e0ee3e7ec`. This completes the design-review
+slice only. The Windows primitive experiment and every implementation gate below
+remain open; see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
 
 ## Product decisions
 
@@ -151,7 +157,7 @@ the safe design or to pretend the current export helper already satisfies #196.
 
 ## Implementation slices and qualification
 
-- [ ] Independently review this behavior/capability design and the recovery boundary.
+- [x] Independently review this behavior/capability design and the recovery boundary (#209).
 - [ ] Native primitive experiment above, with exact Windows run artifacts and clear
       supported/unsupported cases. Keep current production behavior during the spike.
 - [ ] Pure saved-baseline/revision state and native bounded capability registry tests,

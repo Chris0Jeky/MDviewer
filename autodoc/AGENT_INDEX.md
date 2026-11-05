@@ -7,10 +7,12 @@ Current navigation map for MDviewer. Read the narrow owning seam before editing;
 1. `../ACTION_ITEMS.md`, then `../AGENTS.md` and the applicable `../CLAUDE.md` runtime contract.
 2. `../ORCHESTRATOR.md` and `../docs/Project_Roadmap.md` for current state and priorities.
 3. `../docs/design/IMPLEMENTATION_SPEC.md` for current contracts, especially sections 3, 5, 7, 9, 12 and 14.
-4. [Future work](../docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195), then the owning source/tests below. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) are design-first proposals, not current behavior. Start with [`FILE_LIFECYCLE.md`](../docs/design/FILE_LIFECYCLE.md) and [`RECOVERY.md`](../docs/design/RECOVERY.md); the Windows compare/replace primitive remains an explicit implementation gate.
+4. [Future work](../docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195), then the owning source/tests below. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs merged in #209; their implementation is not current behavior. Start with [`FILE_LIFECYCLE.md`](../docs/design/FILE_LIFECYCLE.md) and [`RECOVERY.md`](../docs/design/RECOVERY.md); the Windows compare/replace primitive remains an explicit implementation gate.
 5. The retained `../docs/design/IMPLEMENTATION_FOUNDATION.md` only for unchanged API or editor/no-slice details relevant to the task. Its dated dependency inventory is not current evidence. Current failure records live in `../docs/agentic/failure_ledger.jsonl`.
 
 Do not change a public export, DOM contract or render ordering without updating this index and the canonical specification in the same change. Keep branch work isolated; use merge commits, exact-head CI and latest-head independent review. Never claim an unavailable local, second-engine or live deployment check passed.
+
+Current qualification: [editor follow-up checkpoint](../docs/design/2026-11-05-editor-followup-checkpoint.md). Earlier candidate counts belong to their dated source receipts.
 
 ## Product and flow
 

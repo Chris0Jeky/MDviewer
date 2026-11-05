@@ -44,7 +44,14 @@ production helper across publication and checks complete old/new snapshots,
 Unicode bytes, initial and repeated progress/result writes, missing versus invalid
 snapshots, handle disposal, and visible failures when replacement is blocked.
 
-## Verified main checkpoint — 2026-11-05
+## Current qualification
+
+The [editor follow-up checkpoint](2026-11-05-editor-followup-checkpoint.md) records
+the current qualified source, six hosted jobs, both PowerShell publication fixtures,
+native screenshots and exact saved-output/binary receipts. The original receipt
+below remains tied to its historical source revision.
+
+## Historical main checkpoint — 2026-11-05
 
 The final-main push at `203c09798b01061ceb0c00f0937c22beeafb1a55` passed
 [Windows Desktop 42053740244](https://github.com/Chris0Jeky/MDviewer/actions/runs/42053740244).

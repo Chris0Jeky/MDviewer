@@ -15,6 +15,24 @@
 
 ## Current State (snapshot)
 
+- **2026-11-05 (editor follow-up qualified)** — application revision
+  [`18afeeb8`](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),
+  tree `2ede86cc07caf53a8afb3106716ece69c49d8a41`, includes merged #209/#210/#208/#213/#212/#211/#214.
+  Format, session positions/navigation, visible PDF progress, production Firefox
+  and authored-heading isolation are delivered. The two persistence designs are
+  merged; their implementations remain open. All six hosted jobs passed at the
+  qualified revision: 1,073 units per Node lane, 178 web Chromium
+  cases with five existing optional performance skips, 94 Firefox,
+  36 desktop Chromium, 22 Rust and 21 probe-policy cases plus actual
+  native launch/save verification. Exact source/binary checks and artifact retention
+  are in the [editor follow-up checkpoint](docs/design/2026-11-05-editor-followup-checkpoint.md)
+  and [#169](https://github.com/Chris0Jeky/MDviewer/issues/169).
+  **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** Current saves are explicit copies;
+  documents remain in memory. This does not establish deployment, a signed release,
+  an automatic updater or comparative RAM/startup performance.
+
+### Earlier snapshots (historical)
+
 - **2026-11-05 (combined application verified; future work indexed)** —
   [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
   tree `8fe8e94f9cde0a52f3344075f0c272f140825ccb`, includes all nine authoring,
@@ -33,8 +51,6 @@
   a copy. **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** No live deployment, signed
   release, automatic updater or comparative RAM/startup result is claimed. The
   deployed-source history and human checklists below are unchanged.
-
-### Earlier snapshots (historical)
 
 - **2026-11-05 (qualified desktop authoring and offline capture)** — the last merged
   authoring baseline verified for this record is
