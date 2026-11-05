@@ -84,6 +84,10 @@ jobs:
         run: cargo fmt --check
       - name: Validate native Save-button guards
         run: pwsh -File scripts/test-desktop-save-button.ps1
+      - name: Validate probe publication in PowerShell 7
+        run: pwsh -NoProfile -File scripts/test-desktop-probe-json.ps1
+      - name: Validate probe publication in Windows PowerShell 5.1
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/test-desktop-probe-json.ps1
       - name: Build the frontend and distribution notices
         run: |
           npm run desktop:build:web
