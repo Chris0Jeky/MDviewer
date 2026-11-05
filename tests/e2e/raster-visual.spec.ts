@@ -10,6 +10,109 @@ interface Evidence {
   ink: Array<{ name: string; dark: number; colored: number; light: number }>;
 }
 
+type DiagnosticEvent = { at: number; stage: string } & Record<string, unknown>;
+const offlineDiagnostics = new WeakMap<Page, () => Promise<DiagnosticEvent[]>>();
+
+function observeOfflineCapture(page: Page): () => Promise<void> {
+  const network: DiagnosticEvent[] = [];
+  const record = (stage: string, detail: Record<string, unknown>) => {
+    if (network.length < 128) network.push({ at: Date.now(), stage, ...detail });
+  };
+  const relevant = (request: import("@playwright/test").Request) =>
+    ["stylesheet", "font"].includes(request.resourceType()) || request.url().includes("__offline-visual-probe-");
+  page.on("request", request => {
+    if (!relevant(request)) return;
+    let frameUrl: string | undefined;
+    try { frameUrl = request.frame().url(); } catch { /* Service-worker requests have no frame. */ }
+    record("request", { url: request.url(), resourceType: request.resourceType(), frameUrl });
+  });
+  page.on("response", response => {
+    if (relevant(response.request())) record("response", {
+      url: response.url(), status: response.status(), fromServiceWorker: response.fromServiceWorker(),
+    });
+  });
+  page.on("requestfailed", request => {
+    if (relevant(request)) record("requestfailed", { url: request.url(), error: request.failure()?.errorText });
+  });
+  page.on("download", () => record("download", {}));
+  offlineDiagnostics.set(page, async () => {
+    const browser = await page.evaluate(() =>
+      (window as Window & { __offlineCaptureEvents?: DiagnosticEvent[] }).__offlineCaptureEvents ?? [],
+    ).catch(error => [{ at: Date.now(), stage: "diagnostic-read-failed", error: String(error) }]);
+    return [...network, ...browser].sort((a, b) => a.at - b.at);
+  });
+  return () => page.evaluate(() => {
+    const events: DiagnosticEvent[] = [];
+    (window as Window & { __offlineCaptureEvents?: DiagnosticEvent[] }).__offlineCaptureEvents = events;
+    const record = (stage: string, doc: Document, detail: Record<string, unknown> = {}) => {
+      if (events.length >= 128) return;
+      let controller: string | null | undefined;
+      let controllerError: string | undefined;
+      try { controller = doc.defaultView?.navigator.serviceWorker.controller?.scriptURL ?? null; }
+      catch (error) { controllerError = String(error); }
+      events.push({ at: Date.now(), stage, url: doc.URL, origin: doc.defaultView?.origin,
+        locationOrigin: doc.defaultView?.location.origin, baseURI: doc.baseURI, readyState: doc.readyState,
+        controller, controllerError, fontStatus: doc.fonts.status, ...detail });
+    };
+    record("source-before-export", document, {
+      styles: [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+        .map(link => ({ href: link.href, sheet: link.sheet !== null })),
+    });
+    let frameNumber = 0;
+    const appendChild = Node.prototype.appendChild;
+    // Observe the synchronous mount before document.open() runs. Do not replace
+    // requests, wait for events, or change the renderer's own event handlers.
+    Node.prototype.appendChild = function<T extends Node>(this: Node, node: T): T {
+      const result = appendChild.call(this, node) as T;
+      if (!(node instanceof HTMLIFrameElement) || !node.classList.contains("html2canvas-container")) return result;
+      const doc = node.contentDocument;
+      if (!doc) return result;
+      const frame = ++frameNumber;
+      const snapshot = (stage: string, detail: Record<string, unknown> = {}) => record(stage, doc, { frame, ...detail });
+      snapshot("clone-inserted");
+      node.addEventListener("load", () => snapshot("iframe-load"));
+      for (const name of ["open", "write", "close", "adoptNode", "replaceChild"] as const) {
+        const original = doc[name];
+        Object.defineProperty(doc, name, { configurable: true, writable: true,
+          value: function(this: Document, ...args: unknown[]) {
+            snapshot(`document-${name}-before`);
+            const value: unknown = Reflect.apply(original, this, args);
+            snapshot(`document-${name}-after`, { sameDocument: node.contentDocument === doc });
+            if (name === "open") {
+              // document.open() removes document listeners, so observe its new
+              // lifecycle only after it has returned, without setting onload.
+              doc.addEventListener("readystatechange", () => snapshot("readystatechange"));
+              try {
+                doc.defaultView?.navigator.serviceWorker?.addEventListener("controllerchange", () => snapshot("controllerchange"));
+              } catch (error) { snapshot("controller-observer-unavailable", { error: String(error) }); }
+              for (const event of ["load", "error"] as const) doc.addEventListener(event, e => {
+                const target = e.target as HTMLLinkElement | null;
+                if (target?.tagName === "LINK" && target.relList.contains("stylesheet")) {
+                  snapshot(`stylesheet-${event}`, { href: target.href, sheet: target.sheet !== null });
+                }
+              }, true);
+            }
+            return value;
+          },
+        });
+      }
+      return result;
+    };
+  });
+}
+
+test.afterEach(async ({ page }, info) => {
+  const read = offlineDiagnostics.get(page);
+  if (!read) return;
+  const events = await read();
+  const path = info.outputPath("offline-capture-diagnostic.json");
+  await writeFile(path, JSON.stringify({ events }, null, 2));
+  await info.attach("offline-capture-diagnostic", { path, contentType: "application/json" });
+  if (info.status !== info.expectedStatus) {
+    console.log("Offline capture diagnostic:", JSON.stringify(events.slice(-24)));
+  }
+});
+
 // Expectations are independent of html2canvas and previous captures. Interior
 // samples avoid font antialiasing and gradient edges; a four-level channel budget
 // allows only rounding, not a lost filter, wrong HSL color or missing content.
@@ -101,66 +204,93 @@ async function inspectPdf(page: Page, name: string, boxes: Record<string, Box>):
   }, { png: `data:image/png;base64,${raster.png.toString("base64")}`, boxes, probes: COLORS });
 }
 
-test("downloaded PDF preserves colors, SVG transforms and rich content", async ({ page }) => {
-  test.setTimeout(90_000);
-  await page.setViewportSize({ width: 1400, height: 1500 });
-  await page.goto("/");
-  await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: 1 }));
-  const markdown = await readFile(new URL("../fixtures/raster-visual.md", import.meta.url), "utf8");
-  await loadMarkdownIntoApp(page, markdown, "raster-visual.md");
-  expect(await waitForPagination(page)).toBe(1);
-  const sheet = page.locator("#paged-output .pagedjs_page");
-  await expect(sheet.locator(".katex-error, .diagram-error")).toHaveCount(0);
-  await expect(sheet.locator("[data-raster-probe]")).toHaveCount(6);
-  const boxes = await sheet.evaluate((element): Record<string, Box> => {
-    const paper = element.getBoundingClientRect();
-    const result: Record<string, Box> = {};
-    const record = (name: string, target: Element | null) => {
-      if (!target) throw new Error(`Missing visual fixture region ${name}`);
-      const rect = target.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) throw new Error(`Empty visual region ${name}`);
-      result[name] = { x: (rect.x - paper.x) / paper.width, y: (rect.y - paper.y) / paper.height,
-        width: rect.width / paper.width, height: rect.height / paper.height };
-    };
-    element.querySelectorAll<HTMLElement>("[data-raster-probe]").forEach((target) => record(target.dataset.rasterProbe!, target));
-    record("heading", element.querySelector("h1"));
-    record("code", element.querySelector("pre.shiki code"));
-    record("math", element.querySelector(".katex-html"));
-    record("table", element.querySelector("table"));
-    record("toc", element.querySelector("nav.toc"));
-    record("checkbox", element.querySelector("input:checked"));
-    return result;
-  });
-  await sheet.screenshot({ path: test.info().outputPath("browser-reference.png") });
-
-  // The live preview is parked and its chrome is dark during the real export.
-  // The fixed-paper geometry captured above remains the expected PDF geometry.
-  await page.getByRole("button", { name: "Dark", exact: true }).click();
-  await page.getByRole("button", { name: "Markdown", exact: true }).click();
-  // Only the capture iframe's linked CSS is delayed. Its live source is already
-  // styled, so a valid but unstyled PDF demonstrates the clone-readiness race.
-  let delayedStyles = 0;
-  await page.route("**/assets/*.css", async route => {
-    if (route.request().frame().parentFrame()) {
-      delayedStyles++;
-      await new Promise(resolve => setTimeout(resolve, 350));
+for (const offline of [false, true]) {
+  test(`downloaded PDF preserves colors, SVG transforms and rich content${offline ? " while offline" : ""}`, async ({ page, context, baseURL }) => {
+    test.skip(offline && process.env.E2E_TARGET !== "preview", "Offline capture requires the production service worker.");
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1400, height: 1500 });
+    const installDiagnostic = offline ? observeOfflineCapture(page) : undefined;
+    const foreignRequests: string[] = [];
+    const ownOrigin = new URL(baseURL!).origin;
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (url.protocol.startsWith("http") && url.origin !== ownOrigin) foreignRequests.push(request.url());
+    });
+    await page.goto("/");
+    if (offline) {
+      await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+      await context.setOffline(true);
+      await page.reload();
+      await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), {
+        timeout: 10_000,
+      }).toBe(true);
+      // A controller alone does not prove the network is cut. An uncached request
+      // must fail before loading the fixture or importing any export dependencies.
+      const network = await page.evaluate(() => fetch(`/__offline-visual-probe-${Date.now()}`)
+        .then(response => `online-${response.status}`).catch(() => "offline"));
+      expect(network).toBe("offline");
+      await installDiagnostic!();
     }
-    await route.continue();
-  });
-  const evidence = await inspectPdf(page, "fallback-visual", boxes);
-  if (process.env.E2E_TARGET === "preview") {
-    expect(delayedStyles, "the production regression must actually delay clone CSS").toBeGreaterThanOrEqual(1);
-  }
-  await writeFile(test.info().outputPath("pixel-evidence.json"), JSON.stringify(evidence, null, 2));
-  expect(visualFailures(evidence), JSON.stringify(evidence)).toEqual([]);
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: 1 }));
+    const markdown = await readFile(new URL("../fixtures/raster-visual.md", import.meta.url), "utf8");
+    await loadMarkdownIntoApp(page, markdown, "raster-visual.md");
+    expect(await waitForPagination(page)).toBe(1);
+    const sheet = page.locator("#paged-output .pagedjs_page");
+    await expect(sheet.locator(".katex-error, .diagram-error")).toHaveCount(0);
+    await expect(sheet.locator("[data-raster-probe]")).toHaveCount(6);
+    const boxes = await sheet.evaluate((element): Record<string, Box> => {
+      const paper = element.getBoundingClientRect();
+      const result: Record<string, Box> = {};
+      const record = (name: string, target: Element | null) => {
+        if (!target) throw new Error(`Missing visual fixture region ${name}`);
+        const rect = target.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) throw new Error(`Empty visual region ${name}`);
+        result[name] = { x: (rect.x - paper.x) / paper.width, y: (rect.y - paper.y) / paper.height,
+          width: rect.width / paper.width, height: rect.height / paper.height };
+      };
+      element.querySelectorAll<HTMLElement>("[data-raster-probe]").forEach((target) => record(target.dataset.rasterProbe!, target));
+      record("heading", element.querySelector("h1"));
+      record("code", element.querySelector("pre.shiki code"));
+      record("math", element.querySelector(".katex-html"));
+      record("table", element.querySelector("table"));
+      record("toc", element.querySelector("nav.toc"));
+      record("checkbox", element.querySelector("input:checked"));
+      return result;
+    });
+    await sheet.screenshot({ path: test.info().outputPath("browser-reference.png") });
 
-  // A fresh, actually damaged download must fail the same assertions. Comparing
-  // two captures to one another would otherwise accept a consistently blank or
-  // miscolored renderer (the gap in #136).
-  await page.addStyleTag({ content:
-    '#paged-output [data-raster-probe="hsl"] { background: white !important; } ' +
-    '#paged-output pre.shiki code { visibility: hidden !important; } ' +
-    '#paged-output input:checked { background-image: none !important; }' });
-  const damaged = await inspectPdf(page, "fallback-missing-content-control", boxes);
-  expect(visualFailures(damaged)).toEqual(expect.arrayContaining(["hsl", "code-ink", "syntax-colors", "checked-tick"]));
-});
+    // The live preview is parked and its chrome is dark during the real export.
+    // The fixed-paper geometry captured above remains the expected PDF geometry.
+    await page.getByRole("button", { name: "Dark", exact: true }).click();
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
+    // Only the capture iframe's linked CSS is delayed. Its live source is already
+    // styled, so a valid but unstyled PDF demonstrates the clone-readiness race.
+    let delayedStyles = 0;
+    if (!offline) {
+      await page.route("**/assets/*.css", async route => {
+        if (route.request().frame().parentFrame()) {
+          delayedStyles++;
+          await new Promise(resolve => setTimeout(resolve, 350));
+        }
+        await route.continue();
+      });
+    }
+    const evidence = await inspectPdf(page, "fallback-visual", boxes);
+    if (!offline && process.env.E2E_TARGET === "preview") {
+      expect(delayedStyles, "the production regression must actually delay clone CSS").toBeGreaterThanOrEqual(1);
+    }
+    await writeFile(test.info().outputPath("pixel-evidence.json"), JSON.stringify(evidence, null, 2));
+    expect(visualFailures(evidence), JSON.stringify(evidence)).toEqual([]);
+
+    // A fresh, actually damaged download must fail the same assertions. Comparing
+    // two captures to one another would otherwise accept a consistently blank or
+    // miscolored renderer (the gap in #136).
+    await page.addStyleTag({ content:
+      '#paged-output [data-raster-probe="hsl"] { background: white !important; } ' +
+      '#paged-output pre.shiki code { visibility: hidden !important; } ' +
+      '#paged-output input:checked { background-image: none !important; }' });
+    const damaged = await inspectPdf(page, "fallback-missing-content-control", boxes);
+    expect(visualFailures(damaged)).toEqual(expect.arrayContaining(["hsl", "code-ink", "syntax-colors", "checked-tick"]));
+    expect(foreignRequests, "PDF capture must not request cross-origin resources").toEqual([]);
+  });
+}
