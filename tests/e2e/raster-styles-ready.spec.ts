@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
+import { readRasterPdf } from "../helpers/rasterPdf";
 
 for (const viewMode of ["split", "editor"] as const) {
   test(`failed clone styles save no PDF, release their iframe and permit a retry (${viewMode})`, async ({ page }) => {
@@ -108,3 +110,84 @@ for (const viewMode of ["split", "editor"] as const) {
     await page.screenshot({ path: test.info().outputPath(`recovered-export-${viewMode}.png`), fullPage: true });
   });
 }
+
+test("missing cached CSS saves no offline PDF, cleans up and permits a restored-cache retry", async ({ page, context, baseURL }) => {
+  test.skip(process.env.E2E_TARGET !== "preview", "This regression requires the production service worker.");
+  const session = await context.newCDPSession(page);
+  await session.send("Network.enable");
+  await session.send("Network.setCacheDisabled", { cacheDisabled: true });
+  const foreignRequests: string[] = [];
+  const ownOrigin = new URL(baseURL!).origin;
+  let stylesheet = "";
+  let failedStyles = 0;
+  let downloads = 0;
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.protocol.startsWith("http") && url.origin !== ownOrigin) foreignRequests.push(request.url());
+  });
+  page.on("requestfailed", request => { if (request.url() === stylesheet) failedStyles++; });
+  page.on("download", () => { downloads++; });
+  try {
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    await context.setOffline(true);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+    expect(await page.evaluate(() => fetch(`/__offline-recovery-probe-${Date.now()}`)
+      .then(response => `online-${response.status}`).catch(() => "offline"))).toBe("offline");
+    const markdown = "# Offline capture recovery\n\nThe source survives missing capture CSS.\n\n```ts\nconst offline = true;\n```\n\nMath: $e^{i\\pi}+1=0$.";
+    await loadMarkdownIntoApp(page, markdown, "offline-recovery.md");
+    expect(await waitForPagination(page)).toBe(1);
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
+
+    // The source has already loaded its CSS. Remove only that exact app asset
+    // from real CacheStorage; no route intercepts or manufactures a response.
+    const removed = await page.evaluate(async () => {
+      const link = document.querySelector<HTMLLinkElement>('head link[rel="stylesheet"][href]')!;
+      const backups: Array<{ name: string; response: Response }> = [];
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        const response = await cache.match(link.href);
+        if (response && await cache.delete(link.href)) backups.push({ name, response });
+      }
+      (window as Window & { __offlineStyleBackups?: typeof backups }).__offlineStyleBackups = backups;
+      return { href: link.href, entries: backups.length, sourceStyled: link.sheet !== null };
+    });
+    stylesheet = removed.href;
+    expect(removed.entries).toBeGreaterThan(0);
+    expect(removed.sourceStyled).toBe(true);
+    const exportButton = page.getByRole("button", { name: "Download PDF", exact: true });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await exportButton.click();
+      const error = page.getByRole("alertdialog", { name: "Rendering failed" });
+      await expect(error).toBeVisible();
+      await expect(error).toContainText("stylesheet could not load. Try Print / Save as PDF.");
+      await expect(exportButton).toBeEnabled();
+      await expect(page.locator("iframe.html2canvas-container")).toHaveCount(0);
+      await expect(page.locator("#editor-input")).toHaveValue(markdown);
+      await expect(page.locator("#workspace")).toHaveAttribute("data-view-mode", "editor");
+      expect(downloads, "missing offline CSS must not yield an incomplete PDF").toBe(0);
+    }
+    expect(failedStyles, "both failed captures must request the missing stylesheet").toBeGreaterThanOrEqual(2);
+    await page.evaluate(async href => {
+      const target = window as Window & { __offlineStyleBackups?: Array<{ name: string; response: Response }> };
+      for (const backup of target.__offlineStyleBackups ?? []) {
+        await (await caches.open(backup.name)).put(href, backup.response);
+      }
+      delete target.__offlineStyleBackups;
+    }, stylesheet);
+    const downloading = page.waitForEvent("download");
+    await exportButton.click();
+    const download = await downloading;
+    const path = test.info().outputPath("offline-cache-recovery.pdf");
+    await download.saveAs(path);
+    expect(readRasterPdf(await readFile(path))).toHaveLength(1);
+    await expect(exportButton).toBeEnabled();
+    await expect(page.locator("iframe.html2canvas-container")).toHaveCount(0);
+    await expect(page.locator("#error-card")).toBeHidden();
+    await expect(page.locator("#editor-input")).toHaveValue(markdown);
+    await expect(page.locator("#workspace")).toHaveAttribute("data-view-mode", "editor");
+    expect(downloads).toBe(1);
+    expect(foreignRequests).toEqual([]);
+  } finally { await session.detach(); }
+});

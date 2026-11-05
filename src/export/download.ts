@@ -17,6 +17,7 @@ import type { Settings } from "../app/settings";
 import { IDS, PAGEDJS } from "../app/dom";
 import { getDownloadDestination } from "./destination";
 import { paintFootnoteMarkers } from "./footnoteMarkers";
+import { captureLifecycleError, createOfflineCapture, offlineCaptureController } from "./offlineCapture";
 
 export interface FallbackPdfOptions {
   scale?: number;
@@ -38,18 +39,13 @@ function requiredClonedStyles(document: Document): HTMLLinkElement[] {
   });
 }
 
-function captureLifecycleError(): Error {
-  return new Error("The PDF capture lifecycle could not be verified. Try Print / Save as PDF.");
-}
-
 /**
  * Observe the mounted clone before resource event tasks can dispatch. A failed
  * CSS request can retain a non-null sheet (including inaccessible cssRules), so
  * only an observed load event establishes success. Never inspect rule contents:
  * empty stylesheets and cross-origin sheets can both be valid.
  */
-function observeClonedStyles(container: HTMLElement) {
-  const frame = container.querySelector("iframe");
+function observeClonedStyles(container: HTMLElement, frame = container.querySelector("iframe")) {
   const document = frame?.contentDocument;
   if (!frame || !document) return;
 
@@ -100,14 +96,17 @@ function observeClonedStyles(container: HTMLElement) {
 }
 
 async function waitForClonedFonts(document: Document, deadline: number): Promise<void> {
-  if (!document.fonts) return;
+  const fonts = document.fonts;
+  if (!fonts) return;
   await new Promise<void>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       reject(new Error("The PDF capture fonts did not finish loading. Try Print / Save as PDF."));
     }, Math.max(0, deadline - Date.now()));
-    document.fonts.ready.then(() => {
+    fonts.ready.then(() => {
       window.clearTimeout(timeout);
-      resolve();
+      if (Array.from(fonts).some(font => font.status === "error")) {
+        reject(new Error("The PDF capture fonts could not load. Try Print / Save as PDF."));
+      } else resolve();
     }, error => {
       window.clearTimeout(timeout);
       reject(error);
@@ -209,19 +208,34 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
   let styles: ReturnType<typeof observeClonedStyles>;
   let prepared = false;
   try {
+    const controller = offlineCaptureController(page.ownerDocument);
+    const offline = controller ? await createOfflineCapture(page.ownerDocument, container, controller) : undefined;
+    const rendererContainer = offline ? page.ownerDocument.createElement("div") : container;
+    if (offline) container.append(rendererContainer);
     const capture = html2canvas(page, {
       scale,
       backgroundColor: "#ffffff",
       useCORS: true,
-      iframeContainer: container,
+      iframeContainer: rendererContainer,
+      ignoreElements: offline?.ignoreElements,
       onclone: async (cloneDocument, sheet) => {
         if (!styles || sheet.ownerDocument !== cloneDocument) throw captureLifecycleError();
         await styles.ready(cloneDocument);
+        if (offline) {
+          styles.dispose();
+          cloneDocument = offline.adopt(cloneDocument);
+          if (sheet.ownerDocument !== cloneDocument) throw captureLifecycleError();
+          styles = observeClonedStyles(container, offline.frame);
+          if (!styles) throw captureLifecycleError();
+          await styles.ready(cloneDocument);
+          offline.validate();
+        }
         prepareRasterClone(cloneDocument, sheet, page);
         // Revealing the sheet can use fonts after html2canvas's fonts.ready
         // wait. Resolve layout first, then start a fresh font deadline.
         sheet.getBoundingClientRect();
         await waitForClonedFonts(cloneDocument, Date.now() + 10_000);
+        offline?.validate();
         paintFootnoteMarkers(sheet, page);
         prepared = true;
       },
@@ -235,7 +249,7 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
     // mounts the final Document synchronously before renderElement's first
     // await. Attach now, in the same task; resource events and onclone run later.
     // Observing the capture rejection above also covers failures before mount.
-    styles = observeClonedStyles(container);
+    styles = observeClonedStyles(rendererContainer);
     const result = await capture;
     if (!result.ok) throw result.error;
     if (!prepared) throw captureLifecycleError();

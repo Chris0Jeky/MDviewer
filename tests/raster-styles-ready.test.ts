@@ -190,6 +190,21 @@ it("starts the font deadline after CSS and reveal, then releases a timed-out cap
   expect(addImage).not.toHaveBeenCalled();
 });
 
+it("rejects a font load error even when fonts.ready has settled", async () => {
+  const queued = queuedClone(({ copy }) => {
+    Object.defineProperty(copy, "fonts", { value: {
+      ready: Promise.resolve(),
+      *[Symbol.iterator]() { yield { status: "error" }; },
+    } });
+  });
+  const failure = expect(exportPaginatedToPdf(sourcePages(), DEFAULT_SETTINGS)).rejects.toThrow("fonts could not load");
+  queued.clone.link.dispatchEvent(new Event("load"));
+  queued.enterCallback();
+  await failure;
+  expect(save).not.toHaveBeenCalled();
+  expect(queued.clone.options.iframeContainer?.isConnected).toBe(false);
+});
+
 it.each([false, true])("cleans all owned state when capture fails outside onclone (mounted: %s)", async mounted => {
   vi.useFakeTimers();
   const unrelated = document.createElement("iframe");
