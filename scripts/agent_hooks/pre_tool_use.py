@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """PreToolUse hook for MDviewer (matches Bash).
 
-A second-layer guardrail so that `bypassPermissions` mode stays safe. It blocks:
+A second-layer guardrail script. It is NOT wired in `.claude/settings.json`
+(the estate declares this machine floorless); the rules are agent-held. When
+wired, it blocks:
 
   1. Unconditionally dangerous shell (any branch): recursive force-delete, sudo,
      world-writable chmod, piping the network into a shell, bare force-push,

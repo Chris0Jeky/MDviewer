@@ -176,6 +176,20 @@ describe("desktop owned Save", () => {
     expect(boundary.release.mock.calls).toEqual([[(32).toString(16).padStart(32, "0")]]);
   });
 
+  it("Save As adopts a workspace document that has no baseline (Undo Close)", async () => {
+    const app = await workspaceWith(bound("notes.md", "# One"));
+    const doc = app.store.active!;
+    app.store.remove(doc.id);
+    const restored = app.store.add(doc.name, "# Restored");
+    boundary.saveDocumentAs.mockResolvedValueOnce(saved("restored.md", 0, "f".repeat(32)));
+    press({});
+    await vi.waitFor(() => expect(notice()).toBe("Saved restored.md."));
+    expect(app.store.active).toBe(restored);
+    expect(app.store.active!.name).toBe("restored.md");
+    expect(option()).toBe("restored.md");
+    expect(boundary.release).not.toHaveBeenCalledWith("f".repeat(32));
+  });
+
   it("fences close and handoff while a save is pending", async () => {
     boundary.open.mockResolvedValueOnce(bound("notes.md", "# One"));
     document.getElementById("reader-open")!.click();

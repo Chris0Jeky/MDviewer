@@ -39,3 +39,23 @@ function Read-SmokeProbeJson([string]$Path) {
         if ($null -ne $reader) { $reader.Dispose() } else { $stream.Dispose() }
     }
 }
+
+function Test-SmokeProbeSharingViolation([System.Exception]$Failure) {
+    # PowerShell wraps .NET method failures; ERROR_SHARING_VIOLATION (32) and
+    # ERROR_LOCK_VIOLATION (33) are the transient swap window, nothing else.
+    for ($inner = $Failure; $null -ne $inner; $inner = $inner.InnerException) {
+        if ($inner -is [System.IO.IOException] -and (($inner.HResult -band 0xFFFF) -in 32, 33)) { return $true }
+    }
+    return $false
+}
+
+function Read-SmokeProbeProgressJson([string]$Path) {
+    # Polling only: while the worker's File.Replace swaps the snapshot, Windows can
+    # briefly refuse every opener. Skip that tick so the caller keeps its last
+    # snapshot; other failures stay visible. Final evidence reads stay strict.
+    try { return Read-SmokeProbeJson $Path }
+    catch {
+        if (Test-SmokeProbeSharingViolation $_.Exception) { return $null }
+        throw
+    }
+}
