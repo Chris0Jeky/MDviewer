@@ -11,8 +11,10 @@ use serde::Deserialize;
 pub struct Patch {
     /// The 0-based line the reader last saw this control on.
     pub line: usize,
-    /// The control's `<!-- id: name -->` name, when it has one.
+    /// The control's `<!-- id: name -->` name, when it has one. Native placement
+    /// does not use it; the parser does when it re-derives an unplaced patch.
     #[serde(default)]
+    #[allow(dead_code)]
     pub id: Option<String>,
     pub expect: String,
     pub replace: String,
@@ -123,16 +125,6 @@ fn split(raw: &[u8]) -> Result<Lines<'_>, PatchError> {
     Ok(Lines { codec, bom, lines })
 }
 
-fn id_marker(id: &str) -> Option<String> {
-    let valid = !id.is_empty()
-        && id.len() <= 64
-        && id.as_bytes()[0].is_ascii_alphanumeric()
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
-    valid.then(|| format!("<!-- id: {id} -->"))
-}
-
 /// The file's text exactly as written (terminators kept), or None if not UTF-8/UTF-16.
 pub fn text_of(raw: &[u8]) -> Option<String> {
     let doc = split(raw).ok()?;
@@ -158,41 +150,16 @@ pub fn apply(raw: &[u8], patches: &[Patch]) -> Result<(Vec<u8>, String), PatchEr
         .collect();
     let mut new_texts: Vec<Option<String>> = vec![None; texts.len()];
     for (index, patch) in patches.iter().enumerate() {
-        let bad = |s: &str| s.contains(['\n', '\r']) || s.chars().count() > MAX_LINE_CHARS;
+        let bad = |s: &str| s.contains(['\n', '\r', '\0']) || s.chars().count() > MAX_LINE_CHARS;
         if bad(&patch.replace) || bad(&patch.expect) {
             return Err(PatchError::Invalid(index));
         }
-        let free = |line: usize| new_texts[line].is_none();
-        // 1. The remembered line, if it still holds exactly the expected text.
-        let placed = if texts.get(patch.line) == Some(&patch.expect) && free(patch.line) {
-            Some((patch.line, patch.replace.clone()))
-        } else if let Some(marker) = patch.id.as_deref().and_then(id_marker) {
-            // 2. The one line carrying the same id, if it still holds the expected text.
-            // If that line changed, only the parser knows the control's syntax: refuse,
-            // and the caller re-derives the patch from the current text and retries.
-            let found: Vec<usize> = (0..texts.len())
-                .filter(|&i| texts[i].contains(&marker))
-                .collect();
-            match found.as_slice() {
-                [line] if texts[*line] == patch.expect && free(*line) => {
-                    Some((*line, patch.replace.clone()))
-                }
-                [_] => return Err(PatchError::Unplaced(index)),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        // 3. The one line equal to the expected text.
-        let placed = placed.or_else(|| {
-            let found: Vec<usize> = (0..texts.len())
-                .filter(|&i| texts[i] == patch.expect)
-                .collect();
-            match found.as_slice() {
-                [line] if free(*line) => Some((*line, patch.replace.clone())),
-                _ => None,
-            }
-        });
+        // Only the remembered line, and only while it still holds exactly the expected
+        // text. Everything else (the contract's id and equal-line steps) needs the
+        // Markdown syntax, so it is the parser's: it re-derives from the returned text.
+        let placed = (texts.get(patch.line) == Some(&patch.expect)
+            && new_texts[patch.line].is_none())
+        .then(|| (patch.line, patch.replace.clone()));
         let Some((line, text)) = placed else {
             return Err(PatchError::Unplaced(index));
         };
@@ -274,66 +241,36 @@ mod tests {
     }
 
     #[test]
-    fn placement_after_an_outside_rewrite_follows_line_then_id_then_text() {
-        // Lines inserted above: the control moved, found by its id, unchanged.
-        let now = b"new line
-another
-- [ ] one <!-- id: a -->
-- [ ] plain
-";
-        let p = patch(
-            0,
-            Some("a"),
-            "- [ ] one <!-- id: a -->",
-            "- [x] one <!-- id: a -->",
-        );
-        let (bytes, _) = apply(now, &[p]).unwrap();
-        assert_eq!(
-            bytes,
-            b"new line
-another
-- [x] one <!-- id: a -->
-- [ ] plain
-"
-        );
-        // No id: the one line equal to expect, wherever it moved.
-        let p = patch(0, None, "- [ ] plain", "- [x] plain");
-        let (bytes, _) = apply(now, &[p]).unwrap();
-        assert!(bytes.ends_with(
-            b"- [x] plain
-"
-        ));
-        // The id line itself was edited outside (renamed task, or a field value
-        // extended): never guess the span; refuse so the parser can re-derive.
-        let renamed = b"- [ ] one renamed <!-- id: a -->
-- [ ] one <!-- id: b -->
-";
-        let p = patch(
-            0,
-            Some("a"),
-            "- [ ] one <!-- id: a -->",
-            "- [x] one <!-- id: a -->",
-        );
-        assert_eq!(apply(renamed, &[p]), Err(PatchError::Unplaced(0)));
-        let field = b"Owner:: Bob (team) <!-- id: owner -->
-";
-        let p = patch(
-            0,
-            Some("owner"),
-            "Owner:: Bob <!-- id: owner -->",
-            "Owner:: Ann <!-- id: owner -->",
-        );
-        assert_eq!(apply(field, &[p]), Err(PatchError::Unplaced(0)));
-        // The remembered line wins over an equal line elsewhere.
-        let twice = b"- [ ] t
-- [ ] t
-";
+    fn only_the_remembered_line_is_placed_natively() {
+        let twice = b"- [ ] t\n- [ ] t\n";
         let (bytes, _) = apply(twice, &[patch(1, None, "- [ ] t", "- [x] t")]).unwrap();
+        assert_eq!(bytes, b"- [ ] t\n- [x] t\n");
+        // Moved (lines inserted above), renamed, or a twin left elsewhere: the parser
+        // re-derives with syntax knowledge (code blocks, control kinds), never a guess.
+        let moved = b"new\n- [ ] a <!-- id: a -->\n";
         assert_eq!(
-            bytes,
-            b"- [ ] t
-- [x] t
-"
+            apply(
+                moved,
+                &[patch(
+                    0,
+                    Some("a"),
+                    "- [ ] a <!-- id: a -->",
+                    "- [x] a <!-- id: a -->"
+                )]
+            ),
+            Err(PatchError::Unplaced(0))
+        );
+        let ticked_elsewhere = b"- [x] review\n- [ ] review\n";
+        assert_eq!(
+            apply(
+                ticked_elsewhere,
+                &[patch(0, None, "- [ ] review", "- [x] review")]
+            ),
+            Err(PatchError::Unplaced(0))
+        );
+        assert_eq!(
+            apply(twice, &[patch(0, None, "- [ ] t", "a\0b")]),
+            Err(PatchError::Invalid(0))
         );
     }
 

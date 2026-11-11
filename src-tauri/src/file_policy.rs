@@ -27,7 +27,7 @@ impl Encoding {
         }
     }
 
-    fn detect(bytes: &[u8]) -> Self {
+    pub fn detect(bytes: &[u8]) -> Self {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
             Self::Utf8Bom
         } else if bytes.starts_with(&[0xff, 0xfe]) {

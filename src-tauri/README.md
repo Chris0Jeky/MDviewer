@@ -76,22 +76,23 @@ use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 through one handle (`replace::snapshot_read`), splits lines over raw UTF-8 bytes or UTF-16
 code units after a BOM, and changes only the placed lines' content bytes: the BOM, every line
 terminator (mixed endings included) and a final terminator are kept. Placement: the remembered
-`line` if it still equals `expect`; else the one line carrying `<!-- id: name -->` if it still
-equals `expect`; else the one line equal to `expect`. If the id line changed, or nothing can be
-placed, nothing is written and `unplaced` returns the current text so the parser can re-derive
+`line` if it still equals `expect`, and only that natively. The contract's later steps (the
+one line carrying the id, then the one equal line) need the Markdown syntax (code blocks,
+control kinds), so when the remembered line does not match, nothing is written and `unplaced` returns the current text so the parser can re-derive
 the patch (syntax-aware span edits stay in the webview). A replacement with a line break is
 refused; patches are all-or-nothing. The commit goes through `replace_if_unchanged` against
 the bytes just read, with one re-read and retry on conflict; the binding then moves to the new
 bytes, so the watcher sees no outside change.
 
-`save_export` is the only write operation. It accepts a raw binary body and an
+`save_export` writes explicit copies. It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a
 Blob into memory, and the host checks it before copying the request or opening a
 dialog. A native Save dialog runs on a background thread. Only its chosen path
 can be written. The host writes a temporary file in that directory, syncs it,
 and atomically replaces the chosen destination; cancellation and validation
-failure preserve existing bytes. Documents are never saved automatically.
+failure preserve existing bytes. Documents are never saved automatically; a line patch
+runs only for an explicit actionable-Markdown gesture (enforced by the webview).
 
 Browser download events are denied. This avoids opening modal UI inside
 WebView2's synchronous download event, which does not support reentrancy. The

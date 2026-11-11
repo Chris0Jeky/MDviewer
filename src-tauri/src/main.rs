@@ -6,7 +6,7 @@ mod file_policy;
 mod linepatch;
 mod registry;
 // S1a: not wired into IPC until Save (S1b) consumes it.
-// create_new and recover_journal are used once Save (S1b) lands.
+// create_new is used once Save As (S1b) lands.
 #[allow(dead_code)]
 mod replace;
 

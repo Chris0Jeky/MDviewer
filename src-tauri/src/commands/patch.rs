@@ -5,7 +5,7 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::file_policy::{Eol, MAX_FILE_BYTES};
+use crate::file_policy::{Encoding, Eol, MAX_FILE_BYTES};
 use crate::linepatch::{self, Patch, PatchError};
 use crate::registry::{FileIdentity, Token};
 use crate::replace::{self, ReplaceError, ReplaceOutcome, Snapshot};
@@ -39,7 +39,11 @@ fn failed(code: &'static str) -> PatchResult {
 pub(crate) fn patch_file(
     path: &std::path::Path,
     patches: &[Patch],
-) -> Result<(Snapshot, String), PatchResult> {
+) -> Result<(Snapshot, String, Encoding), PatchResult> {
+    // Finish or roll back a save a crash interrupted here before reading.
+    if let Some(dir) = path.parent() {
+        let _ = replace::recover_journal(dir);
+    }
     for attempt in 0..2 {
         let (snapshot, raw) =
             replace::snapshot_read(path, MAX_FILE_BYTES).map_err(|error| match error.kind() {
@@ -61,7 +65,7 @@ pub(crate) fn patch_file(
             return Err(failed("too-large"));
         }
         match replace::replace_if_unchanged(path, &snapshot, &bytes) {
-            Ok(ReplaceOutcome::Replaced(new)) => return Ok((new, text)),
+            Ok(ReplaceOutcome::Replaced(new)) => return Ok((new, text, Encoding::detect(&bytes))),
             Err(ReplaceError::Conflict(_)) if attempt == 0 => continue,
             Err(ReplaceError::Conflict(_)) => return Err(failed("conflict")),
             Err(ReplaceError::Unsupported(_)) => return Err(failed("unsupported")),
@@ -92,7 +96,7 @@ pub(crate) async fn patch_document(
     let result = tauri::async_runtime::spawn_blocking(move || patch_file(&path, &patches))
         .await
         .map_err(|_| "The change could not be saved.".to_string())?;
-    let (new, text) = match result {
+    let (new, text, encoding) = match result {
         Ok(done) => done,
         Err(outcome) => return Ok(outcome),
     };
@@ -108,6 +112,8 @@ pub(crate) async fn patch_document(
     });
     binding.digest = new.digest;
     binding.len = new.len;
+    // Follow the file as written: another tool may have changed its encoding.
+    binding.encoding = encoding;
     binding.eol = Eol::detect(&text);
     binding.generation += 1;
     Ok(PatchResult::Saved {
@@ -140,7 +146,7 @@ mod tests {
         )
         .unwrap();
         let checked = "- [x] run 01 <!-- id: r1 -->";
-        let (_, text) = patch_file(
+        let (_, text, _) = patch_file(
             &path,
             &[p(1, Some("r1"), "- [ ] run 01 <!-- id: r1 -->", checked)],
         )
@@ -176,13 +182,38 @@ mod tests {
             "- [ ] a <!-- id: a -->",
             "- [x] a <!-- id: a -->",
         );
-        patch_file(&path, std::slice::from_ref(&control)).unwrap();
+        // The control moved: nothing is written and the current text comes back...
+        assert_eq!(
+            patch_file(&path, std::slice::from_ref(&control)).unwrap_err(),
+            PatchResult::Unplaced {
+                index: 0,
+                text: "## Run 02\r\nnotes\r\n- [ ] a <!-- id: a -->\n".into()
+            }
+        );
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"## Run 02\r\nnotes\r\n- [ ] a <!-- id: a -->\n"
+        );
+        // ...and the parser's re-derived patch (same id, now line 2) lands byte-exact.
+        let rederived = p(
+            2,
+            Some("a"),
+            "- [ ] a <!-- id: a -->",
+            "- [x] a <!-- id: a -->",
+        );
+        patch_file(&path, &[rederived]).unwrap();
         assert_eq!(
             std::fs::read(&path).unwrap(),
             b"## Run 02\r\nnotes\r\n- [x] a <!-- id: a -->\n"
         );
         // The control itself changed: nothing is written, the current text comes back.
         std::fs::write(&path, b"- [ ] a renamed <!-- id: a -->\n").unwrap();
+        let control = p(
+            0,
+            Some("a"),
+            "- [ ] a <!-- id: a -->",
+            "- [x] a <!-- id: a -->",
+        );
         assert_eq!(
             patch_file(&path, &[control]).unwrap_err(),
             PatchResult::Unplaced {
