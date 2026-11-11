@@ -112,7 +112,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Document content never leaves the device. Open documents and latest-close recovery stay in
   memory; there is no automatic/app-managed document or session storage. Explicit user-selected
-  Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) and Save As (Ctrl+Shift+S) write the open document to its own file in place (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
+  Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
   SDK keys below persist as app-managed user state. Bundle Shiki themes/langs, KaTeX fonts, and
   Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK

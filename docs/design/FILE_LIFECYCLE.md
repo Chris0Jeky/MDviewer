@@ -11,8 +11,8 @@ leaves the dirty baseline intact; owned Save/Save As (`save_document`,
 The behavior, capability and recovery boundaries were independently reviewed and
 merged in [#209](https://github.com/Chris0Jeky/MDviewer/pull/209), commit
 `2aec9104c7f35f4ac230705e4ba6775e0ee3e7ec`. This completes the design-review
-slice only. The Windows primitive experiment and every implementation gate below
-remain open; see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
+slice. The primitive experiment and the implementation have since landed (see the
+status line and checklist); see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
 
 ## Product decisions
 
