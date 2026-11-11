@@ -129,7 +129,8 @@ in the current environment.
 
 ## Local Settings
 
-Committed `.claude/settings.json` holds shared guardrails (`bypassPermissions` + the safety
-hooks in `scripts/agent_hooks/*`). Use `.claude/settings.local.json` only for machine-specific
+Committed `.claude/settings.json` holds shared guardrails (allow/deny rules and the
+`scripts/agent_hooks/*` hooks). It sets no `defaultMode`: the permission mode comes from the
+user's own settings or launch flag, because a committed project mode outranks the user's. Use `.claude/settings.local.json` only for machine-specific
 overrides (gitignored). MCP defaults live in `.mcp.json` (credential-free: context7, playwright,
 ripgrep) — verify a server is live via `/mcp` before relying on it.

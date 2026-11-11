@@ -409,9 +409,9 @@ function Get-MemorySample([string]$Stage) {
 }
 
 function Read-ProbeProgress([string]$ProbeFile) {
-    # No initial snapshot is normal. The caller keeps its last valid readiness;
-    # corrupt snapshots and unexpected I/O failures remain visible.
-    return Read-SmokeProbeJson ($ProbeFile + '.progress.json')
+    # No initial snapshot or a snapshot mid-swap is normal. The caller keeps its
+    # last valid readiness; corrupt snapshots and other I/O failures remain visible.
+    return Read-SmokeProbeProgressJson ($ProbeFile + '.progress.json')
 }
 
 function Wait-ProbeWorker([System.Diagnostics.Process]$Worker, [string]$ProbeFile,

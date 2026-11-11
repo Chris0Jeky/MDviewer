@@ -20,8 +20,8 @@ handoff that touched skills/hooks.
 ## Safety / guardrails
 
 - Shared guardrails live in committed `.claude/settings.json`; machine-specific
-  overrides in `.claude/settings.local.json`. Permission-bypass mode belongs only in
-  disposable containers/VMs.
+  overrides in `.claude/settings.local.json`. The project sets no `defaultMode`; the
+  permission mode is the user's choice (user settings or a launch flag).
 - Branch-aware git rules are agent-held: protected branches (`main`, `master`,
   `develop`, `release`) never take rebase/force-push/hard-reset/history-rewrite. The
   `pre_tool_use.py` script implements them but is not wired as a hook, so nothing

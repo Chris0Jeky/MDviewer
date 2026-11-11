@@ -6,7 +6,6 @@
     "sessionUrl": false
   },
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "Read",
       "Grep",
