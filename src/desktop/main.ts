@@ -9,7 +9,7 @@ import type { Doc } from "../app/state";
 import { native, type OpenBatch } from "./native";
 import { ReaderSession, decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { renderReaderDocument } from "./render";
-import { bindReaderSource, mountSelectionCopy } from "./reader/copy";
+import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
 
@@ -130,14 +130,11 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
         content.replaceChildren(...first.childNodes); // Text first; code and diagrams upgrade in place.
-        bindReaderSource(content, first);
         return content;
       });
       if (current !== renderGeneration) return;
-      if (result.document !== content) { // A renderer that did not paint early.
-        content.replaceChildren(...result.document.childNodes);
-        bindReaderSource(content, result.document);
-      }
+      // A renderer that did not paint early.
+      if (result.document !== content) content.replaceChildren(...result.document.childNodes);
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {

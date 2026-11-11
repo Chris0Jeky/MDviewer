@@ -88,6 +88,32 @@ describe("sections and selections", () => {
     expect(selectionRange(root, selection)).toBeNull();
   });
 
+  function select(setup: (range: Range) => void): Selection {
+    const range = document.createRange();
+    setup(range);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection;
+  }
+
+  it("includes raw HTML blocks and out-of-order footnote definitions the selection covers", () => {
+    const { root } = map("Para one.[^1]\n\n[^1]: The note.\n\n<div>Raw block</div>\n\nLater.\n");
+    expect(src(root, "div")).toEqual(["5-5"]);
+    const selection = select(range => {
+      range.setStart(root.querySelector("div")!.firstChild!, 0);
+      range.setEnd(root.querySelector(".footnotes p")!.firstChild!, 3);
+    });
+    expect(selectionRange(root, selection)).toEqual([3, 7]);
+  });
+
+  it("does not count a block the selection only touches at its start", () => {
+    const { root } = map("First.\n\nSecond.\n");
+    const [first, second] = root.querySelectorAll("p");
+    const selection = select(range => { range.setStart(first!.firstChild!, 0); range.setEnd(second!.firstChild!, 0); });
+    expect(selectionRange(root, selection)).toEqual([1, 1]);
+  });
+
   it("ignores selections outside the document", () => {
     const { root } = map(text);
     const outside = document.createElement("p");

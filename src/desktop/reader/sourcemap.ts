@@ -29,7 +29,7 @@ function range(map: [number, number], lines: readonly string[]): string {
 }
 
 // Rules that print their own opening tag and ignore token attributes.
-const RAW_RULES = /^(?:fence|math_block(?:_eqno)?|container_\w+_open)$/;
+const RAW_RULES = /^(?:fence|html_block|math_block(?:_eqno)?|container_\w+_open)$/;
 
 /** Stamp parsed block tokens (markdown-it keeps every block token at the top level). */
 export function stampSourceMap(tokens: Token[], lines: readonly string[]): void {
@@ -100,12 +100,19 @@ export function sectionRange(heading: HTMLElement, total: number): [number, numb
 export function selectionRange(root: HTMLElement, selection: Selection | null): [number, number] | null {
   if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
   const range = selection.getRangeAt(0);
-  const element = (node: Node): Element | null => node instanceof Element ? node : node.parentElement;
-  const ends = [element(range.startContainer), element(range.endContainer)];
-  if (ends.some(end => !end || !root.contains(end))) return null;
-  // A selection that starts or ends on the article itself (e.g. triple-click) maps to its blocks.
-  const covered = [...root.querySelectorAll(`[${SOURCE_ATTR}]`)].filter(block => range.intersectsNode(block));
-  const ranges = [...ends.map(rangeOf), ...(ends.includes(root) ? covered.map(rangeOf) : [])]
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+  // Every stamped block with selected text. Footnote definitions render out of source order
+  // and a triple-click ends at offset 0 of the next block, so the two ends alone are not enough.
+  const selectsText = (block: Element): boolean => {
+    const within = document.createRange();
+    within.selectNodeContents(block);
+    if (range.compareBoundaryPoints(Range.START_TO_START, within) > 0) within.setStart(range.startContainer, range.startOffset);
+    if (range.compareBoundaryPoints(Range.END_TO_END, within) < 0) within.setEnd(range.endContainer, range.endOffset);
+    return within.toString().trim() !== "";
+  };
+  const ranges = [...root.querySelectorAll(`[${SOURCE_ATTR}]`)]
+    .filter(block => range.intersectsNode(block) && selectsText(block))
+    .map(rangeOf)
     .filter((value): value is [number, number] => !!value);
   if (!ranges.length) return null;
   return [Math.min(...ranges.map(value => value[0])), Math.max(...ranges.map(value => value[1]))];
