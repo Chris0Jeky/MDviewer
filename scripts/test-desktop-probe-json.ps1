@@ -142,12 +142,18 @@ try {
     Assert-ProbeJson (-not [System.IO.File]::Exists($blockedPath + '.writing')) 'successful recovery consumes staging'
 
     # An existing but inaccessible file is an error, not an unpublished snapshot.
+    $missingDirectoryPathForPoll = Join-Path $testRoot 'absent-poll-directory/probe.json'
     $exclusiveReader = [System.IO.File]::Open($blockedPath, [System.IO.FileMode]::Open,
         [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)
     try {
         Assert-ProbeJsonThrows { Open-SmokeProbeReadStream $blockedPath } ([System.IO.IOException]) 'locked snapshot open'
         Assert-ProbeJsonThrows { Read-SmokeProbeJson $blockedPath } ([System.IO.IOException]) 'locked snapshot parse'
+        # Polling treats only the sharing window as "no new snapshot this tick".
+        Assert-ProbeJson ($null -eq (Read-SmokeProbeProgressJson $blockedPath)) 'locked progress poll skips the tick'
     } finally { $exclusiveReader.Dispose() }
+    Assert-PublishedProbe $blockedPath $after 'progress poll leaves the snapshot readable'
+    Assert-ProbeJson ($null -ne (Read-SmokeProbeProgressJson $blockedPath)) 'released progress poll reads the snapshot'
+    Assert-ProbeJsonThrows { Read-SmokeProbeProgressJson $missingDirectoryPathForPoll } ([System.IO.DirectoryNotFoundException]) 'progress poll keeps other failures'
     $missingDirectoryPath = Join-Path $testRoot 'absent-directory/probe.json'
     Assert-ProbeJsonThrows { Read-SmokeProbeJson $missingDirectoryPath } ([System.IO.DirectoryNotFoundException]) 'missing directory'
 
