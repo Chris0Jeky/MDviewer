@@ -418,8 +418,8 @@
 > window-paste and editor-paste/drop paths) merged as `a56b2f5`. Owner PRs #111
 > (SDK version from lock) and #112 (SDK 3.3.0 sync) merged concurrently, reviewed
 > retrospectively. Production was deployment **`c3509120`** from `a56b2f5`,
-> smoke-verified live. Standing orders update: no more Codex review requests —
-> self-review or headless Grok only. Superseded by the f97778db deploy above.
+> smoke-verified live. Standing orders update (struck 2026-11-11: reviews
+> follow estate law 2g). Superseded by the f97778db deploy above.
 >
 > **▶ PREVIOUS CHECKPOINT — 2026-09-26 (checklist pagination fix, merged as #99):**
 > Owner report: `HUMAN_TODO.pdf` (610 lines, 30 long task items) paginated with
@@ -616,7 +616,7 @@ above and refresh GitHub state for the current queue, verification and next work
   records #106/#108, follow-ups #109, SDK version #111 + SDK 3.3 #112 (owner),
   perf budget #110 merged; production is `c3509120` from `a56b2f5`. Next slice:
   next roadmap item after the P3 budget. Longer backlog plus operator-owned
-  AI-6/AI-7/AI-8. Standing orders: no Codex review requests (self/Grok only).
+  AI-6/AI-7/AI-8. Reviews follow estate law 2g.
 - **Last updated:** 2026-09-27
 - **Live GitHub queue snapshot (2026-09-27):** no open PRs except this deploy-record
   PR, no open issues; production is `c3509120` from `a56b2f5` (fresh).
@@ -938,5 +938,4 @@ one of those issues or its existing AI gate.
   all fixed in-PR. Owner #111/#112 rode along and were reviewed
   retrospectively (3.3.0 behavior-neutral for mdviewer). Production is now
   **`c3509120`** from `a56b2f5`: identical bytes/headers, SDK 3.3.0
-  byte-matching the lock, clean Chromium boot. Standing orders: no more Codex
-  review requests (self/Grok only).
+  byte-matching the lock, clean Chromium boot. Reviews follow estate law 2g.
