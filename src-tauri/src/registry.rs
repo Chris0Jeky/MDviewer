@@ -72,12 +72,12 @@ impl Registry {
         self.bindings.get(token)
     }
 
-    // Close/revocation IPC arrives in a later slice.
-    #[allow(dead_code)]
     pub fn get_mut(&mut self, token: &Token) -> Option<&mut Binding> {
         self.bindings.get_mut(token)
     }
 
+    // Close/revocation IPC arrives in a later slice.
+    #[allow(dead_code)]
     pub fn revoke(&mut self, token: &Token) {
         self.bindings.remove(token);
     }
