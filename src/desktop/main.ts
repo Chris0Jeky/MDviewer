@@ -113,6 +113,16 @@ function recordSession(): void {
   }, 500);
 }
 
+/** On window close: send the current open set now instead of after the debounce. */
+async function flushSession(): Promise<void> {
+  if (!native.available || !sessionReady) return;
+  clearTimeout(sessionTimer);
+  const tokens = docs.boundTokens();
+  if (tokens.join(",") === lastSession) return;
+  lastSession = tokens.join(",");
+  await native.session.record(tokens);
+}
+
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
@@ -757,6 +767,7 @@ if (native.available) {
     run: async () => {
       const current = await native.session.setting(null);
       const next = await native.session.setting(!current.restore);
+      if (!next.persisted) { report("The preference could not be saved; it applies until MDviewer closes."); return; }
       report(next.restore ? "MDviewer will reopen your open files next time." : "MDviewer will start empty next time.");
     } });
   registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
@@ -801,16 +812,19 @@ if (native.available) {
         return false;
       }
       return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
-    });
+    }, flushSession);
     await drain();
     // Reopen the last session's files after launch files, without taking focus
     // from them (paths only; the preference is on by default).
     try {
+      const startedAt = generation;
       const restored = await native.session.restore();
       if (restored.documents.length || restored.errors.length) {
+        // Like a forwarded batch: a newer user action (an Open click) keeps ownership.
+        const owns = startedAt === generation && !docs.reader.activeId && !app;
         commitBatch({ ...restored, errors: restored.errors.length
           ? [{ name: "Last session", message: `${restored.errors.length} file(s) could not be reopened.` }] : [] },
-        docs.reader.activeId || app ? -1 : ++generation);
+        owns ? ++generation : -1);
       }
       sessionReady = true;
       recordSession();

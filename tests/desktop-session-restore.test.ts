@@ -79,11 +79,15 @@ describe("desktop session restore", () => {
 
   it("toggles the reopen-on-launch preference", async () => {
     await boot(empty, empty);
-    boundary.setting.mockResolvedValueOnce({ restore: true }).mockResolvedValueOnce({ restore: false });
+    boundary.setting.mockResolvedValueOnce({ restore: true, persisted: true }).mockResolvedValueOnce({ restore: false, persisted: true });
     const { runCommand } = await import("../src/desktop/commands");
     expect(runCommand("session.toggleRestore")).toBe(true);
     await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toBe("MDviewer will start empty next time."));
     expect(boundary.setting).toHaveBeenNthCalledWith(1, null);
     expect(boundary.setting).toHaveBeenNthCalledWith(2, false);
+    // A store that cannot be written must not claim the preference was saved.
+    boundary.setting.mockResolvedValueOnce({ restore: false, persisted: true }).mockResolvedValueOnce({ restore: true, persisted: false });
+    runCommand("session.toggleRestore");
+    await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("could not be saved"));
   });
 });

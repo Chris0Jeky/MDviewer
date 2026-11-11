@@ -84,8 +84,6 @@ impl Registry {
         self.bindings.remove(token);
     }
 
-    // Retained for bounded-state inspection and later lifecycle commands.
-    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.bindings.len()
     }
