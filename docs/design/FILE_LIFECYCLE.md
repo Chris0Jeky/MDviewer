@@ -155,6 +155,22 @@ shortcut: Microsoft [recommends alternatives][txf] for new applications.
 This unresolved native gate is explicit engineering work, not a reason to delay
 the safe design or to pretend the current export helper already satisfies #196.
 
+### Primitive experiment results
+
+S1a adds an isolated held-handle primitive in `src-tauri/src/replace.rs`, with no
+IPC integration. Windows/NTFS release tests exercised 184 separate-process race
+trials (100 saves, 84 refusals; no acknowledged external-byte loss), 28 injected
+failure/process-exit recovery cases, and altered-artifact recovery refusals.
+Ancestor handles exclude write/delete sharing; native same-directory leaf-name
+renames avoid reopening those parents. The two-rename namespace gap is journaled,
+and an outside claimant is preserved. The full 33-test suite passed within the
+60-second budget. ReFS, file symlinks (sandbox creation privilege unavailable), the legacy
+file-ID fallback, power-loss durability and production IPC remain unverified.
+Unsupported scope and recovery behavior are documented in the native README's
+“Conflict-safe replace (experimental)” section. Strict Clippy still reports two
+pre-existing `file_policy.rs` lints outside this slice. This evidence does not tick
+the implementation gate or qualify native Save.
+
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).

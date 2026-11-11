@@ -4,6 +4,9 @@ mod commands;
 mod export_policy;
 mod file_policy;
 mod registry;
+// S1a: not wired into IPC until Save (S1b) consumes it.
+#[allow(dead_code)]
+mod replace;
 
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
