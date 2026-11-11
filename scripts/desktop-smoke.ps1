@@ -24,6 +24,7 @@ param(
     [ValidateSet('heading', 'button', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
     [string]$ButtonName,
     [string]$SavePath,
+    [string]$DialogTitle = 'Save export',
     [int]$OwnerProcessId,
     [string]$ExpectedHeading,
     [string]$ProbeOutput,
@@ -159,7 +160,7 @@ public static class SmokeWindow {
             if ($ProbeAction -eq 'save-dialog') {
                 $condition = [System.Windows.Automation.AndCondition]::new(
                     [System.Windows.Automation.PropertyCondition]::new(
-                        [System.Windows.Automation.AutomationElement]::NameProperty, 'Save export'),
+                        [System.Windows.Automation.AutomationElement]::NameProperty, $DialogTitle),
                     [System.Windows.Automation.PropertyCondition]::new(
                         [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $OwnerProcessId))
                 Write-ProbePhase 'finding-save-dialog'
@@ -168,7 +169,7 @@ public static class SmokeWindow {
                     $dialog = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
                         [System.Windows.Automation.TreeScope]::Children, $condition)
                 }
-                if ($null -eq $dialog) { throw 'The native Save export dialog is not visible yet.' }
+                if ($null -eq $dialog) { throw "The native '$DialogTitle' dialog is not visible yet." }
                 $result.saveDialog = Get-ControlMetadata $dialog
                 # Framework UIA can expose the dialog but omit all its children
                 # on a second Save. The native bridge addresses only the unique
@@ -558,7 +559,7 @@ function Wait-ForHeading([string]$Heading, [string]$ScreenshotName) {
     throw "Rendered heading was not verified within $TimeoutSeconds seconds. $lastReason"
 }
 
-function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destination = '') {
+function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destination = '', [string]$Title = '') {
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     $lastReason = 'No accessibility result was returned.'
     while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
@@ -571,6 +572,7 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
             '-OwnerProcessId', $app.Id.ToString(), '-ProbeOutput', $probeFile)
         if ($Name) { $arguments += @('-ButtonName', $Name) }
         if ($Destination) { $arguments += @('-SavePath', $Destination) }
+        if ($Title) { $arguments += @('-DialogTitle', $Title) }
         $worker = Start-OwnedProcess $workerShell $arguments $out -CaptureOutput
         $wait = Wait-ProbeWorker $worker $probeFile $watch -ReturnOnResult
         $timedOut = $wait.decision.EndsWith('-timeout')
@@ -700,9 +702,22 @@ try {
         $bytes.Length -gt 5 -and [System.Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ceq '%PDF-' -and
             [System.Text.Encoding]::ASCII.GetString($bytes, [Math]::Max(0, $bytes.Length - 1024), [Math]::Min(1024, $bytes.Length)).Contains('%%EOF')
     }
+    # Owned Save As: the forwarded UTF-16LE BOM document, unedited, must land
+    # byte-identical to its source (encoding, BOM and line endings preserved).
+    $ownedPath = Join-Path $exportDirectory 'saved-as.markdown'
+    $expectedOwnedBytes = [System.IO.File]::ReadAllBytes((Join-Path $fixtureDirectory $secondName))
+    Invoke-SmokeAction 'button' 'Save As'
+    Invoke-SmokeAction 'save-dialog' -Destination $ownedPath -Title 'Save Markdown'
+    $ownedEvidence = Wait-ExportFile $ownedPath {
+        param([byte[]]$bytes)
+        $bytes.Length -eq $expectedOwnedBytes.Length -and
+            [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($expectedOwnedBytes)
+    }
     $metrics.exports = [ordered]@{
         workspaceOpened = $true
-        nativeSaveDialogsVerified = 2
+        nativeSaveDialogsVerified = 3
+        ownedSaveAsExactSourceBytes = $true
+        ownedSaveAs = $ownedEvidence
         markdownExactUtf8Bytes = $true
         markdown = $markdownEvidence
         pdfHeaderAndEofVerified = $true

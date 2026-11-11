@@ -89,6 +89,9 @@ function syncDocuments(): void {
   for (const button of newButtons) button.disabled = workspaceBusy;
   const workspaceNew = appRoot.querySelector<HTMLButtonElement>('.workspace-actions > button[data-document-command="new"]');
   if (workspaceNew) workspaceNew.disabled = workspaceBusy;
+  for (const button of appRoot.querySelectorAll<HTMLButtonElement>("button[data-desktop-command]")) {
+    button.disabled = workspaceBusy || !active;
+  }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
 }
 
@@ -246,7 +249,8 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
     renderedReaderId = null;
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument);
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument,
+      native.available ? { save: () => { void saveDocument(false); }, saveAs: () => { void saveDocument(true); } } : undefined);
     app = mounted.app;
     docs.adoptReaderInto(app);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
