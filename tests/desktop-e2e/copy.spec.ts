@@ -136,7 +136,7 @@ test("a long run-card fence copies byte for byte from a sticky, keyboard-reachab
   await expect(button).toHaveCSS("opacity", "1");
   await page.keyboard.press("Enter");
   expect(await clipboard(page)).toBe(body);
-  expect(await clipboard(page)).toBe(text.split("\n").slice(4, 4 + body.split("\n").length).join("\n"));
+  expect(await clipboard(page)).toBe(text.split("\n").slice(3, 3 + body.split("\n").length).join("\n"));
   await expect(button.getByText("Copied")).toBeVisible();
   await expect(page.locator(".reader-toast")).toHaveText(`Copied ${body.split("\n").length} lines of code`);
 });
