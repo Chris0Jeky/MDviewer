@@ -28,7 +28,8 @@ When sources conflict, follow the higher source and report the conflict.
 ## First 5 Minutes
 
 Read `ACTION_ITEMS.md` and the top of `ORCHESTRATOR.md`; open the other sources above when the
-task needs them. Then pick the smallest safe, reviewable slice and state blockers, assumptions,
+task needs them. Do not bulk-read `node_modules`, `dist`, build output or generated
+artifacts unless the task needs them. Then pick the smallest safe, reviewable slice and state blockers, assumptions,
 verification target, and docs-sync target before editing. Model, effort and agent count follow
 the estate `model-effort-routing` skill.
 
@@ -96,9 +97,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
 - Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
   ready-for-review PRs after relevant local checks. A PR is aged once an independent adversarial review has
-  examined its latest head, exact-head CI has completed green, every comment is triaged, and the
+  examined the reviewed diff, exact-head CI has completed green, every comment is triaged, and the
   head has aged at least three minutes (global law 2f). The repository is T2 with push and merge free
-  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Actionable findings require finding → commit
+  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Fixed findings require finding → commit
   evidence, while informational/bot notices require an explicit non-finding triage. A head change
   re-proves what changed; a fresh review is owed only when fixes change logic or the risk boundary. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.

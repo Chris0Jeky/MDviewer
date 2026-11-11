@@ -58,7 +58,9 @@ Companion behaviour:
 
 ## Boundary changes
 
-Authorized by the owner direction above. Each slice updates `PRODUCT_VISION.md`, the spec and the
+The file watcher, `library.json` and in-place Save rows are owner-confirmed (2026-11-11, see
+below); the other rows are coordinator assumptions from the owner direction above and stay
+reversible by the owner. Each slice updates `PRODUCT_VISION.md`, the spec and the
 privacy text when it ships its row. Everything not listed stays as it is: no network, no document
 telemetry, the sanitizer, the CSP, no generic filesystem or shell command, the web/PWA contract,
 the render order and the no-slice guarantee.
