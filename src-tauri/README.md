@@ -132,8 +132,10 @@ reparse points at the file or any ancestor, multiple hard links, and the reserve
 
 `snapshot_read` reads identity and bounded raw bytes through one handle. Saves
 compare the volume, 128-bit file ID (legacy file-index fallback if unsupported),
-length and SHA-256. The dependency-free SHA-256 implementation is under 150 lines
-and tested against four known-answer vectors, including a million-byte input.
+length and SHA-256 (the pinned `sha2` crate the registry also uses, checked against
+four known-answer vectors). Read-only originals are refused as `Locked`, the written
+temporary is read back and must match the requested bytes before commit, and
+recovery keeps scanning past a journal it cannot reconcile.
 The original and every ancestor stay open without write/delete sharing through
 verification and commit. Existing writable handles or mapped views cause a
 `Locked` refusal, including a writable view retained after its file handle closes.

@@ -346,6 +346,16 @@ mod win {
     }
     fn verify(file: &mut File, expected: &Snapshot) -> Result<(), ReplaceError> {
         regular(file)?;
+        // A read-only original can be renamed but not deleted: refuse up front
+        // rather than drop the user's flag and strand an undeletable aside.
+        if info(file)
+            .map_err(|e| err(e, Stage::Verify))?
+            .dwFileAttributes
+            & FILE_ATTRIBUTE_READONLY
+            != 0
+        {
+            return Err(ReplaceError::Conflict(ConflictKind::Locked));
+        }
         let (id, _) = identity(file).map_err(|e| err(e, Stage::Verify))?;
         if id.VolumeSerialNumber != expected.volume_serial
             || id.FileId.Identifier != expected.file_id
@@ -583,6 +593,9 @@ mod win {
         temp.sync_all().map_err(|e| err(e, Stage::Flush))?;
         let (new, _) =
             read_handle(&mut temp, bytes.len() as u64).map_err(|e| err(e, Stage::Verify))?;
+        if new.len != bytes.len() as u64 || new.digest != digest(bytes) {
+            return Err(ReplaceError::Io(io::ErrorKind::InvalidData, Stage::Verify));
+        }
         let mut journal = scratch(&journal_path).map_err(|e| err(e, Stage::WriteTemp))?;
         journal
             .write_all(&record(dest.file_name().unwrap(), expected, &new))
@@ -674,8 +687,16 @@ mod win {
         }
         if target.is_none() {
             if let Some(f) = aside.as_ref() {
-                rename(f, &dest)?;
-                touched.extend([aside_path.clone(), dest.clone()]);
+                // No temp means the new file already took the name and was then
+                // moved away: the commit stands, so never resurrect the old bytes
+                // under the real name; keep them as a visible sibling instead.
+                let back = if temp.is_none() {
+                    recovered_name(&dest)
+                } else {
+                    dest.clone()
+                };
+                rename(f, &back)?;
+                touched.extend([aside_path.clone(), back]);
                 aside = None;
             } else if old.is_some() {
                 return Err(io::ErrorKind::NotFound.into());
@@ -708,14 +729,24 @@ mod win {
     pub fn recover_journal(dir: &Path) -> io::Result<Vec<PathBuf>> {
         let parents = Parents::hold(&dir.join("recovery-anchor")).map_err(as_io)?;
         let mut touched = Vec::new();
+        let mut first_error = None;
         for entry in fs::read_dir(parents.path.parent().unwrap())? {
             let path = entry?.path();
             let name = path.file_name().unwrap().to_string_lossy();
             if name.starts_with(".mdv-replace-") && name.ends_with(".journal") {
-                touched.extend(recover_one(&path)?);
+                // One stuck journal must not block the others in this folder.
+                match recover_one(&path) {
+                    Ok(paths) => touched.extend(paths),
+                    Err(e) => {
+                        first_error.get_or_insert(e);
+                    }
+                }
             }
         }
-        Ok(touched)
+        match first_error {
+            Some(e) => Err(e),
+            None => Ok(touched),
+        }
     }
 
     #[cfg(test)]
@@ -1035,7 +1066,26 @@ mod win {
                                 assert_eq!(actual, OLD);
                             }
                         }
-                        recover_journal(path.parent().unwrap()).unwrap();
+                        // A scanner may briefly hold a fresh artifact; recovery then
+                        // refuses as Locked (safe) and a later save retries it.
+                        let mut recovered = recover_journal(path.parent().unwrap());
+                        for _ in 0..50 {
+                            match &recovered {
+                                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                                    std::thread::sleep(Duration::from_millis(10));
+                                    recovered = recover_journal(path.parent().unwrap());
+                                }
+                                _ => break,
+                            }
+                        }
+                        if let Err(e) = recovered {
+                            let names: Vec<_> = fs::read_dir(path.parent().unwrap())
+                                .unwrap()
+                                .filter_map(Result::ok)
+                                .map(|e| e.file_name())
+                                .collect();
+                            panic!("{scenario} {stage:?}: recovery failed: {e:?}; files {names:?}; result {result:?}");
+                        }
                         assert_clean(path.parent().unwrap());
                     }
                 }
@@ -1140,6 +1190,65 @@ mod win {
                 eprintln!("FAULT {stage:?}: injected=1 crash=1 recovered=2");
             }
         }
+        #[test]
+        fn read_only_originals_are_refused_and_left_untouched() {
+            let (_dir, path) = fixture();
+            let (snap, _) = snapshot_read(&path, 100).unwrap();
+            let mut permissions = fs::metadata(&path).unwrap().permissions();
+            permissions.set_readonly(true);
+            fs::set_permissions(&path, permissions.clone()).unwrap();
+            assert!(matches!(
+                replace_if_unchanged(&path, &snap, NEW),
+                Err(ReplaceError::Conflict(ConflictKind::Locked))
+            ));
+            assert_eq!(fs::read(&path).unwrap(), OLD);
+            assert!(fs::metadata(&path).unwrap().permissions().readonly());
+            assert_clean(path.parent().unwrap());
+            #[allow(clippy::permissions_set_readonly_false)]
+            permissions.set_readonly(false);
+            fs::set_permissions(&path, permissions).unwrap();
+        }
+
+        #[test]
+        fn recovery_after_a_completed_save_never_resurrects_the_old_bytes() {
+            // Crash after the rename into place, then the user moves the new file away.
+            let (_dir, path) = crash_fixture(Stage::Cleanup);
+            let moved = path.with_file_name("moved.md");
+            fs::rename(&path, &moved).unwrap();
+            recover_journal(path.parent().unwrap()).unwrap();
+            assert!(
+                !path.exists(),
+                "the old version must not reappear under the real name"
+            );
+            assert_eq!(fs::read(&moved).unwrap(), NEW);
+            let kept: Vec<_> = fs::read_dir(path.parent().unwrap())
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .contains("(MDviewer recovered ")
+                })
+                .map(|e| fs::read(e.path()).unwrap())
+                .collect();
+            assert_eq!(kept, vec![OLD.to_vec()]);
+            assert_clean(path.parent().unwrap());
+        }
+
+        #[test]
+        fn one_stuck_journal_does_not_block_recovery_of_another() {
+            let (dir, path) = crash_fixture(Stage::RenameIntoPlace);
+            fs::write(
+                path.with_file_name(".mdv-replace-0-0-0.journal"),
+                b"not a journal",
+            )
+            .unwrap();
+            assert!(recover_journal(path.parent().unwrap()).is_err());
+            // The real interrupted save was still rolled back.
+            assert_eq!(fs::read(&path).unwrap(), OLD);
+            drop(dir);
+        }
+
         #[test]
         fn unsupported_scope_and_private_errors() {
             let (_dir, path) = fixture();
