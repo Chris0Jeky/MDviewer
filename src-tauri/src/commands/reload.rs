@@ -72,9 +72,10 @@ pub(crate) fn reread(
         // Same bytes (our own save echoing, or a rewrite with identical content):
         // follow a new identity silently so the next Save does not see "replaced".
         binding.identity = doc.identity;
-        if adopt && binding.generation != seen {
+        // A webview behind the binding is still out of date: never "unchanged".
+        if binding.generation != seen {
             return ReadResult::Changed {
-                text: Some(doc.text),
+                text: adopt.then_some(doc.text),
                 generation: binding.generation,
                 encoding: binding.encoding.as_str(),
                 eol: binding.eol.as_str(),
@@ -192,10 +193,16 @@ mod tests {
             }
         );
         assert_eq!(reread(&registry, &token, true, 1), ReadResult::Unchanged);
-        assert_eq!(
-            reread(&registry, &token, false, 0),
-            ReadResult::Unchanged,
-            "a notification for a dirty document needs no text"
+        assert!(
+            matches!(
+                reread(&registry, &token, false, 0),
+                ReadResult::Changed {
+                    text: None,
+                    generation: 1,
+                    ..
+                }
+            ),
+            "a dirty document behind the binding stays marked changed"
         );
     }
 

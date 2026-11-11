@@ -151,6 +151,9 @@ export class DesktopDocuments {
    * clean document or after an explicit Reload.
    */
   applyReload(target: SaveTarget, result: Extract<ReadResult, { outcome: "changed" }> & { text: string }): boolean {
+    // Never let an older re-read (overtaken by a newer one) install older text.
+    const current = target.owner === "workspace" ? this.baselines.get(target.id)?.binding : this.reader.documents.find(open => open.id === target.id)?.binding;
+    if (current && result.generation < current.generation) return false;
     const update = (binding: Binding): void => {
       Object.assign(binding, { generation: result.generation, encoding: result.encoding, eol: result.eol, disk: "synced" });
     };
