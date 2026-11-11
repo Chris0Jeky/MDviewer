@@ -150,8 +150,8 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       outline.hidden = outline.childElementCount < 2;
       // The outline changes text wrapping and the maximum scroll offset. Reveal
       // it first so saved offsets clamp against the reader geometry.
-      restore();
-      restoredTop = scroll.scrollTop;
+      // A first open needs no reset (the emptied reader is at 0) and no forced layout.
+      if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
     };
     try {
