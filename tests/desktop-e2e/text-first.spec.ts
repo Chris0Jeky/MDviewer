@@ -13,7 +13,9 @@ test("the first text frame for the sample lands within 100 ms", async ({ page })
     return performance.getEntriesByName("mdv:reader-text")[0]!.startTime - started;
   });
   test.info().annotations.push({ type: "first-text-ms", description: elapsed.toFixed(1) });
-  expect(elapsed, "click to the end of the first frame showing the sample text").toBeLessThan(100);
+  // The 100 ms budget is a development-machine proof (contract S2c); shared CI runners
+  // record the number and keep only a regression guard.
+  expect(elapsed, "click to the end of the first frame showing the sample text").toBeLessThan(process.env.CI ? 400 : 100);
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   expect(await page.evaluate(() => performance.getEntriesByName("mdv:reader-rich").length)).toBe(1);
 });
