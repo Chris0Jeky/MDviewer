@@ -101,6 +101,60 @@ downloads that runtime only if needed. App operation and bundled features work
 offline after installation. The installer registers Markdown file handling;
 Windows still controls the user's selected default app.
 
+## Conflict-safe replace (experimental)
+
+`src/replace.rs` is an isolated primitive; no production IPC calls it. Eligible
+files are ordinary single-link files on local **fixed NTFS/ReFS volumes**. This
+experiment was run on Windows/NTFS; ReFS has not been qualified. UNC/network
+drives, device/extended input paths, alternate-stream paths, ambiguous DOS names,
+reparse points at the file or any ancestor, multiple hard links, and the reserved
+`.mdv-replace-` filename namespace are refused. Non-Windows implementations return
+`Unsupported`. Input paths must be absolute ordinary drive paths.
+
+`snapshot_read` reads identity and bounded raw bytes through one handle. Saves
+compare the volume, 128-bit file ID (legacy file-index fallback if unsupported),
+length and SHA-256. The dependency-free SHA-256 implementation is under 150 lines
+and tested against four known-answer vectors, including a million-byte input.
+The original and every ancestor stay open without write/delete sharing through
+verification and commit. Existing writable handles or mapped views cause a
+`Locked` refusal, including a writable view retained after its file handle closes.
+The two no-clobber renames use `NtSetInformationFile` with a leaf name and NULL
+root, relative to the source handle's directory. This avoids reopening a locked
+parent for writes. See Microsoft's [rename-information contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
+and [sharing contract](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+
+A sibling `.journal` records the destination leaf and old/new identities and
+digests; `.tmp` and `.old` names derive from its unique basename. Scratch files
+start with delete-on-close until the flushed journal owns them; the extended
+on-close disposition explicitly cancels that creation flag before renaming.
+The destination can be briefly absent between renames: this is **not an atomic
+namespace exchange**. A process claiming that name wins; its file is never
+overwritten. `create_new` uses the same no-clobber commit without an original.
+`recover_journal` rolls the verified aside back when the name is empty, otherwise
+preserves the existing destination and cleans only verified transaction artifacts.
+Repeated recovery is harmless. Modified artifacts, malformed journals or locked
+files are refused and retained for resolution. An error after commit can leave
+the complete new file in place; callers must reconcile rather than assume failure
+means nothing changed. New files inherit directory defaults; timestamps, custom
+ACLs, alternate streams and other metadata are not preserved by this byte API.
+
+The release tests re-invoke their own executable as a separate OS process. Four
+forced interleavings (before open, after verification, between renames and after
+commit) cover writes, truncation, replacement, delete/recreate, equal-size/time
+edits, mapped writes, parent/ancestor swaps and create-new collisions. On NTFS:
+184 trials, **100 saved / 84 refused**, with no acknowledged external-byte loss;
+28 injected-error/process-exit cases recovered, plus external-claimant and
+tampered-artifact recovery checks. The full 33-test suite ran within the 60-second
+budget. File-symlink creation was unavailable to the sandbox; junction rejection
+was exercised. `cargo fmt --check` passes; strict Clippy is blocked by two existing
+`file_policy.rs` lints, with no new-module warnings. The standalone file-policy
+tests pass, and the non-Windows module compiles for Android.
+
+Successful file flushes are **not a power-loss durability claim**. These tests
+exercise process exit and injected disk/flush/rename failures, not sudden power
+loss or a physically exhausted disk. ReFS, the legacy identity fallback and native
+Save IPC/UI integration remain unverified. The `ReplaceFileW` fallback is not used.
+
 ## Validation limits
 
 WebView2 is a multiprocess web renderer. A small application download does not

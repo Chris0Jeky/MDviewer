@@ -2,6 +2,8 @@
 
 mod export_policy;
 mod file_policy;
+#[allow(dead_code)]
+mod replace;
 
 use std::io::Write;
 use std::path::Path;
