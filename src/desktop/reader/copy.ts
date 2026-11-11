@@ -7,21 +7,29 @@ import { rangeOf, sectionRange, selectionRange, sliceSource, type ReaderSource }
  * heading text are unaffected; their names come from aria-label.
  */
 
-const sources = new WeakMap<HTMLElement, ReaderSource>();
+// Keyed by the document's first block: when the reader releases its DOM, the source goes too.
+const sources = new WeakMap<Element, ReaderSource>();
 let toast: HTMLElement | null = null;
 let toastTimer = 0;
 
-function announce(message: string): void {
+function liveRegion(): HTMLElement {
   if (!toast) {
     toast = document.createElement("div");
     toast.className = "reader-toast";
     toast.setAttribute("role", "status");
     document.body.append(toast);
   }
-  toast.textContent = message;
+  return toast;
+}
+
+function announce(message: string): void {
+  const toast = liveRegion();
+  // Clear first so a repeated message is announced again.
+  toast.textContent = "";
+  window.setTimeout(() => { toast.textContent = message; });
   toast.classList.add("is-visible");
   window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => toast?.classList.remove("is-visible"), 1600);
+  toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1600);
 }
 
 async function copy(text: string, done: string): Promise<void> {
@@ -62,7 +70,6 @@ function lineCount(text: string): string {
 
 /** Add the copy affordances to a freshly rendered reader document. */
 export function decorateCopy(root: HTMLElement, source: ReaderSource, fileName: string): void {
-  sources.set(root, source);
   for (const pre of root.querySelectorAll<HTMLElement>("pre[data-src]")) {
     const start = rangeOf(pre)?.[0];
     const body = start === undefined ? undefined : source.fences.get(start);
@@ -86,20 +93,18 @@ export function decorateCopy(root: HTMLElement, source: ReaderSource, fileName: 
     );
     heading.append(tools);
   }
-}
-
-/** The document root keeps its source when its children move into the live article. */
-export function bindReaderSource(root: HTMLElement, from: HTMLElement): void {
-  const source = sources.get(from);
-  if (source) sources.set(root, source); else sources.delete(root);
+  if (root.firstElementChild) sources.set(root.firstElementChild, source);
 }
 
 /** Ctrl/Cmd+Shift+C copies the Markdown source of every block the selection touches. */
 export function mountSelectionCopy(root: HTMLElement): void {
+  liveRegion(); // Exists before the first message, so screen readers announce it.
   window.addEventListener("keydown", event => {
+    if (event.defaultPrevented || event.isComposing) return;
     if (event.key.toLowerCase() !== "c" || !event.shiftKey || event.altKey || event.ctrlKey === event.metaKey) return;
-    const source = sources.get(root);
-    const range = source && !root.hidden && selectionRange(root, window.getSelection());
+    const first = root.firstElementChild;
+    const source = first ? sources.get(first) : undefined;
+    const range = source && selectionRange(root, window.getSelection());
     if (!source || !range) return;
     event.preventDefault();
     const text = sliceSource(source, ...range);
