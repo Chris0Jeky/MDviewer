@@ -57,8 +57,13 @@ export async function renderReaderDocument(
 
   const root = paint ? paint(document) : document;
   if (!root) return { document, warnings };
-  // The frame that first shows the text (rendering continues meanwhile).
-  window.requestAnimationFrame?.(() => performance.mark("mdv:reader-text"));
+  // Let the text reach the screen before grammar and engine loading compete for the thread.
+  if (paint && window.requestAnimationFrame) {
+    await new Promise<void>(resolve => window.requestAnimationFrame(() => {
+      performance.mark("mdv:reader-text"); // the frame that first shows the text
+      setTimeout(resolve);
+    }));
+  }
   const reason = (error: unknown): string => error instanceof Error ? error.message : String(error);
   // The text is already on screen: an upgrade failure is a warning, never a failed render.
   if (highlight) {
