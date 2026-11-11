@@ -21,7 +21,7 @@
  */
 
 import type { PagedFlow } from "pagedjs";
-import { PAGEDJS } from "../app/dom";
+import { PAGEDJS, PREVIEW_ZOOM_VAR } from "../app/dom";
 import { setPaginationHost } from "./handler";
 import { repairFootnoteLinks } from "./footnoteLinks";
 import { SPLITTABLE_ATTR, SPLITTABLE_SELECTOR } from "./shrinkToFit";
@@ -87,6 +87,37 @@ export async function paginate(
   // Paged.js lays out (and mutates) the fragment it is given; recovery needs a clean copy.
   const pristine = source.cloneNode(true) as DocumentFragment;
 
+  // Lay out and audit at zoom 1. The preview zoom is a paint-only transform, but Paged.js
+  // 0.4.3 is not scale-invariant: it finds the next page column at `bounds.right +
+  // column-gap`, adding an UNSCALED gap to a scaled rect, so under a zoom below 1 blocks
+  // that overflow into the next column are never detected and stay hidden there. (A first
+  // render ran at zoom 1 only because "Fit" had no pages to fit yet; re-renders did not.)
+  host.style.setProperty(PREVIEW_ZOOM_VAR, "1");
+  try {
+    return await layoutCompletely(Previewer, source, pristine, css, host);
+  } finally {
+    restoreZoomWithoutEasing(host);
+  }
+}
+
+/** Hand the zoom back to the canvas without animating the stack from 1 to "Fit". */
+function restoreZoomWithoutEasing(host: HTMLElement): void {
+  const stacks = Array.from(host.querySelectorAll<HTMLElement>(`.${PAGEDJS.pagesClass}`));
+  for (const stack of stacks) stack.style.transition = "none";
+  host.style.removeProperty(PREVIEW_ZOOM_VAR);
+  for (const stack of stacks) {
+    void getComputedStyle(stack).transform; // commit the final scale before easing returns
+    stack.style.removeProperty("transition");
+  }
+}
+
+async function layoutCompletely(
+  Previewer: typeof import("pagedjs").Previewer,
+  source: DocumentFragment,
+  pristine: DocumentFragment,
+  css: string,
+  host: HTMLElement,
+): Promise<PaginatedFlow> {
   let attempt = source;
   let rung: "none" | "offender" | "all" = "none";
   let marked = new Map<string, string>();
