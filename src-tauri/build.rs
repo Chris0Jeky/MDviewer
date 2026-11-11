@@ -5,6 +5,7 @@ fn main() {
             "take_pending_files",
             "open_external",
             "save_export",
+            "patch_document",
         ]),
     ))
     .expect("failed to prepare the desktop application");

@@ -12,6 +12,7 @@
     "allow-open-files",
     "allow-take-pending-files",
     "allow-open-external",
-    "allow-save-export"
+    "allow-save-export",
+    "allow-patch-document"
   ]
 }

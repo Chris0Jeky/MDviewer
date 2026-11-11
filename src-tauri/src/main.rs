@@ -3,9 +3,9 @@
 mod commands;
 mod export_policy;
 mod file_policy;
+mod linepatch;
 mod registry;
 // S1a: not wired into IPC until Save (S1b) consumes it.
-#[allow(dead_code)]
 mod replace;
 
 use std::path::Path;
@@ -70,7 +70,8 @@ fn main() {
             commands::open::open_files,
             commands::open::take_pending_files,
             commands::external::open_external,
-            commands::export::save_export
+            commands::export::save_export,
+            commands::patch::patch_document
         ])
         .setup(|app| {
             let config = app

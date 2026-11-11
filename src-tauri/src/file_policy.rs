@@ -60,7 +60,7 @@ impl Eol {
         }
     }
 
-    fn detect(text: &str) -> Self {
+    pub fn detect(text: &str) -> Self {
         let mut bytes = text.bytes().peekable();
         let (mut lf, mut crlf, mut cr) = (false, false, false);
         while let Some(byte) = bytes.next() {

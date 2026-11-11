@@ -71,6 +71,19 @@ remote top-level navigation/new windows are denied. There are no generic filesys
 The opener plugin's automatic JavaScript link handler is disabled. Native dialogs
 use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 
+`patch_document(token, patches)` (actionable Markdown write-back, A2) applies line patches
+`{line, id?, expect, replace}` to a bound file as one change. It reads raw bytes and identity
+through one handle (`replace::snapshot_read`), splits lines over raw UTF-8 bytes or UTF-16
+code units after a BOM, and changes only the placed lines' content bytes: the BOM, every line
+terminator (mixed endings included) and a final terminator are kept. Placement: the remembered
+`line` if it still equals `expect`; else the one line carrying `<!-- id: name -->` if it still
+equals `expect`; else the one line equal to `expect`. If the id line changed, or nothing can be
+placed, nothing is written and `unplaced` returns the current text so the parser can re-derive
+the patch (syntax-aware span edits stay in the webview). A replacement with a line break is
+refused; patches are all-or-nothing. The commit goes through `replace_if_unchanged` against
+the bytes just read, with one re-read and retry on conflict; the binding then moves to the new
+bytes, so the watcher sees no outside change.
+
 `save_export` is the only write operation. It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a

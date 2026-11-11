@@ -17,6 +17,14 @@ export interface OpenBatch {
   canceled: boolean;
 }
 
+/** One actionable-Markdown line patch (docs/design/ACTIONABLE_MARKDOWN.md, "Write-back"). */
+export interface LinePatch { line: number; id?: string | null; expect: string; replace: string }
+/** A2 result. `unplaced`: nothing written; re-derive patch `index` from `text` and retry once. */
+export type PatchResult =
+  | { outcome: "saved"; generation: number; text: string }
+  | { outcome: "unplaced"; index: number; text: string }
+  | { outcome: "failed"; code: string };
+
 export const native = {
   available: isTauri(),
   open: (): Promise<OpenBatch> => invoke("open_files"),
@@ -28,6 +36,9 @@ export const native = {
       headers: { "x-mdviewer-filename": encodeURIComponent(filename) },
     });
   },
+  /** Apply line patches to the bound document `token` as one conflict-checked change. */
+  patchDocument: (token: string, patches: LinePatch[]): Promise<PatchResult> =>
+    invoke("patch_document", { token, patches }),
   onPending: (callback: () => void): Promise<() => void> => listen("mdviewer:files-pending", callback),
   onClose: (canClose: () => boolean): Promise<() => void> => getCurrentWindow().onCloseRequested(async event => {
     // Prevent before awaiting: the host otherwise destroys the window immediately.
