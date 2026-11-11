@@ -236,6 +236,8 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
     await expect(error).toContainText(/could not place the whole document/);
     expect(await page.locator("#paged-output .pagedjs_page").count()).toBe(0);
     await expect(page.locator("#page-chip")).toHaveAttribute("data-count", "0");
+    // A failed layout under a reduced zoom must not leave the (empty) stack hidden.
+    await expect(page.locator("#paged-output")).toHaveCSS("visibility", "visible");
 
     await page.evaluate(() => window.__mdviewer?.exportPdf());
     await expect(error).toContainText(/No paginated document to export/);
@@ -325,6 +327,46 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     expect(await missingInOrder(page, markdown)).toEqual([]);
   });
 
+  test("a table that fits a page only without its heading is Tier 4 and starts under the heading", async ({ page }) => {
+    const stalls = watchStalls(page);
+    const markdown = [
+      "Intro paragraph before the heading.",
+      "",
+      "## Near page table",
+      "",
+      "| Row | Station | Note |",
+      "| --- | --- | --- |",
+      ...Array.from({ length: 27 }, (_, index) => `| r${index + 1} | harbor | quiet lantern meadow |`),
+      "",
+      "Closing paragraph.",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "near-page-table.md");
+    await waitForPagination(page);
+
+    const fit = await page.evaluate(() => {
+      const table = document.querySelector<HTMLElement>("#paged-output table")!;
+      const content = document.querySelector<HTMLElement>("#paged-output .pagedjs_page_content")!;
+      return {
+        source: Number(table.dataset.mdvSourceHeight),
+        page: content.offsetHeight,
+        tier: table.getAttribute("data-mdv-splittable"),
+      };
+    });
+    expect(fit.source, "precondition: fits a page alone").toBeLessThanOrEqual(fit.page);
+    expect(fit.source, "precondition: not under its heading").toBeGreaterThan(fit.page - 40);
+    expect(fit.tier).toBe("tier4");
+
+    const table = Object.values(await pagesByRef(page, "table"))[0]!;
+    const heading = Object.values(await pagesByRef(page, "h2"))[0]!;
+    expect(heading, "the heading stays with the table's first fragment").toEqual([Math.min(...table)]);
+    expect(stalls).toEqual([]);
+    expect((await layoutDefects(page)).outside).toEqual([]);
+    await expect(page.locator("#warning-banner")).not.toContainText(/Layout was retried/);
+    expect(await missingInOrder(page, markdown)).toEqual([]);
+  });
+
   test("a last page whose footnotes overflow onto a notes-only page is complete, not empty", async ({ page }) => {
     const note = (n: number): string =>
       `[^n${n}]: Footnote ${n} explains the closing remark at length, so that the notes outgrow the footnote area of the final page and continue on another page.`;
@@ -366,6 +408,19 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
 
     // Any re-render now runs while the stack is scaled; a paper change forces one.
     const before = await page.locator("#paged-output .pagedjs_page").first().evaluate((el) => (el as HTMLElement).offsetWidth);
+    // Layout runs at scale 1; the stack must stay hidden meanwhile, not flash full size.
+    await page.evaluate(() => {
+      const host = document.getElementById("paged-output")!;
+      const seen: string[] = [];
+      (window as unknown as { __hostVisibility: string[] }).__hostVisibility = seen;
+      // Record the stack's visibility each time a new sheet is added to it.
+      new MutationObserver((records) => {
+        const added = records.some((record) =>
+          Array.from(record.addedNodes).some((node) => node instanceof Element && node.matches(".pagedjs_page")),
+        );
+        if (added) seen.push(getComputedStyle(host).visibility);
+      }).observe(host, { childList: true, subtree: true });
+    });
     await page.evaluate(() => window.__mdviewer!.updateSettings({ paperSize: "letter" }));
     await expect
       .poll(() => page.locator("#paged-output .pagedjs_page").first().evaluate((el) => (el as HTMLElement).offsetWidth))
@@ -376,5 +431,10 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     expect(await page.locator("#paged-output .pagedjs_page").count()).toBeGreaterThan(10);
     expect((await layoutDefects(page)).outside).toEqual([]);
     expect(await missingInOrder(page, LONG_PROSE)).toEqual([]);
+
+    const seen = await page.evaluate(() => (window as unknown as { __hostVisibility: string[] }).__hostVisibility);
+    expect(seen.length, "the re-render added sheets").toBeGreaterThan(10);
+    expect(new Set(seen), "sheets laid out at scale 1 are added while the stack is hidden").toEqual(new Set(["hidden"]));
+    await expect(page.locator("#paged-output")).toHaveCSS("visibility", "visible");
   });
 });

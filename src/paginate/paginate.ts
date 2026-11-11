@@ -93,11 +93,18 @@ export async function paginate(
   // column-gap`, adding an UNSCALED gap to a scaled rect, so under a zoom below 1 blocks
   // that overflow into the next column are never detected and stay hidden there. (A first
   // render ran at zoom 1 only because "Fit" had no pages to fit yet; re-renders did not.)
+  // Under a reduced preview zoom, forcing 1 would show the stack jumping to full size and
+  // back; hide it (visibility keeps every measurement intact) until the zoom is restored.
+  // ponytail: hide-and-reveal; rendering off-screen and swapping pages in is the real fix (#242).
+  const zoom = Number.parseFloat(getComputedStyle(host).getPropertyValue(PREVIEW_ZOOM_VAR));
+  const hide = Number.isFinite(zoom) && zoom !== 1;
+  if (hide) host.style.setProperty("visibility", "hidden");
   host.style.setProperty(PREVIEW_ZOOM_VAR, "1");
   try {
     return await layoutCompletely(Previewer, source, pristine, css, host);
   } finally {
     restoreZoomWithoutEasing(host);
+    if (hide) host.style.removeProperty("visibility");
   }
 }
 
