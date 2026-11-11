@@ -2,6 +2,7 @@ import { getReaderHighlighter, isSupportedLanguage } from "../render/highlight";
 import type { MarkdownIt, Token } from "markdown-it";
 import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, renderMarkdownTokens } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
+import { sanitizeRenderedHtml } from "../render/sanitize";
 import type { Settings } from "../app/settings";
 import { CLASSES, ATTRS } from "../app/dom";
 import { readFrontMatter } from "../render/frontmatter";
@@ -9,11 +10,21 @@ import { frontMatterCard } from "./reader/frontmatter";
 import { collectFences, installSourceMap, sourceLines, stampSourceMap } from "./reader/sourcemap";
 import { decorateCopy } from "./reader/copy";
 
-/** Continuous reading keeps natural endnotes and never invokes Paged.js. */
-export async function renderReaderDocument(text: string, settings: Settings, fileName = ""): Promise<{
-  document: HTMLElement;
-  warnings: string[];
-}> {
+/**
+ * Continuous reading keeps natural endnotes and never invokes Paged.js.
+ *
+ * Text first: with `paint`, the parsed document is handed over at once with fences as
+ * plain-text placeholders that share the highlighted block's box metrics; highlighted
+ * code then replaces each placeholder in place, and Mermaid renders last. `paint` returns
+ * the live root (or null when this render is obsolete). Without `paint` the returned
+ * document is complete.
+ */
+export async function renderReaderDocument(
+  text: string,
+  settings: Settings,
+  fileName = "",
+  paint?: (document: HTMLElement) => HTMLElement | null,
+): Promise<{ document: HTMLElement; warnings: string[] }> {
   const md = createMarkdown(null, settings);
   const env = {};
   const { body, frontMatter } = readFrontMatter(text);
@@ -26,9 +37,11 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
   // use the existing transformers even when the fence has no syntax grammar.
-  if (languages.length || needsCodeTransformers(md, tokens, settings.showLineNumbers)) {
-    const highlighter = await getReaderHighlighter(languages);
-    installMarkdownHighlighter(md, highlighter, settings);
+  const highlight = languages.length > 0 || needsCodeTransformers(md, tokens, settings.showLineNumbers);
+  if (highlight) {
+    const lineNumbers = settings.showLineNumbers ? ` ${CLASSES.withLineNumbers}` : "";
+    md.options.highlight = code =>
+      `<pre class="shiki ${PENDING}${lineNumbers}"><code>${md.utils.escapeHtml(code.replace(/\n$/, ""))}</code></pre>`;
   }
   installSourceMap(md);
   const result = renderMarkdownTokens(md, tokens, env);
@@ -37,12 +50,42 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
   document.setAttribute(ATTRS.codeTheme, settings.codeTheme);
   document.innerHTML = result.html;
   if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
-  const diagrams = await renderAllMermaid(document, "default");
   decorateCopy(document, source, fileName);
   const warnings = result.warnings.map(warning => warning.message);
-  if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
   if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");
-  return { document, warnings };
+
+  const root = paint ? paint(document) : document;
+  if (!root) return { document, warnings };
+  performance.mark("mdv:reader-text");
+  if (highlight) {
+    try {
+      installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings);
+      upgradeCode(md, tokens, env, root);
+    } catch (error) {
+      warnings.push(`Code highlighting is unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const diagrams = await renderAllMermaid(root, "default");
+  if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
+  performance.mark("mdv:reader-rich");
+  return { document: root, warnings };
+}
+
+const PENDING = "reader-pending";
+
+/** Replace each placeholder still inside `root` (a superseded render's root is emptied). */
+function upgradeCode(md: MarkdownIt, tokens: Token[], env: Parameters<MarkdownIt["parse"]>[1], root: HTMLElement): void {
+  const byLine = new Map<string, number>();
+  tokens.forEach((token, index) => { if (token.type === "fence") byLine.set(String(token.attrGet("data-src") ?? ""), index); });
+  const fence = md.renderer.rules.fence!;
+  const template = window.document.createElement("template");
+  for (const pending of root.querySelectorAll<HTMLElement>(`pre.${PENDING}`)) {
+    const index = byLine.get(pending.getAttribute("data-src") ?? "");
+    if (index === undefined) continue;
+    template.innerHTML = sanitizeRenderedHtml(fence(tokens, index, md.options, env, md.renderer)).html;
+    const highlighted = template.content.firstElementChild;
+    if (highlighted) pending.replaceWith(highlighted);
+  }
 }
 
 function needsCodeTransformers(md: MarkdownIt, tokens: Token[], lineNumbers: boolean): boolean {

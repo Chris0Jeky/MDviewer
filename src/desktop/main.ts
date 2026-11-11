@@ -127,10 +127,17 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
     try {
-      const result = await renderReaderDocument(doc.text, settings, doc.name);
+      const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
+        if (current !== renderGeneration) return null;
+        content.replaceChildren(...first.childNodes); // Text first; code and diagrams upgrade in place.
+        bindReaderSource(content, first);
+        return content;
+      });
       if (current !== renderGeneration) return;
-      content.replaceChildren(...result.document.childNodes);
-      bindReaderSource(content, result.document);
+      if (result.document !== content) { // A renderer that did not paint early.
+        content.replaceChildren(...result.document.childNodes);
+        bindReaderSource(content, result.document);
+      }
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
