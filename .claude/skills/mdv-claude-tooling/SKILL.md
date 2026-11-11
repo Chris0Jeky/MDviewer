@@ -20,8 +20,8 @@ handoff that touched skills/hooks.
 ## Safety / guardrails
 
 - Shared guardrails live in committed `.claude/settings.json`; machine-specific
-  overrides in `.claude/settings.local.json`. Permission-bypass mode belongs only in
-  disposable containers/VMs.
+  overrides in `.claude/settings.local.json`. The project sets no `defaultMode`; the
+  permission mode is the user's choice (user settings or a launch flag).
 - A pre_tool_use hook enforces branch-aware git rules: protected branches (`main`,
   `master`, `develop`, `release`) block rebase/force-push/hard-reset/history-rewrite;
   other branches allow them but route through the permission prompt.
