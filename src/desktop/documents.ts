@@ -169,11 +169,16 @@ export class DesktopDocuments {
   addBatch(documents: OpenBatch["documents"], owns: boolean): string[] {
     const incoming = documents.map(doc => ({ name: doc.name, text: doc.text, binding: bindingOf(doc) }));
     const app = this.workspace;
-    if (!app) return this.reader.append(incoming, owns);
-    const bounded = this.boundedWorkspace(app);
-    const count = bounded.documents.length;
-    const errors = bounded.append(incoming);
-    const accepted = bounded.documents.slice(count);
+    const target = app ? this.boundedWorkspace(app) : this.reader;
+    const count = target.documents.length;
+    const errors = target.append(incoming, owns);
+    const accepted = target.documents.slice(count);
+    // The host registered every opened file; release the ones admission refused.
+    const admitted = new Set(accepted.map(doc => doc.binding?.token));
+    for (const doc of incoming) {
+      if (doc.binding && !admitted.has(doc.binding.token)) this.onRelease(doc.binding.token);
+    }
+    if (!app) return errors;
     const added = app.store.addBatch(accepted, owns || app.store.activeId === null);
     for (const [index, doc] of added.entries()) {
       const { key, binding } = accepted[index]!;

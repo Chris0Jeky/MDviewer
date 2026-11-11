@@ -166,6 +166,16 @@ describe("desktop owned Save", () => {
     expect(boundary.saveDocumentAs, "the restored document cannot revive the revoked token").toHaveBeenCalledWith(null, "notes.md", "# Edited", false);
   });
 
+  it("releases the capability of every opened file the session refuses", async () => {
+    const documents = Array.from({ length: 33 }, (_, index) => ({
+      ...bound(`n${index}.md`, `# ${index}`).documents[0]!, token: index.toString(16).padStart(32, "0"),
+    }));
+    boundary.open.mockResolvedValueOnce({ documents, errors: [], canceled: false });
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("at most 32 documents"));
+    expect(boundary.release.mock.calls).toEqual([[(32).toString(16).padStart(32, "0")]]);
+  });
+
   it("fences close and handoff while a save is pending", async () => {
     boundary.open.mockResolvedValueOnce(bound("notes.md", "# One"));
     document.getElementById("reader-open")!.click();
