@@ -6,6 +6,8 @@ import type { Settings } from "../app/settings";
 import { CLASSES, ATTRS } from "../app/dom";
 import { readFrontMatter } from "../render/frontmatter";
 import { frontMatterCard } from "./reader/frontmatter";
+import { collectFences, installSourceMap, sourceLines, stampSourceMap } from "./reader/sourcemap";
+import { decorateCopy } from "./reader/copy";
 
 /** Continuous reading keeps natural endnotes and never invokes Paged.js. */
 export async function renderReaderDocument(text: string, settings: Settings, fileName = ""): Promise<{
@@ -16,6 +18,8 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
   const env = {};
   const { body, frontMatter } = readFrontMatter(text);
   const tokens = md.parse(body, env);
+  const lines = sourceLines(text);
+  stampSourceMap(tokens, lines);
   const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
@@ -24,6 +28,7 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
     const highlighter = await getReaderHighlighter(languages);
     installMarkdownHighlighter(md, highlighter, settings);
   }
+  installSourceMap(md);
   const result = renderMarkdownTokens(md, tokens, env);
   const document = window.document.createElement("div");
   document.className = CLASSES.doc;
@@ -31,6 +36,7 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
   document.innerHTML = result.html;
   if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
   const diagrams = await renderAllMermaid(document, "default");
+  decorateCopy(document, { lines, fences: collectFences(tokens) }, fileName);
   const warnings = result.warnings.map(warning => warning.message);
   if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
   if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");

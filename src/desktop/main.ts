@@ -9,6 +9,7 @@ import type { Doc } from "../app/state";
 import { native, type OpenBatch } from "./native";
 import { ReaderSession, decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { renderReaderDocument } from "./render";
+import { bindReaderSource, mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
 
@@ -51,6 +52,8 @@ let renderedReaderId: string | null = null;
 const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
   shell.querySelector<HTMLElement>(".reader-footer")!);
+
+mountSelectionCopy(content);
 
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
@@ -127,6 +130,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       const result = await renderReaderDocument(doc.text, settings, doc.name);
       if (current !== renderGeneration) return;
       content.replaceChildren(...result.document.childNodes);
+      bindReaderSource(content, result.document);
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
