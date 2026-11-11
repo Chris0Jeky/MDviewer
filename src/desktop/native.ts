@@ -15,6 +15,24 @@ export interface OpenBatch {
   canceled: boolean;
 }
 
+/** A native Save / Save As completion (src-tauri/src/commands/save.rs). */
+export type SaveResult =
+  | {
+    outcome: "saved"; token: string | null; generation: number; name: string; path: string; dir: string;
+    encoding: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be"; eol: "lf" | "crlf" | "cr" | "mixed" | "none";
+  }
+  | { outcome: "canceled" }
+  | { outcome: "conflict"; reason: "changed" | "missing" | "replaced" | "locked" }
+  | { outcome: "mixed-line-endings" }
+  | { outcome: "failed"; code: string };
+
+const SAVE_LIMIT = 25_000_000;
+function saveBody(text: string): Uint8Array {
+  const bytes = new TextEncoder().encode(text);
+  if (bytes.length > SAVE_LIMIT) throw new Error("This document exceeds the 25 MB save limit.");
+  return bytes;
+}
+
 export const native = {
   available: isTauri(),
   open: (): Promise<OpenBatch> => invoke("open_files"),
@@ -26,6 +44,17 @@ export const native = {
       headers: { "x-mdviewer-filename": encodeURIComponent(filename) },
     });
   },
+  /** Save in place through the document's capability; never sends a path. */
+  saveDocument: (token: string, generation: number, text: string, acceptLf: boolean): Promise<SaveResult> =>
+    invoke("save_document", saveBody(text), { headers: {
+      "x-mdviewer-token": token, "x-mdviewer-generation": String(generation), "x-mdviewer-accept-lf": acceptLf ? "1" : "0",
+    } }),
+  /** Ask for a destination in the native dialog, then save and rebind there. */
+  saveDocumentAs: (token: string | null, name: string, text: string, acceptLf: boolean): Promise<SaveResult> =>
+    invoke("save_document_as", saveBody(text), { headers: {
+      "x-mdviewer-token": token ?? "", "x-mdviewer-filename": encodeURIComponent(name), "x-mdviewer-accept-lf": acceptLf ? "1" : "0",
+    } }),
+  releaseDocument: (token: string): Promise<void> => invoke("release_document", { token }),
   onPending: (callback: () => void): Promise<() => void> => listen("mdviewer:files-pending", callback),
   onClose: (canClose: () => boolean): Promise<() => void> => getCurrentWindow().onCloseRequested(async event => {
     // Prevent before awaiting: the host otherwise destroys the window immediately.

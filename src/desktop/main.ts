@@ -6,12 +6,13 @@ import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import { native, type OpenBatch } from "./native";
+import { native, type OpenBatch, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
-import { DesktopDocuments } from "./documents";
+import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
 import { renderReaderDocument } from "./render";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
+import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -253,7 +254,8 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
       if (!app) return;
-      docs.pruneBaselines();
+      // A mode transition empties the store; those documents move, they do not close.
+      docs.pruneBaselines(!changingMode);
       if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
       syncDocuments();
     });
@@ -334,7 +336,7 @@ function closeDocument(): void {
   if (!doc || changingMode) return;
   if (doc.dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) return;
   ++generation;
-  docs.reader.close(doc.id);
+  docs.closeReaderDocument(doc.id);
   report("");
   void render();
 }
@@ -393,6 +395,80 @@ window.addEventListener("drop", event => {
   event.preventDefault();
   void readFiles(Array.from(event.dataTransfer.files));
 });
+
+const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
+function conflictText(name: string, reason: Extract<SaveResult, { outcome: "conflict" }>["reason"]): string {
+  const what = reason === "missing" ? "was moved or deleted"
+    : reason === "locked" ? "is open in another program or read-only"
+      : "changed on disk since MDviewer last read or saved it";
+  return `${name} ${what}. Nothing was written and your text is still open. ${SAVE_AS_HINT}`;
+}
+const FAILURES: Record<string, string> = {
+  busy: "Another save or file dialog is already open.",
+  revoked: "is no longer linked to its file.",
+  stale: "was saved from another view since. Try Save again.",
+  unsupported: "is on a network drive, link or disk MDviewer cannot save over safely.",
+  "write-failed": "could not be written. Check free space and access.",
+  "too-large": "is larger than the 25 MB save limit.",
+  "invalid-destination": "needs a .md or .markdown file name.",
+  "revoked-after-write": "was saved, but it was closed while saving.",
+};
+
+/** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
+async function saveDocument(as: boolean): Promise<void> {
+  if (!native.available || changingMode || nativeSaveBusy || app?.exportState.busy) return;
+  const target: SaveTarget | null = docs.saveTarget();
+  if (!target) return;
+  if (!as && !target.binding) return saveDocument(true);
+  if (!as && !target.dirty) { report(`${target.name} has no unsaved changes.`); return; }
+  let acceptLf = false;
+  if (target.binding?.eol === "mixed") {
+    if (!window.confirm(`${target.name} mixes line ending styles. Saving writes every line ending as LF. Continue?`)) return;
+    acceptLf = true;
+  }
+  const captured = target.text; // Later edits, tab switches or a slow dialog never change these bytes.
+  nativeSaveBusy = true;
+  syncDocuments();
+  let result: SaveResult;
+  try {
+    result = as || !target.binding
+      ? await native.saveDocumentAs(target.binding?.token ?? null, target.name, captured, acceptLf)
+      : await native.saveDocument(target.binding.token, target.binding.generation, captured, acceptLf);
+  } catch (error) {
+    report(`Could not save ${target.name}: ${errorText(error)} Your text is still open.`);
+    return;
+  } finally {
+    nativeSaveBusy = false;
+    syncDocuments();
+  }
+  switch (result.outcome) {
+    case "saved": {
+      const applied = docs.completeSave(target, captured, result);
+      syncDocuments();
+      if (applied === "saved") report(`Saved ${result.name}.`);
+      else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
+      return;
+    }
+    case "canceled": report("Save canceled. Your document is still open."); return;
+    case "conflict": report(conflictText(target.name, result.reason)); return;
+    case "mixed-line-endings": report(`${target.name} mixes line ending styles; save again to convert them to LF.`); return;
+    case "failed": {
+      const detail = FAILURES[result.code] ?? "could not be saved.";
+      report(`${target.name} ${detail} ${result.code === "busy" ? "" : "Your text is still open. " + SAVE_AS_HINT}`.trim());
+      return;
+    }
+  }
+}
+
+function saveCopy(): void {
+  const target = docs.saveTarget();
+  if (!target || changingMode || nativeSaveBusy) return;
+  void Promise.resolve(downloadMarkdown(target.name, target.text)).then(
+    () => report(`Saved a copy of ${target.name}. The open document is unchanged.`),
+    error => { if (!(error instanceof SaveCanceled)) report(`Could not save a copy: ${errorText(error)}`); },
+  );
+}
+
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
 registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
@@ -403,7 +479,14 @@ registerCommand({ id: "workspace.return", title: "Return to reading", enabled: (
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
 registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
-installShortcuts(window, () => !app);
+installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
+// Save works in every mode and must claim Ctrl+S before the workspace's own
+// Save Markdown (copy) shortcut, so it listens in the capture phase.
+const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
+registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
+registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
+registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
+installShortcuts(window, command => native.available && command.id.startsWith("document.save"), { capture: true });
 document.addEventListener("click", event => {
   const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
   if (!anchor || !anchor.closest(".doc, #reader-outline")) return;
@@ -426,6 +509,7 @@ window.addEventListener("beforeunload", event => {
   event.preventDefault(); event.returnValue = "";
 });
 if (native.available) {
+  docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
@@ -459,7 +543,7 @@ if (native.available) {
         report("Please wait for the current operation to finish before closing MDviewer.");
         return false;
       }
-      return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save Markdown to keep them.");
+      return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
     });
     await drain();
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));

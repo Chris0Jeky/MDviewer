@@ -85,6 +85,15 @@ export class DocStore {
     return true;
   }
 
+  /** Rename after a successful Save As. Emits "change": the document's identity UI follows. */
+  rename(id: string, name: string): boolean {
+    const doc = this.openDocs.find((d) => d.id === id);
+    if (!doc || doc.name === name) return false;
+    doc.name = name;
+    this.emit("change");
+    return true;
+  }
+
   remove(id: string): DocumentPosition | undefined {
     const idx = this.openDocs.findIndex((d) => d.id === id);
     if (idx === -1) return;
