@@ -42,6 +42,10 @@ pub struct Store {
     pub pinned_files: Vec<Stamped>,
     pub projects: Vec<Stamped>,
     pub seen: Vec<Stamped>,
+    /// The bound files open when the app last changed its open set (S7), in order.
+    pub session: Vec<Stamped>,
+    /// "Reopen last session on launch" is on unless this is set.
+    pub restore_off: bool,
 }
 
 fn same(a: &Path, b: &Path) -> bool {
@@ -96,8 +100,38 @@ impl Store {
     pub fn seen_at(&self, path: &Path) -> Option<u64> {
         self.seen.iter().find(|e| same(&e.path, path)).map(|e| e.at)
     }
+    /// Forget every path; the reopen-on-launch preference is kept.
     pub fn clear(&mut self) {
-        *self = Store::default();
+        *self = Store {
+            restore_off: self.restore_off,
+            ..Store::default()
+        };
+    }
+
+    /// Replace the remembered session with these files (32 at most, like a session).
+    pub fn record_session(&mut self, paths: &[PathBuf], at: u64) {
+        let mut unique = HashSet::new();
+        self.session = paths
+            .iter()
+            .filter(|path| unique.insert(path.to_string_lossy().to_lowercase()))
+            .take(crate::file_policy::MAX_BATCH_FILES)
+            .map(|path| Stamped {
+                path: path.clone(),
+                at,
+            })
+            .collect();
+    }
+
+    /// The files to reopen on launch, minus any already open.
+    pub fn session_to_restore(&self, open: &[PathBuf]) -> Vec<PathBuf> {
+        if self.restore_off {
+            return Vec::new();
+        }
+        self.session
+            .iter()
+            .map(|entry| entry.path.clone())
+            .filter(|path| !open.iter().any(|o| same(o, path)))
+            .collect()
     }
 
     /// Drop anything that is not an absolute local drive path, and re-apply caps.
@@ -108,6 +142,7 @@ impl Store {
             (&mut self.pinned_files, MAX_PINS),
             (&mut self.projects, MAX_PINS),
             (&mut self.seen, MAX_SEEN),
+            (&mut self.session, crate::file_policy::MAX_BATCH_FILES),
         ] {
             list.retain(keep);
             let mut unique = HashSet::new();
@@ -345,7 +380,15 @@ mod tests {
         keys.sort();
         assert_eq!(
             keys,
-            ["pinned_files", "projects", "recent", "seen", "version"]
+            [
+                "pinned_files",
+                "projects",
+                "recent",
+                "restore_off",
+                "seen",
+                "session",
+                "version"
+            ]
         );
         for entry in value["recent"].as_array().unwrap() {
             let mut fields: Vec<_> = entry.as_object().unwrap().keys().cloned().collect();
@@ -355,6 +398,33 @@ mod tests {
         assert_eq!(load(&file), (store.clone().sanitize(), true));
         store.clear();
         assert_eq!(store, Store::default());
+    }
+
+    #[test]
+    fn the_session_keeps_open_bound_files_in_order_and_survives_clear_preferences() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (abs(&dir, "a.md"), abs(&dir, "b.md"));
+        let mut store = Store::default();
+        store.record_session(&[a.clone(), b.clone(), abs(&dir, "A.MD")], 5);
+        assert_eq!(store.session_to_restore(&[]), [a.clone(), b.clone()]);
+        assert_eq!(
+            store.session_to_restore(&[abs(&dir, "B.md")]),
+            [a.clone()],
+            "already open files are skipped"
+        );
+        let file = dir.path().join("library.json");
+        save(&file, &store).unwrap();
+        assert_eq!(load(&file).0.session, store.session);
+        store.restore_off = true;
+        assert!(store.session_to_restore(&[]).is_empty());
+        store.clear();
+        assert!(
+            store.session.is_empty() && store.restore_off,
+            "Clear forgets paths, keeps the preference"
+        );
+        let many: Vec<_> = (0..40).map(|n| abs(&dir, &format!("{n}.md"))).collect();
+        store.record_session(&many, 1);
+        assert_eq!(store.session.len(), crate::file_policy::MAX_BATCH_FILES);
     }
 
     #[test]

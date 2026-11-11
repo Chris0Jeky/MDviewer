@@ -107,7 +107,10 @@ fn main() {
             commands::library::library_add_project,
             commands::library::library_clear,
             commands::links::open_relative,
-            commands::links::read_asset
+            commands::links::read_asset,
+            commands::library::session_record,
+            commands::library::session_restore,
+            commands::library::session_setting
         ])
         .setup(|app| {
             let emitter = app.handle().clone();

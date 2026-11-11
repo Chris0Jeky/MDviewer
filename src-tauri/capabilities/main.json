@@ -27,6 +27,9 @@
     "allow-library-add-project",
     "allow-library-clear",
     "allow-open-relative",
-    "allow-read-asset"
+    "allow-read-asset",
+    "allow-session-record",
+    "allow-session-restore",
+    "allow-session-setting"
   ]
 }
