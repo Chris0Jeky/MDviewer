@@ -102,6 +102,11 @@ describe("readFrontMatter: tolerant YAML reader", () => {
     expect(read("---\nmetadata:\n  a:\n    b: 1\n---\n").frontMatter.entries).toBeNull();
   });
 
+  it("keeps relative indentation inside literal block scalars", () => {
+    expect(read("---\nscript: |\n  if true:\n    print(1)\n\n  done\n---\n").frontMatter.entries)
+      .toEqual([{ key: "script", value: "if true:\n  print(1)\n\ndone" }]);
+  });
+
   it("decodes escapes in one pass and reads non-ASCII keys", () => {
     expect(read(String.raw`---
 a: "x\\n\"y\"\tz"

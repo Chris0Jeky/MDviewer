@@ -173,9 +173,12 @@ function parseYaml(inner: readonly string[]): Pick<FrontMatter, "entries" | "pro
       const body: string[] = [];
       while (index + 1 < inner.length && (!inner[index + 1]!.trim() || /^\s/.test(inner[index + 1]!))
         && (inner[index + 1]!.match(/^ */)![0].length > indent || !inner[index + 1]!.trim())) {
-        body.push(inner[++index]!.trim());
+        body.push(inner[++index]!.trimEnd());
       }
       while (body.length && !body[body.length - 1]) body.pop();
+      // Remove only the scalar's own indentation; deeper indentation is content.
+      const base = Math.min(...body.filter(Boolean).map(line => line.match(/^ */)![0].length));
+      for (const [at, line] of body.entries()) body[at] = line.slice(base);
       entries.push({ key, value: value.startsWith("|") ? body.join("\n") : body.join(" ").replace(/ {2,}/g, " ") });
       continue;
     }
