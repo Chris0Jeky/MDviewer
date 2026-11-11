@@ -642,8 +642,8 @@ if (native.available) {
   registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
     run: async () => {
       if (!window.confirm("Clear the library? Recent files, pinned files and pinned projects are forgotten. No file is deleted.")) return;
-      await native.library.clear();
-      report("Library cleared.");
+      try { await native.library.clear(); report("Library cleared."); }
+      catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
   setDownloadDestination(async (blob, filename) => {

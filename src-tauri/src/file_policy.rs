@@ -204,7 +204,7 @@ fn error_for(path: &Path, message: &str) -> FileError {
 
 // Never turn a Markdown open into a device or UNC/network request. Ordinary local
 // absolute paths, including Windows' long-path disk prefix, remain supported.
-fn is_local_file_path(path: &Path) -> bool {
+pub fn is_local_file_path(path: &Path) -> bool {
     #[cfg(windows)]
     {
         use std::path::{Component, Prefix};

@@ -74,6 +74,9 @@ impl Store {
         true
     }
     pub fn pin_project(&mut self, path: &Path, at: u64) -> bool {
+        if !crate::file_policy::is_local_file_path(path) {
+            return false;
+        }
         if self.projects.len() >= MAX_PINS && !self.projects.iter().any(|e| same(&e.path, path)) {
             return false;
         }
@@ -97,9 +100,9 @@ impl Store {
         *self = Store::default();
     }
 
-    /// Drop anything that is not an absolute local path, and re-apply caps.
+    /// Drop anything that is not an absolute local drive path, and re-apply caps.
     fn sanitize(mut self) -> Self {
-        let keep = |e: &Stamped| e.path.is_absolute();
+        let keep = |e: &Stamped| crate::file_policy::is_local_file_path(&e.path);
         for (list, cap) in [
             (&mut self.recent, MAX_RECENT),
             (&mut self.pinned_files, MAX_PINS),
@@ -116,20 +119,39 @@ impl Store {
     }
 }
 
-/// Load the store. A missing file is an empty library; an unreadable or invalid
-/// one is renamed aside (`library.json.corrupt-<ms>`) and replaced by an empty
-/// library, so a bad file never blocks the app and is never silently destroyed.
-pub fn load(path: &Path) -> Store {
+/// Load the store and whether it may be written back. A missing file is an
+/// empty, writable library. An invalid one is renamed aside
+/// (`library.json.corrupt-<ms>`) and replaced by an empty library. A file that
+/// cannot be read right now (locked, access denied) or set aside yields a
+/// read-only session, so it is never overwritten with an empty library.
+pub fn load(path: &Path) -> (Store, bool) {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
-        Err(_) => return Store::default().sanitize(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return (Store::default().sanitize(), true)
+        }
+        Err(_) => return (Store::default().sanitize(), false),
     };
     match serde_json::from_slice::<Store>(&bytes) {
-        Ok(store) if store.version <= STORE_VERSION => store.sanitize(),
+        Ok(store) if store.version <= STORE_VERSION => (store.sanitize(), true),
         _ => {
             let aside = path.with_extension(format!("json.corrupt-{}", now_ms()));
-            let _ = fs::rename(path, aside);
-            Store::default().sanitize()
+            let writable = fs::rename(path, aside).is_ok();
+            (Store::default().sanitize(), writable)
+        }
+    }
+}
+
+/// Remove set-aside and leftover temporary library files (they hold paths).
+pub fn remove_leftovers(path: &Path) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let corrupt = format!("{}.corrupt-", name.to_string_lossy());
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let file = entry.file_name().to_string_lossy().into_owned();
+        if file.starts_with(&corrupt) || file.starts_with(".library-") {
+            let _ = fs::remove_file(entry.path());
         }
     }
 }
@@ -240,7 +262,8 @@ pub fn scan(root: &Path) -> Scan {
             } else if metadata.is_file() && is_markdown(&path) {
                 if scan.files.len() >= SCAN_FILES {
                     scan.truncated = true;
-                    return scan;
+                    stack.clear();
+                    break;
                 }
                 let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
                 scan.files.push(ScannedFile {
@@ -285,8 +308,10 @@ impl Ids {
     pub fn path(&self, id: &str) -> Option<&Path> {
         self.by_id.get(id).map(PathBuf::as_path)
     }
+    /// Forget every id, but never reuse one: a stale panel row cannot reach a new path.
     pub fn clear(&mut self) {
-        *self = Self::default();
+        self.by_id.clear();
+        self.by_path.clear();
     }
 }
 
@@ -327,7 +352,7 @@ mod tests {
             fields.sort();
             assert_eq!(fields, ["at", "path"], "nothing but a path and a timestamp");
         }
-        assert_eq!(load(&file), store.clone().sanitize());
+        assert_eq!(load(&file), (store.clone().sanitize(), true));
         store.clear();
         assert_eq!(store, Store::default());
     }
@@ -337,7 +362,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("library.json");
         fs::write(&file, b"{ not json").unwrap();
-        assert_eq!(load(&file).recent.len(), 0);
+        assert_eq!(load(&file), (Store::default().sanitize(), true));
         assert!(!file.exists());
         let aside: Vec<_> = fs::read_dir(dir.path())
             .unwrap()
@@ -349,14 +374,27 @@ mod tests {
             "{aside:?}"
         );
         // Relative or future-version entries never load.
-        fs::write(
-            &file,
-            br#"{"version":1,"recent":[{"path":"relative.md","at":1}]}"#,
-        )
-        .unwrap();
-        assert!(load(&file).recent.is_empty());
+        fs::write(&file, br#"{"version":1,"recent":[{"path":"relative.md","at":1},{"path":"\\\\host\\share\\a.md","at":2}]}"#).unwrap();
+        assert!(
+            load(&file).0.recent.is_empty(),
+            "relative and network paths never load"
+        );
         fs::write(&file, br#"{"version":99}"#).unwrap();
-        assert_eq!(load(&file), Store::default().sanitize());
+        assert_eq!(load(&file), (Store::default().sanitize(), true));
+        // A store that cannot be read right now is left alone and never overwritten.
+        // (The future-version file above was set aside, so the name is free.)
+        fs::create_dir(&file).unwrap();
+        assert!(
+            !load(&file).1,
+            "an unreadable store makes the session read-only"
+        );
+        remove_leftovers(&file);
+        let left: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, ["library.json"], "Clear removes set-aside copies");
     }
 
     #[test]
@@ -450,5 +488,12 @@ mod tests {
         assert_eq!(ids.path(&a), Some(Path::new(r"C:\notes\a.md")));
         assert!(!a.contains("notes"));
         assert_eq!(ids.path("l999"), None);
+        ids.clear();
+        assert_eq!(ids.path(&a), None);
+        assert_ne!(
+            ids.id(Path::new(r"C:\other.md")),
+            a,
+            "ids are never reused after Clear"
+        );
     }
 }

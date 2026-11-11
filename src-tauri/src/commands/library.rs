@@ -18,23 +18,27 @@ use crate::DesktopState;
 /// Loaded on first use, so reading a file never touches the library store.
 pub(crate) struct Library {
     file: Option<PathBuf>,
+    /// False when the store could not be read safely this session.
+    writable: bool,
     store: Store,
     ids: Ids,
 }
 
 impl Library {
     fn load(file: Option<PathBuf>) -> Self {
-        let store = file.as_deref().map(library::load).unwrap_or_default();
+        let (store, writable) = file.as_deref().map(library::load).unwrap_or_default();
         Self {
             file,
+            writable,
             store,
             ids: Ids::default(),
         }
     }
-    fn persist(&self) {
-        if let Some(file) = &self.file {
+    fn persist(&self) -> bool {
+        match &self.file {
             // A failed write keeps the in-memory library; the next change retries.
-            let _ = library::save(file, &self.store);
+            Some(file) if self.writable => library::save(file, &self.store).is_ok(),
+            _ => false,
         }
     }
 }
@@ -56,18 +60,22 @@ pub(crate) fn with_library<T>(app: &AppHandle, act: impl FnOnce(&mut Library) ->
     act(library)
 }
 
-/// Record successful opens and saves as recent files.
+/// Record successful opens and saves as recent files. Runs off the open path:
+/// the first paint never waits for the library to load or write.
 pub(crate) fn remember(app: &AppHandle, paths: impl IntoIterator<Item = PathBuf>) {
+    let paths: Vec<PathBuf> = paths.into_iter().collect();
+    if paths.is_empty() {
+        return;
+    }
+    let app = app.clone();
     let at = library::now_ms();
-    with_library(app, |library| {
-        let mut changed = false;
-        for path in paths {
-            library.store.opened(&path, at);
-            changed = true;
-        }
-        if changed {
-            library.persist();
-        }
+    tauri::async_runtime::spawn_blocking(move || {
+        with_library(&app, |library| {
+            for path in &paths {
+                library.store.opened(path, at);
+            }
+            let _ = library.persist();
+        });
     });
 }
 
@@ -144,7 +152,9 @@ pub(crate) async fn library_scan(app: AppHandle, id: String) -> Result<ProjectSc
             .store
             .projects
             .iter()
-            .any(|p| p.path == path)
+            .any(|p| {
+                p.path.to_string_lossy().to_lowercase() == path.to_string_lossy().to_lowercase()
+            })
             .then_some(path)
     })
     .ok_or("This project is no longer in the library.")?;
@@ -203,7 +213,7 @@ pub(crate) async fn library_open(
         with_library(&app, |library| {
             library.store.opened(&path, at);
             library.store.mark_seen(&path, at);
-            library.persist();
+            let _ = library.persist();
         });
     }
     Ok(batch)
@@ -214,7 +224,7 @@ fn mutate(app: &AppHandle, act: impl FnOnce(&mut Store, u64) -> bool) -> bool {
     with_library(app, |library| {
         let changed = act(&mut library.store, at);
         if changed {
-            library.persist();
+            let _ = library.persist();
         }
         changed
     })
@@ -309,12 +319,24 @@ pub(crate) async fn library_add_project(
 
 /// "Clear library": forget every recent file, pin, project and seen stamp.
 #[tauri::command]
-pub(crate) fn library_clear(app: AppHandle) {
+pub(crate) fn library_clear(app: AppHandle) -> Result<(), String> {
     with_library(&app, |library| {
         library.store.clear();
         library.ids.clear();
-        library.persist();
-    });
+        // Clearing is an explicit request: write even after an unreadable load.
+        library.writable = true;
+        if let Some(file) = &library.file {
+            library::remove_leftovers(file);
+        }
+        if library.persist() {
+            Ok(())
+        } else {
+            Err(
+                "The library file could not be cleared. Check access to the app's data folder."
+                    .into(),
+            )
+        }
+    })
 }
 
 pub(crate) type LibrarySlot = Mutex<Option<Library>>;
