@@ -216,6 +216,19 @@ Refresh #202's workloads against the new reader and Edit surface and fix what th
 Produce a local release build (`npm run desktop:build`) and record where the installer and the
 portable executable are, so the owner can install it. Add the human acceptance item for it.
 
+## Use case: run cards
+
+The owner will work through ChatGPT "run cards" in MDviewer: a folder holding `desk.md` (a queue
+table with relative links) and `runs/<NN>-<LANE>-<part>.md` cards that a generator rewrites as runs
+complete. What they feel first, in order: copy a whole fenced block; open a folder and follow
+relative `.md` links with Back; reload when the file changes on disk, keeping the scroll position;
+long code blocks that behave. Acceptance for S1c and S6: with `desk.md` open, clicking a relative
+link to a card opens it in the same window; `Alt+Left` returns to `desk.md` at its previous scroll
+position; when a second process rewrites the open card, the view updates within about a second and
+the scroll anchor holds. Real samples are private: read them locally only, never copy their text
+into the repository, a fixture, a PR or an issue. This ordering is a coordinator assumption about
+the owner's near-term priority (relayed 2026-11-11); the owner can reverse it.
+
 ## Lanes and routing
 
 Models resolve through the estate `model-effort-routing` skill; this file names jobs, not ladders.
