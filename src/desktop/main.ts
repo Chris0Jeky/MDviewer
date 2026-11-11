@@ -125,7 +125,8 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
   const behavior = scroll.style.scrollBehavior;
   scroll.style.scrollBehavior = "auto";
-  scroll.scrollTo(0, 0);
+  scroll.scrollTop = 0;
+  scroll.scrollLeft = 0;
   scroll.style.scrollBehavior = behavior;
   status.textContent = `Opening ${doc.name}…`;
   // Mermaid's singleton is not re-entrant; serialize and skip obsolete renders.
