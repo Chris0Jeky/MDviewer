@@ -147,6 +147,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   empty.hidden = !!doc;
   if (!doc) {
     content.replaceChildren();
+    releaseImages();
     status.textContent = "Local files · No uploads";
     return Promise.resolve();
   }
@@ -680,18 +681,33 @@ const IMAGE_TYPES: Record<string, string> = {
 function releaseImages(): void {
   for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
 }
+// Bound what one document can make the reader hold: distinct images and bytes.
+const MAX_LOCAL_IMAGES = 100;
+const MAX_LOCAL_IMAGE_BYTES = 200 * 1024 * 1024;
 async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
+  const loaded = new Map<string, string | null>();
+  let bytesHeld = 0;
   for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
     const src = image.dataset.localSrc!;
     const type = IMAGE_TYPES[src.split(/[?#]/, 1)[0]!.split(".").pop()?.toLowerCase() ?? ""];
     if (!type) continue;
-    try {
-      const bytes = await native.readAsset(token, src);
-      if (current !== renderGeneration) return; // A newer render owns the DOM now.
-      const url = URL.createObjectURL(new Blob([bytes], { type }));
-      imageUrls.push(url);
-      image.src = url;
-    } catch { image.alt ||= `${src} could not be loaded`; }
+    if (!loaded.has(src)) {
+      if (loaded.size >= MAX_LOCAL_IMAGES || bytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
+        image.alt ||= `${src} was not loaded: this document shows too many local images`;
+        continue;
+      }
+      try {
+        const bytes = await native.readAsset(token, src);
+        if (current !== renderGeneration) return; // A newer render owns the DOM now.
+        bytesHeld += bytes.byteLength;
+        const url = URL.createObjectURL(new Blob([bytes], { type }));
+        imageUrls.push(url);
+        loaded.set(src, url);
+      } catch { loaded.set(src, null); }
+    }
+    const url = loaded.get(src);
+    if (url) image.src = url;
+    else image.alt ||= `${src} could not be loaded`;
   }
 }
 
