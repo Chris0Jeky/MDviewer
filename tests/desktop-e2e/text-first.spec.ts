@@ -27,6 +27,7 @@ test("the reader paints text first, then upgrades code in place without moving i
     while (!performance.getEntriesByName("mdv:reader-text").length) await new Promise(resolve => setTimeout(resolve, 5));
     return performance.getEntriesByName("mdv:reader-text")[0]!.startTime - started;
   });
+  test.info().annotations.push({ type: "first-text-ms", description: elapsed.toFixed(1) });
   expect(elapsed, "first text paint after opening the sample").toBeLessThan(100);
 
   const doc = page.locator("#reader-document");
@@ -40,4 +41,18 @@ test("the reader paints text first, then upgrades code in place without moving i
     expect(Math.abs(after[range]! - height), `code block ${range} height after upgrade`).toBeLessThanOrEqual(1);
   }
   expect(await page.evaluate(() => performance.getEntriesByName("mdv:reader-rich").length)).toBe(1);
+});
+
+test("scrolling while code and diagrams upgrade keeps the reader's place", async ({ page }) => {
+  // Hold back every lazily loaded chunk (grammars, Mermaid) so the upgrade is still running.
+  await page.route("**/assets/**", async route => { await new Promise(resolve => setTimeout(resolve, 800)); await route.continue(); });
+  await page.locator("#reader-sample").click();
+  const doc = page.locator("#reader-document");
+  await expect(doc.locator("pre.reader-pending").first()).toBeAttached();
+  await expect(doc).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByRole("navigation", { name: "Document headings" })).toBeVisible();
+  const scroll = page.locator("#reader-scroll");
+  await scroll.evaluate(element => { element.style.scrollBehavior = "auto"; element.scrollTop = 600; });
+  await expect(doc).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
+  expect(await scroll.evaluate(element => element.scrollTop)).toBe(600);
 });

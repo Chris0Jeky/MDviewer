@@ -1,34 +1,45 @@
-import { SOURCE_ATTR, sliceSource, type ReaderSource } from "./sourcemap";
+import { SOURCE_ATTR } from "./sourcemap";
 import { setSource, sourceOf } from "./copy";
 
 /**
- * Patch a live reader document towards a fresh render of new text: top-level blocks whose
- * source text is unchanged keep their live node (its highlighted code, Mermaid figure,
- * open details, focus), and only the others are replaced. Kept nodes get their line ranges
- * moved to the new positions. Returns how many blocks were replaced.
+ * Patch a live reader document towards a fresh first-pass render of new text: top-level
+ * blocks whose first-pass markup is unchanged keep their live node (highlighted code,
+ * Mermaid figure, open details), and only the others are replaced. Kept nodes get their
+ * line ranges moved to the new positions. Returns how many blocks were replaced.
  *
- * Call it as the `paint` step of `renderReaderDocument`: the upgrade that follows then
- * finds placeholders and diagram sources only in the replaced blocks.
+ * Call it as the `paint` step of `renderReaderDocument` for the SAME document (live reload,
+ * Edit): copy handlers keep their file name. The upgrade that follows finds placeholders and
+ * diagram sources only in replaced blocks.
+ *
+ * Keys are the first-pass markup without line ranges, not the block's own source, because
+ * reference links, heading ids, footnote numbers and the TOC depend on other blocks.
+ * Blocks this function did not insert have no key and are always replaced.
+ * ponytail: kept nodes are re-inserted, so focus inside them is lost; insert in place if Edit needs it.
  */
+const firstPass = new WeakMap<Element, string>();
+const RANGE = new RegExp(` ${SOURCE_ATTR}="\\d+-\\d+"`, "g");
+
 export function patchDocument(live: HTMLElement, next: HTMLElement): number {
-  const before = sourceOf(live);
-  const after = sourceOf(next);
   const available = new Map<string, Element[]>();
-  if (before) {
-    for (const node of live.children) {
-      const key = blockKey(node, before);
-      available.set(key, [...(available.get(key) ?? []), node]);
-    }
+  for (const node of live.children) {
+    const key = firstPass.get(node);
+    if (key !== undefined) available.set(key, [...(available.get(key) ?? []), node]);
   }
   let replaced = 0;
   const children = [...next.children].map(node => {
-    const kept = after && available.get(blockKey(node, after))?.shift();
-    if (!kept) { replaced++; return node; }
+    const key = node.outerHTML.replace(RANGE, "");
+    const kept = available.get(key)?.shift();
+    if (!kept) {
+      replaced++;
+      firstPass.set(node, key);
+      return node;
+    }
     moveRanges(kept, node);
     return kept;
   });
+  const source = sourceOf(next);
   live.replaceChildren(...children);
-  if (after) setSource(live, after);
+  if (source) setSource(live, source);
   return replaced;
 }
 
@@ -36,14 +47,7 @@ function stamp(node: Element): Element | null {
   return node.hasAttribute(SOURCE_ATTR) ? node : node.querySelector(`[${SOURCE_ATTR}]`);
 }
 
-/** The block's own source text; unmapped blocks (footnotes) compare by markup. */
-function blockKey(node: Element, source: ReaderSource): string {
-  const match = /^(\d+)-(\d+)$/.exec(stamp(node)?.getAttribute(SOURCE_ATTR) ?? "");
-  if (!match) return `html\0${node.outerHTML}`;
-  return `${node.tagName}\0${sliceSource(source, Number(match[1]), Number(match[2]))}`;
-}
-
-/** Same source, maybe new lines: shift every range in the kept node by the start delta. */
+/** Same markup, maybe new lines: shift every range in the kept node by the start delta. */
 function moveRanges(kept: Element, fresh: Element): void {
   const from = Number(stamp(kept)?.getAttribute(SOURCE_ATTR)?.split("-")[0]);
   const to = Number(stamp(fresh)?.getAttribute(SOURCE_ATTR)?.split("-")[0]);

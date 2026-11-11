@@ -57,17 +57,24 @@ export async function renderReaderDocument(
 
   const root = paint ? paint(document) : document;
   if (!root) return { document, warnings };
-  performance.mark("mdv:reader-text");
+  // The frame that first shows the text (rendering continues meanwhile).
+  window.requestAnimationFrame?.(() => performance.mark("mdv:reader-text"));
+  const reason = (error: unknown): string => error instanceof Error ? error.message : String(error);
+  // The text is already on screen: an upgrade failure is a warning, never a failed render.
   if (highlight) {
     try {
       installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings);
       upgradeCode(md, tokens, env, root);
     } catch (error) {
-      warnings.push(`Code highlighting is unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Code highlighting is unavailable: ${reason(error)}`);
     }
   }
-  const diagrams = await renderAllMermaid(root, "default");
-  if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
+  try {
+    const diagrams = await renderAllMermaid(root, "default");
+    if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
+  } catch (error) {
+    warnings.push(`Diagrams are unavailable: ${reason(error)}`);
+  }
   performance.mark("mdv:reader-rich");
   return { document: root, warnings };
 }
