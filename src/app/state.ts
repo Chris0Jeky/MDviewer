@@ -85,6 +85,19 @@ export class DocStore {
     return true;
   }
 
+  /**
+   * Replace a document's text from outside the editor (live reload). Unlike
+   * `updateText`, this re-seeds the editor ("change") and then re-renders ("text").
+   */
+  replaceText(id: string, text: string): boolean {
+    const doc = this.openDocs.find((d) => d.id === id);
+    if (!doc || doc.text === text) return false;
+    doc.text = text;
+    this.emit("change");
+    this.emit("text");
+    return true;
+  }
+
   /** Rename after a successful Save As. Emits "change": the document's identity UI follows. */
   rename(id: string, name: string): boolean {
     const doc = this.openDocs.find((d) => d.id === id);
