@@ -20,6 +20,11 @@ Deep text.
 ## Third
 
 Third text.
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
 `;
 
 declare global { interface Window { __copied: string[] } }
@@ -77,4 +82,11 @@ test("reader copies code bodies, sections, links and selected Markdown source", 
   await page.keyboard.press("Control+Shift+C");
   expect(await clipboard(page)).toBe(DOC.slice(DOC.indexOf("Intro"), DOC.indexOf("### Deeper") + "### Deeper".length));
   await expect(page.locator(".reader-toast")).toHaveText("Copied 12 lines of Markdown");
+
+  // A rendered diagram keeps its source mapping and copies its fence body.
+  const diagram = doc.locator(".reader-code", { has: page.locator("figure svg") });
+  await expect(diagram).toHaveAttribute("data-src", /^\d+-\d+$/);
+  await diagram.hover();
+  await diagram.getByRole("button", { name: "Copy code" }).click();
+  expect(await clipboard(page)).toBe(["flowchart LR", "  A --> B"].join("\n"));
 });
