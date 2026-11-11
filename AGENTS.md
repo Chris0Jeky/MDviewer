@@ -27,10 +27,11 @@ When sources conflict, follow the higher source and report the conflict.
 
 ## First 5 Minutes
 
-`ACTION_ITEMS.md` → `AGENTS.md` → `ORCHESTRATOR.md` → `docs/Project_Roadmap.md` →
-`docs/design/IMPLEMENTATION_SPEC.md` → `autodoc/AGENT_INDEX.md`. Then pick the smallest
-safe, reviewable slice and state blockers, assumptions, verification target, and docs-sync
-target before editing.
+Read `ACTION_ITEMS.md` and the top of `ORCHESTRATOR.md`; open the other sources above when the
+task needs them. Do not bulk-read `node_modules`, `dist`, build output or generated
+artifacts unless the task needs them. Then pick the smallest safe, reviewable slice and state blockers, assumptions,
+verification target, and docs-sync target before editing. Model, effort and agent count follow
+the estate `model-effort-routing` skill.
 
 The issue-backed queue is [Future work](docs/FUTURE_WORK.md) and
 [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Proposed native Save/Save As
@@ -95,14 +96,16 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - Git: branch off `main`; `merge` not `rebase`; no force-push or history rewrite on protected
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
 - Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
-  draft PRs after relevant local checks. A PR is aged once an independent adversarial review has
-  examined its latest head, exact-head CI has completed green, every comment is triaged, and the
+  ready-for-review PRs after relevant local checks. A PR is aged once an independent adversarial review has
+  examined the reviewed diff, exact-head CI has completed green, every comment is triaged, and the
   head has aged at least three minutes (global law 2f). The repository is T2 with push and merge free
-  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Actionable findings require finding → commit
-  evidence, while informational/bot notices require an explicit non-finding triage. Any head change
-  resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
+  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Fixed findings require finding → commit
+  evidence, while informational/bot notices require an explicit non-finding triage. A head change
+  re-proves what changed; a fresh review is owed only when fixes change logic or the risk boundary. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
-- Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
+- Failures: surface every failure; fix it now or seed a tracked follow-up, never drop one silently. See `docs/agentic/FAILURE_LEDGER.md`.
+- Review findings follow estate law 2: fix confirmed CRITICAL and HIGH (correctness, security,
+  data loss) before merge; track or decline the rest on the thread; two rounds at most.
 - Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
   UI/pagination/export, zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
 
