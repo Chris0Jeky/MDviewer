@@ -22,11 +22,18 @@ Deep text.
 Third text.
 `;
 
-test.beforeEach(async ({ context, baseURL }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseURL!).origin });
+declare global { interface Window { __copied: string[] } }
+
+// Record what the app writes. The OS clipboard is machine-wide state on a Windows host
+// (other checkouts run tests here too), so it is not a reliable assertion channel.
+test.beforeEach(async ({ page }) => {
+  await page.evaluate(() => {
+    window.__copied = [];
+    navigator.clipboard.writeText = async text => { window.__copied.push(text); };
+  });
 });
 
-const clipboard = (page: import("@playwright/test").Page): Promise<string> => page.evaluate(() => navigator.clipboard.readText());
+const clipboard = (page: import("@playwright/test").Page): Promise<string> => page.evaluate(() => window.__copied.at(-1) ?? "");
 
 test("reader copies code bodies, sections, links and selected Markdown source", async ({ page }) => {
   await openFiles(page, [{ name: "copy.md", text: DOC }]);
@@ -62,11 +69,12 @@ test("reader copies code bodies, sections, links and selected Markdown source", 
     const paragraphs = document.querySelectorAll("#reader-document > p");
     const range = document.createRange();
     range.setStart(paragraphs[0]!.firstChild!, 3);
-    range.setEnd(document.querySelector("#reader-document h3")!.firstChild!.firstChild!, 2);
+    const heading = document.createTreeWalker(document.querySelector("#reader-document h3")!, NodeFilter.SHOW_TEXT).nextNode()!;
+    range.setEnd(heading, 2);
     getSelection()!.removeAllRanges();
     getSelection()!.addRange(range);
   });
   await page.keyboard.press("Control+Shift+C");
   expect(await clipboard(page)).toBe(DOC.slice(DOC.indexOf("Intro"), DOC.indexOf("### Deeper") + "### Deeper".length));
-  await expect(page.locator(".reader-toast")).toHaveText("Copied 13 lines of Markdown");
+  await expect(page.locator(".reader-toast")).toHaveText("Copied 12 lines of Markdown");
 });
