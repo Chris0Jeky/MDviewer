@@ -3,6 +3,7 @@
 mod commands;
 mod export_policy;
 mod file_policy;
+mod library;
 mod registry;
 mod replace;
 mod watch;
@@ -29,6 +30,8 @@ struct DesktopState {
     registry: std::sync::Arc<Mutex<Registry>>,
     /// Created in setup (it needs the app handle to emit); starts watching lazily.
     watch: std::sync::OnceLock<watch::FileWatch>,
+    /// Recent/pinned paths and timestamps, loaded on first library use.
+    library: commands::library::LibrarySlot,
 }
 
 impl DesktopState {
@@ -92,7 +95,16 @@ fn main() {
             commands::save::save_document,
             commands::save::save_document_as,
             commands::save::release_document,
-            commands::reload::read_document
+            commands::reload::read_document,
+            commands::library::library_list,
+            commands::library::library_scan,
+            commands::library::library_open,
+            commands::library::library_pin,
+            commands::library::library_unpin,
+            commands::library::library_forget,
+            commands::library::library_mark_seen,
+            commands::library::library_add_project,
+            commands::library::library_clear
         ])
         .setup(|app| {
             let emitter = app.handle().clone();

@@ -36,7 +36,7 @@ pub(crate) struct OpenBatch {
 
 impl OpenBatch {
     /// Start following every bound file in this batch.
-    fn follow(self, state: &DesktopState) -> Self {
+    pub(crate) fn follow(self, state: &DesktopState) -> Self {
         for doc in &self.documents {
             if let Some(token) = &doc.token {
                 state.follow(token, std::path::Path::new(&doc.path));
@@ -45,7 +45,7 @@ impl OpenBatch {
         self
     }
 
-    fn from_read_batch(batch: ReadBatch, registry: &mut Registry) -> Self {
+    pub(crate) fn from_read_batch(batch: ReadBatch, registry: &mut Registry) -> Self {
         Self {
             documents: batch
                 .documents
