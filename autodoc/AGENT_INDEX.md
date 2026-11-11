@@ -50,7 +50,7 @@ Export click → capture document id/name/text and settings NOW
 | Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
 | Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
-| Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
+| Paged.js lifecycle, handlers, CSS, in-context measurement, shrink (Tier 3) and split (Tier 4) tiers, completeness audit and recovery | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | `tests/paginate-completeness.test.ts`, `tests/e2e/nocutoff.spec.ts`, `tests/e2e/pagination-completeness.spec.ts` |
 | Vector / raster PDF | `src/export/{print,download,footnoteMarkers}.ts` | `tests/export-download.test.ts`, `tests/raster-{content-clone,styles-ready,footnote-markers}.test.ts`, `tests/e2e/export.spec.ts`, `tests/e2e/raster-resolution.spec.ts` (preview isolation), `tests/e2e/raster-{visual,footnotes,styles-ready}.spec.ts` (saved pixels, CSS delay/failure recovery and damage controls); spec §§5,10 and `docs/PDF_VISUAL_REGRESSION.md` |
 | Offline raster capture document and CSS ownership | `src/export/offlineCapture.ts`, `src/export/download.ts` | `tests/raster-offline-capture.test.ts`, `tests/e2e/raster-offline-frame.spec.ts`, existing saved-PDF pixels and real CSS/font cache-loss/no-save/retry in `tests/e2e/raster-{visual,styles-ready,fonts-ready}.spec.ts`; spec §§5,6,10; `docs/design/RASTER_OFFLINE_CAPTURE.md` |
 | Export progress and outcomes in every workspace view | `src/ui/ExportStatus.ts`, `src/app/App.ts`, `src/export/download.ts` | `tests/export-status.test.ts`, export-lifetime/download tests, `tests/e2e/export-status.spec.ts`; spec §§5,7 and `docs/design/EXPORT_STATUS.md` |
@@ -78,6 +78,20 @@ withRenderLock<T>(task: () => Promise<T>): Promise<T>;
 // src/paginate/footnoteLinks.ts
 repairFootnoteLinks(host: ParentNode): void;
 // Called inside paginate after awaited Previewer.preview; only citation hrefs change.
+
+// src/paginate/paginate.ts — signature unchanged; the result and failure widen.
+paginate(source: DocumentFragment, css: string, host: HTMLElement): Promise<PaginatedFlow>;
+interface PaginatedFlow extends PagedFlow { recoveredSplits?: string[] } // set only after a recovery run
+class PaginationIncompleteError extends Error {} // thrown after teardown; App shows the fatal state
+auditPagination(source: ParentNode, host: HTMLElement): PaginationProblem | null;
+
+// src/paginate/shrinkToFit.ts (afterParsed, in order)
+recordSourceHeights(content: ParentNode, area: PageArea): void; // in-context, batched
+shrinkToFit(content: ParentNode, area: PageArea): void;          // Tier 3
+markOverTallSplittable(content: ParentNode, area: PageArea): void; // Tier 4 -> data-mdv-splittable
+
+// src/paginate/handler.ts (filter hook)
+restoreDisplayedElements(content: ParentNode): void; // undo Paged.js marking inline-styled elements hidden
 
 // src/export/markdown.ts
 markdownFilename(name: string): string;
