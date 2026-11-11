@@ -15,6 +15,7 @@
     "allow-save-export",
     "allow-save-document",
     "allow-save-document-as",
-    "allow-release-document"
+    "allow-release-document",
+    "allow-read-document"
   ]
 }

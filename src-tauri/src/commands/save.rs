@@ -385,11 +385,24 @@ pub(crate) async fn save_document_as(
         return Ok(SaveResult::Canceled);
     };
     let registry = state.registry.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let previous = token.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         save_to_path(&registry, token.as_ref(), &destination, &text, accept_lf)
     })
     .await
-    .map_err(|_| "The save could not complete. Your text is still open.".into())
+    .map_err(|_| "The save could not complete. Your text is still open.".to_string())?;
+    if let SaveResult::Saved {
+        token: new, path, ..
+    } = &result
+    {
+        if let Some(previous) = &previous {
+            state.unfollow(previous);
+        }
+        if let Some(new) = new {
+            state.follow(new, Path::new(path));
+        }
+    }
+    Ok(result)
 }
 
 /// Release a closed document's capability. Unknown tokens are ignored.
@@ -397,6 +410,7 @@ pub(crate) async fn save_document_as(
 pub(crate) fn release_document(state: State<'_, DesktopState>, token: String) {
     if let Some(token) = Token::parse(&token) {
         lock(&state.registry).revoke(&token);
+        state.unfollow(&token);
     }
 }
 

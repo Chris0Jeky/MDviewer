@@ -8,6 +8,7 @@ fn main() {
             "save_document",
             "save_document_as",
             "release_document",
+            "read_document",
         ]),
     ))
     .expect("failed to prepare the desktop application");

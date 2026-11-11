@@ -5,6 +5,7 @@ mod export_policy;
 mod file_policy;
 mod registry;
 mod replace;
+mod watch;
 
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -18,6 +19,7 @@ use file_policy::{resolve_launch_paths, PendingFiles};
 use registry::Registry;
 
 const FILES_PENDING_EVENT: &str = "mdviewer:files-pending";
+const FILES_CHANGED_EVENT: &str = "mdviewer:files-changed";
 
 #[derive(Default)]
 struct DesktopState {
@@ -25,6 +27,23 @@ struct DesktopState {
     picker_open: AtomicBool,
     // Shared with blocking save tasks; never locked across a dialog or write.
     registry: std::sync::Arc<Mutex<Registry>>,
+    /// Created in setup (it needs the app handle to emit); starts watching lazily.
+    watch: std::sync::OnceLock<watch::FileWatch>,
+}
+
+impl DesktopState {
+    /// Follow a newly bound file; a no-op before setup (tests) or if watching fails.
+    fn follow(&self, token: &registry::Token, path: &Path) {
+        if let Some(watch) = self.watch.get() {
+            watch.add(token, path);
+        }
+    }
+
+    fn unfollow(&self, token: &registry::Token) {
+        if let Some(watch) = self.watch.get() {
+            watch.remove(token);
+        }
+    }
 }
 
 fn main() {
@@ -72,9 +91,18 @@ fn main() {
             commands::export::save_export,
             commands::save::save_document,
             commands::save::save_document_as,
-            commands::save::release_document
+            commands::save::release_document,
+            commands::reload::read_document
         ])
         .setup(|app| {
+            let emitter = app.handle().clone();
+            // The event carries capability tokens only: never paths or contents.
+            let _ = app
+                .state::<DesktopState>()
+                .watch
+                .set(watch::FileWatch::new(move |tokens| {
+                    let _ = emitter.emit(FILES_CHANGED_EVENT, tokens);
+                }));
             let config = app
                 .config()
                 .app
