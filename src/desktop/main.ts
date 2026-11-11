@@ -461,6 +461,9 @@ async function saveDocument(as: boolean): Promise<void> {
   const target: SaveTarget | null = docs.saveTarget();
   if (!target) return;
   if (!as && !target.binding) return saveDocument(true);
+  // An outside change the user has not taken (Keep mine, or edits typed while a
+  // reload was being read) must never be overwritten in place.
+  if (!as && target.binding?.disk === "changed") { report(conflictText(target.name, "changed")); return; }
   if (!as && !target.dirty) { report(`${target.name} has no unsaved changes.`); return; }
   let acceptLf = false;
   if (target.binding?.eol === "mixed") {

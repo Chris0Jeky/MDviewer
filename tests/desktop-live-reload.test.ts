@@ -131,6 +131,26 @@ describe("desktop live reload", () => {
     expect(visibleBar()).toBeUndefined();
   });
 
+  it("edits typed while a reload is read are kept, and Save then refuses to overwrite in place", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    const doc = app.store.active!;
+    let finish!: (result: ReadResult) => void;
+    boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    boundary.changed!([TOKEN]);
+    expect(boundary.read).toHaveBeenCalledWith(TOKEN, true); // Clean when the notification arrived.
+    app.store.updateText(doc.id, "# Typed meanwhile");
+    finish(changed("# Theirs"));
+    await vi.waitFor(() => expect(visibleBar()).toBeDefined());
+    expect(app.store.active!.text).toBe("# Typed meanwhile");
+    // The host already moved to the outside bytes; an in-place Save must not land on them.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(boundary.saveDocument).not.toHaveBeenCalled();
+    expect(document.getElementById("workspace-notice")!.textContent).toContain("changed on disk");
+    visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="keep"]')!.click();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(boundary.saveDocument, "Keep mine still never overwrites in place").not.toHaveBeenCalled();
+  });
+
   it("Save As from the bar keeps the edits in another file", async () => {
     const app = await workspace(bound("notes.md", "# One"));
     app.store.updateText(app.store.active!.id, "# Mine");
