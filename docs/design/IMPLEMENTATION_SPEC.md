@@ -10,7 +10,7 @@ A local-first Markdown reader/editor and paginated PDF workspace for the web and
 
 The approved runtime-network exception is the Pulseboard SDK 3.3 (`public/pulseboard.js`, locked by `observatory.lock.json`, active only on the production origin), and product code reaches it only through `src/app/pulse.ts`, whose events carry closed enums, size buckets and page counts; error events are shielded from it (`installErrorShield`). Document text, file names, titles, headings, document URLs and export contents never reach it (`tests/pulse.test.ts`). Any other runtime request or telemetry still needs an owner decision.
 
-[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195) index proposed scopes. Save/Save As ownership [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) require reviewed designs and coordinated operating/privacy contracts before implementation. They do not change the current Save Copy or memory-only behavior.
+[Future work](../FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195) index proposed scopes. Save/Save As ownership [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) is implemented on Windows (§14, `docs/design/FILE_LIFECYCLE.md`); optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) is design-only and sessions stay memory-only.
 
 The product invariant remains page-break-safe output: keep normal-size code blocks, figures, tables and callouts intact; use the foundation's explicit graceful-split/shrink/forced-split tiers for genuinely oversize content. Both PDF paths consume the same prepared page DOM.
 
@@ -452,6 +452,15 @@ Store notifications continue through App's existing render scheduler and export 
 
 
 ## 14. Experimental Windows reader
+
+Owned Save (`Ctrl+S`) and Save As (`Ctrl+Shift+S`, plus workspace **Save** / **Save As**
+buttons, `data-desktop-command`) run from reading view and the workspace when the
+native host is present; the browser build of the desktop entry keeps today's keys.
+`DesktopDocuments.saveTarget()` captures the active document's text and binding;
+`completeSave()` applies a `saved` completion only to the same still-open document
+(baseline = captured text, newer edits stay dirty, Save As renames through
+`DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
+`release_document`; mode transitions never do. Save Markdown remains the copy.
 
 `desktop.html` and `vite.desktop.config.ts` build a separate `dist-desktop` entry.
 `src/desktop/main.ts` starts a continuous, sanitized reader with no editor, Paged.js,

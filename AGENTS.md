@@ -33,12 +33,11 @@ safe, reviewable slice and state blockers, assumptions, verification target, and
 target before editing.
 
 The issue-backed queue is [Future work](docs/FUTURE_WORK.md) and
-[#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Proposed native Save/Save As
-[#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery
-[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs merged in #209.
-Their implementation still requires the native proof/measurement gates in those designs
-and coordinated contract/privacy updates; they do not change today's
-Save Copy or memory-only session behavior.
+[#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Native Save/Save As
+[#196](https://github.com/Chris0Jeky/MDviewer/issues/196) is implemented on Windows (companion
+push S1b) on the conflict-safe replace primitive; optional recovery
+[#197](https://github.com/Chris0Jeky/MDviewer/issues/197) is still design-only and sessions stay
+memory-only. The web/PWA keeps its source download.
 
 ## Project Structure
 
@@ -110,8 +109,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Document content never leaves the device. Open documents and latest-close recovery stay in
   memory; there is no automatic/app-managed document or session storage. Explicit user-selected
-  Markdown copies and PDF saves/exports write the requested output. Save Copy does not adopt an
-  original-file write binding or clear the dirty baseline. Only the small `Settings` object and
+  Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) and Save As (Ctrl+Shift+S) write the open document to its own file in place (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
   SDK keys below persist as app-managed user state. Bundle Shiki themes/langs, KaTeX fonts, and
   Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK

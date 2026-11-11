@@ -51,7 +51,7 @@ These two audiences share the same hard requirement: **structure must be preserv
 
 Dropping a file is still the fastest path, but you can also **write Markdown directly in MDviewer** and watch the paginated preview rebuild as you type — and a file you dropped is editable the same way, so a last-minute fix does not mean a round trip through another editor. The workspace toggles between three layouts: source only, preview only, or both side by side.
 
-The source pane feeds the *same* pipeline that produces the PDF, so editing uses real page geometry. On Windows, New enters that workspace lazily, and Reading view returns with open documents and edits preserved. Save Markdown currently saves a copy; it does not adopt the destination or reset the original-source dirty baseline. Typed text otherwise lives in memory. [Save/Save As #196](https://github.com/Chris0Jeky/MDviewer/issues/196) and [optional recovery #197](https://github.com/Chris0Jeky/MDviewer/issues/197) must define their new behavior before changing that contract.
+The source pane feeds the *same* pipeline that produces the PDF, so editing uses real page geometry. On Windows, New enters that workspace lazily, and Reading view returns with open documents and edits preserved. Save (Ctrl+S) and Save As write the document to its own file in place, conflict-checked ([#196](https://github.com/Chris0Jeky/MDviewer/issues/196)); Save Markdown stays a copy. Unsaved text otherwise lives in memory; [optional recovery #197](https://github.com/Chris0Jeky/MDviewer/issues/197) is still design-only.
 
 ## Non-goals
 

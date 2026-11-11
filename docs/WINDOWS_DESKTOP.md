@@ -57,10 +57,18 @@ reader scroll positions are kept for this session, including reader/workspace
 round trips and Undo Close; they are not stored on disk. Apple platforms retain
 native Option-key behavior and use the keyboard-reachable buttons/picker.
 
-**Reading view** returns with your open documents and edits preserved. **Save Markdown**
-saves a copy of the source. The session still compares edits with the original text
-that was opened or created, so saving a copy does not clear an edited document's
-discard confirmation. You may still be asked before closing it after a successful save.
+**Reading view** returns with your open documents and edits preserved. **Save**
+(`Ctrl+S`) writes the document back to the file it was opened from, in its original
+encoding (UTF-8 with or without BOM, UTF-16) and line endings, and works from reading
+view and the workspace. A new document, or one opened by drag and drop, asks where to
+save it. **Save As** (`Ctrl+Shift+S`) saves to a new file and keeps editing it there.
+
+Save never overwrites outside changes: if another program changed, moved, replaced or
+locked the file since MDviewer last read or saved it, nothing is written, your text
+stays open, and Save As keeps it in another file. A file that mixes line ending styles
+asks before converting them to LF. Read-only files, network drives and links are not
+saved over; use Save As. **Save Markdown** saves a copy and leaves the open document
+bound to its own file.
 
 **Print / Save as PDF** uses the print dialog, and **Download PDF** creates the raster
 fallback. Exports do not overwrite the original file automatically. Wait for an
