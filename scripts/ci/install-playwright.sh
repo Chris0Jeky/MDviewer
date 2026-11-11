@@ -15,7 +15,8 @@ echo 'Acquire::Retries "3"; Acquire::http::Timeout "20"; Acquire::https::Timeout
 
 for attempt in 1 2 3; do
   echo "::group::playwright install --with-deps $* (attempt $attempt, $route)"
-  timeout --kill-after=15 240 npx playwright install --with-deps "$@"
+  # 180 s each keeps a recovered run inside the 15-minute desktop reader job.
+  timeout --kill-after=15 180 npx playwright install --with-deps "$@"
   status=$?
   echo "::endgroup::"
   if [ "$status" -eq 0 ]; then
@@ -25,19 +26,21 @@ for attempt in 1 2 3; do
   echo "::warning::Playwright install attempt $attempt failed (exit $status) via $route."
   [ "$attempt" -eq 3 ] && break
 
-  # A timed-out attempt can leave apt or dpkg holding the lock.
+  # A timed-out attempt can leave apt or dpkg holding the lock; give them the backoff to exit.
   sudo pkill -x apt-get || true
   sudo pkill -x dpkg || true
-  sudo dpkg --configure -a || true
+  sleep $((attempt * 15))
+  sudo DEBIAN_FRONTEND=noninteractive timeout 120 dpkg --configure -a || true
 
   if [ "$attempt" -eq 1 ]; then
     for file in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
-      [ -f "$file" ] && sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' "$file"
+      if [ -f "$file" ] && grep -q 'azure\.archive\.ubuntu\.com' "$file"; then
+        sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' "$file"
+        route="archive.ubuntu.com"
+      fi
     done
-    route="archive.ubuntu.com"
-    sudo apt-get update || true
+    sudo DEBIAN_FRONTEND=noninteractive timeout 120 apt-get update || true
   fi
-  sleep $((attempt * 15))
 done
 
 echo "::error::Playwright install failed after 3 attempts; last route: $route. See #230."
