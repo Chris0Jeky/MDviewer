@@ -462,6 +462,14 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
+`main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
+replaces its text and baseline (the reader re-renders; S2c's block patching and change
+flash will replace the full re-render). A dirty document re-reads with `adopt: false`,
+is marked `disk: "changed"` and shows the `.file-conflict` bar (Reload / Keep mine /
+Save As) next to the notice line; Keep mine hides it for that token until the next
+change. `missing` keeps the text and reports it.
+
 `desktop.html` and `vite.desktop.config.ts` build a separate `dist-desktop` entry.
 `src/desktop/main.ts` starts a continuous, sanitized reader with no editor, Paged.js,
 service worker or Pulseboard SDK. Rich rendering shares highlighter/Markdown/KaTeX

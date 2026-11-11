@@ -10,7 +10,7 @@
  */
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import type { OpenBatch, SaveResult } from "./native";
+import type { OpenBatch, ReadResult, SaveResult } from "./native";
 import { ReaderSession, nextDocumentKey, type ReaderDocument } from "./session";
 
 export type FileEncoding = "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
@@ -121,6 +121,54 @@ export class DesktopDocuments {
   private discard(token: string | null): SaveCompletion {
     if (token) this.onRelease(token);
     return "stale";
+  }
+
+  /** The open document bound to `token`, in whichever mode owns it now. */
+  byToken(token: string): SaveTarget | null {
+    const app = this.workspace;
+    if (app) {
+      for (const doc of app.store.openDocs) {
+        const binding = this.baselines.get(doc.id)?.binding;
+        if (binding?.token === token) {
+          return { owner: "workspace", id: doc.id, name: doc.name, text: doc.text, dirty: this.workspaceDirty(doc), binding };
+        }
+      }
+      return null;
+    }
+    const doc = this.reader.documents.find(open => open.binding?.token === token);
+    return doc ? { owner: "reader", id: doc.id, name: doc.name, text: doc.text, dirty: doc.dirty, ...(doc.binding ? { binding: doc.binding } : {}) } : null;
+  }
+
+  /** Record what the watcher found on disk for `token` (shown by the shell). */
+  markDisk(token: string, disk: DiskState): void {
+    const target = this.byToken(token);
+    if (target?.binding) target.binding.disk = disk;
+  }
+
+  /**
+   * Install text the host re-read and adopted: the open text and its saved
+   * baseline both become the file's new content. Callers only do this for a
+   * clean document or after an explicit Reload.
+   */
+  applyReload(target: SaveTarget, result: Extract<ReadResult, { outcome: "changed" }> & { text: string }): boolean {
+    const update = (binding: Binding): void => {
+      Object.assign(binding, { generation: result.generation, encoding: result.encoding, eol: result.eol, disk: "synced" });
+    };
+    const app = this.workspace;
+    if (target.owner === "workspace") {
+      const baseline = this.baselines.get(target.id);
+      if (!app || !baseline?.binding || !app.store.openDocs.some(doc => doc.id === target.id)) return false;
+      update(baseline.binding);
+      this.baselines.set(target.id, { ...baseline, text: result.text, dirty: false });
+      app.store.updateText(target.id, result.text);
+      return true;
+    }
+    const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);
+    if (!doc?.binding) return false;
+    update(doc.binding);
+    doc.text = result.text;
+    doc.dirty = false;
+    return true;
   }
 
   /** Close a reader document and release its native capability. */

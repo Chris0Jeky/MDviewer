@@ -12,7 +12,7 @@ const boundary = vi.hoisted(() => ({
 vi.mock("../src/desktop/native", () => ({ native: {
   available: true, open: boundary.open, takePending: boundary.pending,
   saveDocument: boundary.saveDocument, saveDocumentAs: boundary.saveDocumentAs, releaseDocument: boundary.release,
-  onPending: vi.fn(async () => () => {}), onClose: vi.fn(async () => () => {}),
+  onPending: vi.fn(async () => () => {}), onFilesChanged: vi.fn(async () => () => {}), onClose: vi.fn(async () => () => {}),
 } }));
 vi.mock("../src/desktop/workspace", () => ({ startWorkspace: boundary.start }));
 vi.mock("../src/desktop/render", () => ({ renderReaderDocument: boundary.render }));

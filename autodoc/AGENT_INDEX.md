@@ -201,7 +201,10 @@ and `returnToReader`; admission and dirty checks through `admitToWorkspace`,
 document carries a `key` (from `session.ts` `nextDocumentKey`) and, for
 host-opened files with a token, a display-only `Binding {token, path, dir,
 encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
-closing releases it through `onRelease` (never during a mode transition). `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+closing releases it through `onRelease` (never during a mode transition). Live reload:
+`src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
+`byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
+`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
 is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
 keys (exact modifiers; a match is always claimed, even repeated or disabled),
 `listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`

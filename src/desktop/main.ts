@@ -6,7 +6,7 @@ import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import { native, type OpenBatch, type SaveResult } from "./native";
+import { native, type OpenBatch, type ReadResult, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
@@ -59,6 +59,28 @@ const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
 document.documentElement.dataset.appTheme = settings.screenTheme;
 
+// Live reload (S1c): a dirty document whose file changed on disk gets a
+// non-modal bar. Nothing is discarded without a click.
+const dismissedConflicts = new Set<string>();
+function conflictBar(after: HTMLElement): { bar: HTMLElement; text: HTMLElement } {
+  const bar = document.createElement("div");
+  bar.className = "reader-notice file-conflict";
+  bar.setAttribute("role", "alert");
+  bar.hidden = true;
+  const text = document.createElement("span");
+  const button = (label: string, action: string): HTMLButtonElement => {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.textContent = label;
+    control.dataset.conflictAction = action;
+    return control;
+  };
+  bar.append(text, " ", button("Reload", "reload"), " ", button("Keep mine", "keep"), " ", button("Save As", "save-as"));
+  after.after(bar);
+  return { bar, text };
+}
+const conflictBars = [conflictBar(notice), conflictBar(workspaceNotice)];
+
 function report(message: string): void {
   ++noticeGeneration;
   notice.textContent = message;
@@ -93,6 +115,14 @@ function syncDocuments(): void {
     button.disabled = workspaceBusy || !active;
   }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  const target = docs.saveTarget();
+  const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
+    && !dismissedConflicts.has(target.binding.token);
+  for (const { bar, text } of conflictBars) {
+    bar.hidden = !conflicted;
+    if (conflicted) text.textContent = `${target.name} changed on disk. Your edits are kept until you choose.`;
+    for (const control of bar.querySelectorAll("button")) control.disabled = changingMode || nativeSaveBusy;
+  }
 }
 
 function rememberReaderPosition(): void {
@@ -480,6 +510,63 @@ function saveCopy(): void {
   );
 }
 
+/** Handle one changed file reported by the host watcher. */
+async function followChange(token: string): Promise<void> {
+  const target = docs.byToken(token);
+  if (!target) return;
+  let result: ReadResult;
+  try { result = await native.readDocument(token, !target.dirty); }
+  catch { return; } // A failed re-read changes nothing; the next notification retries.
+  const current = docs.byToken(token);
+  if (!current || current.id !== target.id) return;
+  if (result.outcome === "unchanged") {
+    if (current.binding?.disk !== "synced") { docs.markDisk(token, "synced"); syncDocuments(); }
+    return;
+  }
+  if (result.outcome === "missing") {
+    docs.markDisk(token, "missing");
+    report(`${current.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+    syncDocuments();
+    return;
+  }
+  if (result.outcome !== "changed") return;
+  if (result.text === null || current.dirty) {
+    // Dirty: keep the edits and the old read, so Save conflicts instead of overwriting.
+    dismissedConflicts.delete(token);
+    docs.markDisk(token, "changed");
+    syncDocuments();
+    return;
+  }
+  if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  if (current.owner === "reader" && docs.reader.activeId === current.id) void render();
+  syncDocuments();
+}
+
+async function reloadFromDisk(): Promise<void> {
+  const target = docs.saveTarget();
+  if (!target?.binding || changingMode || nativeSaveBusy) return;
+  const result = await native.readDocument(target.binding.token, true).catch(() => null);
+  if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
+    if (target.owner === "reader") void render();
+    report(`Reloaded ${target.name} from disk.`);
+  } else if (result?.outcome === "missing") {
+    docs.markDisk(target.binding.token, "missing");
+    report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+  }
+  syncDocuments();
+}
+
+for (const { bar } of conflictBars) {
+  bar.addEventListener("click", event => {
+    const action = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-conflict-action]")?.dataset.conflictAction;
+    const token = docs.saveTarget()?.binding?.token;
+    if (!action || !token) return;
+    if (action === "reload") void reloadFromDisk();
+    if (action === "keep") { dismissedConflicts.add(token); syncDocuments(); }
+    if (action === "save-as") void saveDocument(true);
+  });
+}
+
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
 registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
@@ -549,6 +636,7 @@ if (native.available) {
   });
   void (async () => {
     await native.onPending(() => { void drain(); });
+    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
     await native.onClose(() => {
       if (changingMode || nativeSaveBusy || app?.exportState.busy) {
         report("Please wait for the current operation to finish before closing MDviewer.");

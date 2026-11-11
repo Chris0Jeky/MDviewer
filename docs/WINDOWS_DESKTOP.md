@@ -63,6 +63,14 @@ encoding (UTF-8 with or without BOM, UTF-16) and line endings, and works from re
 view and the workspace. A new document, or one opened by drag and drop, asks where to
 save it. **Save As** (`Ctrl+Shift+S`) saves to a new file and keeps editing it there.
 
+Open files follow their changes on disk. When an agent or another program writes
+a file you have open and you have not edited it, MDviewer shows the new text in
+place. If you have unsaved edits, a bar offers **Reload** (take the file's text),
+**Keep mine** (keep your edits; Save will then ask you to use Save As) or **Save
+As**. Nothing is discarded without a click. A moved or deleted file keeps its text
+open and says so. MDviewer watches only the folders of files you have open, using
+Windows change notifications, and stops when you close them.
+
 Save never overwrites outside changes: if another program changed, moved, replaced or
 locked the file since MDviewer last read or saved it, nothing is written, your text
 stays open, and Save As keeps it in another file. A file that mixes line ending styles

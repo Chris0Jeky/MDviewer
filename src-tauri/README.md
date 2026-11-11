@@ -84,6 +84,16 @@ Results are `{outcome: "saved" | "canceled" | "conflict" | "mixed-line-endings" 
 "failed", ...}` with stable codes and no paths. One dialog or write runs at a time;
 each save first reconciles interrupted saves in its folder.
 
+Live reload: `watch.rs` follows the parent folder of each bound file through OS
+change notifications (`notify` 8.2.0, ReadDirectoryChangesW; no polling). It starts
+with the first bound document, watches each folder once and non-recursively, and
+unwatches a folder with its last file. Bursts are coalesced (150 ms quiet) into one
+`mdviewer:files-changed` event whose payload is capability tokens only.
+`read_document(token, adopt)` then reports `unchanged` (the bytes this binding last
+read or saved, so this app's own save never echoes), `missing`, or `changed`; only
+`adopt: true` returns the text and moves the binding to the new bytes, so a dirty
+document's Save still conflicts.
+
 `save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a

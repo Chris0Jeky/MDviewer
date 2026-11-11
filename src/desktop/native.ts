@@ -26,6 +26,16 @@ export type SaveResult =
   | { outcome: "mixed-line-endings" }
   | { outcome: "failed"; code: string };
 
+/** A live-reload re-read (src-tauri/src/commands/reload.rs). */
+export type ReadResult =
+  | { outcome: "unchanged" }
+  | {
+    outcome: "changed"; text: string | null; generation: number;
+    encoding: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be"; eol: "lf" | "crlf" | "cr" | "mixed" | "none";
+  }
+  | { outcome: "missing" }
+  | { outcome: "failed"; code: string };
+
 const SAVE_LIMIT = 25_000_000;
 // An unpaired surrogate cannot be encoded faithfully; never write U+FFFD in its place.
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
@@ -58,6 +68,11 @@ export const native = {
       "x-mdviewer-token": token ?? "", "x-mdviewer-filename": encodeURIComponent(name), "x-mdviewer-accept-lf": acceptLf ? "1" : "0",
     } }),
   releaseDocument: (token: string): Promise<void> => invoke("release_document", { token }),
+  /** Re-read a bound file after a change notification; `adopt` moves the binding to the new bytes. */
+  readDocument: (token: string, adopt: boolean): Promise<ReadResult> => invoke("read_document", { token, adopt }),
+  /** Changed files arrive as capability tokens only, never paths or contents. */
+  onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
+    listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),
   onPending: (callback: () => void): Promise<() => void> => listen("mdviewer:files-pending", callback),
   onClose: (canClose: () => boolean): Promise<() => void> => getCurrentWindow().onCloseRequested(async event => {
     // Prevent before awaiting: the host otherwise destroys the window immediately.
