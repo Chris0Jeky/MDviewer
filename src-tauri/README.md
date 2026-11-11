@@ -164,12 +164,15 @@ on-close disposition explicitly cancels that creation flag before renaming.
 The destination can be briefly absent between renames: this is **not an atomic
 namespace exchange**. A process claiming that name wins; its file is never
 overwritten. `create_new` uses the same no-clobber commit without an original.
-`recover_journal` rolls the verified aside back when the name is empty, otherwise
-preserves the existing destination and cleans only verified transaction artifacts.
-Repeated recovery is harmless. Modified artifacts, malformed journals or locked
-files are refused and retained for resolution. An error after commit can leave
-the complete new file in place; callers must reconcile rather than assume failure
-means nothing changed. New files inherit directory defaults; timestamps, custom
+`recover_journal` rolls the verified aside back when the name is empty and the save
+never committed. If an outside file took the name, or the committed file was later
+moved away, the original's bytes are kept as a visible `name (MDviewer recovered
+<id>).ext` sibling rather than deleted. Otherwise it preserves the existing
+destination and cleans only verified transaction artifacts. Repeated recovery is
+harmless, and one stuck journal does not stop the rest of the folder. Modified
+artifacts, malformed journals or locked files are refused and retained. Once the
+new file is in place a save returns success even if cleanup failed; the leftover
+aside or journal is reconciled by the next recovery. New files inherit directory defaults; timestamps, custom
 ACLs, alternate streams and other metadata are not preserved by this byte API.
 
 The release tests re-invoke their own executable as a separate OS process. Four
