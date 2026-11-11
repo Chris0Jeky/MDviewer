@@ -18,6 +18,7 @@ import type { Settings } from "../app/settings";
 import { DOC_FONT_STACKS, MARGIN_MM } from "../app/settings";
 import { CLASSES } from "../app/dom";
 import printBase from "../styles/print.css?raw";
+import { measurePageArea } from "./measure";
 
 /** Map the paper-size setting to the CSS `@page { size }` keyword. */
 function pageSizeKeyword(paperSize: Settings["paperSize"]): string {
@@ -157,9 +158,19 @@ export function buildStylesheet(settings: Settings): string {
       `}\n`
     : "";
 
+  // Media cannot split, so an image or diagram taller than the page area could never be
+  // placed whole (Tier 4 for unsplittable media). Cap it to the page height, leaving room
+  // for a caption and the figure margins; both are `height: auto`, so the aspect ratio holds.
+  const mediaCapRule =
+    `.${CLASSES.doc} img, .${CLASSES.doc} figure.mermaid-figure svg {\n` +
+    `  max-height: calc(${measurePageArea(settings).heightPx.toFixed(1)}px - 4em);\n` +
+    `  object-fit: contain;\n` +
+    `}\n`;
+
   return (
     `${printBase}\n` +
     pageBlock +
+    mediaCapRule +
     firstPageBlock +
     stringSet +
     footnoteFloatRule +

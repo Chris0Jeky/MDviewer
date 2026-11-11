@@ -56,6 +56,22 @@ blockquote {
 }
 
 /* -----------------------------------------------------------------------------
+ * Tier 4 — completeness outranks keep-whole. A code block, table, quote or callout
+ * measured taller than one page (even after Tier 3 shrink) is marked
+ * [data-mdv-splittable] before layout (shrinkToFit.ts markOverTallSplittable), and
+ * the pagination recovery path marks a block that stalled layout. Both the browser
+ * fragmenter and Paged.js read this computed value, so they agree it may break.
+ * Rows, lines and nested short atomics keep their own keep-whole rules, so the split
+ * lands on a line/row/paragraph boundary. Must stay after the avoid rule above.
+ * -------------------------------------------------------------------------- */
+[data-mdv-splittable],
+[data-mdv-splittable] > pre {
+  -webkit-column-break-inside: auto;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+/* -----------------------------------------------------------------------------
  * Code blocks. Allow at most a clean split when unavoidable: keep at least 3
  * lines together at the top/bottom of a page, and wrap long lines so nothing is
  * clipped off the right edge of the sheet.

@@ -1,44 +1,60 @@
 /**
- * Tier-3 of the no-slice strategy: shrink-to-fit.
+ * Tiers 3 and 4 of the no-slice strategy, applied before layout.
  *
- * Runs in the Paged.js `afterParsed` hook (pre-layout, on the parsed source clone)
- * before the chunker measures heights. For each self-contained atomic block (`pre`,
- * `figure.code-figure`, `figure.mermaid-figure`) we measure its natural height with an
- * off-DOM probe. If it overflows one page but only modestly (≤ SHRINK_LIMIT), we apply
- * a `transform: scale(...)` so it lands on a single page and reserve the scaled height
- * via an explicit `height`, so the chunker accounts for the shrunk footprint. Anything
- * taller than the limit is left to a clean forced split (Tier 4). Tables are never
- * shrunk here — they reflow and split gracefully (Tier 2).
+ * Runs in the Paged.js `afterParsed` hook (pre-layout, on the parsed source) before the
+ * chunker measures heights:
+ *
+ *   recordSourceHeights   measure every keep-whole block IN CONTEXT (same `.doc` styles,
+ *                         same ancestor insets, the printable width) and record it.
+ *   shrinkToFit (Tier 3)  a code block or diagram that overflows one page only modestly
+ *                         (≤ SHRINK_LIMIT) is scaled onto a single page.
+ *   markOverTallSplittable (Tier 4)  a splittable family (code, table, quote, callout) that
+ *                         still cannot fit one page is marked `data-mdv-splittable`, which
+ *                         print.css turns into `break-inside: auto`, so the browser's
+ *                         fragmenter and Paged.js agree it may break at line/row boundaries.
+ *
+ * A keep-whole block taller than a page is physically un-keepable: leaving it
+ * `break-inside: avoid` lets Chromium push it (and its keep-with-next heading) into a
+ * later column, which wastes the page and, on Paged.js 0.4.3, can feed its loop guard.
+ * Media that cannot split (images, diagrams) is capped to the page height by cssBuilder.
  */
 
 import type { PageArea } from "./measure";
 import { SHRINK_LIMIT } from "./measure";
 import { ATTRS } from "../app/dom";
 
+/** Marks a keep-whole block that may break across pages (print.css relaxes break-inside). */
+export const SPLITTABLE_ATTR = "data-mdv-splittable";
+
+/** Outermost keep-whole blocks, as stamped by buildSource.stampAtomicBlocks. */
+const ATOMIC_SELECTOR = "[data-mdv-atomic-id]";
+
 /** Selector for blocks eligible for shrink-to-fit (never tables — they reflow). */
 const SHRINK_SELECTOR = "pre, figure.code-figure, figure.mermaid-figure";
-const SPLITTABLE_SELECTOR = "pre[data-mdv-atomic-id], table[data-mdv-atomic-id]";
+
+/** Keep-whole families that can split cleanly at line, row or paragraph boundaries. */
+export const SPLITTABLE_SELECTOR = "pre, .shiki, figure.code-figure, table, blockquote, .callout";
+
+/** Rounding slack: a block this close to the page height still fits it. */
+const FIT_TOLERANCE_PX = 2;
 
 /**
- * Preserve trustworthy pre-pagination heights for the only block families allowed to
- * split when genuinely taller than a page. Paged.js copies the attribute to every
- * fragment, so E2E can distinguish a real over-tall split from a duplicated short block.
+ * Record each outermost keep-whole block's natural height as `data-mdv-source-height`.
+ * Paged.js copies the attribute to every fragment, so E2E can tell a genuine over-tall
+ * split from a duplicated short block, and the tiers below read it instead of re-measuring.
  */
-export function recordSplittableSourceHeights(content: ParentNode, area: PageArea): void {
-  for (const el of content.querySelectorAll<HTMLElement>(SPLITTABLE_SELECTOR)) {
-    const naturalHeight = measureNaturalHeight(el, area.widthPx);
-    el.setAttribute(ATTRS.atomicSourceHeight, naturalHeight.toFixed(3));
-  }
+export function recordSourceHeights(content: ParentNode, area: PageArea): void {
+  const blocks = Array.from(content.querySelectorAll<HTMLElement>(ATOMIC_SELECTOR));
+  const heights = measureInContext(blocks, area);
+  blocks.forEach((el, index) => {
+    el.setAttribute(ATTRS.atomicSourceHeight, heights[index]!.toFixed(3));
+  });
 }
 
 export function shrinkToFit(content: ParentNode, area: PageArea): void {
   const candidates = content.querySelectorAll<HTMLElement>(SHRINK_SELECTOR);
   for (const el of candidates) {
-    const recordedHeight = Number(el.getAttribute(ATTRS.atomicSourceHeight));
-    const naturalHeight =
-      Number.isFinite(recordedHeight) && recordedHeight > 0
-        ? recordedHeight
-        : measureNaturalHeight(el, area.widthPx);
+    const naturalHeight = recordedHeight(el) ?? measureInContext([el], area)[0]!;
 
     // Only shrink blocks that overflow one page but stay within the ceiling.
     if (naturalHeight > area.heightPx && naturalHeight <= area.heightPx * SHRINK_LIMIT) {
@@ -55,22 +71,56 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void {
   }
 }
 
-/** Measure an element's natural height at its intended printable width. */
-function measureNaturalHeight(el: HTMLElement, fallbackWidthPx: number): number {
-  const probe = el.cloneNode(true) as HTMLElement;
-  Object.assign(probe.style, {
+/** Tier 4: mark splittable families that cannot fit one page even after Tier 3. */
+export function markOverTallSplittable(content: ParentNode, area: PageArea): void {
+  for (const el of content.querySelectorAll<HTMLElement>(ATOMIC_SELECTOR)) {
+    if (el.hasAttribute(ATTRS.shrunk) || !el.matches(SPLITTABLE_SELECTOR)) continue;
+    const height = recordedHeight(el);
+    if (height !== null && height > area.heightPx + FIT_TOLERANCE_PX) {
+      el.setAttribute(SPLITTABLE_ATTR, "tier4");
+    }
+  }
+}
+
+function recordedHeight(el: HTMLElement): number | null {
+  const value = Number(el.getAttribute(ATTRS.atomicSourceHeight));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Measure blocks with the styles and width they get on the page. Each probe is a deep
+ * clone wrapped in shallow clones of its real ancestors (up to the `.doc` root that
+ * carries the typography tokens), inside a hidden host at the printable width. All
+ * probes share one host, so the whole batch costs a single layout.
+ */
+function measureInContext(blocks: HTMLElement[], area: PageArea): number[] {
+  if (blocks.length === 0) return [];
+  const host = document.createElement("div");
+  host.setAttribute("aria-hidden", "true");
+  Object.assign(host.style, {
     position: "absolute",
     visibility: "hidden",
-    left: "-9999px",
+    left: "-100000px",
     top: "0",
-    width: `${el.clientWidth || fallbackWidthPx}px`,
-    transform: "none",
-    height: "auto",
+    width: `${area.widthPx}px`,
   });
-  document.body.appendChild(probe);
-  const naturalHeight = probe.getBoundingClientRect().height;
-  probe.remove();
-  return naturalHeight;
+  const probes = blocks.map((el) => {
+    const probe = el.cloneNode(true) as HTMLElement;
+    let wrapped: HTMLElement = probe;
+    for (let ancestor = el.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      const shell = ancestor.cloneNode(false) as HTMLElement;
+      shell.appendChild(wrapped);
+      wrapped = shell;
+    }
+    host.appendChild(wrapped);
+    return probe;
+  });
+  document.body.appendChild(host);
+  try {
+    return probes.map((probe) => probe.getBoundingClientRect().height);
+  } finally {
+    host.remove();
+  }
 }
 
 /** `data-shrunk` -> `shrunk` (dataset key form), derived from the canonical attr name. */
