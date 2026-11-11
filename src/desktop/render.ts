@@ -20,6 +20,8 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
   const tokens = md.parse(body, env);
   const lines = sourceLines(text);
   stampSourceMap(tokens, lines);
+  // Before rendering: Shiki's notation transformers rewrite fence content in place.
+  const source = { lines, fences: collectFences(tokens) };
   const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
@@ -36,7 +38,7 @@ export async function renderReaderDocument(text: string, settings: Settings, fil
   document.innerHTML = result.html;
   if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
   const diagrams = await renderAllMermaid(document, "default");
-  decorateCopy(document, { lines, fences: collectFences(tokens) }, fileName);
+  decorateCopy(document, source, fileName);
   const warnings = result.warnings.map(warning => warning.message);
   if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);
   if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");
