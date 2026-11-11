@@ -40,8 +40,9 @@ export async function renderReaderDocument(
   const highlight = languages.length > 0 || needsCodeTransformers(md, tokens, settings.showLineNumbers);
   if (highlight) {
     const lineNumbers = settings.showLineNumbers ? ` ${CLASSES.withLineNumbers}` : "";
-    md.options.highlight = code =>
-      `<pre class="shiki ${PENDING}${lineNumbers}"><code>${md.utils.escapeHtml(code.replace(/\n$/, ""))}</code></pre>`;
+    // Shiki's own line structure (inline-block .line spans), so the swap keeps every height.
+    md.options.highlight = code => `<pre class="shiki ${PENDING}${lineNumbers}"><code>${code.replace(/\n$/, "").split("\n")
+      .map(line => `<span class="line">${md.utils.escapeHtml(line)}</span>`).join("\n")}</code></pre>`;
   }
   installSourceMap(md);
   const result = renderMarkdownTokens(md, tokens, env);
