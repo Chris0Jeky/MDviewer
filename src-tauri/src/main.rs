@@ -4,8 +4,6 @@ mod commands;
 mod export_policy;
 mod file_policy;
 mod registry;
-// S1a: not wired into IPC until Save (S1b) consumes it.
-#[allow(dead_code)]
 mod replace;
 
 use std::path::Path;
@@ -25,7 +23,8 @@ const FILES_PENDING_EVENT: &str = "mdviewer:files-pending";
 struct DesktopState {
     pending: Mutex<PendingFiles>,
     picker_open: AtomicBool,
-    registry: Mutex<Registry>,
+    // Shared with blocking save tasks; never locked across a dialog or write.
+    registry: std::sync::Arc<Mutex<Registry>>,
 }
 
 fn main() {
@@ -70,7 +69,10 @@ fn main() {
             commands::open::open_files,
             commands::open::take_pending_files,
             commands::external::open_external,
-            commands::export::save_export
+            commands::export::save_export,
+            commands::save::save_document,
+            commands::save::save_document_as,
+            commands::save::release_document
         ])
         .setup(|app| {
             let config = app

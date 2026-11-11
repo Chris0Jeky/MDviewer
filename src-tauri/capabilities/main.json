@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Only the bundled reader can receive selected documents and open explicitly clicked web links.",
+  "description": "Only the bundled reader can receive selected documents, save them in place through their capability tokens, and open explicitly clicked web links.",
   "windows": [
     "main"
   ],
@@ -12,6 +12,9 @@
     "allow-open-files",
     "allow-take-pending-files",
     "allow-open-external",
-    "allow-save-export"
+    "allow-save-export",
+    "allow-save-document",
+    "allow-save-document-as",
+    "allow-release-document"
   ]
 }
