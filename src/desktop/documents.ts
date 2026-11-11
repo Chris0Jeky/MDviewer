@@ -102,7 +102,7 @@ export class DesktopDocuments {
     if (target.owner === "workspace") {
       const baseline = this.baselines.get(target.id);
       const doc = app?.store.openDocs.find(open => open.id === target.id);
-      if (!app || !doc || !baseline) return "stale";
+      if (!app || !doc || !baseline) return this.discard(result.token);
       this.baselines.set(doc.id, {
         name: result.name, text: captured, dirty: false, ...(baseline.key ? { key: baseline.key } : {}), ...(binding ? { binding } : {}),
       });
@@ -110,11 +110,17 @@ export class DesktopDocuments {
       return doc.text === captured ? "saved" : "saved-newer-edits";
     }
     const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);
-    if (!doc) return "stale";
+    if (!doc) return this.discard(result.token);
     doc.name = result.name;
     doc.dirty = doc.text !== captured;
     if (binding) doc.binding = binding; else delete doc.binding;
     return doc.dirty ? "saved-newer-edits" : "saved";
+  }
+
+  /** A completion nobody can adopt: release any capability the host just created. */
+  private discard(token: string | null): SaveCompletion {
+    if (token) this.onRelease(token);
+    return "stale";
   }
 
   /** Close a reader document and release its native capability. */
@@ -163,11 +169,16 @@ export class DesktopDocuments {
   addBatch(documents: OpenBatch["documents"], owns: boolean): string[] {
     const incoming = documents.map(doc => ({ name: doc.name, text: doc.text, binding: bindingOf(doc) }));
     const app = this.workspace;
-    if (!app) return this.reader.append(incoming, owns);
-    const bounded = this.boundedWorkspace(app);
-    const count = bounded.documents.length;
-    const errors = bounded.append(incoming);
-    const accepted = bounded.documents.slice(count);
+    const target = app ? this.boundedWorkspace(app) : this.reader;
+    const count = target.documents.length;
+    const errors = target.append(incoming, owns);
+    const accepted = target.documents.slice(count);
+    // The host registered every opened file; release the ones admission refused.
+    const admitted = new Set(accepted.map(doc => doc.binding?.token));
+    for (const doc of incoming) {
+      if (doc.binding && !admitted.has(doc.binding.token)) this.onRelease(doc.binding.token);
+    }
+    if (!app) return errors;
     const added = app.store.addBatch(accepted, owns || app.store.activeId === null);
     for (const [index, doc] of added.entries()) {
       const { key, binding } = accepted[index]!;

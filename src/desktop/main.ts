@@ -83,7 +83,7 @@ function syncDocuments(): void {
   select.disabled = !open.length || changingMode;
   readerNavigation.sync();
   closeButton.disabled = !active;
-  workspaceButton.disabled = !active || changingMode;
+  workspaceButton.disabled = !active || changingMode || nativeSaveBusy;
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
   returnButton.disabled = workspaceBusy;
   for (const button of newButtons) button.disabled = workspaceBusy;
@@ -232,7 +232,8 @@ async function createDocument(): Promise<void> {
 }
 
 async function enterWorkspace(revealEditor = false): Promise<void> {
-  if (app || changingMode || !docs.reader.active) return;
+  // A pending save must finish before its document changes owner (FILE_LIFECYCLE).
+  if (app || changingMode || nativeSaveBusy || !docs.reader.active) return;
   rememberReaderPosition();
   changingMode = true; ++generation; ++renderGeneration;
   // Layout needs a visible workspace, but its controls must not accept input
@@ -338,6 +339,7 @@ function finishMode(): void {
 function closeDocument(): void {
   const doc = docs.reader.active;
   if (!doc || changingMode) return;
+  if (nativeSaveBusy) { report("Wait for the save to finish before closing this document."); return; }
   if (doc.dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) return;
   ++generation;
   docs.closeReaderDocument(doc.id);
@@ -360,6 +362,10 @@ appRoot.addEventListener("click", event => {
   const button = (event.target as Element | null)?.closest("button.doc-close");
   const doc = app?.store.active;
   if (!button || !doc) return;
+  if (nativeSaveBusy) {
+    report("Wait for the save to finish before closing this document.");
+    event.preventDefault(); event.stopImmediatePropagation(); return;
+  }
   if (docs.workspaceDirty(doc) && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
     event.preventDefault(); event.stopImmediatePropagation();
   }
@@ -420,7 +426,8 @@ const FAILURES: Record<string, string> = {
 
 /** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
 async function saveDocument(as: boolean): Promise<void> {
-  if (!native.available || changingMode || nativeSaveBusy || app?.exportState.busy) return;
+  if (!native.available || changingMode || nativeSaveBusy) return;
+  if (app?.exportState.busy) { report("Wait for the PDF export to finish, then save."); return; }
   const target: SaveTarget | null = docs.saveTarget();
   if (!target) return;
   if (!as && !target.binding) return saveDocument(true);

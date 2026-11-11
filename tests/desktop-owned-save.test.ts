@@ -166,6 +166,50 @@ describe("desktop owned Save", () => {
     expect(boundary.saveDocumentAs, "the restored document cannot revive the revoked token").toHaveBeenCalledWith(null, "notes.md", "# Edited", false);
   });
 
+  it("releases the capability of every opened file the session refuses", async () => {
+    const documents = Array.from({ length: 33 }, (_, index) => ({
+      ...bound(`n${index}.md`, `# ${index}`).documents[0]!, token: index.toString(16).padStart(32, "0"),
+    }));
+    boundary.open.mockResolvedValueOnce({ documents, errors: [], canceled: false });
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("at most 32 documents"));
+    expect(boundary.release.mock.calls).toEqual([[(32).toString(16).padStart(32, "0")]]);
+  });
+
+  it("fences close and handoff while a save is pending", async () => {
+    boundary.open.mockResolvedValueOnce(bound("notes.md", "# One"));
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# One"));
+    let finish!: (result: SaveResult) => void;
+    boundary.saveDocumentAs.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    press({ shiftKey: true, key: "S" });
+    expect(boundary.saveDocumentAs).toHaveBeenCalledOnce();
+    expect((document.getElementById("reader-workspace") as HTMLButtonElement).disabled).toBe(true);
+    document.getElementById("reader-close")!.click();
+    expect(document.getElementById("reader-notice")!.textContent).toContain("Wait for the save to finish");
+    expect(option()).toBe("notes.md");
+    finish(saved("copy.md", 0, "d".repeat(32)));
+    await vi.waitFor(() => expect(option()).toBe("copy.md"));
+    expect(boundary.release).not.toHaveBeenCalled();
+  });
+
+  it("releases a Save As capability whose document disappeared before completion", async () => {
+    const app = await workspaceWith({ documents: [{ name: "Untitled.md", text: "draft", bytes: 5 }], errors: [], canceled: false });
+    let finish!: (result: SaveResult) => void;
+    boundary.saveDocumentAs.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    press({});
+    app.store.remove(app.store.active!.id);
+    finish(saved("plan.md", 0, "e".repeat(32)));
+    await vi.waitFor(() => expect(boundary.release).toHaveBeenCalledWith("e".repeat(32)));
+  });
+
+  it("refuses to save text with an unpaired surrogate instead of writing a replacement character", async () => {
+    const { native } = await vi.importActual<typeof import("../src/desktop/native")>("../src/desktop/native");
+    const lone = String.fromCharCode(0xd800);
+    // Refused before any IPC call; the caller reports it and keeps the text open.
+    expect(() => native.saveDocument(TOKEN, 0, `bad ${lone} text`, false)).toThrow(/invalid Unicode/);
+  });
+
   it("saves from reading view after edits made in the workspace", async () => {
     const app = await workspaceWith(bound("notes.md", "# One"));
     app.store.updateText(app.store.active!.id, "# Edited in the workspace");

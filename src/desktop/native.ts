@@ -27,7 +27,10 @@ export type SaveResult =
   | { outcome: "failed"; code: string };
 
 const SAVE_LIMIT = 25_000_000;
+// An unpaired surrogate cannot be encoded faithfully; never write U+FFFD in its place.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 function saveBody(text: string): Uint8Array {
+  if (LONE_SURROGATE.test(text)) throw new Error("This document contains an invalid Unicode character and cannot be saved exactly.");
   const bytes = new TextEncoder().encode(text);
   if (bytes.length > SAVE_LIMIT) throw new Error("This document exceeds the 25 MB save limit.");
   return bytes;
