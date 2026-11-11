@@ -166,6 +166,19 @@ describe("desktop owned Save", () => {
     expect(boundary.saveDocumentAs, "the restored document cannot revive the revoked token").toHaveBeenCalledWith(null, "notes.md", "# Edited", false);
   });
 
+  it("saves from reading view after edits made in the workspace", async () => {
+    const app = await workspaceWith(bound("notes.md", "# One"));
+    app.store.updateText(app.store.active!.id, "# Edited in the workspace");
+    document.getElementById("reader-return")!.click();
+    await vi.waitFor(() => expect(app.destroy).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(option()).toBe("• notes.md"));
+    boundary.saveDocument.mockResolvedValueOnce(saved("notes.md", 1));
+    press({});
+    expect(boundary.saveDocument).toHaveBeenCalledWith(TOKEN, 0, "# Edited in the workspace", false);
+    await vi.waitFor(() => expect(option()).toBe("notes.md"));
+    expect(document.getElementById("reader-notice")!.textContent).toBe("Saved notes.md.");
+  });
+
   it("moving between reading and the workspace never releases a capability", async () => {
     const app = await workspaceWith(bound("notes.md", "# One"));
     document.getElementById("reader-return")!.click();
