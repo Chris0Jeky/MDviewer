@@ -65,7 +65,9 @@ impl Store {
         upsert(&mut self.recent, path, at, MAX_RECENT);
     }
     pub fn pin_file(&mut self, path: &Path, at: u64) -> bool {
-        if self.pinned_files.len() >= MAX_PINS && !self.pinned_files.iter().any(|e| same(&e.path, path)) {
+        if self.pinned_files.len() >= MAX_PINS
+            && !self.pinned_files.iter().any(|e| same(&e.path, path))
+        {
             return false;
         }
         upsert(&mut self.pinned_files, path, at, MAX_PINS);
@@ -164,7 +166,13 @@ pub fn is_agent_file(relative: &Path) -> bool {
         .unwrap_or_default();
     matches!(
         name.as_str(),
-        "claude.md" | "agents.md" | "skill.md" | "memory.md" | "human_todo.md" | "action_items.md" | "orchestrator.md"
+        "claude.md"
+            | "agents.md"
+            | "skill.md"
+            | "memory.md"
+            | "human_todo.md"
+            | "action_items.md"
+            | "orchestrator.md"
     ) || (parent == "agents" && grandparent == ".claude")
         || parent == "memory"
 }
@@ -308,10 +316,15 @@ mod tests {
         save(&file, &store).unwrap();
         let text = String::from_utf8(fs::read(&file).unwrap()).unwrap();
         let value: serde_json::Value = serde_json::from_str(&text).unwrap();
-        let keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
-        assert_eq!(keys, ["pinned_files", "projects", "recent", "seen", "version"]);
+        let mut keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            ["pinned_files", "projects", "recent", "seen", "version"]
+        );
         for entry in value["recent"].as_array().unwrap() {
-            let fields: Vec<_> = entry.as_object().unwrap().keys().cloned().collect();
+            let mut fields: Vec<_> = entry.as_object().unwrap().keys().cloned().collect();
+            fields.sort();
             assert_eq!(fields, ["at", "path"], "nothing but a path and a timestamp");
         }
         assert_eq!(load(&file), store.clone().sanitize());
@@ -331,9 +344,16 @@ mod tests {
             .filter_map(Result::ok)
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .collect();
-        assert!(aside.iter().any(|n| n.starts_with("library.json.corrupt-")), "{aside:?}");
+        assert!(
+            aside.iter().any(|n| n.starts_with("library.json.corrupt-")),
+            "{aside:?}"
+        );
         // Relative or future-version entries never load.
-        fs::write(&file, br#"{"version":1,"recent":[{"path":"relative.md","at":1}]}"#).unwrap();
+        fs::write(
+            &file,
+            br#"{"version":1,"recent":[{"path":"relative.md","at":1}]}"#,
+        )
+        .unwrap();
         assert!(load(&file).recent.is_empty());
         fs::write(&file, br#"{"version":99}"#).unwrap();
         assert_eq!(load(&file), Store::default().sanitize());
@@ -412,7 +432,11 @@ mod tests {
             .unwrap();
         assert!(status.status.success(), "{status:?}");
         fs::write(dir.path().join("mine.md"), b"x").unwrap();
-        let files: Vec<_> = scan(dir.path()).files.into_iter().map(|f| f.relative).collect();
+        let files: Vec<_> = scan(dir.path())
+            .files
+            .into_iter()
+            .map(|f| f.relative)
+            .collect();
         assert_eq!(files, ["mine.md"]);
         fs::remove_dir(&link).unwrap(); // Removes the junction only.
     }
