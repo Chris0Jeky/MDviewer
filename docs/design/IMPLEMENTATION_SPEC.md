@@ -462,6 +462,12 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
+`src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
+batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:
+`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel UI is
+the shell's (S4 panel half).
+
 Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
 `main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
 replaces its text and baseline (the reader re-renders; S2c's block patching and change

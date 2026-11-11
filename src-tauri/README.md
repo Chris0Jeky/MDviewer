@@ -94,6 +94,19 @@ read or saved, so this app's own save never echoes), `missing`, or `changed`; on
 `adopt: true` returns the text and moves the binding to the new bytes, so a dirty
 document's Save still conflicts.
 
+Library (`library.rs`, `commands/library.rs`): `library.json` in the app's local data folder
+holds recent files (500), pinned files and project folders (64 each) and last-seen stamps —
+absolute paths and Unix-millisecond times only, written atomically. It is loaded on first
+library use; a corrupt file is renamed `library.json.corrupt-<ms>` and replaced by an empty
+library. Opens and Save As record recents. Commands take opaque per-process ids (`library_list`,
+`library_scan`, `library_open`, `library_pin` by token or id, `library_unpin`, `library_forget`,
+`library_mark_seen`, `library_add_project` via the native folder picker, `library_clear`); the
+webview never supplies a path. `library_scan` walks a pinned project for `.md`/`.markdown` files
+(depth 8, 5,000 files), skips `node_modules`, `.git`, `target`, `dist`, `build` and `.venv`,
+includes dot-folders such as `.claude`, never follows junctions or symlinks, and marks agent
+files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
+`HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
+
 `save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a

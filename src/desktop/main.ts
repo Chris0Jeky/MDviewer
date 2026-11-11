@@ -10,6 +10,7 @@ import { native, type OpenBatch, type ReadResult, type SaveResult } from "./nati
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
+import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
@@ -242,6 +243,15 @@ async function open(): Promise<void> {
   report("");
   try { commitBatch(await native.open(), request); }
   catch (error) { report(`Could not open files: ${errorText(error)}`); }
+}
+
+/** Open a library entry exactly like a picked file (same admission and notices). */
+async function openFromLibrary(id: string): Promise<void> {
+  if (changingMode || !native.available) return;
+  const request = ++generation;
+  report("");
+  try { commitBatch(await native.library.open(id), request); }
+  catch (error) { report(`Could not open this file: ${errorText(error)}`); }
 }
 
 async function createDocument(): Promise<void> {
@@ -615,6 +625,26 @@ window.addEventListener("beforeunload", event => {
   event.preventDefault(); event.returnValue = "";
 });
 if (native.available) {
+  setLibraryOpener(openFromLibrary);
+  registerCommand({ id: "library.pinDocument", title: "Pin this document to the library",
+    enabled: () => !!docs.saveTarget()?.binding,
+    run: async () => {
+      const target = docs.saveTarget();
+      if (!target?.binding) return;
+      report(await native.library.pinDocument(target.binding.token)
+        ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+    } });
+  registerCommand({ id: "library.addProject", title: "Pin a project folder…", enabled: () => !changingMode && !nativeSaveBusy,
+    run: async () => {
+      try { if (await native.library.addProject()) report("Project pinned to the library."); }
+      catch (error) { report(errorText(error)); }
+    } });
+  registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
+    run: async () => {
+      if (!window.confirm("Clear the library? Recent files, pinned files and pinned projects are forgotten. No file is deleted.")) return;
+      await native.library.clear();
+      report("Library cleared.");
+    } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");

@@ -65,7 +65,8 @@ The full rationale is in [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md).
 
 Your documents stay private. Markdown text, file names, titles, headings, links or URLs that appear
 in a document, and PDF or print contents **never leave your browser** — not to Pulseboard, not to
-anyone. This is enforced in code: every usage call goes through one module
+anyone. The Windows app sends nothing at all; on your own disk it keeps only `library.json` (recent
+and pinned file and folder paths with timestamps, never content), which **Clear library** empties. This is enforced in code: every usage call goes through one module
 ([`src/app/pulse.ts`](src/app/pulse.ts)) whose functions accept only fixed choices, and
 [`tests/pulse.test.ts`](tests/pulse.test.ts) opens documents full of marker text and fails if any of
 it reaches a usage call.

@@ -63,6 +63,12 @@ encoding (UTF-8 with or without BOM, UTF-16) and line endings, and works from re
 view and the workspace. A new document, or one opened by drag and drop, asks where to
 save it. **Save As** (`Ctrl+Shift+S`) saves to a new file and keeps editing it there.
 
+The library remembers recent files and lets you pin files and project folders. A pinned
+project lists its Markdown files newest first, groups agent files (CLAUDE.md, AGENTS.md,
+SKILL.md, agent definitions, memory files, ACTION_ITEMS.md and similar) and marks files that
+changed since you last opened them. It stores only paths and times in `library.json` in the
+app's local data folder, never file contents; **Clear library** forgets everything.
+
 Open files follow their changes on disk. When an agent or another program writes
 a file you have open and you have not edited it, MDviewer shows the new text in
 place. If you have unsaved edits, a bar offers **Reload** (take the file's text),

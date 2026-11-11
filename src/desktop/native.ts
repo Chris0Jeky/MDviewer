@@ -26,6 +26,18 @@ export type SaveResult =
   | { outcome: "mixed-line-endings" }
   | { outcome: "failed"; code: string };
 
+/** A library entry (src-tauri/src/commands/library.rs); `path`/`dir` are display-only. */
+export interface LibraryEntry { id: string; name: string; dir: string; path: string; at: number }
+export interface LibraryView { recent: LibraryEntry[]; pinned: LibraryEntry[]; projects: LibraryEntry[] }
+export interface ProjectFile {
+  id: string; name: string; relative: string; path: string;
+  /** Last modified, Unix ms. */ modified: number;
+  /** CLAUDE.md, AGENTS.md, SKILL.md, .claude/agents/*.md, MEMORY.md, memory/*.md, HUMAN_TODO.md, ACTION_ITEMS.md, ORCHESTRATOR.md. */
+  agent: boolean;
+  /** Changed since it was last opened from the library or marked seen. */ unseen: boolean;
+}
+export interface ProjectScan { files: ProjectFile[]; truncated: boolean }
+
 /** A live-reload re-read (src-tauri/src/commands/reload.rs). */
 export type ReadResult =
   | { outcome: "unchanged" }
@@ -71,6 +83,20 @@ export const native = {
   /** Re-read a bound file after a change notification; `adopt` moves the binding to the new bytes. */
   readDocument: (token: string, adopt: boolean, generation: number): Promise<ReadResult> =>
     invoke("read_document", { token, adopt, generation }),
+  /** The library (S4). Entries are opaque ids; the webview never sends a path. */
+  library: {
+    list: (): Promise<LibraryView> => invoke("library_list"),
+    scan: (id: string): Promise<ProjectScan> => invoke("library_scan", { id }),
+    open: (id: string): Promise<OpenBatch> => invoke("library_open", { id }),
+    pinDocument: (token: string): Promise<boolean> => invoke("library_pin", { token, id: null }),
+    pinEntry: (id: string): Promise<boolean> => invoke("library_pin", { token: null, id }),
+    unpin: (id: string): Promise<void> => invoke("library_unpin", { id }),
+    forget: (id: string): Promise<void> => invoke("library_forget", { id }),
+    markSeen: (id: string): Promise<void> => invoke("library_mark_seen", { id }),
+    /** Opens the native folder picker; resolves to the new project's id or null on cancel. */
+    addProject: (): Promise<string | null> => invoke("library_add_project"),
+    clear: (): Promise<void> => invoke("library_clear"),
+  },
   /** Changed files arrive as capability tokens only, never paths or contents. */
   onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
     listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),

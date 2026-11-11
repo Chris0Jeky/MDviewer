@@ -110,7 +110,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - Document content never leaves the device. Open documents and latest-close recovery stay in
   memory; there is no automatic/app-managed document or session storage. Explicit user-selected
   Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) and Save As (Ctrl+Shift+S) write the open document to its own file in place (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
-  SDK keys below persist as app-managed user state. Bundle Shiki themes/langs, KaTeX fonts, and
+  SDK keys below persist as app-managed user state. The Windows app also keeps `library.json` in its local data folder: recent files, pinned files and project folders, and last-looked-at stamps — absolute paths and timestamps only, never content, capped (500 recents, 64 pins), cleared by Clear library. Bundle Shiki themes/langs, KaTeX fonts, and
   Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK
   (`public/pulseboard.js`, called only through `src/app/pulse.ts`): closed enums, size
