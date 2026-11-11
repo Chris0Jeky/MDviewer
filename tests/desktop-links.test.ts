@@ -66,12 +66,18 @@ async function openGuide(): Promise<void> {
 describe("desktop relative links, images and history", () => {
   it("opens a relative link through the host, then goes back and forward", async () => {
     await openGuide();
+    const guideScroll = 420;
+    document.getElementById("reader-scroll")!.scrollTop = guideScroll;
     boundary.openRelative.mockResolvedValueOnce(batch("next.md", "Next page", "b".repeat(32)));
     document.querySelector<HTMLAnchorElement>('.doc a[href^="../"]')!.click();
     expect(boundary.openRelative).toHaveBeenCalledWith("a".repeat(32), "../docs/next.md#part");
     await vi.waitFor(() => expect(shown()).toBe("Next page"));
+    // Run-card acceptance: Back returns to the desk at its previous scroll position.
+    const scroll = document.getElementById("reader-scroll")!;
+    scroll.scrollTop = 0;
     alt("ArrowLeft");
     await vi.waitFor(() => expect(shown()).toContain("Guide"));
+    expect(scroll.scrollTop).toBe(guideScroll);
     alt("ArrowRight");
     await vi.waitFor(() => expect(shown()).toBe("Next page"));
     // Web links still go to the system browser only.
