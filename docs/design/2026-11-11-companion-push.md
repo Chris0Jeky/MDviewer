@@ -63,6 +63,11 @@ privacy text when it ships its row. Everything not listed stays as it is: no net
 telemetry, the sanitizer, the CSP, no generic filesystem or shell command, the web/PWA contract,
 the render order and the no-slice guarantee.
 
+Owner confirmation: the file watcher, `library.json` (saved file paths) and in-place Save rows were
+confirmed by the owner in chat on 2026-11-11 ("Keep defaults"). The other rows (display paths in the
+webview, session list restore, recovery staying opt-in) and drift-table rows 4, 10 and 15 remain
+coordinator assumptions.
+
 | Was | Now | Limits |
 | --- | --- | --- |
 | No file watcher | Native watcher for open bound files and pinned project folders | OS change notifications only, no polling; starts after the first bound document; reader cold start must not regress |
