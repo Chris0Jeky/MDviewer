@@ -50,6 +50,7 @@ export interface PaginationProblem {
 
 const ATOMIC_ID_ATTR = "data-mdv-atomic-id";
 const PAGE_CONTENT_SELECTOR = ".pagedjs_page_content";
+const BLANK_PAGE_CLASS = "pagedjs_blank_page";
 /** Flow blocks whose geometry must stay inside their page's content box. */
 const FLOW_BLOCKS =
   "p, pre, table, li, h1, h2, h3, h4, h5, h6, blockquote, figure, img, svg, hr, .callout, .katex-display";
@@ -190,9 +191,12 @@ export function auditPagination(source: ParentNode, host: HTMLElement): Paginati
   // A split element legitimately continues on the NEXT page; reappearing later means
   // Paged.js backed up and laid the same content out twice.
   const lastPageOf = new Map<string, number>();
+  let contentPage = -1;
   for (const [index, page] of pages.entries()) {
     const content = page.querySelector<HTMLElement>(PAGE_CONTENT_SELECTOR);
-    if (!content) continue;
+    // Paged.js inserts an intentional blank page for a left/right (recto/verso) break.
+    if (!content || page.classList.contains(BLANK_PAGE_CLASS)) continue;
+    contentPage += 1;
     if (pages.length > 1 && isEmptyPage(content)) {
       const next = pages[index + 1]?.querySelector<HTMLElement>(`[${ATOMIC_ID_ATTR}]`);
       return { problem: `page ${index + 1} is empty`, atomicId: next ? atomicIdOf(next) : null };
@@ -200,10 +204,10 @@ export function auditPagination(source: ParentNode, host: HTMLElement): Paginati
     for (const el of page.querySelectorAll<HTMLElement>("[data-ref]")) {
       if (!hasOwnText(el)) continue;
       const last = lastPageOf.get(el.dataset.ref!);
-      if (last !== undefined && last < index - 1) {
+      if (last !== undefined && last < contentPage - 1) {
         return { problem: `content repeats on page ${index + 1}`, atomicId: atomicIdOf(el) };
       }
-      lastPageOf.set(el.dataset.ref!, index);
+      lastPageOf.set(el.dataset.ref!, contentPage);
     }
     const box = content.getBoundingClientRect();
     for (const el of content.querySelectorAll<HTMLElement>(FLOW_BLOCKS)) {

@@ -66,6 +66,16 @@ describe("auditPagination", () => {
     });
   });
 
+  it("accepts Paged.js's intentional blank page for a left/right break", () => {
+    const source = html('<p data-ref="1">one</p><h2 data-ref="2">two</h2>');
+    const host = html(
+      page('<p data-ref="1">one</p>') +
+        '<div class="pagedjs_page pagedjs_blank_page"><div class="pagedjs_page_content"></div></div>' +
+        page('<h2 data-ref="2">two</h2>'),
+    );
+    expect(auditPagination(source, host)).toBeNull();
+  });
+
   it("flags an empty page and content laid out twice", () => {
     const source = html('<p data-ref="1">one</p>');
     expect(auditPagination(source, html(page('<p data-ref="1">one</p>') + page("")))?.problem).toBe(
