@@ -27,6 +27,7 @@ vi.mock("../src/paginate/cssBuilder", () => ({ buildStylesheet: () => "" }));
 vi.mock("../src/paginate/handler", () => ({ registerHandlersOnce: async () => {}, setPaginationProgress: () => {} }));
 vi.mock("../src/paginate/paginate", () => ({
   paginate: mocks.paginate, teardownPagination: (host: HTMLElement) => host.replaceChildren(),
+  PaginationIncompleteError: class PaginationIncompleteError extends Error {},
 }));
 
 function gate() {

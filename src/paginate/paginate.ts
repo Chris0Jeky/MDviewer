@@ -10,12 +10,51 @@
  * happens exactly once via registerHandlersOnce() (called by the App before the first
  * paginate). We only (re)bind the render host so the handler can stamp page numbers and
  * fill the TOC for this specific run.
+ *
+ * Completeness outranks keep-whole. Paged.js resolves normally even when it stopped early
+ * ("Layout repeated", "Unable to layout item"), so every run is audited: every text-bearing
+ * source element must be on a page, no page may be empty and no block may sit outside its
+ * page's content box. A failed audit re-runs layout from a pristine copy with the offending
+ * keep-whole block made splittable, then with every keep-whole block splittable. If that
+ * still fails, the pages are torn down and PaginationIncompleteError is thrown: a truncated
+ * document is never presented (or exported) as complete.
  */
 
 import type { PagedFlow } from "pagedjs";
 import { PAGEDJS } from "../app/dom";
 import { setPaginationHost } from "./handler";
 import { repairFootnoteLinks } from "./footnoteLinks";
+import { SPLITTABLE_ATTR, SPLITTABLE_SELECTOR } from "./shrinkToFit";
+
+/**
+ * A completed pagination run. `recoveredSplits` is present only when the audit forced a
+ * recovery run, and names the keep-whole blocks that run had to split (possibly none).
+ */
+export interface PaginatedFlow extends PagedFlow {
+  recoveredSplits?: string[];
+}
+
+/** Pagination could not place the whole document even after recovery. */
+export class PaginationIncompleteError extends Error {
+  constructor(problem: string) {
+    super(`Pagination could not place the whole document (${problem}), so it is not shown.`);
+    this.name = "PaginationIncompleteError";
+  }
+}
+
+/** What an audit found wrong with a run, and the keep-whole block to blame if known. */
+export interface PaginationProblem {
+  problem: string;
+  atomicId: string | null;
+}
+
+const ATOMIC_ID_ATTR = "data-mdv-atomic-id";
+const PAGE_CONTENT_SELECTOR = ".pagedjs_page_content";
+/** Flow blocks whose geometry must stay inside their page's content box. */
+const FLOW_BLOCKS =
+  "p, pre, table, li, h1, h2, h3, h4, h5, h6, blockquote, figure, img, svg, hr, .callout, .katex-display";
+/** Pixel slack for sub-pixel rounding, matching the no-cutoff E2E tolerance. */
+const TOLERANCE_PX = 2;
 
 /**
  * Remove all paginated output and Paged.js-inserted stylesheets before a re-run.
@@ -41,21 +80,150 @@ export async function paginate(
   source: DocumentFragment,
   css: string,
   host: HTMLElement,
-): Promise<PagedFlow> {
+): Promise<PaginatedFlow> {
   // Keep Paged.js off the empty-state startup path. Import before teardown so an
   // unavailable chunk does not erase the last successfully paginated document.
   const { Previewer } = await import("pagedjs");
-  teardownPagination(host);
-  setPaginationHost(host);
+  // Paged.js lays out (and mutates) the fragment it is given; recovery needs a clean copy.
+  const pristine = source.cloneNode(true) as DocumentFragment;
 
-  const blobUrl = URL.createObjectURL(new Blob([css], { type: "text/css" }));
-  try {
-    const previewer = new Previewer();
-    const flow = await previewer.preview(source, [blobUrl], host);
-    // Only links change after layout, never document geometry.
-    repairFootnoteLinks(host);
-    return flow;
-  } finally {
-    URL.revokeObjectURL(blobUrl);
+  let attempt = source;
+  let rung: "none" | "offender" | "all" = "none";
+  let marked = new Map<string, string>();
+  for (;;) {
+    teardownPagination(host);
+    setPaginationHost(host);
+    const blobUrl = URL.createObjectURL(new Blob([css], { type: "text/css" }));
+    let flow: PaginatedFlow;
+    try {
+      flow = await new Previewer().preview(attempt, [blobUrl], host);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+
+    const audit = auditPagination(attempt, host);
+    if (!audit) {
+      // Only links change after layout, never document geometry.
+      repairFootnoteLinks(host);
+      if (rung !== "none") flow.recoveredSplits = splitByRecovery(host, marked);
+      return flow;
+    }
+
+    attempt = pristine.cloneNode(true) as DocumentFragment;
+    marked = new Map();
+    if (rung === "none" && audit.atomicId) {
+      marked = markSplittable(attempt, audit.atomicId);
+      rung = "offender";
+    }
+    if (marked.size === 0 && rung !== "all") {
+      marked = markSplittable(attempt, null);
+      rung = "all";
+    }
+    if (marked.size === 0) {
+      teardownPagination(host);
+      throw new PaginationIncompleteError(audit.problem);
+    }
   }
+}
+
+/**
+ * Describe the recovery-marked blocks that actually split. Tier 4 re-marks a block it
+ * measured over-tall, so those (which split on every run) are not reported as recovery.
+ */
+function splitByRecovery(host: HTMLElement, marked: Map<string, string>): string[] {
+  const pagesById = new Map<string, Set<Element>>();
+  for (const el of host.querySelectorAll(`[${SPLITTABLE_ATTR}="recovery"]`)) {
+    const id = el.getAttribute(ATOMIC_ID_ATTR);
+    const page = el.closest(`.${PAGEDJS.pageClass}`);
+    if (!id || !page) continue;
+    pagesById.set(id, (pagesById.get(id) ?? new Set()).add(page));
+  }
+  return [...marked].filter(([id]) => (pagesById.get(id)?.size ?? 0) > 1).map(([, name]) => name);
+}
+
+/**
+ * Check a finished run against its parsed source. Returns null when the document is
+ * complete: every source element that carries its own text was rendered on some page,
+ * no page is empty, and no block sits below its page's content box or in one of Paged.js's
+ * hidden overflow columns to its right.
+ */
+export function auditPagination(source: ParentNode, host: HTMLElement): PaginationProblem | null {
+  const rendered = new Set<string>();
+  for (const el of host.querySelectorAll<HTMLElement>("[data-ref]")) rendered.add(el.dataset.ref!);
+  for (const el of source.querySelectorAll<HTMLElement>("[data-ref]")) {
+    if (rendered.has(el.dataset.ref!) || !hasOwnText(el)) continue;
+    return { problem: "content was left unrendered", atomicId: atomicIdOf(el) };
+  }
+
+  const pages = Array.from(host.querySelectorAll<HTMLElement>(`.${PAGEDJS.pageClass}`));
+  // A split element legitimately continues on the NEXT page; reappearing later means
+  // Paged.js backed up and laid the same content out twice.
+  const lastPageOf = new Map<string, number>();
+  for (const [index, page] of pages.entries()) {
+    const content = page.querySelector<HTMLElement>(PAGE_CONTENT_SELECTOR);
+    if (!content) continue;
+    if (pages.length > 1 && isEmptyPage(content)) {
+      const next = pages[index + 1]?.querySelector<HTMLElement>(`[${ATOMIC_ID_ATTR}]`);
+      return { problem: `page ${index + 1} is empty`, atomicId: next ? atomicIdOf(next) : null };
+    }
+    for (const el of page.querySelectorAll<HTMLElement>("[data-ref]")) {
+      if (!hasOwnText(el)) continue;
+      const last = lastPageOf.get(el.dataset.ref!);
+      if (last !== undefined && last < index - 1) {
+        return { problem: `content repeats on page ${index + 1}`, atomicId: atomicIdOf(el) };
+      }
+      lastPageOf.set(el.dataset.ref!, index);
+    }
+    const box = content.getBoundingClientRect();
+    for (const el of content.querySelectorAll<HTMLElement>(FLOW_BLOCKS)) {
+      const rect = el.getBoundingClientRect();
+      if (rect.height === 0) continue;
+      if (rect.left >= box.right - TOLERANCE_PX || rect.bottom > box.bottom + TOLERANCE_PX) {
+        return { problem: `a block on page ${index + 1} lies outside the page`, atomicId: atomicIdOf(el) };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Mark the splittable keep-whole block with `atomicId` (or, with null, every splittable
+ * keep-whole block) in `root`. Returns atomic id -> reader-facing description, naming the
+ * family and the heading it sits under.
+ */
+function markSplittable(root: DocumentFragment, atomicId: string | null): Map<string, string> {
+  const described = new Map<string, string>();
+  let heading = "";
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node as HTMLElement;
+    if (/^H[1-6]$/.test(el.tagName)) heading = (el.textContent ?? "").trim();
+    const id = el.getAttribute(ATOMIC_ID_ATTR);
+    if (!id || (atomicId !== null && id !== atomicId) || !el.matches(SPLITTABLE_SELECTOR)) continue;
+    el.setAttribute(SPLITTABLE_ATTR, "recovery");
+    described.set(id, heading ? `${familyName(el)} under “${heading}”` : familyName(el));
+  }
+  return described;
+}
+
+function familyName(el: HTMLElement): string {
+  if (el.matches("table")) return "table";
+  if (el.matches("blockquote")) return "quote";
+  if (el.matches(".callout")) return "callout";
+  return "code block";
+}
+
+function atomicIdOf(el: Element): string | null {
+  return el.closest(`[${ATOMIC_ID_ATTR}]`)?.getAttribute(ATOMIC_ID_ATTR) ?? null;
+}
+
+function hasOwnText(el: Element): boolean {
+  for (const child of el.childNodes) {
+    if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) return true;
+  }
+  return false;
+}
+
+function isEmptyPage(content: HTMLElement): boolean {
+  return !content.textContent?.trim() && !content.querySelector("img, svg, hr, table, canvas");
 }
