@@ -32,13 +32,25 @@ function announce(message: string): void {
   toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1600);
 }
 
-async function copy(text: string, done: string): Promise<void> {
+async function copy(text: string, done: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     announce(done);
+    return true;
   } catch (error) {
     announce(`Could not copy: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
   }
+}
+
+/** The pressed button itself says "Copied" for a moment, where the eye already is. */
+function confirmCopied(button: HTMLButtonElement): void {
+  const label = button.querySelector(".reader-copied") ?? button.appendChild(Object.assign(
+    document.createElement("span"), { className: "reader-copied", textContent: "Copied" }));
+  label.setAttribute("aria-hidden", "true"); // the live region announces it
+  button.classList.add("is-copied");
+  window.clearTimeout(Number(button.dataset.copiedTimer));
+  button.dataset.copiedTimer = String(window.setTimeout(() => button.classList.remove("is-copied"), 1600));
 }
 
 const ICONS = {
@@ -46,7 +58,7 @@ const ICONS = {
   link: "M6.5 9.5l3-3M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1",
 };
 
-function iconButton(className: string, label: string, icon: keyof typeof ICONS, run: () => void): HTMLButtonElement {
+function iconButton(className: string, label: string, icon: keyof typeof ICONS, run: () => Promise<boolean>): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = className;
@@ -59,7 +71,10 @@ function iconButton(className: string, label: string, icon: keyof typeof ICONS, 
   path.setAttribute("d", ICONS[icon]);
   svg.append(path);
   button.append(svg);
-  button.addEventListener("click", event => { event.preventDefault(); run(); });
+  button.addEventListener("click", event => {
+    event.preventDefault();
+    void run().then(copied => { if (copied) confirmCopied(button); });
+  });
   return button;
 }
 
@@ -78,18 +93,19 @@ export function decorateCopy(root: HTMLElement, source: ReaderSource, fileName: 
     wrapper.className = "reader-code";
     wrapper.setAttribute(SOURCE_ATTR, pre.getAttribute(SOURCE_ATTR)!);
     pre.replaceWith(wrapper);
-    wrapper.append(pre, iconButton("reader-copy", "Copy code", "copy", () => { void copy(body, `Copied ${lineCount(body)} of code`); }));
+    wrapper.append(pre, iconButton("reader-copy", "Copy code", "copy", () => copy(body, `Copied ${lineCount(body)} of code`)));
   }
   for (const heading of root.querySelectorAll<HTMLElement>(":scope > :is(h1,h2,h3,h4,h5,h6)[id][data-src]")) {
     const tools = document.createElement("span");
     tools.className = "reader-heading-tools";
     tools.append(
-      iconButton("reader-heading-tool", "Copy link to section", "link", () => {
-        void copy(`${fileName}#${heading.id}`, "Copied link to section");
-      }),
-      iconButton("reader-heading-tool", "Copy section as Markdown", "copy", () => {
+      iconButton("reader-heading-tool", "Copy link to section", "link", () =>
+        copy(`${fileName}#${heading.id}`, "Copied link to section")),
+      iconButton("reader-heading-tool", "Copy section as Markdown", "copy", async () => {
         const range = sectionRange(heading, source.lines.length);
-        if (range) { const text = sliceSource(source, ...range); void copy(text, `Copied section (${lineCount(text)})`); }
+        if (!range) return false;
+        const text = sliceSource(source, ...range);
+        return copy(text, `Copied section (${lineCount(text)})`);
       }),
     );
     heading.append(tools);

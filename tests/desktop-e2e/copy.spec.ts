@@ -90,3 +90,53 @@ test("reader copies code bodies, sections, links and selected Markdown source", 
   await diagram.getByRole("button", { name: "Copy code" }).click();
   expect(await clipboard(page)).toBe(["flowchart LR", "  A --> B"].join("\n"));
 });
+
+/** An 8 KB run-card fence: tabs, Unicode, markup characters, backticks, a 400-character line. */
+function runCard(): { doc: string; body: string } {
+  const lines = [
+    "You are a careful reviewer. Follow every step & report <findings> as `code`.",
+    "\tIndented with a tab; trailing spaces stay   ",
+    "Ünïcödé — “quotes”, emoji 🧭, CJK 漢字, RTL שלום",
+    "``` inner backticks are content, not a fence",
+    "x".repeat(400),
+  ];
+  const body: string[] = [];
+  for (let index = 0; body.join("\n").length < 8_192; index++) body.push(`${index}: ${lines[index % lines.length]}`);
+  const text = body.join("\n");
+  return { doc: `# Run card\n\n\`\`\`\`text\n${text}\n\`\`\`\`\n\nSmall follow-up:\n\n\`\`\`\nsecond block\n\`\`\`\n`, body: text };
+}
+
+test("a long run-card fence copies byte for byte from a sticky, keyboard-reachable button and wraps", async ({ page }) => {
+  await page.setViewportSize({ width: 1120, height: 800 });
+  const { doc: text, body } = runCard();
+  expect(new TextEncoder().encode(body).length).toBeGreaterThanOrEqual(8_192);
+  await openFiles(page, [{ name: "run-card.md", text }]);
+  await readyReader(page, "Run card");
+  const scroll = page.locator("#reader-scroll");
+  const code = page.locator("#reader-document .reader-code").first();
+
+  // Long lines wrap: neither the page nor the code block scrolls sideways.
+  expect(await scroll.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  expect(await code.locator("pre").evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+  // Halfway down the block, the button is still on screen.
+  await code.evaluate((el, scroller) => {
+    const host = document.querySelector<HTMLElement>(scroller)!;
+    host.style.scrollBehavior = "auto";
+    host.scrollTop += el.getBoundingClientRect().top - host.getBoundingClientRect().top + el.getBoundingClientRect().height / 2;
+  }, "#reader-scroll");
+  const button = code.getByRole("button", { name: "Copy code" });
+  await code.hover({ position: { x: 40, y: 40 } });
+  const [box, view] = [await button.boundingBox(), await scroll.boundingBox()];
+  expect(box!.y).toBeGreaterThanOrEqual(view!.y);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(view!.y + view!.height);
+
+  // Keyboard: focus reveals it, Enter copies, and the button itself says Copied.
+  await button.focus();
+  await expect(button).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Enter");
+  expect(await clipboard(page)).toBe(body);
+  expect(await clipboard(page)).toBe(text.split("\n").slice(4, 4 + body.split("\n").length).join("\n"));
+  await expect(button.getByText("Copied")).toBeVisible();
+  await expect(page.locator(".reader-toast")).toHaveText(`Copied ${body.split("\n").length} lines of code`);
+});
