@@ -62,10 +62,13 @@ blockquote {
  * the pagination recovery path marks a block that stalled layout. Both the browser
  * fragmenter and Paged.js read this computed value, so they agree it may break.
  * Rows, lines and nested short atomics keep their own keep-whole rules, so the split
- * lands on a line/row/paragraph boundary. Must stay after the avoid rule above.
+ * lands on a line/row/paragraph boundary: only a code figure's own <pre> is relaxed
+ * with it (a short fence inside a split quote or callout stays whole). The height
+ * test counts a keep-with-next heading directly above the block. Must stay after the
+ * avoid rule above.
  * -------------------------------------------------------------------------- */
 [data-mdv-splittable],
-[data-mdv-splittable] > pre {
+figure.code-figure[data-mdv-splittable] > pre {
   -webkit-column-break-inside: auto;
   break-inside: auto;
   page-break-inside: auto;

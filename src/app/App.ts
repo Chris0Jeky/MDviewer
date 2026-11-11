@@ -651,7 +651,10 @@ export class App {
     } catch (err) {
       if (stale()) return;
       // An incomplete layout was torn down, so no earlier render is left on screen.
-      if (err instanceof PaginationIncompleteError) this.hasGoodRender = false;
+      if (err instanceof PaginationIncompleteError) {
+        this.hasGoodRender = false;
+        this.canvas.setPageCount(0);
+      }
       // Keep the last good render on screen; surface a fatal banner over it.
       this.banner.fatal(`Render failed: ${errorMessage(err)}`);
       if (!this.hasGoodRender) this.showPane("error");

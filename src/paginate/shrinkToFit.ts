@@ -68,9 +68,10 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void {
     const room = area.heightPx - 2 - (headingLead.get(el) ?? 0);
     const scale = room / naturalHeight;
 
-    // Only shrink blocks that overflow one page, and only as far as the ceiling allows;
-    // anything taller is left to Tier 4.
-    if (naturalHeight > area.heightPx && scale >= 1 / SHRINK_LIMIT) {
+    // Shrink a block that does not fit the page room left under its keep-with-next
+    // heading (even if it would fit alone), only as far as the ceiling allows; anything
+    // taller is left to Tier 4.
+    if (naturalHeight > room && scale >= 1 / SHRINK_LIMIT) {
       // `zoom`, not a transform: zoom scales the LAYOUT box, so the fragmenter sees the
       // shrunk height. A transformed block keeps its unscaled content height in layout;
       // that content overflowed its reserved box and Chromium fragmented the overflow into
@@ -82,12 +83,16 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void {
   }
 }
 
-/** Tier 4: mark splittable families that cannot fit one page even after Tier 3. */
+/**
+ * Tier 4: mark splittable families that cannot fit one page, under the keep-with-next
+ * heading above them, even after Tier 3.
+ */
 export function markOverTallSplittable(content: ParentNode, area: PageArea): void {
   for (const el of content.querySelectorAll<HTMLElement>(ATOMIC_SELECTOR)) {
     if (el.hasAttribute(ATTRS.shrunk) || !el.matches(SPLITTABLE_SELECTOR)) continue;
     const height = recordedHeight(el);
-    if (height !== null && height > area.heightPx + FIT_TOLERANCE_PX) {
+    const lead = headingLead.get(el) ?? 0;
+    if (height !== null && height + lead > area.heightPx + FIT_TOLERANCE_PX) {
       el.setAttribute(SPLITTABLE_ATTR, "tier4");
     }
   }

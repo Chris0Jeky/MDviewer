@@ -38,14 +38,14 @@ function expectedLines(markdown: string): string[] {
   const lines: string[] = [];
   let fence = false;
   for (const raw of markdown.split(/\r?\n/)) {
-    if (raw.startsWith("```")) {
+    let line = raw.replace(/^>\s?/, "");
+    if (line.startsWith("```")) {
       fence = !fence;
       continue;
     }
-    let line = raw;
     if (!fence) {
       if (line.startsWith(":::") || /^\|\s*-/.test(line)) continue;
-      line = line.replace(/^#+\s+/, "").replace(/^>\s?/, "").replace(/\s*\{[^}]*\}\s*$/, "");
+      line = line.replace(/^#+\s+/, "").replace(/\s*\{[^}]*\}\s*$/, "");
       if (line.startsWith("|")) line = line.split("|").map((cell) => cell.trim()).filter(Boolean).join(" ");
     }
     line = line.replace(/\s+/g, " ").trim();
@@ -225,14 +225,156 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
 
   test("an unrecoverable stall shows the error state and nothing exportable", async ({ page }) => {
     await page.goto("/");
+    // A complete render first, so the chip has a stale "Page n / N" to lose.
+    await loadMarkdownIntoApp(page, NOCUTOFF);
+    await waitForPagination(page);
+    await expect(page.locator("#page-chip")).not.toHaveAttribute("data-count", "0");
     await loadMarkdownIntoApp(page, forcedStall("image"), "forced-fatal.md");
 
     const error = page.locator("#error-card");
     await expect(error).toBeVisible({ timeout: 30_000 });
     await expect(error).toContainText(/could not place the whole document/);
     expect(await page.locator("#paged-output .pagedjs_page").count()).toBe(0);
+    await expect(page.locator("#page-chip")).toHaveAttribute("data-count", "0");
 
     await page.evaluate(() => window.__mdviewer?.exportPdf());
     await expect(error).toContainText(/No paginated document to export/);
+  });
+});
+
+/** Page indexes each element matching `selector` spans, keyed by its Paged.js source ref. */
+async function pagesByRef(page: Page, selector: string): Promise<Record<string, number[]>> {
+  return page.evaluate((sel) => {
+    const pages = Array.from(document.querySelectorAll("#paged-output .pagedjs_page"));
+    const byRef: Record<string, number[]> = {};
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(`#paged-output ${sel}`))) {
+      const index = pages.indexOf(el.closest(".pagedjs_page")!);
+      const list = (byRef[el.dataset.ref ?? "?"] ??= []);
+      if (!list.includes(index)) list.push(index);
+    }
+    return byRef;
+  }, selector);
+}
+
+const shortFence = (tag: string): string[] => [
+  "```",
+  ...Array.from({ length: 8 }, (_, index) => `${tag}${index + 1} quiet harbor lantern meadow orchard`),
+  "```",
+];
+
+test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
+  test("a short fence inside an over-tall quote or callout stays whole", async ({ page }) => {
+    // Short fences are spread through each tall container, so page boundaries fall
+    // across several of them; each must move whole while its container splits.
+    const prose = (tag: string): string =>
+      `${tag} the container keeps flowing around its short code samples, line after line.`;
+    const quote: string[] = [];
+    const callout: string[] = [];
+    for (let block = 1; block <= 9; block += 1) {
+      quote.push(`> ${prose(`q${block}a`)}`, ">", `> ${prose(`q${block}b`)}`, ">", ...shortFence(`qf${block}l`).map((line) => `> ${line}`), ">");
+      callout.push(prose(`c${block}a`), "", prose(`c${block}b`), "", ...shortFence(`cf${block}l`), "");
+    }
+    const markdown = ["## Tall quote", "", ...quote, "", "## Tall callout", "", "::: note", ...callout, ":::", ""].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "nested-fences.md");
+    await waitForPagination(page);
+
+    const containers = await pagesByRef(page, "blockquote, div.callout");
+    expect(Object.values(containers).filter((pages) => pages.length > 1).length, "both containers split").toBe(2);
+    const fences = await pagesByRef(page, "blockquote > pre, div.callout > pre");
+    expect(Object.keys(fences).length).toBe(18);
+    const sliced = Object.entries(fences).filter(([, pages]) => pages.length > 1);
+    expect(sliced, "short nested fences split across pages").toEqual([]);
+    expect(await missingInOrder(page, markdown)).toEqual([]);
+  });
+
+  test("a heading and a fence that fit a page only without the heading stay together and whole", async ({ page }) => {
+    const stalls = watchStalls(page);
+    const markdown = [
+      "Intro paragraph before the heading.",
+      "",
+      "## Near page",
+      "",
+      "```",
+      ...Array.from({ length: 48 }, (_, index) => `n${index + 1} quiet harbor lantern meadow`),
+      "```",
+      "",
+      "Closing paragraph.",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "near-page.md");
+    await waitForPagination(page);
+
+    // Precondition: the fence fits a page alone but not under its heading.
+    const fit = await page.evaluate(() => {
+      const pre = document.querySelector<HTMLElement>("#paged-output pre")!;
+      const content = document.querySelector<HTMLElement>("#paged-output .pagedjs_page_content")!;
+      return { source: Number(pre.dataset.mdvSourceHeight), page: content.offsetHeight };
+    });
+    expect(fit.source).toBeLessThanOrEqual(fit.page);
+    expect(fit.source).toBeGreaterThan(fit.page - 40);
+
+    const fence = Object.values(await pagesByRef(page, "pre"));
+    expect(fence, "the fence is laid out once, on one page").toEqual([[expect.any(Number)]]);
+    const heading = Object.values(await pagesByRef(page, "h2"));
+    expect(heading).toEqual([fence[0]]);
+    expect(stalls).toEqual([]);
+    expect((await layoutDefects(page)).outside).toEqual([]);
+    await expect(page.locator("#warning-banner")).not.toContainText(/Layout was retried/);
+    expect(await missingInOrder(page, markdown)).toEqual([]);
+  });
+
+  test("a last page whose footnotes overflow onto a notes-only page is complete, not empty", async ({ page }) => {
+    const note = (n: number): string =>
+      `[^n${n}]: Footnote ${n} explains the closing remark at length, so that the notes outgrow the footnote area of the final page and continue on another page.`;
+    const markdown = [
+      "# Notes",
+      "",
+      `The closing paragraph cites every note.${Array.from({ length: 80 }, (_, i) => `[^n${i + 1}]`).join("")}`,
+      "",
+      ...Array.from({ length: 80 }, (_, i) => note(i + 1)),
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "footnote-overflow.md");
+    await waitForPagination(page);
+
+    // Non-vacuous: Paged.js really moved overflowing notes onto a page with no body text.
+    const notesOnly = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("#paged-output .pagedjs_page")).some(
+        (sheet) =>
+          !sheet.querySelector<HTMLElement>(".pagedjs_page_content")!.innerText.trim() &&
+          !!sheet.querySelector<HTMLElement>(".pagedjs_footnote_area")!.innerText.trim(),
+      ),
+    );
+    expect(notesOnly, "fixture must produce a notes-only page").toBe(true);
+    await expect(page.locator("#error-card")).toBeHidden();
+    const text = await page.evaluate(() => document.getElementById("paged-output")!.innerText);
+    for (let n = 1; n <= 80; n += 1) expect(text).toContain(`Footnote ${n} explains`);
+  });
+
+  test("a re-render under a reduced preview zoom leaves no block outside its page", async ({ page }) => {
+    // Narrower than a sheet, so "Fit" resolves below 1 once pages exist.
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.goto("/");
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: "fit" }));
+    await loadMarkdownIntoApp(page, LONG_PROSE, "long-prose-fences.md");
+    await waitForPagination(page);
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ zoom: 0.5 }));
+    await expect(page.locator("#canvas")).toHaveAttribute("data-zoom", "0.5");
+
+    // Any re-render now runs while the stack is scaled; a paper change forces one.
+    const before = await page.locator("#paged-output .pagedjs_page").first().evaluate((el) => (el as HTMLElement).offsetWidth);
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ paperSize: "letter" }));
+    await expect
+      .poll(() => page.locator("#paged-output .pagedjs_page").first().evaluate((el) => (el as HTMLElement).offsetWidth))
+      .toBeGreaterThan(before);
+    await waitForPagination(page);
+
+    await expect(page.locator("#error-card")).toBeHidden();
+    expect(await page.locator("#paged-output .pagedjs_page").count()).toBeGreaterThan(10);
+    expect((await layoutDefects(page)).outside).toEqual([]);
+    expect(await missingInOrder(page, LONG_PROSE)).toEqual([]);
   });
 });

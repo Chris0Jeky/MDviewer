@@ -137,7 +137,7 @@ Offline raster capture selects its controlled `srcdoc` destination before stagin
 
 Source footnote IDs must avoid headings and suffix collisions. Repeated citations share one float; post-preview repair uses Paged.js `data-id` to generated-note mapping and leaves unrelated links alone.
 
-Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` or change natural page dimensions. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
+Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` for the preview scale or change natural page dimensions; the preview scale is a paint-only transform, and `paginate` lays out at `--preview-zoom: 1` because Paged.js is not scale-invariant. The one CSS `zoom` is the Tier 3 shrink: a constant per block, applied before layout (`shrinkToFit.ts`), so preview and export lay out the same geometry. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
 
 The PDF action classes identify PDF actions only; source New/Open/Save use `workspaceAction` for styling and explicit `data-document-command` identities for routing. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings. Desktop supplies `layoutInitiallyOpen: false` through App/Toolbar; the web entry keeps its viewport-adaptive default. This screen-only disclosure preference is never persisted and does not alter pagination. Desktop tests: `tests/desktop-toolbar.test.ts`, `tests/desktop-e2e/toolbar.spec.ts`.
 
