@@ -199,9 +199,14 @@ pub(crate) fn save_to_path(
     }
     let own = previous.and_then(|token| {
         let registry = lock(registry);
-        registry
-            .get(token)
-            .map(|binding| (snapshot_of(binding), binding.encoding, binding.eol))
+        registry.get(token).map(|binding| {
+            (
+                snapshot_of(binding),
+                binding.encoding,
+                binding.eol,
+                binding.path.clone(),
+            )
+        })
     });
     let (encoding, eol) = own
         .as_ref()
@@ -211,6 +216,28 @@ pub(crate) fn save_to_path(
         Err(result) => return result,
     };
     recover_interrupted(destination);
+    // Choosing this document's own file by name gets exactly Save's check: what is
+    // there now must still be what this document read, even if it was replaced or
+    // deleted meanwhile. A picker confirmation never bypasses that.
+    let same_name = |path: &Path| {
+        path.to_string_lossy().to_lowercase() == destination.to_string_lossy().to_lowercase()
+    };
+    if let Some((snapshot, _, _, path)) = own.as_ref().filter(|own| same_name(&own.3)) {
+        let Some(snapshot) = snapshot else {
+            return failed("unsupported");
+        };
+        if !path.exists() {
+            return conflict(ConflictKind::Missing);
+        }
+        return finish_save_as(
+            registry,
+            previous,
+            destination,
+            encoding,
+            eol,
+            replace::replace_if_unchanged(destination, snapshot, &bytes),
+        );
+    }
     let outcome = match replace::snapshot_read(destination, MAX_FILE_BYTES) {
         Ok((current, _)) => {
             let same_file = own
@@ -234,6 +261,17 @@ pub(crate) fn save_to_path(
         }
         Err(_) => return conflict(ConflictKind::Locked),
     };
+    finish_save_as(registry, previous, destination, encoding, eol, outcome)
+}
+
+fn finish_save_as(
+    registry: &Mutex<Registry>,
+    previous: Option<&Token>,
+    destination: &Path,
+    encoding: Encoding,
+    eol: Eol,
+    outcome: Result<ReplaceOutcome, ReplaceError>,
+) -> SaveResult {
     let new = match outcome {
         Ok(ReplaceOutcome::Replaced(new)) => new,
         Err(error) => return from_replace(error),
@@ -582,6 +620,74 @@ mod tests {
             save_to_path(&registry, None, &dir.path().join("x.txt"), "t", false),
             failed("invalid-destination")
         );
+    }
+
+    #[test]
+    fn save_as_onto_its_own_replaced_or_deleted_file_is_a_conflict_not_an_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Notes.md");
+        std::fs::write(
+            &path, b"mine
+",
+        )
+        .unwrap();
+        let registry = Mutex::new(Registry::default());
+        let (token, _) = open(&registry, &path);
+        // Another program replaces the file (new identity, new bytes).
+        let swap = dir.path().join("swap.tmp");
+        std::fs::write(
+            &swap, b"theirs
+",
+        )
+        .unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::rename(&swap, &path).unwrap();
+        // The user picks the same file (any case) in Save As and confirms overwrite.
+        let picked = dir.path().join("notes.md");
+        assert!(matches!(
+            save_to_path(
+                &registry,
+                Some(&token),
+                &picked,
+                "edited
+",
+                false
+            ),
+            SaveResult::Conflict { .. }
+        ));
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"theirs
+"
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            save_to_path(
+                &registry,
+                Some(&token),
+                &picked,
+                "edited
+",
+                false
+            ),
+            SaveResult::Conflict { reason: "missing" }
+        );
+        assert!(
+            !path.exists(),
+            "Save As never recreates its own deleted file"
+        );
+        // The binding is still live for a different destination.
+        assert!(matches!(
+            save_to_path(
+                &registry,
+                Some(&token),
+                &dir.path().join("copy.md"),
+                "edited
+",
+                false
+            ),
+            SaveResult::Saved { .. }
+        ));
     }
 
     fn generation_of(result: &SaveResult) -> u64 {

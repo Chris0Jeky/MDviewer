@@ -102,7 +102,7 @@ export class DesktopDocuments {
     if (target.owner === "workspace") {
       const baseline = this.baselines.get(target.id);
       const doc = app?.store.openDocs.find(open => open.id === target.id);
-      if (!app || !doc || !baseline) return "stale";
+      if (!app || !doc || !baseline) return this.discard(result.token);
       this.baselines.set(doc.id, {
         name: result.name, text: captured, dirty: false, ...(baseline.key ? { key: baseline.key } : {}), ...(binding ? { binding } : {}),
       });
@@ -110,11 +110,17 @@ export class DesktopDocuments {
       return doc.text === captured ? "saved" : "saved-newer-edits";
     }
     const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);
-    if (!doc) return "stale";
+    if (!doc) return this.discard(result.token);
     doc.name = result.name;
     doc.dirty = doc.text !== captured;
     if (binding) doc.binding = binding; else delete doc.binding;
     return doc.dirty ? "saved-newer-edits" : "saved";
+  }
+
+  /** A completion nobody can adopt: release any capability the host just created. */
+  private discard(token: string | null): SaveCompletion {
+    if (token) this.onRelease(token);
+    return "stale";
   }
 
   /** Close a reader document and release its native capability. */
