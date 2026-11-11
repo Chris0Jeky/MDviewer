@@ -134,7 +134,7 @@ Only what the code actually does:
 - **Source download.** **Save Markdown** (`Ctrl/Cmd+S`) writes the exact in-memory text to a file. It does not persist the document in the app. On the Windows app, **Save** (`Ctrl+S`) and **Save As** (`Ctrl+Shift+S`) write the open document back to its own file, keeping its encoding and line endings, and refuse to overwrite a file another program changed; **Save Markdown** stays a copy.
 - **Close recovery.** Undo the latest close in this tab. Reload or closing the tab clears it. No history store.
 - **Installable PWA** with a prompt-based update (never an unattended swap under a live document) and a Workbox precache of the lazy feature chunks and KaTeX fonts, so Print and math still work offline.
-- **Sanitized HTML.** `markdown-it` runs with `html: true` for KaTeX/Mermaid output; every fragment is run through DOMPurify and a second pass that strips automatic remote-resource loads. Embedded raster data URLs are the only images allowed.
+- **Sanitized HTML.** `markdown-it` runs with `html: true` for KaTeX/Mermaid output; every fragment is run through DOMPurify and a second pass that strips automatic remote-resource loads. Embedded raster data URLs are the only images allowed in the browser; the Windows app also shows images stored next to the document (PNG, JPEG, GIF, WebP, SVG as an image), read from disk, never fetched.
 
 ## Architecture
 

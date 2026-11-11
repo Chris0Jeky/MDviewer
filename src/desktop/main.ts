@@ -159,7 +159,9 @@ function render(importErrors: readonly string[] = []): Promise<void> {
     try {
       const result = await renderReaderDocument(doc.text, settings);
       if (current !== renderGeneration) return;
+      releaseImages();
       content.replaceChildren(...result.document.childNodes);
+      if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
       content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
@@ -414,6 +416,7 @@ appRoot.addEventListener("click", event => {
 }, true);
 select.addEventListener("change", () => {
   if (changingMode || docs.reader.activeId === select.value) return;
+  visit(select.value, docs.reader.activeId);
   ++generation; docs.reader.activeId = select.value; report(""); void render();
 });
 closeButton.addEventListener("click", closeDocument);
@@ -594,6 +597,10 @@ registerCommand({ id: "workspace.enter", title: "Edit & PDF", enabled: () => !ap
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
+registerCommand({ id: "navigate.back", title: "Back", keys: ["Alt+ArrowLeft"], enabled: () => !app && backStack.length > 0,
+  run: () => step(backStack, forwardStack) });
+registerCommand({ id: "navigate.forward", title: "Forward", keys: ["Alt+ArrowRight"], enabled: () => !app && forwardStack.length > 0,
+  run: () => step(forwardStack, backStack) });
 registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
 installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
 // Save works in every mode and must claim Ctrl+S before the workspace's own
@@ -609,6 +616,7 @@ document.addEventListener("click", event => {
   const href = anchor.getAttribute("href") ?? "";
   if (href.startsWith("#")) return;
   event.preventDefault();
+  if (isRelativeReference(href)) { void followRelativeLink(href); return; }
   try {
     const url = new URL(href);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Only web links can open. Local resource links are disabled.");
@@ -616,6 +624,76 @@ document.addEventListener("click", event => {
     else window.open(url.href, "_blank", "noopener,noreferrer");
   } catch (error) { report(errorText(error)); }
 });
+
+/** A reference with no scheme and no root: resolved natively against the document's folder. */
+function isRelativeReference(reference: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:|^[\\/]/i.test(reference.trim());
+}
+
+// Back/forward through documents reached by links (Alt+Left / Alt+Right).
+const backStack: string[] = [];
+const forwardStack: string[] = [];
+function visit(id: string, from: string | null): void {
+  if (!from || from === id) return;
+  backStack.push(from);
+  forwardStack.length = 0;
+  if (backStack.length > 100) backStack.shift();
+}
+function step(stack: string[], other: string[]): void {
+  if (app || changingMode) return;
+  const open = new Set(docs.reader.documents.map(doc => doc.id));
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (!open.has(id) || id === docs.reader.activeId) continue;
+    if (docs.reader.activeId) other.push(docs.reader.activeId);
+    ++generation;
+    docs.reader.activeId = id;
+    report("");
+    void render();
+    return;
+  }
+}
+
+/** Open a relative Markdown link or `@path` import from the active document. */
+async function followRelativeLink(href: string): Promise<void> {
+  const source = docs.saveTarget();
+  if (!native.available || !source?.binding) {
+    report("Local links open in the Windows app for documents opened from a file.");
+    return;
+  }
+  if (changingMode) return;
+  const from = app ? null : docs.reader.activeId;
+  const request = ++generation;
+  report("");
+  try {
+    commitBatch(await native.openRelative(source.binding.token, href), request);
+    if (!app && docs.reader.activeId) visit(docs.reader.activeId, from);
+  } catch (error) { report(errorText(error)); }
+}
+
+// Local images: the sanitizer keeps a relative src inert as data-local-src; the
+// host reads it (typed, 20 MB cap) relative to this document's own folder.
+const imageUrls: string[] = [];
+const IMAGE_TYPES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+};
+function releaseImages(): void {
+  for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
+}
+async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
+  for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
+    const src = image.dataset.localSrc!;
+    const type = IMAGE_TYPES[src.split(/[?#]/, 1)[0]!.split(".").pop()?.toLowerCase() ?? ""];
+    if (!type) continue;
+    try {
+      const bytes = await native.readAsset(token, src);
+      if (current !== renderGeneration) return; // A newer render owns the DOM now.
+      const url = URL.createObjectURL(new Blob([bytes], { type }));
+      imageUrls.push(url);
+      image.src = url;
+    } catch { image.alt ||= `${src} could not be loaded`; }
+  }
+}
 
 function hasUnsavedWork(): boolean {
   return docs.hasUnsavedWork();

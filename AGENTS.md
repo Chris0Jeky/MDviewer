@@ -120,4 +120,6 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   fetch/XHR/WebSocket at runtime, and no other telemetry.
 - `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
   before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
-  image data URLs are allowed. Mermaid SVG output is sanitized again after rendering.
+  image data URLs are allowed. A relative image `src` is kept only as an inert `data-local-src`;
+  the Windows reader loads it through the native `read_asset` (the document's own folder, local
+  image types, 20 MB) as a blob URL. Mermaid SVG output is sanitized again after rendering.

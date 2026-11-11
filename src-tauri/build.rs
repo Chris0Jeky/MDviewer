@@ -18,6 +18,8 @@ fn main() {
             "library_mark_seen",
             "library_add_project",
             "library_clear",
+            "open_relative",
+            "read_asset",
         ]),
     ))
     .expect("failed to prepare the desktop application");

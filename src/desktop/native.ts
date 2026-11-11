@@ -97,6 +97,10 @@ export const native = {
     addProject: (): Promise<string | null> => invoke("library_add_project"),
     clear: (): Promise<void> => invoke("library_clear"),
   },
+  /** Open a relative Markdown link or @import from the bound document `token`. */
+  openRelative: (token: string, href: string): Promise<OpenBatch> => invoke("open_relative", { token, href }),
+  /** Bytes of a local image referenced by the bound document `token` (typed, 20 MB cap). */
+  readAsset: (token: string, src: string): Promise<ArrayBuffer> => invoke("read_asset", { token, src }),
   /** Changed files arrive as capability tokens only, never paths or contents. */
   onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
     listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),

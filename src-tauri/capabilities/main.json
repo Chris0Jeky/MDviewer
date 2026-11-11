@@ -25,6 +25,8 @@
     "allow-library-forget",
     "allow-library-mark-seen",
     "allow-library-add-project",
-    "allow-library-clear"
+    "allow-library-clear",
+    "allow-open-relative",
+    "allow-read-asset"
   ]
 }

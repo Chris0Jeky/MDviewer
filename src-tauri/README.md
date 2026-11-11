@@ -107,6 +107,14 @@ includes dot-folders such as `.claude`, never follows junctions or symlinks, and
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
 
+Relative references (`assets.rs`, `commands/links.rs`): `open_relative(token, href)` opens a
+Markdown file a document links to (`other.md`, `../x.md#part`, `@CLAUDE.md`, or an
+extensionless wiki-style name, which gets `.md`), and `read_asset(token, src)` returns the raw
+bytes of a local image it shows (PNG, JPEG, GIF, WebP, SVG; 20 MB). Both resolve against the
+folder of that document's own binding, refuse URLs, absolute, rooted, drive-relative, UNC and
+device forms, never climb above the drive root, and re-apply the local-file policy (opens go
+through `read_batch`). The webview sends only the token and the reference as written.
+
 `save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a

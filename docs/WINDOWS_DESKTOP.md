@@ -63,6 +63,11 @@ encoding (UTF-8 with or without BOM, UTF-16) and line endings, and works from re
 view and the workspace. A new document, or one opened by drag and drop, asks where to
 save it. **Save As** (`Ctrl+Shift+S`) saves to a new file and keeps editing it there.
 
+Links between Markdown files open in MDviewer: a relative link (`other.md`, `../docs/x.md`) or
+an `@path` import resolves against the folder of the document you are reading. **Alt+Left** and
+**Alt+Right** go back and forward. Images stored next to a document show in the reader. Web
+links open in your browser as before.
+
 The library remembers recent files and lets you pin files and project folders. A pinned
 project lists its Markdown files newest first, groups agent files (CLAUDE.md, AGENTS.md,
 SKILL.md, agent definitions, memory files, ACTION_ITEMS.md and similar) and marks files that

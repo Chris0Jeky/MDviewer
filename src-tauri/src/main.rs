@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assets;
 mod commands;
 mod export_policy;
 mod file_policy;
@@ -104,7 +105,9 @@ fn main() {
             commands::library::library_forget,
             commands::library::library_mark_seen,
             commands::library::library_add_project,
-            commands::library::library_clear
+            commands::library::library_clear,
+            commands::links::open_relative,
+            commands::links::read_asset
         ])
         .setup(|app| {
             let emitter = app.handle().clone();
