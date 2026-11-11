@@ -94,7 +94,7 @@ export class DocStore {
     if (!doc || doc.text === text) return false;
     doc.text = text;
     this.emit("change");
-    this.emit("text");
+    if (id === this.activeId) this.emit("text"); // Only the active document renders.
     return true;
   }
 
