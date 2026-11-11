@@ -107,6 +107,12 @@ includes dot-folders such as `.claude`, never follows junctions or symlinks, and
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
 
+Session (S7): `library.json` also keeps the bound files open when the open set last changed
+(`session`, 32 paths with timestamps) and `restore_off` (reopen on launch is on by default; Clear
+library keeps the preference). `session_record(tokens)` maps tokens to paths natively;
+`session_restore()` reopens what is not already open after the launch queue drains, without
+taking focus from launch files; `session_setting(restore?)` reads or changes the preference.
+
 Relative references (`assets.rs`, `commands/links.rs`): `open_relative(token, href)` opens a
 Markdown file a document links to (`other.md`, `../x.md#part`, `@CLAUDE.md`, or an
 extensionless wiki-style name, which gets `.md`), and `read_asset(token, src)` returns the raw

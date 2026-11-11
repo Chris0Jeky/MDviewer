@@ -469,6 +469,12 @@ Document clicks on relative links and `@path` imports call `native.openRelative`
 `open_external`. `navigate.back` / `navigate.forward` (Alt+Left/Right) step through documents
 reached by links or the picker. The paginated workspace does not load local images yet.
 
+Session restore (S7): after the first launch drain, `native.session.restore()` reopens the last
+session's bound files (focus stays with launch files; unreopenable files are summarised in one
+notice). `recordSession()` sends the open bound tokens, coalesced (500 ms, deduplicated) and never
+during a mode transition. Command `session.toggleRestore`. Unsaved-content recovery (#197) is
+not implemented; sessions keep paths only.
+
 Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
 `src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
 batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:

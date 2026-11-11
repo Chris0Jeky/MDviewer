@@ -49,7 +49,9 @@ beforeEach(() => {
     });
   }
 });
-afterEach(() => {
+afterEach(async () => {
+  // Let this test's coalesced session record fire before the next test resets the mocks.
+  await new Promise(resolve => setTimeout(resolve, 600));
   removeListeners.splice(0).forEach(remove => remove());
   document.body.replaceChildren();
 });
@@ -72,7 +74,7 @@ describe("desktop session restore", () => {
     await vi.waitFor(() => expect(boundary.record).toHaveBeenCalledWith([token(1)]), { timeout: 2000 });
     document.getElementById("reader-close")!.click();
     await vi.waitFor(() => expect(boundary.record).toHaveBeenLastCalledWith([]), { timeout: 2000 });
-    expect(boundary.record).toHaveBeenCalledTimes(2);
+    expect(boundary.record.mock.calls).toEqual([[[token(1)]], [[]]]);
   });
 
   it("toggles the reopen-on-launch preference", async () => {
