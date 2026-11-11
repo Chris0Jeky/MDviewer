@@ -33,8 +33,8 @@ export interface FrontMatter {
 
 const FENCE_OPEN = /^\uFEFF?---[ \t]*$/;
 const FENCE_CLOSE = /^(?:---|\.\.\.)[ \t]*$/;
-const KEY_LINE = /^( *)([A-Za-z0-9_][\w.-]*|"[^"]*"|'[^']*')[ \t]*:(?:[ \t]+(.*?))?[ \t]*$/;
-const LOOKS_LIKE_YAML = /^(?:[A-Za-z0-9_"'][^:]*:(?:\s|$)|- |#)/;
+// Every quantifier here is followed by a disjoint class or the end, so matching stays linear.
+const KEY_LINE = /^( *)([\p{L}\p{N}_][\p{L}\p{N}_.-]*|"[^"]*"|'[^']*')[ \t]*:(?:[ \t]+(.*))?$/u;
 const BLOCK_SCALAR = /^[|>][-+]?\d?$/;
 
 /** Split `text` into lines lazily: front matter is small, documents may be 25 MB. */
@@ -56,7 +56,7 @@ export function readFrontMatter(text: string): { body: string; frontMatter: Fron
   const inner: string[] = [];
   for (const { line, end } of iterator) {
     if (FENCE_CLOSE.test(line)) {
-      if (!looksLikeYaml(inner)) return { body: text, frontMatter: null };
+      if (!startsWithKey(inner)) return { body: text, frontMatter: null };
       const lineCount = inner.length + 2;
       const raw = inner.join("\n");
       return {
@@ -67,7 +67,7 @@ export function readFrontMatter(text: string): { body: string; frontMatter: Fron
     inner.push(line);
   }
   // A leading thematic break is ordinary Markdown; only YAML-shaped text is a broken block.
-  if (!inner.length || !LOOKS_LIKE_YAML.test(inner[0]!)) return { body: text, frontMatter: null };
+  if (!isTopLevelKey(inner[0] ?? "")) return { body: text, frontMatter: null };
   return {
     body: text,
     frontMatter: {
@@ -77,10 +77,22 @@ export function readFrontMatter(text: string): { body: string; frontMatter: Fron
   };
 }
 
-function looksLikeYaml(inner: readonly string[]): boolean {
-  const first = inner.find(line => line.trim());
-  return first === undefined || LOOKS_LIKE_YAML.test(first);
+function isTopLevelKey(line: string): boolean {
+  return KEY_LINE.exec(line)?.[1] === "";
 }
+
+/** A leading rule, list or heading is Markdown; front matter opens with a `key:` line. */
+function startsWithKey(inner: readonly string[]): boolean {
+  const first = inner.find(line => line.trim() && !/^\s*#/.test(line));
+  return first !== undefined && isTopLevelKey(first);
+}
+
+function stripComment(value: string): string {
+  const at = value.search(/[ \t]#/);
+  return (at === -1 ? value : value.slice(0, at)).trimEnd();
+}
+
+const ESCAPES: Record<string, string> = { n: "\n", t: "\t" };
 
 function unquoteKey(key: string): string {
   return /^["']/.test(key) ? key.slice(1, -1) : key;
@@ -90,7 +102,7 @@ function unquoteKey(key: string): string {
 function scalar(value: string): string | string[] | undefined {
   if (value.startsWith('"')) {
     const match = /^"((?:[^"\\]|\\.)*)"(?:\s+#.*)?$/.exec(value);
-    return match ? match[1]!.replace(/\\(["\\/])/g, "$1").replace(/\\n/g, "\n").replace(/\\t/g, "\t") : undefined;
+    return match ? match[1]!.replace(/\\(.)/g, (_, char: string) => ESCAPES[char] ?? char) : undefined;
   }
   if (value.startsWith("'")) {
     const match = /^'((?:[^']|'')*)'(?:\s+#.*)?$/.exec(value);
@@ -108,11 +120,11 @@ function scalar(value: string): string | string[] | undefined {
     return items;
   }
   if (/^[{&*!%@`]/.test(value)) return undefined;
-  return value.replace(/\s+#.*$/, "");
+  return stripComment(value);
 }
 
 function plainColonProblem(value: string, key: string, line: number): FrontMatterProblem | null {
-  if (/^["'[{|>]/.test(value) || !/: /.test(value.replace(/\s+#.*$/, ""))) return null;
+  if (/^["'[{|>]/.test(value) || !/: /.test(stripComment(value))) return null;
   return { line, message: `The value of "${key}" contains ": " but is not quoted, so YAML rejects the whole block. Wrap the value in quotes.` };
 }
 
@@ -121,31 +133,37 @@ function parseYaml(inner: readonly string[]): Pick<FrontMatter, "entries" | "pro
   const problems: FrontMatterProblem[] = [];
   let understood = true;
   let parent: string | null = null; // a key whose value is a nested map
+  let parentIndent = 0;
   let list: string[] | null = null; // the list currently being filled
   for (let index = 0; index < inner.length; index++) {
     const line = inner[index]!;
     const documentLine = index + 2;
     if (!line.trim() || /^\s*#/.test(line)) continue;
     if (/\t/.test(line.match(/^\s*/)![0])) { understood = false; continue; }
-    const item = /^( *)- +(.*?)\s*$/.exec(line);
+    const item = /^( *)- +(.*)$/.exec(line);
     if (item && list && (item[1]!.length > 0 || parent === null)) {
-      const parsed = scalar(item[2]!);
+      const parsed = scalar(item[2]!.trimEnd());
       if (typeof parsed === "string") list.push(parsed); else understood = false;
       continue;
     }
     const keyLine = KEY_LINE.exec(line);
     if (!keyLine) { understood = false; continue; }
     const indent = keyLine[1]!.length;
-    if (indent > 0 && parent === null) { understood = false; continue; }
-    if (indent === 0) parent = null;
+    // One nesting level, at one indent; anything deeper is shown raw.
+    if (indent > 0 && (parent === null || (parentIndent && indent !== parentIndent))) { understood = false; continue; }
+    if (indent > 0) parentIndent = indent;
+    else { parent = null; parentIndent = 0; }
     const key: string = indent > 0 ? `${parent}.${unquoteKey(keyLine[2]!)}` : unquoteKey(keyLine[2]!);
-    const value = keyLine[3] ?? "";
+    const value = (keyLine[3] ?? "").trimEnd();
     list = null;
     const problem = plainColonProblem(value, key, documentLine);
     if (problem) problems.push(problem);
     if (!value) {
       // Either a list, a nested map, or an empty value; the next lines decide.
-      const next = inner.slice(index + 1).find(candidate => candidate.trim() && !/^\s*#/.test(candidate)) ?? "";
+      let next = "";
+      for (let ahead = index + 1; ahead < inner.length && !next; ahead++) {
+        if (inner[ahead]!.trim() && !/^\s*#/.test(inner[ahead]!)) next = inner[ahead]!;
+      }
       if (/^ *- /.test(next)) { list = []; entries.push({ key, value: list }); }
       else if (indent === 0 && /^ +\S/.test(next)) parent = key;
       else entries.push({ key, value: "" });
@@ -172,7 +190,7 @@ export type FrontMatterKind = "skill" | "agent" | "memory";
 
 /**
  * Which Claude Code file this is, from its path when known, else its keys.
- * ponytail: basename + key heuristic until bound documents carry display paths (S0).
+ * ponytail: the reader passes basenames until bound documents carry display paths (S0); agents then match.
  */
 export function frontMatterKind(fileName: string, frontMatter: FrontMatter): FrontMatterKind | null {
   const path = fileName.replace(/\\/g, "/").toLowerCase();
@@ -180,10 +198,8 @@ export function frontMatterKind(fileName: string, frontMatter: FrontMatter): Fro
   if (base === "skill.md") return "skill";
   if (/(?:^|\/)\.claude\/agents\/[^/]+\.md$/.test(path)) return "agent";
   if (/(?:^|\/)memory\/[^/]+\.md$/.test(path) && base !== "memory.md") return "memory";
-  const keys = new Set((frontMatter.entries ?? []).map(entry => entry.key));
-  if (keys.has("metadata.type")) return "memory";
-  if (keys.has("tools")) return "agent";
-  return null;
+  // Agents are recognised by path only: a `tools` key alone also appears in ordinary notes.
+  return frontMatter.entries?.some(entry => entry.key === "metadata.type") ? "memory" : null;
 }
 
 const KIND_LABEL: Record<FrontMatterKind, string> = { skill: "skill", agent: "agent definition", memory: "memory file" };

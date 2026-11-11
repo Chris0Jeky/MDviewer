@@ -17,7 +17,10 @@ function read(text: string) {
 
 describe("readFrontMatter: recognition and blanking", () => {
   it("returns documents without front matter unchanged", () => {
-    for (const text of ["# Title\n\nText", "", "---", "---\n\nA paragraph between rules\n\n---\n", " ---\nname: x\n---\n"]) {
+    for (const text of [
+      "# Title\n\nText", "", "---", "---\n\nA paragraph between rules\n\n---\n", " ---\nname: x\n---\n",
+      "---\n# Title\n\nIntro paragraph\n\n---\n\nRest", "---\n- a\n- b\n---\n", "---\n---\ntext", "---\n# Heading\nbody",
+    ]) {
       expect(readFrontMatter(text)).toEqual({ body: text, frontMatter: null });
     }
   });
@@ -65,9 +68,11 @@ describe("readFrontMatter: tolerant YAML reader", () => {
   it("reads an agent definition with a quoted description containing colons", () => {
     const { frontMatter } = read(fixture("agent.md"));
     expect(frontMatter.entries?.find(entry => entry.key === "description")?.value).toMatch(/^Read-only .*: it cannot/);
-    expect(frontMatterKind("reviewer.md", frontMatter)).toBe("agent");
+    expect(frontMatterKind("reviewer.md", frontMatter)).toBeNull();
     expect(frontMatterKind("C:\\repo\\.claude\\agents\\reviewer.md", frontMatter)).toBe("agent");
-    expect(frontMatterProblems("reviewer.md", frontMatter)).toEqual([]);
+    expect(frontMatterProblems("C:\\repo\\.claude\\agents\\reviewer.md", frontMatter)).toEqual([]);
+    // A `tools` key alone does not make an ordinary note an agent definition.
+    expect(frontMatterProblems("post.md", read("---\ntools: [a, b]\n---\n").frontMatter)).toEqual([]);
   });
 
   it("reads a memory file with one nested map", () => {
@@ -94,6 +99,21 @@ describe("readFrontMatter: tolerant YAML reader", () => {
     const { frontMatter } = read("---\nmap: {a: 1}\nanchor: &x 1\n---\n");
     expect(frontMatter.entries).toBeNull();
     expect(frontMatter.raw).toBe("map: {a: 1}\nanchor: &x 1");
+    expect(read("---\nmetadata:\n  a:\n    b: 1\n---\n").frontMatter.entries).toBeNull();
+  });
+
+  it("decodes escapes in one pass and reads non-ASCII keys", () => {
+    expect(read(String.raw`---
+a: "x\\n\"y\"\tz"
+标题: 中文
+---
+`).frontMatter.entries).toEqual([{ key: "a", value: 'x\\n"y"\tz' }, { key: "标题", value: "中文" }]);
+  });
+
+  it("stays fast on long whitespace runs", () => {
+    const started = performance.now();
+    read(`---\nk: a${" ".repeat(200_000)}b\n- c${" ".repeat(200_000)}d\n---\n`);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 

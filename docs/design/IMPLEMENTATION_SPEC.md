@@ -56,7 +56,7 @@ pipeline prints no front matter. The Windows reader prepends a collapsible Prope
 tolerant line reader (flat keys, one nested level, lists, quoted strings, block scalars) or
 the raw YAML in monospace. Its lint, open by default when present: an unquoted value
 containing `: `, an unterminated block, and a missing `name` or `description` in a skill,
-agent definition or memory file (by path, else basename and keys).
+agent definition or memory file (skills by basename, memory files by path or a `metadata.type` key, agents by `.claude/agents/` path).
 
 Grammar preparation uses decoded parser-recognized fences, including nested blockquotes,
 lists and footnotes. Fence-shaped text inside code examples does not request a grammar.
