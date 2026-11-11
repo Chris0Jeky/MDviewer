@@ -135,6 +135,31 @@ fn lock(registry: &Mutex<Registry>) -> std::sync::MutexGuard<'_, Registry> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Whether two absolute paths name the same location regardless of spelling:
+/// a verbatim `\\?\` prefix, `/` versus `\`, `.` components and case. A path
+/// with `..` never matches (it could alias anything).
+fn same_location(a: &Path, b: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    let parts = |path: &Path| -> Option<Vec<String>> {
+        path.components()
+            .filter(|part| !matches!(part, Component::CurDir))
+            .map(|part| match part {
+                Component::Prefix(prefix) => match prefix.kind() {
+                    Prefix::VerbatimDisk(drive) | Prefix::Disk(drive) => {
+                        Some(format!("{}:", (drive as char).to_ascii_lowercase()))
+                    }
+                    _ => Some(prefix.as_os_str().to_string_lossy().to_lowercase()),
+                },
+                Component::RootDir => Some(String::new()),
+                Component::ParentDir => None,
+                Component::CurDir => unreachable!("filtered above"),
+                Component::Normal(name) => Some(name.to_string_lossy().to_lowercase()),
+            })
+            .collect()
+    };
+    matches!((parts(a), parts(b)), (Some(a), Some(b)) if a == b)
+}
+
 /// Save to the bound file only if it is still the file and bytes this binding read.
 pub(crate) fn save_bound(
     registry: &Mutex<Registry>,
@@ -219,9 +244,7 @@ pub(crate) fn save_to_path(
     // Choosing this document's own file by name gets exactly Save's check: what is
     // there now must still be what this document read, even if it was replaced or
     // deleted meanwhile. A picker confirmation never bypasses that.
-    let same_name = |path: &Path| {
-        path.to_string_lossy().to_lowercase() == destination.to_string_lossy().to_lowercase()
-    };
+    let same_name = |path: &Path| same_location(path, destination);
     if let Some((snapshot, _, _, path)) = own.as_ref().filter(|own| same_name(&own.3)) {
         let Some(snapshot) = snapshot else {
             return failed("unsupported");
@@ -620,6 +643,18 @@ mod tests {
             save_to_path(&registry, None, &dir.path().join("x.txt"), "t", false),
             failed("invalid-destination")
         );
+    }
+
+    #[test]
+    fn locations_compare_by_component_not_spelling() {
+        let same = |a: &str, b: &str| same_location(Path::new(a), Path::new(b));
+        assert!(same(r"C:\Notes\a.md", r"c:\notes\A.MD"));
+        assert!(same(r"\\?\C:\Notes\a.md", r"C:\Notes\a.md"));
+        assert!(same(r"C:/Notes/a.md", r"C:\Notes\a.md"));
+        assert!(same(r"C:\Notes\.\a.md", r"C:\Notes\a.md"));
+        assert!(!same(r"C:\Notes\x\..\a.md", r"C:\Notes\a.md"));
+        assert!(!same(r"C:\Notes\a.md", r"D:\Notes\a.md"));
+        assert!(!same(r"C:\Notes\a.md", r"C:\Notes\b.md"));
     }
 
     #[test]
