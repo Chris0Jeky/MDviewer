@@ -18,7 +18,7 @@ export function startWorkspace(root: HTMLElement, openFilePicker: () => void, ca
     layoutInitiallyOpen: false,
   });
   if (ownedSave) addOwnedSaveButtons(root, ownedSave);
-  const detachShortcuts = mountDocumentShortcuts(root);
+  const detachShortcuts = mountDocumentShortcuts(root, { ownedSave: !!ownedSave });
   return { app, detachShortcuts };
 }
 

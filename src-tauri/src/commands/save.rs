@@ -151,13 +151,31 @@ fn same_location(a: &Path, b: &Path) -> bool {
                     _ => Some(prefix.as_os_str().to_string_lossy().to_lowercase()),
                 },
                 Component::RootDir => Some(String::new()),
-                Component::ParentDir => None,
+                // Resolve `..` lexically: a false "same" only fails closed into a conflict.
+                Component::ParentDir => Some("..".into()),
                 Component::CurDir => unreachable!("filtered above"),
                 Component::Normal(name) => Some(name.to_string_lossy().to_lowercase()),
             })
             .collect()
     };
-    matches!((parts(a), parts(b)), (Some(a), Some(b)) if a == b)
+    let resolve = |parts: Vec<String>| {
+        let mut out: Vec<String> = Vec::new();
+        for part in parts {
+            if part == ".." {
+                // Never above the root (prefix and root stay).
+                if out.len() > 2 {
+                    out.pop();
+                }
+            } else {
+                out.push(part);
+            }
+        }
+        out
+    };
+    match (parts(a), parts(b)) {
+        (Some(a), Some(b)) => resolve(a) == resolve(b),
+        _ => false,
+    }
 }
 
 /// Save to the bound file only if it is still the file and bytes this binding read.
@@ -420,6 +438,12 @@ pub(crate) async fn save_document_as(
     request: Request<'_>,
 ) -> Result<SaveResult, String> {
     let body = parse(&request)?;
+    // A token that no longer names a binding is refused before any dialog opens.
+    if let Some(token) = &body.token {
+        if lock(&state.registry).get(token).is_none() {
+            return Ok(failed("revoked"));
+        }
+    }
     let Some(_busy) = Busy::claim(&state.picker_open) else {
         return Ok(failed("busy"));
     };
@@ -666,7 +690,7 @@ mod tests {
         assert!(same(r"\\?\C:\Notes\a.md", r"C:\Notes\a.md"));
         assert!(same(r"C:/Notes/a.md", r"C:\Notes\a.md"));
         assert!(same(r"C:\Notes\.\a.md", r"C:\Notes\a.md"));
-        assert!(!same(r"C:\Notes\x\..\a.md", r"C:\Notes\a.md"));
+        assert!(same(r"C:\Notes\x\..\a.md", r"C:\Notes\a.md"));
         assert!(!same(r"C:\Notes\a.md", r"D:\Notes\a.md"));
         assert!(!same(r"C:\Notes\a.md", r"C:\Notes\b.md"));
     }

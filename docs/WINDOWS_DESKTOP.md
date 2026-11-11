@@ -97,7 +97,8 @@ keeps every layout setting and your Markdown unchanged.
 | --- | --- | --- |
 | `Ctrl+N` | Start a new document, preserving open files | Reader and editing workspace |
 | `Ctrl+O` | Open Markdown files | Reader and editing workspace |
-| `Ctrl+S` | Save a Markdown copy | Editing workspace |
+| `Ctrl+S` | Save the document to its own file (Save As if it has none) | Reading view and editing workspace |
+| `Ctrl+Shift+S` | Save As: choose a new file and keep editing it there | Reading view and editing workspace |
 | `Ctrl+F` | Find source text | Workspace with the source pane visible; reader and Preview-only keep WebView Find |
 | `Ctrl+H` | Open source replacement controls | Workspace with the source pane visible |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | Bold / Italic / Link | Source textarea |
