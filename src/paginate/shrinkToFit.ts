@@ -7,7 +7,8 @@
  *   recordSourceHeights   measure every keep-whole block IN CONTEXT (same `.doc` styles,
  *                         same ancestor insets, the printable width) and record it.
  *   shrinkToFit (Tier 3)  a code block or diagram that overflows one page only modestly
- *                         (≤ SHRINK_LIMIT) is scaled onto a single page.
+ *                         (≤ SHRINK_LIMIT, counting a keep-with-next heading above it) is
+ *                         zoomed onto a single page.
  *   markOverTallSplittable (Tier 4)  a splittable family (code, table, quote, callout) that
  *                         still cannot fit one page is marked `data-mdv-splittable`, which
  *                         print.css turns into `break-inside: auto`, so the browser's
@@ -45,27 +46,37 @@ const FIT_TOLERANCE_PX = 2;
  */
 export function recordSourceHeights(content: ParentNode, area: PageArea): void {
   const blocks = Array.from(content.querySelectorAll<HTMLElement>(ATOMIC_SELECTOR));
-  const heights = measureInContext(blocks, area);
+  const measured = measureInContext(blocks, area);
   blocks.forEach((el, index) => {
-    el.setAttribute(ATTRS.atomicSourceHeight, heights[index]!.toFixed(3));
+    el.setAttribute(ATTRS.atomicSourceHeight, measured[index]!.height.toFixed(3));
+    headingLead.set(el, measured[index]!.lead);
   });
 }
+
+/**
+ * Space a keep-with-next heading directly above a block takes on the block's page
+ * (heading top to block top). Tier 3 must fit heading + shrunk block on one page, or the
+ * fragmenter splits the shrunk block to honour the heading.
+ */
+const headingLead = new WeakMap<HTMLElement, number>();
 
 export function shrinkToFit(content: ParentNode, area: PageArea): void {
   const candidates = content.querySelectorAll<HTMLElement>(SHRINK_SELECTOR);
   for (const el of candidates) {
-    const naturalHeight = recordedHeight(el) ?? measureInContext([el], area)[0]!;
+    const naturalHeight = recordedHeight(el) ?? measureInContext([el], area)[0]!.height;
+    // Leave a 2px safety gap so rounding never pushes the scaled block over.
+    const room = area.heightPx - 2 - (headingLead.get(el) ?? 0);
+    const scale = room / naturalHeight;
 
-    // Only shrink blocks that overflow one page but stay within the ceiling.
-    if (naturalHeight > area.heightPx && naturalHeight <= area.heightPx * SHRINK_LIMIT) {
-      // Leave a 2px safety gap so rounding never pushes the scaled block over.
-      const scale = (area.heightPx - 2) / naturalHeight;
-      el.style.transformOrigin = "top left";
-      el.style.transform = `scale(${scale})`;
-      // Reserve the scaled footprint so the chunker reflows around the real height.
-      el.style.height = `${naturalHeight * scale}px`;
-      // Counter the horizontal shrink so the block still fills the column width.
-      el.style.width = `${100 / scale}%`;
+    // Only shrink blocks that overflow one page, and only as far as the ceiling allows;
+    // anything taller is left to Tier 4.
+    if (naturalHeight > area.heightPx && scale >= 1 / SHRINK_LIMIT) {
+      // `zoom`, not a transform: zoom scales the LAYOUT box, so the fragmenter sees the
+      // shrunk height. A transformed block keeps its unscaled content height in layout;
+      // that content overflowed its reserved box and Chromium fragmented the overflow into
+      // the next page column, so "shrunk to fit" blocks were silently split. The zoomed
+      // block also keeps filling the column width (its zoomed width is the column).
+      el.style.zoom = String(scale);
       el.dataset[camel(ATTRS.shrunk)] = scale.toFixed(3);
     }
   }
@@ -93,7 +104,10 @@ function recordedHeight(el: HTMLElement): number | null {
  * carries the typography tokens), inside a hidden host at the printable width. All
  * probes share one host, so the whole batch costs a single layout.
  */
-function measureInContext(blocks: HTMLElement[], area: PageArea): number[] {
+function measureInContext(
+  blocks: HTMLElement[],
+  area: PageArea,
+): Array<{ height: number; lead: number }> {
   if (blocks.length === 0) return [];
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
@@ -106,18 +120,24 @@ function measureInContext(blocks: HTMLElement[], area: PageArea): number[] {
   });
   const probes = blocks.map((el) => {
     const probe = el.cloneNode(true) as HTMLElement;
-    let wrapped: HTMLElement = probe;
+    const previous = el.previousElementSibling;
+    const heading = previous && /^H[1-6]$/.test(previous.tagName) ? (previous.cloneNode(true) as HTMLElement) : null;
+    let wrapped: HTMLElement | null = null;
     for (let ancestor = el.parentElement; ancestor; ancestor = ancestor.parentElement) {
       const shell = ancestor.cloneNode(false) as HTMLElement;
-      shell.appendChild(wrapped);
+      if (wrapped) shell.appendChild(wrapped);
+      else shell.append(...(heading ? [heading, probe] : [probe]));
       wrapped = shell;
     }
-    host.appendChild(wrapped);
-    return probe;
+    host.appendChild(wrapped ?? probe);
+    return { probe, heading: wrapped ? heading : null };
   });
   document.body.appendChild(host);
   try {
-    return probes.map((probe) => probe.getBoundingClientRect().height);
+    return probes.map(({ probe, heading }) => {
+      const rect = probe.getBoundingClientRect();
+      return { height: rect.height, lead: heading ? rect.top - heading.getBoundingClientRect().top : 0 };
+    });
   } finally {
     host.remove();
   }

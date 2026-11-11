@@ -7,8 +7,8 @@ import { shrinkToFit } from "../src/paginate/shrinkToFit";
 // jsdom has no layout engine, so the natural height is stubbed through the
 // recorded `data-mdv-source-height` attribute — the same value
 // recordSplittableSourceHeights would have stored pre-pagination — instead of
-// measuring a real probe. If the scaling block (lines 44-54) were dropped,
-// the first test fails: transform/height/width/data-shrunk would all stay empty.
+// measuring a real probe. If the scaling block were dropped, the first
+// test fails: zoom and data-shrunk would stay empty.
 const AREA: PageArea = { widthPx: 800, heightPx: 1000 };
 
 /** Detached container holding a single <pre> with a stubbed natural height. */
@@ -29,11 +29,10 @@ describe("shrinkToFit regression pin", () => {
     shrinkToFit(root, AREA);
 
     const scale = (AREA.heightPx - 2) / naturalHeight;
-    expect(pre.style.transform.startsWith("scale(")).toBe(true);
-    expect(pre.style.height).not.toBe("");
-    expect(Number.parseFloat(pre.style.height)).toBeCloseTo(AREA.heightPx - 2, 3);
-    expect(pre.style.width.endsWith("%")).toBe(true);
-    expect(Number.parseFloat(pre.style.width)).toBeCloseTo(100 / scale, 3);
+    // Zoom (not a transform) so the fragmenter sees the shrunk layout height.
+    expect(Number.parseFloat(pre.style.zoom)).toBeCloseTo(scale, 6);
+    expect(naturalHeight * Number.parseFloat(pre.style.zoom)).toBeCloseTo(AREA.heightPx - 2, 3);
+    expect(pre.style.transform).toBe("");
     expect(pre.dataset.shrunk).toBe(scale.toFixed(3));
   });
 
@@ -42,9 +41,8 @@ describe("shrinkToFit regression pin", () => {
 
     shrinkToFit(root, AREA);
 
+    expect(pre.style.zoom).toBe("");
     expect(pre.style.transform).toBe("");
-    expect(pre.style.height).toBe("");
-    expect(pre.style.width).toBe("");
     expect(pre.hasAttribute(ATTRS.shrunk)).toBe(false);
   });
 });
