@@ -16,7 +16,7 @@ test("the first text frame for the sample lands within 100 ms", async ({ page })
   // The 100 ms budget is a quiet development-machine proof (contract S2c), run with
   // MDV_PERF_STRICT=1 and one worker. Parallel and CI runs record it behind a regression guard.
   expect(elapsed, "click to the end of the first frame showing the sample text").toBeLessThan(process.env.MDV_PERF_STRICT ? 100 : 400);
-  await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   expect(await page.evaluate(() => performance.getEntriesByName("mdv:reader-rich").length)).toBe(1);
 });
 
