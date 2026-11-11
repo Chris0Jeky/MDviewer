@@ -42,8 +42,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx eslint:*)",
       "Bash(npx playwright:*)",
-      "Bash(python scripts/agent_hooks/*.py:*)",
-      "Bash(python -m py_compile scripts/agent_hooks/*.py:*)"
+      "Bash(python scripts/agent_hooks/smoke_test.py:*)",
+      "Bash(python scripts/agent_hooks/validate_skills.py:*)",
+      "Bash(python scripts/agent_hooks/render_failure_ledger.py:*)",
+      "Bash(python -m py_compile:*)"
     ],
     "deny": [
       "Bash(rm -rf *)",

@@ -402,7 +402,7 @@
 > proves per-deploy the app phones nowhere). Headless Grok review attempted 3×
 > — the CLI hangs on any tool-using invocation in this environment (trivial
 > no-tool prompt works); merge proceeded on self-review + Codex + green CI per
-> the standing no-Codex-requests order. Production is now deployment
+> the then-standing review order (struck 2026-11-11). Production is now deployment
 > **`f97778db`** from `main` **`df50e7a`** (immutable URL
 > `https://f97778db.mdviewer-c9r.pages.dev/`, id
 > `f97778db-22ac-4637-b40c-758ecd96885e`), smoke-verified live: identical
