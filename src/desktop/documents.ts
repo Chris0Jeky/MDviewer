@@ -160,7 +160,8 @@ export class DesktopDocuments {
       if (!app || !baseline?.binding || !app.store.openDocs.some(doc => doc.id === target.id)) return false;
       update(baseline.binding);
       this.baselines.set(target.id, { ...baseline, text: result.text, dirty: false });
-      app.store.updateText(target.id, result.text);
+      // Re-seed the editor too: updateText would leave the textarea on the old text.
+      app.store.replaceText(target.id, result.text);
       return true;
     }
     const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);

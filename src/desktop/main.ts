@@ -120,7 +120,9 @@ function syncDocuments(): void {
     && !dismissedConflicts.has(target.binding.token);
   for (const { bar, text } of conflictBars) {
     bar.hidden = !conflicted;
-    if (conflicted) text.textContent = `${target.name} changed on disk. Your edits are kept until you choose.`;
+    const message = conflicted ? `${target.name} changed on disk. Your edits are kept until you choose.` : "";
+    // role=alert re-announces on every text write; write only when it changes.
+    if (conflicted && text.textContent !== message) text.textContent = message;
     for (const control of bar.querySelectorAll("button")) control.disabled = changingMode || nativeSaveBusy;
   }
 }
@@ -518,7 +520,7 @@ async function followChange(token: string): Promise<void> {
   const target = docs.byToken(token);
   if (!target) return;
   let result: ReadResult;
-  try { result = await native.readDocument(token, !target.dirty); }
+  try { result = await native.readDocument(token, !target.dirty, target.binding?.generation ?? 0); }
   catch { return; } // A failed re-read changes nothing; the next notification retries.
   const current = docs.byToken(token);
   if (!current || current.id !== target.id) return;
@@ -548,10 +550,13 @@ async function followChange(token: string): Promise<void> {
 async function reloadFromDisk(): Promise<void> {
   const target = docs.saveTarget();
   if (!target?.binding || changingMode || nativeSaveBusy) return;
-  const result = await native.readDocument(target.binding.token, true).catch(() => null);
+  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
   if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
     if (target.owner === "reader") void render();
     report(`Reloaded ${target.name} from disk.`);
+  } else if (result?.outcome === "unchanged") {
+    docs.markDisk(target.binding.token, "synced");
+    report(`${target.name} already matches the file on disk.`);
   } else if (result?.outcome === "missing") {
     docs.markDisk(target.binding.token, "missing");
     report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);

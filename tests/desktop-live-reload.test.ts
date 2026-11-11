@@ -88,10 +88,21 @@ describe("desktop live reload", () => {
     boundary.read.mockResolvedValueOnce(changed("# One\n\nAdded by an agent."));
     boundary.changed!([TOKEN]);
     await vi.waitFor(() => expect(shown()).toBe("# One\n\nAdded by an agent."));
-    expect(boundary.read).toHaveBeenCalledWith(TOKEN, true);
+    expect(boundary.read).toHaveBeenCalledWith(TOKEN, true, 0);
     expect(option(), "a reload is a clean state, not an edit").toBe("notes.md");
     expect(scroll.scrollTop).toBe(140);
     expect(bars().every(bar => bar.hidden)).toBe(true);
+  });
+
+  it("a clean workspace document reloads into the editor, not only the store", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    const reseeded = vi.fn();
+    app.store.on("change", reseeded); // App re-seeds the source editor on "change".
+    boundary.read.mockResolvedValueOnce(changed("# Agent rewrite"));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(app.store.active!.text).toBe("# Agent rewrite"));
+    expect(reseeded).toHaveBeenCalled();
+    expect(option()).toBe("notes.md");
   });
 
   it("our own save echoing back changes nothing", async () => {
@@ -112,7 +123,7 @@ describe("desktop live reload", () => {
     boundary.read.mockResolvedValueOnce(changed(null));
     boundary.changed!([TOKEN]);
     await vi.waitFor(() => expect(visibleBar()).toBeDefined());
-    expect(boundary.read).toHaveBeenCalledWith(TOKEN, false);
+    expect(boundary.read).toHaveBeenCalledWith(TOKEN, false, 0);
     expect(visibleBar()!.textContent).toContain("notes.md changed on disk");
     expect(app.store.active!.text, "nothing is discarded without a click").toBe("# Mine");
     // Keep mine hides the bar; the edits stay dirty and Save will still conflict.
@@ -126,7 +137,7 @@ describe("desktop live reload", () => {
     boundary.read.mockResolvedValueOnce(changed("# Theirs", 1));
     visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="reload"]')!.click();
     await vi.waitFor(() => expect(app.store.active!.text).toBe("# Theirs"));
-    expect(boundary.read).toHaveBeenLastCalledWith(TOKEN, true);
+    expect(boundary.read).toHaveBeenLastCalledWith(TOKEN, true, 0);
     expect(option()).toBe("notes.md");
     expect(visibleBar()).toBeUndefined();
   });
@@ -137,7 +148,7 @@ describe("desktop live reload", () => {
     let finish!: (result: ReadResult) => void;
     boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     boundary.changed!([TOKEN]);
-    expect(boundary.read).toHaveBeenCalledWith(TOKEN, true); // Clean when the notification arrived.
+    expect(boundary.read).toHaveBeenCalledWith(TOKEN, true, 0); // Clean when the notification arrived.
     app.store.updateText(doc.id, "# Typed meanwhile");
     finish(changed("# Theirs"));
     await vi.waitFor(() => expect(visibleBar()).toBeDefined());

@@ -69,7 +69,8 @@ export const native = {
     } }),
   releaseDocument: (token: string): Promise<void> => invoke("release_document", { token }),
   /** Re-read a bound file after a change notification; `adopt` moves the binding to the new bytes. */
-  readDocument: (token: string, adopt: boolean): Promise<ReadResult> => invoke("read_document", { token, adopt }),
+  readDocument: (token: string, adopt: boolean, generation: number): Promise<ReadResult> =>
+    invoke("read_document", { token, adopt, generation }),
   /** Changed files arrive as capability tokens only, never paths or contents. */
   onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
     listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),
