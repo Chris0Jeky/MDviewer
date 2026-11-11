@@ -1,4 +1,4 @@
-import { rangeOf, sectionRange, selectionRange, sliceSource, type ReaderSource } from "./sourcemap";
+import { SOURCE_ATTR, rangeOf, sectionRange, selectionRange, sliceSource, type ReaderSource } from "./sourcemap";
 
 /**
  * Reader copy toolkit: a Copy button on every code block, Copy link and Copy section on
@@ -85,6 +85,7 @@ export function decorateCopy(root: HTMLElement, source: ReaderSource, fileName: 
     if (body === undefined) continue; // indented code and raw HTML <pre> have no fence body
     const wrapper = document.createElement("div");
     wrapper.className = "reader-code";
+    wrapper.setAttribute(SOURCE_ATTR, pre.getAttribute(SOURCE_ATTR)!);
     pre.replaceWith(wrapper);
     wrapper.append(pre, iconButton("reader-copy", "Copy code", "copy", () => { void copy(body, `Copied ${lineCount(body)} of code`); }));
   }

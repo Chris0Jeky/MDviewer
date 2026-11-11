@@ -7,8 +7,9 @@ import { setSource, sourceOf } from "./copy";
  * Mermaid figure, open details), and only the others are replaced. Kept nodes get their
  * line ranges moved to the new positions. Returns how many blocks were replaced.
  *
- * Call it as the `paint` step of `renderReaderDocument` for the SAME document (live reload,
- * Edit): copy handlers keep their file name. The upgrade that follows finds placeholders and
+ * Call it as the `paint` step of `renderReaderDocument` for the SAME document and settings
+ * (live reload, Edit): copy handlers keep their file name, and kept code keeps its theme, so
+ * a settings change needs a full render. The upgrade that follows finds placeholders and
  * diagram sources only in replaced blocks.
  *
  * Keys are the first-pass markup without line ranges, not the block's own source, because
@@ -17,7 +18,7 @@ import { setSource, sourceOf } from "./copy";
  * ponytail: kept nodes are re-inserted, so focus inside them is lost; insert in place if Edit needs it.
  */
 const firstPass = new WeakMap<Element, string>();
-const RANGE = new RegExp(` ${SOURCE_ATTR}="\\d+-\\d+"`, "g");
+const RANGE = new RegExp(` ${SOURCE_ATTR}="(\\d+)-(\\d+)"`, "g");
 
 export function patchDocument(live: HTMLElement, next: HTMLElement): number {
   const available = new Map<string, Element[]>();
@@ -27,7 +28,9 @@ export function patchDocument(live: HTMLElement, next: HTMLElement): number {
   }
   let replaced = 0;
   const children = [...next.children].map(node => {
-    const key = node.outerHTML.replace(RANGE, "");
+    // Ranges relative to the block's start: same markup with different inner spacing differs.
+    const base = Number(stamp(node)?.getAttribute(SOURCE_ATTR)?.split("-")[0] ?? 0);
+    const key = node.outerHTML.replace(RANGE, (_, start: string, end: string) => ` r="${Number(start) - base}-${Number(end) - base}"`);
     const kept = available.get(key)?.shift();
     if (!kept) {
       replaced++;

@@ -45,6 +45,15 @@ describe("reader block patching", () => {
     expect(live.querySelector("a")?.getAttribute("href")).toBe("https://example.com/b");
   });
 
+  it("replaces a block whose markup is equal but whose inner line offsets moved", async () => {
+    const live = document.createElement("div");
+    await patch(live, "- a\n\n- b\n");
+    const list = live.querySelector("ul")!;
+    expect(await patch(live, "- a\n\n\n- b\n")).toBe(1);
+    expect(live.querySelector("ul")).not.toBe(list);
+    expect([...live.querySelectorAll("li")].map(item => item.getAttribute("data-src"))).toEqual(["1-1", "4-4"]);
+  });
+
   it("replaces blocks it did not insert itself", async () => {
     const live = document.createElement("div");
     live.innerHTML = "<p>Fresh.</p>";

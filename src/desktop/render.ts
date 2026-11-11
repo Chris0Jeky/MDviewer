@@ -51,6 +51,7 @@ export async function renderReaderDocument(
   document.setAttribute(ATTRS.codeTheme, settings.codeTheme);
   document.innerHTML = result.html;
   if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
+  // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
   decorateCopy(document, source, fileName);
   const warnings = result.warnings.map(warning => warning.message);
   if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");
@@ -58,11 +59,16 @@ export async function renderReaderDocument(
   const root = paint ? paint(document) : document;
   if (!root) return { document, warnings };
   // Let the text reach the screen before grammar and engine loading compete for the thread.
+  // A hidden or minimized window draws no frames, so a timeout bounds the wait.
   if (paint && window.requestAnimationFrame) {
-    await new Promise<void>(resolve => window.requestAnimationFrame(() => setTimeout(() => {
-      performance.mark("mdv:reader-text"); // after the frame that first shows the text
-      resolve();
-    })));
+    await new Promise<void>(resolve => {
+      const done = (): void => { clearTimeout(fallback); resolve(); };
+      const fallback = setTimeout(done, 100);
+      window.requestAnimationFrame(() => setTimeout(() => {
+        performance.mark("mdv:reader-text"); // after the frame that first shows the text
+        done();
+      }));
+    });
   }
   const reason = (error: unknown): string => error instanceof Error ? error.message : String(error);
   // The text is already on screen: an upgrade failure is a warning, never a failed render.
