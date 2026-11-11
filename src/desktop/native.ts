@@ -3,7 +3,16 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export interface OpenBatch {
-  documents: Array<{ name: string; text: string; bytes: number }>;
+  documents: Array<{
+    name: string;
+    text: string;
+    bytes: number;
+    token?: string | null;
+    path?: string;
+    dir?: string;
+    encoding?: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
+    eol?: "lf" | "crlf" | "cr" | "mixed" | "none";
+  }>;
   errors: Array<{ name: string; message: string }>;
   canceled: boolean;
 }
