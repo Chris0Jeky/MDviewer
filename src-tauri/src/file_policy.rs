@@ -9,11 +9,105 @@ use std::path::{Path, PathBuf};
 pub const MAX_FILE_BYTES: u64 = 25_000_000;
 pub const MAX_BATCH_FILES: usize = 32;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Encoding {
+    Utf8,
+    Utf8Bom,
+    Utf16Le,
+    Utf16Be,
+}
+
+impl Encoding {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Utf8 => "utf-8",
+            Self::Utf8Bom => "utf-8-bom",
+            Self::Utf16Le => "utf-16le",
+            Self::Utf16Be => "utf-16be",
+        }
+    }
+
+    fn detect(bytes: &[u8]) -> Self {
+        if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+            Self::Utf8Bom
+        } else if bytes.starts_with(&[0xff, 0xfe]) {
+            Self::Utf16Le
+        } else if bytes.starts_with(&[0xfe, 0xff]) {
+            Self::Utf16Be
+        } else {
+            Self::Utf8
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Eol {
+    Lf,
+    Crlf,
+    Cr,
+    Mixed,
+    None,
+}
+
+impl Eol {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lf => "lf",
+            Self::Crlf => "crlf",
+            Self::Cr => "cr",
+            Self::Mixed => "mixed",
+            Self::None => "none",
+        }
+    }
+
+    fn detect(text: &str) -> Self {
+        let mut bytes = text.bytes().peekable();
+        let (mut lf, mut crlf, mut cr) = (false, false, false);
+        while let Some(byte) = bytes.next() {
+            match byte {
+                b'\r' if bytes.peek() == Some(&b'\n') => {
+                    crlf = true;
+                    bytes.next();
+                }
+                b'\r' => cr = true,
+                b'\n' => lf = true,
+                _ => {}
+            }
+        }
+        match (lf, crlf, cr) {
+            (false, false, false) => Self::None,
+            (true, false, false) => Self::Lf,
+            (false, true, false) => Self::Crlf,
+            (false, false, true) => Self::Cr,
+            _ => Self::Mixed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileIdentity {
+    pub volume_serial: u64,
+    pub file_id: [u8; 16],
+}
+
+// Supplied by the host from the exact raw bytes and open read handle. Keeping the
+// capture callback here leaves cryptography and platform FFI outside this module.
+#[derive(Debug)]
+pub struct ReadRevision {
+    pub digest: [u8; 32],
+    pub identity: Option<FileIdentity>,
+}
+
 #[derive(Debug)]
 pub struct Document {
     pub name: String,
     pub text: String,
     pub bytes: u64,
+    pub path: PathBuf,
+    pub digest: [u8; 32],
+    pub identity: Option<FileIdentity>,
+    pub encoding: Encoding,
+    pub eol: Eol,
 }
 
 #[derive(Debug)]
@@ -60,7 +154,10 @@ pub fn resolve_launch_paths(args: impl IntoIterator<Item = OsString>, cwd: &Path
         .collect()
 }
 
-pub fn read_batch(paths: impl IntoIterator<Item = PathBuf>) -> ReadBatch {
+pub fn read_batch(
+    paths: impl IntoIterator<Item = PathBuf>,
+    capture: impl Fn(&File, &[u8]) -> ReadRevision,
+) -> ReadBatch {
     let mut batch = ReadBatch::default();
     let mut remaining = MAX_FILE_BYTES;
     let mut skipped = 0;
@@ -69,7 +166,7 @@ pub fn read_batch(paths: impl IntoIterator<Item = PathBuf>) -> ReadBatch {
             skipped += 1;
             continue;
         }
-        match read_markdown(&path, remaining) {
+        match read_markdown(&path, remaining, &capture) {
             Ok(document) => {
                 // Limit both disk bytes and decoded UTF-8: UTF-16 can grow when decoded.
                 remaining =
@@ -135,7 +232,11 @@ fn is_local_file_path(path: &Path) -> bool {
     path.is_absolute()
 }
 
-fn read_markdown(path: &Path, limit: u64) -> Result<Document, FileError> {
+pub fn read_markdown(
+    path: &Path,
+    limit: u64,
+    capture: impl FnOnce(&File, &[u8]) -> ReadRevision,
+) -> Result<Document, FileError> {
     let limit = limit.min(MAX_FILE_BYTES);
     if !is_local_file_path(path) {
         return Err(error_for(
@@ -193,8 +294,10 @@ fn read_markdown(path: &Path, limit: u64) -> Result<Document, FileError> {
             "This selection exceeds the 25 MB limit. Open fewer or smaller files.",
         ));
     }
-    let raw = read_bounded(file, limit).map_err(|message| error_for(path, message))?;
+    let raw = read_bounded(&file, limit).map_err(|message| error_for(path, message))?;
     let bytes = raw.len() as u64;
+    let revision = capture(&file, &raw);
+    let encoding = Encoding::detect(&raw);
     let text = decode_markdown(raw).map_err(|message| error_for(path, message))?;
     if text.len() as u64 > limit {
         return Err(error_for(
@@ -204,8 +307,13 @@ fn read_markdown(path: &Path, limit: u64) -> Result<Document, FileError> {
     }
     Ok(Document {
         name: filename(path),
+        eol: Eol::detect(&text),
         text,
         bytes,
+        path: path.to_path_buf(),
+        digest: revision.digest,
+        identity: revision.identity,
+        encoding,
     })
 }
 
@@ -265,6 +373,22 @@ mod tests {
     use std::io::Cursor;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    // The standalone policy suite tests reads without linking host dependencies.
+    fn policy_revision(_: &File, _: &[u8]) -> ReadRevision {
+        ReadRevision {
+            digest: [0; 32],
+            identity: None,
+        }
+    }
+
+    fn read_markdown(path: &Path, limit: u64) -> Result<Document, FileError> {
+        super::read_markdown(path, limit, policy_revision)
+    }
+
+    fn read_batch(paths: impl IntoIterator<Item = PathBuf>) -> ReadBatch {
+        super::read_batch(paths, policy_revision)
+    }
+
     static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
     struct TestDirectory(PathBuf);
@@ -289,6 +413,84 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn captures_each_encoding_and_original_line_ending_style_without_normalizing() {
+        let dir = TestDirectory::new();
+        for (encoding, wire_encoding) in [
+            (Encoding::Utf8, "utf-8"),
+            (Encoding::Utf8Bom, "utf-8-bom"),
+            (Encoding::Utf16Le, "utf-16le"),
+            (Encoding::Utf16Be, "utf-16be"),
+        ] {
+            for (text, eol, wire_eol) in [
+                ("", Eol::None, "none"),
+                ("caf\u{e9}", Eol::None, "none"),
+                ("a\nb\n", Eol::Lf, "lf"),
+                ("a\r\nb\r\n", Eol::Crlf, "crlf"),
+                ("a\rb\r", Eol::Cr, "cr"),
+                ("a\r\nb\n", Eol::Mixed, "mixed"),
+                ("a\nb\r", Eol::Mixed, "mixed"),
+                ("a\rb\r\n", Eol::Mixed, "mixed"),
+                ("a\r\nb\nc\rd", Eol::Mixed, "mixed"),
+                ("a\nb", Eol::Lf, "lf"),
+            ] {
+                let mut raw = match encoding {
+                    Encoding::Utf8 => vec![],
+                    Encoding::Utf8Bom => vec![0xef, 0xbb, 0xbf],
+                    Encoding::Utf16Le => vec![0xff, 0xfe],
+                    Encoding::Utf16Be => vec![0xfe, 0xff],
+                };
+                match encoding {
+                    Encoding::Utf8 | Encoding::Utf8Bom => raw.extend_from_slice(text.as_bytes()),
+                    Encoding::Utf16Le | Encoding::Utf16Be => {
+                        for unit in text.encode_utf16() {
+                            raw.extend_from_slice(&if encoding == Encoding::Utf16Le {
+                                unit.to_le_bytes()
+                            } else {
+                                unit.to_be_bytes()
+                            });
+                        }
+                    }
+                }
+                let path = dir.write("metadata.md", &raw);
+                let doc = read_markdown(&path, MAX_FILE_BYTES).unwrap();
+                assert_eq!(doc.encoding, encoding);
+                assert_eq!(doc.encoding.as_str(), wire_encoding);
+                assert_eq!(doc.eol, eol);
+                assert_eq!(doc.eol.as_str(), wire_eol);
+                assert_eq!(doc.text, text);
+                assert_eq!(doc.bytes, raw.len() as u64);
+                assert_eq!(doc.path, path);
+            }
+        }
+    }
+
+    #[test]
+    fn revision_capture_observes_the_read_handle_and_exact_raw_bytes() {
+        let dir = TestDirectory::new();
+        let path = dir.write("capture.md", b"\xef\xbb\xbfabc");
+        let document = super::read_markdown(&path, MAX_FILE_BYTES, |file, raw| {
+            assert_eq!(file.metadata().unwrap().len(), 6);
+            assert_eq!(raw, b"\xef\xbb\xbfabc");
+            ReadRevision {
+                digest: [42; 32],
+                identity: Some(FileIdentity {
+                    volume_serial: 7,
+                    file_id: [8; 16],
+                }),
+            }
+        })
+        .unwrap();
+        assert_eq!(document.digest, [42; 32]);
+        assert_eq!(
+            document.identity,
+            Some(FileIdentity {
+                volume_serial: 7,
+                file_id: [8; 16]
+            })
+        );
     }
 
     #[test]

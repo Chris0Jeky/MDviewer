@@ -11,7 +11,16 @@ Only the local `main` window has these capabilities.
 
 ```ts
 interface OpenBatch {
-  documents: Array<{ name: string; text: string; bytes: number }>;
+  documents: Array<{
+    name: string;
+    text: string;
+    bytes: number;
+    token: string | null;
+    path: string;
+    dir: string;
+    encoding: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
+    eol: "lf" | "crlf" | "cr" | "mixed" | "none";
+  }>;
   errors: Array<{ name: string; message: string }>;
   canceled: boolean;
 }
@@ -43,8 +52,18 @@ without a BOM, and UTF-16 LE/BE with a BOM. Invalid encodings are rejected rathe
 than silently replaced. Metadata and the actual read are both bounded. Each file
 and each batch is limited to 25,000,000 disk/decoded bytes, and one batch/launch
 queue is limited to 32 files. Errors are returned alongside successfully opened
-documents. Only basenames are returned; absolute paths and document contents are
-never logged. Opened documents stay in memory. UNC and device paths are rejected.
+documents. Display paths (`path` and `dir`) are returned for opened documents
+(owner-authorized boundary change, companion push 2026-11-11); the webview still
+cannot supply a path. Paths and document contents are never logged. Errors retain
+only a basename and a closed message.
+
+A process-lifetime capability registry behind a mutex holds at most 32 bindings,
+each with a random 128-bit token, native path, same-read-handle Windows identity,
+SHA-256 of the raw bytes, byte length, encoding, original line-ending style and
+generation. Duplicate opens receive distinct tokens; at capacity (or if secure
+randomness is unavailable), files still open with `token: null` and no existing
+binding is evicted. No save, lookup or revocation IPC is added in this slice.
+Opened documents stay in memory. UNC and device paths are rejected.
 
 `open_external` accepts only HTTP(S) URLs without embedded credentials or control
 characters. Call it only for an explicit user link action. Other schemes and
