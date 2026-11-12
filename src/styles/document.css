@@ -264,6 +264,48 @@
   cursor: default;
 }
 
+/* Actionable marks beyond to do / done, and choices (src/render/actionableGlyphs.ts). Same
+ * gutter box as the task-list checkbox, drawn on a <span> with background images (inline
+ * SVG, nothing fetched; no pseudo-elements, for the raster export path described above). */
+.doc .am-box,
+.doc .am-radio {
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+  width: 0.95em;
+  height: 0.95em;
+  box-sizing: border-box;
+  border: 1.5px solid var(--doc-fg-muted);
+  border-radius: 3px;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 78% 78%;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.doc .am-radio { border-radius: 50%; }
+.doc .am-radio.am-checked {
+  border-color: var(--doc-link);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='4.5' fill='%231a4fb8'/%3E%3C/svg%3E");
+}
+/* In progress: the box half filled. */
+.doc .am-box[data-mark="/"] {
+  border-color: var(--doc-link);
+  background-size: 100% 100%;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M0 16 L16 0 L16 16 Z' fill='%231a4fb8'/%3E%3C/svg%3E");
+}
+/* Dropped: an empty box and the item struck through. */
+.doc .am-dropped { text-decoration: line-through; color: var(--doc-fg-muted); }
+/* Blocked and question: the box carries a "!" or "?". */
+.doc .am-box[data-mark="!"] {
+  border-color: #a4161a;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 2.5 V9.5' stroke='%23a4161a' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='13' r='1.5' fill='%23a4161a'/%3E%3C/svg%3E");
+}
+.doc .am-box[data-mark="?"] {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M5.2 5.6 a2.9 2.9 0 1 1 4 2.7 c-1 .5-1.2 1-1.2 2' fill='none' stroke='%23555b63' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='13.3' r='1.3' fill='%23555b63'/%3E%3C/svg%3E");
+}
+
 /* -----------------------------------------------------------------------------
  * Inline code. (Block code coloring lives in shiki.css.)
  * -------------------------------------------------------------------------- */

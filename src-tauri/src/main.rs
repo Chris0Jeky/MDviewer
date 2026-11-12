@@ -1,8 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assets;
 mod commands;
 mod export_policy;
 mod file_policy;
+mod library;
+mod linepatch;
 mod registry;
 mod replace;
 mod watch;
@@ -29,6 +32,8 @@ struct DesktopState {
     registry: std::sync::Arc<Mutex<Registry>>,
     /// Created in setup (it needs the app handle to emit); starts watching lazily.
     watch: std::sync::OnceLock<watch::FileWatch>,
+    /// Recent/pinned paths and timestamps, loaded on first library use.
+    library: commands::library::LibrarySlot,
 }
 
 impl DesktopState {
@@ -89,10 +94,22 @@ fn main() {
             commands::open::take_pending_files,
             commands::external::open_external,
             commands::export::save_export,
+            commands::patch::patch_document,
             commands::save::save_document,
             commands::save::save_document_as,
             commands::save::release_document,
-            commands::reload::read_document
+            commands::reload::read_document,
+            commands::library::library_list,
+            commands::library::library_scan,
+            commands::library::library_open,
+            commands::library::library_pin,
+            commands::library::library_unpin,
+            commands::library::library_forget,
+            commands::library::library_mark_seen,
+            commands::library::library_add_project,
+            commands::library::library_clear,
+            commands::links::open_relative,
+            commands::links::read_asset
         ])
         .setup(|app| {
             let emitter = app.handle().clone();

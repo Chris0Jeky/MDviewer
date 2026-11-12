@@ -11,8 +11,12 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, 
  * The reader's collapsible Properties card. Built with textContent only: front matter is
  * untrusted document text and never passes through innerHTML. Opens itself when it has problems.
  */
-export function frontMatterCard(frontMatter: FrontMatter, fileName: string): HTMLElement {
-  const problems = frontMatterProblems(fileName, frontMatter);
+export function frontMatterCard(frontMatter: FrontMatter | null, fileName: string, documentProblems: readonly string[] = []): HTMLElement {
+  frontMatter ??= { raw: "", lineCount: 0, entries: [], problems: [] };
+  const problems = [
+    ...frontMatterProblems(fileName, frontMatter).map(problem => `Line ${problem.line}: ${problem.message}`),
+    ...documentProblems,
+  ];
   const card = node("details", "reader-properties");
   card.open = problems.length > 0;
   if (frontMatter.lineCount) card.dataset.src = `1-${frontMatter.lineCount}`;
@@ -25,7 +29,7 @@ export function frontMatterCard(frontMatter: FrontMatter, fileName: string): HTM
   card.append(summary);
   if (problems.length) {
     const list = node("ul", "reader-properties-problems");
-    for (const problem of problems) list.append(node("li", "", `Line ${problem.line}: ${problem.message}`));
+    for (const problem of problems) list.append(node("li", "", problem));
     card.append(list);
   }
   if (frontMatter.entries?.length) {

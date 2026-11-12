@@ -26,6 +26,10 @@ cancellation #201 and profile measured authoring bottlenecks #202. Unicode headi
 identity #204, upstream engagement accounting #206 and pagination whitespace
 research #205 remain separate.
 
+[Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) joined the companion push on 2026-11-11
+(owner: "Yes, add it"): clickable marks, choices, fields and status chips written back byte-exact,
+in slices A1–A5. Specification only; nothing is implemented yet.
+
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
 [optional recovery](design/RECOVERY.md) designs merged in #209; no in-place writes

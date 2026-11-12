@@ -36,7 +36,7 @@ pub(crate) struct OpenBatch {
 
 impl OpenBatch {
     /// Start following every bound file in this batch.
-    fn follow(self, state: &DesktopState) -> Self {
+    pub(crate) fn follow(self, state: &DesktopState) -> Self {
         for doc in &self.documents {
             if let Some(token) = &doc.token {
                 state.follow(token, std::path::Path::new(&doc.path));
@@ -45,7 +45,18 @@ impl OpenBatch {
         self
     }
 
-    fn from_read_batch(batch: ReadBatch, registry: &mut Registry) -> Self {
+    /// Record the opened files as recent in the library (paths and times only).
+    pub(crate) fn remember(self, app: &AppHandle) -> Self {
+        crate::commands::library::remember(
+            app,
+            self.documents
+                .iter()
+                .map(|doc| std::path::PathBuf::from(&doc.path)),
+        );
+        self
+    }
+
+    pub(crate) fn from_read_batch(batch: ReadBatch, registry: &mut Registry) -> Self {
         Self {
             documents: batch
                 .documents
@@ -106,11 +117,12 @@ pub(crate) async fn open_files(
     {
         return Err("A file picker is already open.".into());
     }
+    let dialog_app = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let mut picker = rfd::FileDialog::new()
             .set_title("Open Markdown")
             .add_filter("Markdown documents", &["md", "markdown"]);
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = dialog_app.get_webview_window("main") {
             picker = picker.set_parent(&window);
         }
         picker
@@ -130,7 +142,8 @@ pub(crate) async fn open_files(
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
         )
-        .follow(&state),
+        .follow(&state)
+        .remember(&app),
         None => OpenBatch {
             canceled: true,
             ..OpenBatch::default()
@@ -140,6 +153,7 @@ pub(crate) async fn open_files(
 
 #[tauri::command]
 pub(crate) async fn take_pending_files(
+    app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<OpenBatch, String> {
     let pending = {
@@ -165,7 +179,8 @@ pub(crate) async fn take_pending_files(
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()),
     )
-    .follow(&state))
+    .follow(&state)
+    .remember(&app))
 }
 
 #[cfg(test)]

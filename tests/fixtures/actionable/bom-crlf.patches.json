@@ -1,0 +1,38 @@
+[
+  {
+    "name": "BOM and CRLF kept",
+    "target": {
+      "id": "first"
+    },
+    "action": {
+      "kind": "mark",
+      "to": "x"
+    },
+    "patches": [
+      {
+        "line": 3,
+        "id": "first",
+        "expect": "- [ ] First <!-- id: first -->",
+        "replace": "- [x] First <!-- id: first -->"
+      }
+    ],
+    "after": "﻿# Mixed endings\r\n\r\n- [x] First <!-- id: first -->\r\n- [x] Second\n- ( ) A\r\n- ( ) B"
+  },
+  {
+    "name": "LF line and no final newline kept",
+    "target": {
+      "line": 6
+    },
+    "action": {
+      "kind": "choice"
+    },
+    "patches": [
+      {
+        "line": 6,
+        "expect": "- ( ) B",
+        "replace": "- (x) B"
+      }
+    ],
+    "after": "﻿# Mixed endings\r\n\r\n- [ ] First <!-- id: first -->\r\n- [x] Second\n- ( ) A\r\n- (x) B"
+  }
+]

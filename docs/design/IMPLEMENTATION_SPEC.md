@@ -76,6 +76,17 @@ Foundation section 4 remains the detailed no-slice contract: `break-inside: avoi
 
 **Replacement for the foundation's `li` listing:** list items are NOT keep-whole atomic blocks. `print.css` gives `li` the same `orphans: 3; widows: 3` clean-split protection as paragraphs and no `break-inside: avoid`: a long checklist item that does not fit the remaining space fragments instead of pushing itself whole onto the next page and leaving the sheet mostly blank (2026-09-26 checklist report: a 610-line todo list paginated four non-last pages over one-third blank, worst 76%; after the change the worst non-last page is 4% and the document shrank from 20 pages to 16). `ATOMIC_BLOCK_SELECTOR` (`src/render/buildSource.ts`) excludes `li` for the same reason — stamping would assert a keep-whole promise the fragmenter no longer makes — while atomics nested inside an item (`pre`, `table`, `figure`, callouts) keep their own rules and stamps. `blockquote` stays keep-whole as the foundation lists it. Cover: `tests/e2e/list-flow.spec.ts` over `tests/fixtures/checklist.md`.
 
+**Completeness outranks keep-whole (2026-11-11).** Keep-whole is the rule only for a block that fits one page. The tiers, all applied in the Paged.js `afterParsed` hook (`src/paginate/shrinkToFit.ts`) before layout:
+
+- **Measure in context.** Every outermost `[data-mdv-atomic-id]` block is measured inside shallow clones of its real ancestors (up to `.doc`) at the printable width, in one batched layout, and recorded as `data-mdv-source-height`. A block that stays whole must match its laid-out height within 2 px (layout px; on-screen rects are zoomed).
+- **Tier 3** shrink (≤ 1.15× page) applies to code and diagrams only, as before, but the fit now counts a keep-with-next heading directly above the block (a block that fits a page alone but not under its heading is shrunk too), and the scale is applied with CSS `zoom`, not a transform. A transformed block kept its unscaled content height in layout; the overflow fragmented into the next page column, so "shrunk to fit" blocks were silently split. `zoom` scales the layout box itself (and html2canvas-pro honours it for the raster export).
+- **Tier 4.** A code block, table, blockquote or callout still taller than the page, counting a keep-with-next heading directly above it, is marked `data-mdv-splittable`; `print.css` turns that into `break-inside: auto`, so the browser fragmenter and Paged.js agree it may break at line, row or paragraph boundaries with the cloned decoration. Only the marked block (and a code figure's own `<pre>`) is relaxed: a short fence nested in a split quote or callout stays whole. Images and Mermaid SVG cannot split and are capped to the page height by `buildStylesheet`.
+- **Paged.js 0.4.3 undisplayed bug.** Its UndisplayedFilter marks every inline-styled element `data-undisplayed`, so a heading's `break-after: avoid` skipped its Shiki `<pre>` and landed on the next heading; when that heading overflowed on a page that began inside the code block, Paged.js backed up to the block's start and stopped with "Layout repeated". `restoreDisplayedElements` (handler `filter` hook) clears the bogus mark before break propagation.
+- **Layout runs at zoom 1.** Paged.js 0.4.3 finds the next page column at `bounds.right + column-gap`, adding an unscaled gap to a scaled rect, so under a preview zoom below 1 blocks overflowing into the next column were never cut and stayed hidden. `paginate` sets `--preview-zoom: 1` on the host for layout and audit, then restores the canvas zoom without easing.
+- **Audit and recovery.** Paged.js resolves even after it gives up, so `paginate` audits every run (`auditPagination`): each text-bearing source element rendered, no empty page, nothing laid out twice, nothing below a page or in a hidden overflow column. A failed audit re-runs from a pristine copy with the offending block splittable, then with every splittable keep-whole block, and returns `recoveredSplits` for a reader-facing warning. If that still fails, the pages are torn down and `PaginationIncompleteError` puts the App in its fatal state with export ineligible. A truncated document is never presented.
+
+Cover: `tests/e2e/pagination-completeness.spec.ts` over `tests/fixtures/long-prose-fences.md`, plus forced-stall and fatal cases.
+
 An author-placed `[[toc]]` stays in place; a synthesized TOC follows the first h1, or starts the document when no h1 exists.
 
 `transformFootnotesToInline` allocates one retained float per note. It preserves the original ID unless occupied outside the removed endnote section, then allocates a collision-free `-footnote-N` suffix. Every citation, including repeats, is rewritten before the single-float guard. Never rename a heading to make room for a note.
@@ -473,6 +484,19 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Links and images (S6 native half): `src/render/sanitize.ts` keeps a relative image `src` as an
+inert `data-local-src` (web output unchanged otherwise, still counted as blocked). The desktop
+reader fills those through `native.readAsset` as blob URLs (revoked on the next render).
+Document clicks on relative links and `@path` imports call `native.openRelative`; web links keep
+`open_external`. `navigate.back` / `navigate.forward` (Alt+Left/Right) step through documents
+reached by links or the picker. The paginated workspace does not load local images yet.
+
+Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
+`src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
+batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:
+`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel UI is
+the shell's (S4 panel half).
+
 Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
 `main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
 replaces its text and baseline (the reader re-renders; S2c's block patching and change
@@ -584,6 +608,51 @@ restarting an unknown worker. The existing Windows path runs the pure deadline
 policy tests and still requires actual rendered headings, single-instance routing,
 owned native Save dialogs and exact saved Markdown/PDF bytes. See
 `NATIVE_SMOKE_BOOTSTRAP.md`; these are harness limits, not app performance claims.
+
+Reader text first (`src/desktop/render.ts`). `renderReaderDocument(text, settings,
+fileName?, paint?)` parses and renders synchronously with fences as plain-text
+placeholders (`pre.shiki.reader-pending` holding Shiki's own `span.line` structure, so
+heights match within a pixel), hands that document to `paint` and marks
+`mdv:reader-text`. It then loads the reader highlighter, replaces each placeholder still
+in the live root with its sanitized highlighted fence, runs `renderAllMermaid` on the live
+root and marks `mdv:reader-rich`. All of this stays inside main's serialized
+`renderChain`, so Mermaid is never re-entered and an obsolete render's `paint` returns
+null. A highlighter failure leaves readable plain code and a warning. Without `paint`
+the returned document is complete. `src/desktop/reader/patch.ts` `patchDocument(live,
+next)` is the `paint` step for re-rendering an open document: top-level blocks whose
+source text is unchanged keep their live node (highlighted code, figures) with line
+ranges moved; only the others are replaced and upgraded. Live reload (S1c) and Edit (S5)
+are its callers. Coverage: `tests/desktop-e2e/text-first.spec.ts` (first text under
+100 ms for the sample in the production build; code heights within 1 px),
+`tests/reader-patch.test.ts`.
+
+Actionable Markdown, A1 (static; `docs/design/ACTIONABLE_MARKDOWN.md`).
+`src/render/actionable.ts` is DOM-free: `parseActionable(text, tokens?)` finds marks, choices
+(grouped per list), fields, front matter chips and ids from the CommonMark block parse (never in
+code or HTML blocks), the `marks:` cycle and the `actionable:` version; `planChange` and
+`applyPatches` produce and apply byte-exact line patches (BOM, every terminator and the final
+newline kept). `src/render/actionableGlyphs.ts`, in `createMarkdown`, draws `[/] [-] [!] [?]`
+and `( ) (x)` as named static glyphs in both pipelines; `[ ]`/`[x]` stay with task lists, so
+ordinary documents render unchanged. The reader (`src/desktop/reader/actionable.ts`) labels field
+keys, shows chips above the document and reports actionable problems on the Properties card; the
+paginated output keeps fields as text and omits chips with the front matter. Nothing is
+interactive yet (A3). Conformance: `tests/fixtures/actionable/*` (byte-exact, `-text` in
+`.gitattributes`), `tests/actionable.test.ts`, `tests/desktop-e2e/actionable.spec.ts`.
+
+Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
+the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
+clamped, trailing blank lines dropped) and stamps the rules that print their own tag
+(fences, display math, callouts). The paginated pipeline never installs it, so its
+output is unchanged. Fence bodies are captured before rendering because Shiki's notation
+transformers rewrite token content. Each fenced code block gets a Copy button (shown on
+hover and focus) that copies the fence body exactly; top-level headings get Copy link
+(`name.md#id`) and Copy section as Markdown (to the next heading of the same or higher
+level). Ctrl/Cmd+Shift+C copies the source lines of every block the selection touches;
+Ctrl+C stays the browser default. Heading buttons hold no text so heading text and the
+outline are unchanged. Copy path and Copy reference wait for display paths (S0) and the
+command palette (S3). Coverage: `tests/reader-sourcemap.test.ts`,
+`tests/desktop-e2e/copy.spec.ts` (asserts the text the app writes; the OS clipboard is
+shared machine state on Windows hosts).
 
 ## 15. Reader-only syntax-engine admission
 

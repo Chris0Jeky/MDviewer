@@ -1,0 +1,75 @@
+[
+  {
+    "name": "replace a value",
+    "target": {
+      "line": 3
+    },
+    "action": {
+      "kind": "field",
+      "value": "Grace"
+    },
+    "patches": [
+      {
+        "line": 3,
+        "expect": "owner:: Ada",
+        "replace": "owner:: Grace"
+      }
+    ],
+    "after": "# Run card\n\nowner:: Grace\ndue:: \nreviewer::\nbudget:: 120 <!-- id: budget -->\n\n- status:: waiting\n- [ ] not a field:: a task\n\nInline `code:: no` stays text.\nkey:: a field inside a paragraph\n\n```\nnote:: inside a fence\n```\n"
+  },
+  {
+    "name": "an empty field gains one space",
+    "target": {
+      "line": 5
+    },
+    "action": {
+      "kind": "field",
+      "value": "Lin"
+    },
+    "patches": [
+      {
+        "line": 5,
+        "expect": "reviewer::",
+        "replace": "reviewer:: Lin"
+      }
+    ],
+    "after": "# Run card\n\nowner:: Ada\ndue:: \nreviewer:: Lin\nbudget:: 120 <!-- id: budget -->\n\n- status:: waiting\n- [ ] not a field:: a task\n\nInline `code:: no` stays text.\nkey:: a field inside a paragraph\n\n```\nnote:: inside a fence\n```\n"
+  },
+  {
+    "name": "a field with its space keeps one space",
+    "target": {
+      "line": 4
+    },
+    "action": {
+      "kind": "field",
+      "value": "Friday"
+    },
+    "patches": [
+      {
+        "line": 4,
+        "expect": "due:: ",
+        "replace": "due:: Friday"
+      }
+    ],
+    "after": "# Run card\n\nowner:: Ada\ndue:: Friday\nreviewer::\nbudget:: 120 <!-- id: budget -->\n\n- status:: waiting\n- [ ] not a field:: a task\n\nInline `code:: no` stays text.\nkey:: a field inside a paragraph\n\n```\nnote:: inside a fence\n```\n"
+  },
+  {
+    "name": "the id comment stays",
+    "target": {
+      "id": "budget"
+    },
+    "action": {
+      "kind": "field",
+      "value": "150"
+    },
+    "patches": [
+      {
+        "line": 6,
+        "id": "budget",
+        "expect": "budget:: 120 <!-- id: budget -->",
+        "replace": "budget:: 150 <!-- id: budget -->"
+      }
+    ],
+    "after": "# Run card\n\nowner:: Ada\ndue:: \nreviewer::\nbudget:: 150 <!-- id: budget -->\n\n- status:: waiting\n- [ ] not a field:: a task\n\nInline `code:: no` stays text.\nkey:: a field inside a paragraph\n\n```\nnote:: inside a fence\n```\n"
+  }
+]

@@ -46,12 +46,15 @@ Export click → capture document id/name/text and settings NOW
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
+| Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1, static) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
+| Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
 | Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
 | Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
 | Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
 | Generated footnote destinations after preview | `src/paginate/footnoteLinks.ts` | `tests/footnote-targets.test.ts`, `tests/e2e/footnote-targets.spec.ts` |
-| Paged.js lifecycle, handlers, CSS, measurement and shrink tiers | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | Unit pagination tests, `tests/e2e/nocutoff.spec.ts` |
+| Paged.js lifecycle, handlers, CSS, in-context measurement, shrink (Tier 3) and split (Tier 4) tiers, completeness audit and recovery | `src/paginate/{paginate,handler,cssBuilder,measure,shrinkToFit}.ts` | `tests/paginate-completeness.test.ts`, `tests/e2e/nocutoff.spec.ts`, `tests/e2e/pagination-completeness.spec.ts` |
 | Vector / raster PDF | `src/export/{print,download,footnoteMarkers}.ts` | `tests/export-download.test.ts`, `tests/raster-{content-clone,styles-ready,footnote-markers}.test.ts`, `tests/e2e/export.spec.ts`, `tests/e2e/raster-resolution.spec.ts` (preview isolation), `tests/e2e/raster-{visual,footnotes,styles-ready}.spec.ts` (saved pixels, CSS delay/failure recovery and damage controls); spec §§5,10 and `docs/PDF_VISUAL_REGRESSION.md` |
 | Offline raster capture document and CSS ownership | `src/export/offlineCapture.ts`, `src/export/download.ts` | `tests/raster-offline-capture.test.ts`, `tests/e2e/raster-offline-frame.spec.ts`, existing saved-PDF pixels and real CSS/font cache-loss/no-save/retry in `tests/e2e/raster-{visual,styles-ready,fonts-ready}.spec.ts`; spec §§5,6,10; `docs/design/RASTER_OFFLINE_CAPTURE.md` |
 | Export progress and outcomes in every workspace view | `src/ui/ExportStatus.ts`, `src/app/App.ts`, `src/export/download.ts` | `tests/export-status.test.ts`, export-lifetime/download tests, `tests/e2e/export-status.spec.ts`; spec §§5,7 and `docs/design/EXPORT_STATUS.md` |
@@ -79,6 +82,20 @@ withRenderLock<T>(task: () => Promise<T>): Promise<T>;
 // src/paginate/footnoteLinks.ts
 repairFootnoteLinks(host: ParentNode): void;
 // Called inside paginate after awaited Previewer.preview; only citation hrefs change.
+
+// src/paginate/paginate.ts — signature unchanged; the result and failure widen.
+paginate(source: DocumentFragment, css: string, host: HTMLElement): Promise<PaginatedFlow>;
+interface PaginatedFlow extends PagedFlow { recoveredSplits?: string[] } // set only after a recovery run
+class PaginationIncompleteError extends Error {} // thrown after teardown; App shows the fatal state
+auditPagination(source: ParentNode, host: HTMLElement): PaginationProblem | null;
+
+// src/paginate/shrinkToFit.ts (afterParsed, in order)
+recordSourceHeights(content: ParentNode, area: PageArea): void; // in-context, batched
+shrinkToFit(content: ParentNode, area: PageArea): void;          // Tier 3
+markOverTallSplittable(content: ParentNode, area: PageArea): void; // Tier 4 -> data-mdv-splittable
+
+// src/paginate/handler.ts (filter hook)
+restoreDisplayedElements(content: ParentNode): void; // undo Paged.js marking inline-styled elements hidden
 
 // src/export/markdown.ts
 markdownFilename(name: string): string;
@@ -124,7 +141,7 @@ Offline raster capture selects its controlled `srcdoc` destination before stagin
 
 Source footnote IDs must avoid headings and suffix collisions. Repeated citations share one float; post-preview repair uses Paged.js `data-id` to generated-note mapping and leaves unrelated links alone.
 
-Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` or change natural page dimensions. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
+Screen import order is app, editor, preview, document, workspace, print, shiki, pwa. Never use CSS `zoom` for the preview scale or change natural page dimensions; the preview scale is a paint-only transform, and `paginate` lays out at `--preview-zoom: 1` because Paged.js is not scale-invariant. The one CSS `zoom` is the Tier 3 shrink: a constant per block, applied before layout (`shrinkToFit.ts`), so preview and export lay out the same geometry. Outer scroll sizing is removed before pagination and reset in print. Full-size sheets must remain horizontally reachable on narrow screens.
 
 The PDF action classes identify PDF actions only; source New/Open/Save use `workspaceAction` for styling and explicit `data-document-command` identities for routing. Keep filename visible for one document and source bytes exact. Disclosure Escape returns focus and preserves settings. Desktop supplies `layoutInitiallyOpen: false` through App/Toolbar; the web entry keeps its viewport-adaptive default. This screen-only disclosure preference is never persisted and does not alter pagination. Desktop tests: `tests/desktop-toolbar.test.ts`, `tests/desktop-e2e/toolbar.spec.ts`.
 
@@ -205,7 +222,11 @@ encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
 closing releases it through `onRelease` (never during a mode transition). Live reload:
 `src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
 `byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
-`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+`tests/desktop-live-reload.test.ts`. Links/images: `src-tauri/src/{assets.rs,commands/links.rs}`, `main.ts`
+`followRelativeLink`/`loadLocalImages`/back-forward, sanitizer `data-local-src`; tests
+`tests/desktop-links.test.ts`. Library: `src-tauri/src/{library.rs,commands/library.rs}`,
+`src/desktop/library.ts` (`openLibraryEntry`), `native.library.*`; tests in `library.rs` and
+`tests/desktop-library.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
 is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
 keys (exact modifiers; a match is always claimed, even repeated or disabled),
 `listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`

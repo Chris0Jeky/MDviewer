@@ -8,13 +8,14 @@
  * instantiates handlers internally, so we can't pass our own dependencies in).
  *
  * Hooks:
- *   afterParsed(parsed)     -> Tier-3 shrink-to-fit on the pre-layout source.
+ *   filter(content)         -> undo Paged.js's bogus "undisplayed" marks (restoreDisplayedElements).
+ *   afterParsed(parsed)     -> in-context heights, Tier-3 shrink, Tier-4 split marking.
  *   afterPageLayout(pageEl) -> stamp a stable `data-page-number` on each page.
  *   afterRendered()         -> resolve TOC leader page numbers from laid-out pages.
  */
 
 import type { PageArea } from "./measure";
-import { recordSplittableSourceHeights, shrinkToFit } from "./shrinkToFit";
+import { markOverTallSplittable, recordSourceHeights, shrinkToFit } from "./shrinkToFit";
 import { PAGEDJS, CLASSES } from "../app/dom";
 
 /** Set by registerHandlersOnce: how the handler reads the current printable area. */
@@ -68,12 +69,18 @@ export async function registerHandlersOnce(area: () => PageArea): Promise<void> 
   registrationPromise ??= import("pagedjs")
     .then(({ Handler, registerHandlers }) => {
       class MDViewerHandler extends Handler {
-        /** Pre-layout: shrink modestly-oversized atomic blocks to fit one page (Tier 3). */
+        /** Post-parse filter: undo Paged.js marking every inline-styled element hidden. */
+        filter(content: ParentNode): void {
+          restoreDisplayedElements(content);
+        }
+
+        /** Pre-layout: measure in context, then Tier 3 shrink and Tier 4 split marking. */
         afterParsed(parsed: ParentNode): void {
           if (areaProvider) {
             const area = areaProvider();
-            recordSplittableSourceHeights(parsed, area);
+            recordSourceHeights(parsed, area);
             shrinkToFit(parsed, area);
+            markOverTallSplittable(parsed, area);
           }
         }
 
@@ -111,6 +118,24 @@ export async function registerHandlersOnce(area: () => PageArea): Promise<void> 
     });
 
   await registrationPromise;
+}
+
+/**
+ * Paged.js 0.4.3's UndisplayedFilter marks EVERY element carrying an inline `style`
+ * attribute `data-undisplayed` (its `removable()` only exempts an inline display other
+ * than none), so every Shiki `<pre style="background-color:…">` is treated as hidden.
+ * Breaks.processBreaks then skips it when propagating a heading's `break-after: avoid`:
+ * the keep-with-next lands on the NEXT block after the code (often the next heading)
+ * instead of the code. When that next heading is pushed into an overflow column on a page
+ * that began inside the code block, Paged.js backs up to the code block's start, lays the
+ * same content out again and stops with "Layout repeated" — silently dropping the rest of
+ * the document. Clearing the bogus mark before Breaks runs restores correct propagation.
+ * An element whose inline style really hides it keeps the mark.
+ */
+export function restoreDisplayedElements(content: ParentNode): void {
+  for (const el of content.querySelectorAll<HTMLElement>("[data-undisplayed]")) {
+    if (el.hasAttribute("style") && el.style.display !== "none") delete el.dataset.undisplayed;
+  }
 }
 
 /**

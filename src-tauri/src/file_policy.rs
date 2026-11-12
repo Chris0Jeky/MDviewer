@@ -27,7 +27,7 @@ impl Encoding {
         }
     }
 
-    fn detect(bytes: &[u8]) -> Self {
+    pub fn detect(bytes: &[u8]) -> Self {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
             Self::Utf8Bom
         } else if bytes.starts_with(&[0xff, 0xfe]) {
@@ -60,7 +60,7 @@ impl Eol {
         }
     }
 
-    fn detect(text: &str) -> Self {
+    pub fn detect(text: &str) -> Self {
         let mut bytes = text.bytes().peekable();
         let (mut lf, mut crlf, mut cr) = (false, false, false);
         while let Some(byte) = bytes.next() {
@@ -204,7 +204,7 @@ fn error_for(path: &Path, message: &str) -> FileError {
 
 // Never turn a Markdown open into a device or UNC/network request. Ordinary local
 // absolute paths, including Windows' long-path disk prefix, remain supported.
-fn is_local_file_path(path: &Path) -> bool {
+pub fn is_local_file_path(path: &Path) -> bool {
     #[cfg(windows)]
     {
         use std::path::{Component, Prefix};

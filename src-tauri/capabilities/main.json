@@ -13,9 +13,21 @@
     "allow-take-pending-files",
     "allow-open-external",
     "allow-save-export",
+    "allow-patch-document",
     "allow-save-document",
     "allow-save-document-as",
     "allow-release-document",
-    "allow-read-document"
+    "allow-read-document",
+    "allow-library-list",
+    "allow-library-scan",
+    "allow-library-open",
+    "allow-library-pin",
+    "allow-library-unpin",
+    "allow-library-forget",
+    "allow-library-mark-seen",
+    "allow-library-add-project",
+    "allow-library-clear",
+    "allow-open-relative",
+    "allow-read-asset"
   ]
 }

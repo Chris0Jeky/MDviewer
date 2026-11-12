@@ -87,10 +87,13 @@
  * width whenever the canvas resizes (window, splitter drag) and is capped at 1.
  * data-zoom stays on #canvas purely as a state hook for tests and debugging.
  *
- * This MUST stay a transform, not the `zoom` property: `zoom` participates in
- * layout, so text would re-wrap and Paged.js would place breaks against geometry
- * the exported PDF never sees. A transform is paint-only — the paginated layout,
- * and therefore the no-slice guarantee, is bit-identical at every zoom level.
+ * The PREVIEW scale MUST stay a transform, not the `zoom` property: `zoom`
+ * participates in layout, so text would re-wrap and Paged.js would place breaks
+ * against geometry the exported PDF never sees. A transform is paint-only — the
+ * paginated layout, and therefore the no-slice guarantee, is bit-identical at every
+ * zoom level (paginate.ts also lays out at --preview-zoom: 1, because Paged.js is not
+ * scale-invariant). The Tier 3 shrink (shrinkToFit.ts) is different: a constant
+ * per-block `zoom` applied before layout, identical for preview and export.
  * Scale is never > 1, so the shrunken stack cannot overflow to the left where
  * the scroll container could not reach it.
  * -------------------------------------------------------------------------- */

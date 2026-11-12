@@ -27,11 +27,10 @@ When sources conflict, follow the higher source and report the conflict.
 
 ## First 5 Minutes
 
-Read `ACTION_ITEMS.md` and the top of `ORCHESTRATOR.md`; open the other sources above when the
-task needs them. Do not bulk-read `node_modules`, `dist`, build output or generated
-artifacts unless the task needs them. Then pick the smallest safe, reviewable slice and state blockers, assumptions,
-verification target, and docs-sync target before editing. Model, effort and agent count follow
-the estate `model-effort-routing` skill.
+`ACTION_ITEMS.md` → `AGENTS.md` → `ORCHESTRATOR.md` → `docs/Project_Roadmap.md` →
+`docs/design/IMPLEMENTATION_SPEC.md` → `autodoc/AGENT_INDEX.md`. Then pick the smallest
+safe, reviewable slice and state blockers, assumptions, verification target, and docs-sync
+target before editing.
 
 The issue-backed queue is [Future work](docs/FUTURE_WORK.md) and
 [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Native Save/Save As
@@ -95,16 +94,14 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - Git: branch off `main`; `merge` not `rebase`; no force-push or history rewrite on protected
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
 - Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
-  ready-for-review PRs after relevant local checks. A PR is aged once an independent adversarial review has
-  examined the reviewed diff, exact-head CI has completed green, every comment is triaged, and the
+  draft PRs after relevant local checks. A PR is aged once an independent adversarial review has
+  examined its latest head, exact-head CI has completed green, every comment is triaged, and the
   head has aged at least three minutes (global law 2f). The repository is T2 with push and merge free
-  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Fixed findings require finding → commit
-  evidence, while informational/bot notices require an explicit non-finding triage. A head change
-  re-proves what changed; a fresh review is owed only when fixes change logic or the risk boundary. Preserve commits with a merge commit—never squash-merge.
+  (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Actionable findings require finding → commit
+  evidence, while informational/bot notices require an explicit non-finding triage. Any head change
+  resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
-- Failures: surface every failure; fix it now or seed a tracked follow-up, never drop one silently. See `docs/agentic/FAILURE_LEDGER.md`.
-- Review findings follow estate law 2: fix confirmed CRITICAL and HIGH (correctness, security,
-  data loss) before merge; track or decline the rest on the thread; two rounds at most.
+- Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
 - Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
   UI/pagination/export, zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
 
@@ -113,7 +110,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - Document content never leaves the device. Open documents and latest-close recovery stay in
   memory; there is no automatic/app-managed document or session storage. Explicit user-selected
   Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
-  SDK keys below persist as app-managed user state. Bundle Shiki themes/langs, KaTeX fonts, and
+  SDK keys below persist as app-managed user state. The Windows app also keeps `library.json` in its local data folder: recent files, pinned files and project folders, and last-looked-at stamps — absolute paths and timestamps only, never content, capped (500 recents, 64 pins), cleared by Clear library. Bundle Shiki themes/langs, KaTeX fonts, and
   Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK
   (`public/pulseboard.js`, called only through `src/app/pulse.ts`): closed enums, size
@@ -123,4 +120,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   fetch/XHR/WebSocket at runtime, and no other telemetry.
 - `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
   before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
-  image data URLs are allowed. Mermaid SVG output is sanitized again after rendering.
+  image data URLs are allowed. A relative image `src` is kept only as an inert `data-local-src`;
+  the Windows reader loads it through the native `read_asset` (resolved relative to the
+  document's folder, may climb with `../` but never to a drive root, UNC or device path; local
+  image types, 20 MB) as a blob URL. Mermaid SVG output is sanitized again after rendering.

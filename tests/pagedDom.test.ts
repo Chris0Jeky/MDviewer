@@ -20,10 +20,11 @@ const block = (pageIndex: number, sourceHeight: number, shrunk = false): BlockRe
   shrunk,
 });
 
-const snapshot = (blocks: BlockRect[]): PagedSnapshot => ({
+const snapshot = (blocks: BlockRect[], scale = 1): PagedSnapshot => ({
   pageCount: 2,
   pages: [0, 1].map((index) => ({ index, outer: rect(0, 100), content: rect(0, 100) })),
   blocks,
+  scale,
 });
 
 describe("splitAtomicOffenders", () => {
@@ -35,6 +36,13 @@ describe("splitAtomicOffenders", () => {
 
   it("allows a genuinely over-tall splittable block on consecutive pages", () => {
     expect(splitAtomicOffenders(snapshot([block(0, 120), block(1, 120)]))).toEqual([]);
+  });
+
+  it("compares source heights against the unzoomed page height", () => {
+    // A 100px rect at 0.5 zoom is a 200px layout page: a 150px source block fits it.
+    const offenders = splitAtomicOffenders(snapshot([block(0, 150), block(1, 150)], 0.5));
+    expect(offenders).toHaveLength(1);
+    expect(offenders[0]).toContain("fitting a 200.0px page");
   });
 
   it("rejects a multi-page block that Tier 3 already shrunk to one-page height", () => {

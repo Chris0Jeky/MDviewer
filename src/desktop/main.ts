@@ -10,7 +10,9 @@ import { native, type OpenBatch, type ReadResult, type SaveResult } from "./nati
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
+import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
+import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
@@ -54,6 +56,8 @@ let renderedReaderId: string | null = null;
 const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
   shell.querySelector<HTMLElement>(".reader-footer")!);
+
+mountSelectionCopy(content);
 
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
@@ -146,21 +150,39 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   empty.hidden = !!doc;
   if (!doc) {
     content.replaceChildren();
+    releaseImages();
     status.textContent = "Local files · No uploads";
     return Promise.resolve();
   }
   content.setAttribute("aria-busy", "true");
   content.replaceChildren(); // A failed new document must not display the previous file's contents.
+  // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
+  const behavior = scroll.style.scrollBehavior;
+  scroll.style.scrollBehavior = "auto";
+  scroll.scrollTop = 0;
+  scroll.scrollLeft = 0;
+  scroll.style.scrollBehavior = behavior;
   status.textContent = `Opening ${doc.name}…`;
   // Mermaid's singleton is not re-entrant; serialize and skip obsolete renders.
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
-    try {
-      const result = await renderReaderDocument(doc.text, settings, doc.name);
-      if (current !== renderGeneration) return;
-      content.replaceChildren(...result.document.childNodes);
+    const position = docs.reader.positions.get(doc.id)?.reader;
+    const restore = (): void => {
+      const previousBehavior = scroll.style.scrollBehavior;
+      scroll.style.scrollBehavior = "auto";
+      scroll.scrollTop = position?.scrollTop ?? 0;
+      scroll.scrollLeft = position?.scrollLeft ?? 0;
+      scroll.style.scrollBehavior = previousBehavior;
+    };
+    let restoredTop = -1;
+    // Text first: the document is readable, navigable and scrollable from this point;
+    // code and diagrams upgrade in place afterwards.
+    const show = (from: HTMLElement): void => {
+      releaseImages();
+      content.replaceChildren(...from.childNodes);
+      // Relative images load natively into blob URLs (S6); upgrades later happen in place.
+      if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
-      content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
         const link = document.createElement("a");
         link.href = `#${encodeURIComponent(heading.id)}`;
@@ -170,14 +192,22 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       }
       outline.hidden = outline.childElementCount < 2;
       // The outline changes text wrapping and the maximum scroll offset. Reveal
-      // it first so saved offsets clamp against the final reader geometry.
-      const position = docs.reader.positions.get(doc.id)?.reader;
-      const previousBehavior = scroll.style.scrollBehavior;
-      scroll.style.scrollBehavior = "auto";
-      scroll.scrollTop = position?.scrollTop ?? 0;
-      scroll.scrollLeft = position?.scrollLeft ?? 0;
-      scroll.style.scrollBehavior = previousBehavior;
+      // it first so saved offsets clamp against the reader geometry.
+      // A first open needs no reset (the emptied reader is at 0) and no forced layout.
+      if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
+    };
+    try {
+      const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
+        if (current !== renderGeneration) return null;
+        show(first);
+        return content;
+      });
+      if (current !== renderGeneration) return;
+      if (result.document !== content) show(result.document); // A renderer that did not paint early.
+      // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
+      else if (position && scroll.scrollTop === restoredTop) restore();
+      content.setAttribute("aria-busy", "false");
       status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
       // A new open/action may have reported a newer failure while this render ran.
       if (result.warnings.length && currentNotice === noticeGeneration) {
@@ -242,6 +272,15 @@ async function open(): Promise<void> {
   report("");
   try { commitBatch(await native.open(), request); }
   catch (error) { report(`Could not open files: ${errorText(error)}`); }
+}
+
+/** Open a library entry exactly like a picked file (same admission and notices). */
+async function openFromLibrary(id: string): Promise<void> {
+  if (changingMode || !native.available) return;
+  const request = ++generation;
+  report("");
+  try { commitBatch(await native.library.open(id), request); }
+  catch (error) { report(`Could not open this file: ${errorText(error)}`); }
 }
 
 async function createDocument(): Promise<void> {
@@ -404,6 +443,7 @@ appRoot.addEventListener("click", event => {
 }, true);
 select.addEventListener("change", () => {
   if (changingMode || docs.reader.activeId === select.value) return;
+  visit(select.value, docs.reader.activeId);
   ++generation; docs.reader.activeId = select.value; report(""); void render();
 });
 closeButton.addEventListener("click", closeDocument);
@@ -584,6 +624,10 @@ registerCommand({ id: "workspace.enter", title: "Edit & PDF", enabled: () => !ap
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
+registerCommand({ id: "navigate.back", title: "Back", keys: ["Alt+ArrowLeft"], enabled: () => !app && backStack.length > 0,
+  run: () => step(backStack, forwardStack) });
+registerCommand({ id: "navigate.forward", title: "Forward", keys: ["Alt+ArrowRight"], enabled: () => !app && forwardStack.length > 0,
+  run: () => step(forwardStack, backStack) });
 registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
 installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
 // Save works in every mode and must claim Ctrl+S before the workspace's own
@@ -599,6 +643,7 @@ document.addEventListener("click", event => {
   const href = anchor.getAttribute("href") ?? "";
   if (href.startsWith("#")) return;
   event.preventDefault();
+  if (isRelativeReference(href)) { void followRelativeLink(href); return; }
   try {
     const url = new URL(href);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Only web links can open. Local resource links are disabled.");
@@ -606,6 +651,91 @@ document.addEventListener("click", event => {
     else window.open(url.href, "_blank", "noopener,noreferrer");
   } catch (error) { report(errorText(error)); }
 });
+
+/** A reference with no scheme and no root: resolved natively against the document's folder. */
+function isRelativeReference(reference: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:|^[\\/]/i.test(reference.trim());
+}
+
+// Back/forward through documents reached by links (Alt+Left / Alt+Right).
+const backStack: string[] = [];
+const forwardStack: string[] = [];
+function visit(id: string, from: string | null): void {
+  if (!from || from === id) return;
+  backStack.push(from);
+  forwardStack.length = 0;
+  if (backStack.length > 100) backStack.shift();
+}
+function step(stack: string[], other: string[]): void {
+  if (app || changingMode) return;
+  const open = new Set(docs.reader.documents.map(doc => doc.id));
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (!open.has(id) || id === docs.reader.activeId) continue;
+    if (docs.reader.activeId) other.push(docs.reader.activeId);
+    ++generation;
+    docs.reader.activeId = id;
+    report("");
+    void render();
+    return;
+  }
+}
+
+/** Open a relative Markdown link or `@path` import from the active document. */
+async function followRelativeLink(href: string): Promise<void> {
+  const source = docs.saveTarget();
+  if (!native.available || !source?.binding) {
+    report("Local links open in the Windows app for documents opened from a file.");
+    return;
+  }
+  if (changingMode) return;
+  const from = app ? null : docs.reader.activeId;
+  const request = ++generation;
+  report("");
+  try {
+    commitBatch(await native.openRelative(source.binding.token, href), request);
+    if (!app && docs.reader.activeId) visit(docs.reader.activeId, from);
+  } catch (error) { report(errorText(error)); }
+}
+
+// Local images: the sanitizer keeps a relative src inert as data-local-src; the
+// host reads it (typed, 20 MB cap) relative to this document's own folder.
+const imageUrls: string[] = [];
+const IMAGE_TYPES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+};
+function releaseImages(): void {
+  for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
+}
+// Bound what one document can make the reader hold: distinct images and bytes.
+const MAX_LOCAL_IMAGES = 100;
+const MAX_LOCAL_IMAGE_BYTES = 200 * 1024 * 1024;
+async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
+  const loaded = new Map<string, string | null>();
+  let bytesHeld = 0;
+  for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
+    const src = image.dataset.localSrc!;
+    const type = IMAGE_TYPES[src.split(/[?#]/, 1)[0]!.split(".").pop()?.toLowerCase() ?? ""];
+    if (!type) continue;
+    if (!loaded.has(src)) {
+      if (loaded.size >= MAX_LOCAL_IMAGES || bytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
+        image.alt ||= `${src} was not loaded: this document shows too many local images`;
+        continue;
+      }
+      try {
+        const bytes = await native.readAsset(token, src);
+        if (current !== renderGeneration) return; // A newer render owns the DOM now.
+        bytesHeld += bytes.byteLength;
+        const url = URL.createObjectURL(new Blob([bytes], { type }));
+        imageUrls.push(url);
+        loaded.set(src, url);
+      } catch { loaded.set(src, null); }
+    }
+    const url = loaded.get(src);
+    if (url) image.src = url;
+    else image.alt ||= `${src} could not be loaded`;
+  }
+}
 
 function hasUnsavedWork(): boolean {
   return docs.hasUnsavedWork();
@@ -615,6 +745,26 @@ window.addEventListener("beforeunload", event => {
   event.preventDefault(); event.returnValue = "";
 });
 if (native.available) {
+  setLibraryOpener(openFromLibrary);
+  registerCommand({ id: "library.pinDocument", title: "Pin this document to the library",
+    enabled: () => !!docs.saveTarget()?.binding,
+    run: async () => {
+      const target = docs.saveTarget();
+      if (!target?.binding) return;
+      report(await native.library.pinDocument(target.binding.token)
+        ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+    } });
+  registerCommand({ id: "library.addProject", title: "Pin a project folder…", enabled: () => !changingMode && !nativeSaveBusy,
+    run: async () => {
+      try { if (await native.library.addProject()) report("Project pinned to the library."); }
+      catch (error) { report(errorText(error)); }
+    } });
+  registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
+    run: async () => {
+      if (!window.confirm("Clear the library? Recent files, pinned files and pinned projects are forgotten. No file is deleted.")) return;
+      try { await native.library.clear(); report("Library cleared."); }
+      catch (error) { report(errorText(error)); }
+    } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
