@@ -168,9 +168,11 @@ export function installMarkdownHighlighter(
   md: MarkdownIt,
   hl: HighlighterCore,
   settings: Settings,
+  /** A data document's readable view: code stays literal, so no `[!code …]` or meta directives. */
+  literal = false,
 ): void {
   const pair = CODE_THEME_PAIRS[settings.codeTheme];
-  const transformers: ShikiTransformer[] = [
+  const transformers: ShikiTransformer[] = literal ? [] : [
     transformerNotationHighlight(),
     transformerNotationDiff(),
     transformerMetaHighlight(),

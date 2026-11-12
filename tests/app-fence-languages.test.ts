@@ -56,7 +56,7 @@ async function fixture(source: string) {
   const store = new DocStore();
   const doc = store.add("Code.md", source);
   const app = Object.create(App.prototype) as AppController;
-  const banner = { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn() };
+  const banner = { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn(), offer: vi.fn() };
   Object.assign(app, {
     store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
     renderedSnapshot: null, banner, emptyEl: document.createElement("div"),

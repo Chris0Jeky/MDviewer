@@ -18,6 +18,7 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
+import { dataDocumentKind, dataLabelOf, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
@@ -225,7 +226,7 @@ function syncDocuments(): void {
   const target = docs.saveTarget();
   const shown = !app && active && renderedReaderId === active.id ? docs.reader.active : null;
   if (shown) {
-    const parts = statusParts({ name: shown.name, path: shown.binding?.path, text: shown.text, dirty: shown.dirty, disk: shown.binding?.disk });
+    const parts = statusParts({ name: shown.name, path: shown.binding?.path, text: shown.text, dirty: shown.dirty, disk: shown.binding?.disk, format: dataLabelOf(shown.name) });
     status.textContent = `${parts.where} · ${parts.size}`;
   }
   saveState.textContent = target
@@ -336,19 +337,22 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
     };
+    // A data document renders its readable view; its raw text stays the document (renderText.ts).
+    const view = renderTextOf(doc.name, doc.text);
     try {
-      const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
+      const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
         show(first);
         return content;
-      });
+      }, { data: !!view.data });
       if (current !== renderGeneration) return;
       if (result.document !== content) show(result.document); // A renderer that did not paint early.
       // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
       else if (position && scroll.scrollTop === restoredTop) restore();
       content.setAttribute("aria-busy", "false");
-      const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk });
+      const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk, format: view.data?.label });
       status.textContent = `${parts.where} · ${parts.size}`;
+      if (view.data?.readable.truncated) content.append(moreBar(doc.name));
       // A new open/action may have reported a newer failure while this render ran.
       const warnings = editing ? result.warnings.filter(warning => !warning.startsWith("This document is empty.")) : result.warnings;
       if (warnings.length && currentNotice === noticeGeneration) {
@@ -391,13 +395,17 @@ async function readFiles(files: File[]): Promise<void> {
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown files are supported.");
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, JSON, JSON Lines and plain text files are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (bytes.length > SIZE_HARD_BYTES || total + bytes.length > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       total += bytes.length;
-      batch.documents.push({ name: file.name, text: decodeMarkdown(bytes), bytes: bytes.length });
+      const text = decodeMarkdown(bytes);
+      // A data document's readable view can outgrow its file: confirm on the view too.
+      if (bytes.length <= SIZE_SOFT_BYTES && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
+        && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
+      batch.documents.push({ name: file.name, text, bytes: bytes.length });
     } catch (error) {
       batch.errors.push({ name: file.name, message: errorText(error) });
     }
@@ -442,6 +450,24 @@ async function createDocument(): Promise<void> {
   ++generation;
   await setEditing(true); // before the render, so an empty note is not reported as a problem
   await render();
+}
+
+/** A cut-short readable view offers the next part and everything (budgets live in renderText). */
+function moreBar(name: string): HTMLElement {
+  const bar = document.createElement("p");
+  bar.className = "reader-data-more";
+  const button = (label: string, widen: (name: string) => void): HTMLButtonElement => {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.textContent = label;
+    control.addEventListener("click", () => {
+      widen(name);
+      void render().then(() => content.querySelector<HTMLElement>(".reader-data-more button")?.focus({ preventScroll: true }));
+    });
+    return control;
+  };
+  bar.append("This view was cut short. ", button("Show more", showMoreOf), " ", button("Show all", showAllOf));
+  return bar;
 }
 
 /** Keep the editor on the active document. A same-document, same-text call keeps caret and undo. */
@@ -526,7 +552,7 @@ editHost.addEventListener("click", event => { if (event.target === editor?.input
 
 /** Scroll follows the caret (S2a's line map): bring the block holding the caret line into view. */
 function followCaret(): void {
-  if (!editor || !editing) return;
+  if (!editor || !editing || (docs.reader.active && dataLabelOf(docs.reader.active.name))) return;
   const input = editor.input;
   const line = input.value.slice(0, input.selectionStart).split("\n").length;
   let target: Element | null = null;
@@ -785,8 +811,10 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
+      const kindBefore = dataDocumentKind(target.name);
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
+      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;
@@ -1049,8 +1077,8 @@ const moreMenu: MenuEntry[] = [
   { command: "document.open", id: "reader-open" },
   "separator",
   { command: "document.save", disabled: () => !somethingToSave() },
-  { command: "document.saveAs" },
-  { command: "document.saveCopy" },
+  { command: "document.saveAs", id: "reader-save-as" },
+  { command: "document.saveCopy", id: "reader-save-copy" },
   { command: "workspace.enter", id: "reader-workspace" },
   { command: "export.pdf" },
   "separator",

@@ -27,6 +27,8 @@ export async function renderReaderDocument(
   settings: Settings,
   fileName = "",
   paint?: (document: HTMLElement) => HTMLElement | null,
+  /** A data document's readable view: actionable controls and the front matter card stay off. */
+  options: { data?: boolean } = {},
 ): Promise<{ document: HTMLElement; warnings: string[] }> {
   const md = createMarkdown(null, settings);
   const env = {};
@@ -37,13 +39,14 @@ export async function renderReaderDocument(
   // Before rendering: Shiki's notation transformers rewrite fence content in place.
   const source = { lines, fences: collectFences(tokens) };
   // Actionable Markdown (static in A1): reuse this parse; fields get labels before rendering.
-  const actionable = parseActionable(text, tokens);
-  if (tokens[0]) markFields(tokens, actionable, tokens[0].constructor as Parameters<typeof markFields>[2]);
+  const actionable = options.data ? parseActionable("") : parseActionable(text, tokens);
+  if (tokens[0] && !options.data) markFields(tokens, actionable, tokens[0].constructor as Parameters<typeof markFields>[2]);
   const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
   // use the existing transformers even when the fence has no syntax grammar.
-  const highlight = languages.length > 0 || needsCodeTransformers(md, tokens, settings.showLineNumbers);
+  // A data view keeps fence text literal: notation directives never trigger a transformer.
+  const highlight = languages.length > 0 || (options.data ? settings.showLineNumbers : needsCodeTransformers(md, tokens, settings.showLineNumbers));
   if (highlight) {
     const lineNumbers = settings.showLineNumbers ? ` ${CLASSES.withLineNumbers}` : "";
     // Shiki's own line structure (inline-block .line spans), so the swap keeps every height.
@@ -59,7 +62,7 @@ export async function renderReaderDocument(
   document.className = CLASSES.doc;
   document.setAttribute(ATTRS.codeTheme, settings.codeTheme);
   document.innerHTML = result.html;
-  if (frontMatter || actionable.problems.length) document.prepend(frontMatterCard(frontMatter, fileName, actionable.problems));
+  if (!options.data && (frontMatter || actionable.problems.length)) document.prepend(frontMatterCard(frontMatter, fileName, actionable.problems));
   const chips = chipRow(actionable);
   if (chips) document.prepend(chips);
   // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
@@ -86,7 +89,7 @@ export async function renderReaderDocument(
   // The text is already on screen: an upgrade failure is a warning, never a failed render.
   if (highlight) {
     try {
-      installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings);
+      installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings, options.data);
       upgradeCode(md, tokens, env, root);
     } catch (error) {
       warnings.push(`Code highlighting is unavailable: ${reason(error)}`);

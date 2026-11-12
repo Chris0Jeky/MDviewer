@@ -800,6 +800,39 @@ try {
         param([byte[]]$bytes)
         [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($tasksBytes)
     }
+    # Readable data (D3): a forwarded .json renders as its readable view (heading = file name),
+    # and both Save As and Save a copy write the raw bytes under a .json name.
+    $dataName = 'service.json'
+    $dataPath = Join-Path $fixtureDirectory $dataName
+    $dataText = "{`n  `"name`": `"demo-service`",`n  `"port`": 8080`n}`n"
+    $dataBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($dataText)
+    [System.IO.File]::WriteAllBytes($dataPath, $dataBytes)
+    $fourth = Start-OwnedProcess $exe @($dataName) $fixtureDirectory
+    if (-not $fourth.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
+        throw 'The data-file launch stayed alive instead of forwarding to the existing instance.'
+    }
+    [void](Wait-ForHeading $dataName 'data-document.png')
+    $dataSaveAsPath = Join-Path $exportDirectory 'saved-data.json'
+    Invoke-SmokeAction 'button' 'More'
+    Invoke-SmokeAction 'button' '#reader-save-as'
+    Invoke-SmokeAction 'save-dialog' -Destination $dataSaveAsPath -Title 'Save'
+    $dataSaveAsEvidence = Wait-ExportFile $dataSaveAsPath {
+        param([byte[]]$bytes)
+        [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($dataBytes)
+    }
+    $dataCopyPath = Join-Path $exportDirectory 'copied-data.json'
+    Invoke-SmokeAction 'button' 'More'
+    Invoke-SmokeAction 'button' '#reader-save-copy'
+    Invoke-SmokeAction 'save-dialog' -Destination $dataCopyPath
+    $dataCopyEvidence = Wait-ExportFile $dataCopyPath {
+        param([byte[]]$bytes)
+        [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($dataBytes)
+    }
+    $metrics.data = [ordered]@{
+        readableHeadingVerified = $true
+        saveAsExactRawBytes = $true; saveAs = $dataSaveAsEvidence
+        saveCopyExactRawBytes = $true; saveCopy = $dataCopyEvidence
+    }
     $metrics.actionable = [ordered]@{
         toggledExactBytes = $true; toggled = $toggledEvidence
         undoneExactBytes = $true; undone = $undoneEvidence

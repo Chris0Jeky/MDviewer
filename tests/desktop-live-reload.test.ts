@@ -95,6 +95,22 @@ describe("desktop live reload", () => {
     expect(bars().every(bar => bar.hidden)).toBe(true);
   });
 
+  it("a data document re-derives its readable view on reload and keeps the reading position", async () => {
+    boundary.open.mockResolvedValueOnce(bound("status.json", '{"state": "one"}'));
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(shown()).toContain("one"));
+    expect(boundary.render.mock.calls.at(-1)![4]).toEqual({ data: true });
+    expect(shown()).toContain("# status\\.json"); // the readable view, not the raw text
+    const scroll = document.getElementById("reader-scroll")!;
+    scroll.scrollTop = 90;
+    boundary.read.mockResolvedValueOnce(changed('{"state": "two"}'));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(shown()).toContain("two"));
+    expect(shown()).not.toContain('"state"'); // still derived, never the raw JSON
+    expect(scroll.scrollTop).toBe(90);
+    expect(option()).toBe("status.json");
+  });
+
   it("a clean workspace document reloads into the editor, not only the store", async () => {
     const app = await workspace(bound("notes.md", "# One"));
     const reseeded = vi.fn();

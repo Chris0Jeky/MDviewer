@@ -55,6 +55,7 @@ import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
+import { renderTextOf, showAllOf, showMoreOf } from "./renderText";
 import { installInputHandlers, SIZE_HARD_BYTES, SIZE_SOFT_BYTES } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
@@ -473,7 +474,7 @@ export class App {
         await this.prepareExport(input);
         const snapshot = this.renderedSnapshot;
         if (!snapshot) throw new Error("No paginated document to export.");
-        const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
+        const base = snapshot.name.replace(/\.(md|markdown|json|jsonc|jsonl|ndjson|txt|log)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
         let pages = 0;
         try {
@@ -568,7 +569,9 @@ export class App {
 
     try {
       // 0 — raw markdown; leading front matter is document metadata, never printed
-      const src = readFrontMatter(doc.text).body;
+      // A data document paginates its readable view (src/app/renderText.ts, the shared seam).
+      const view = renderTextOf(doc.name, doc.text);
+      const src = readFrontMatter(view.text).body;
 
       // 1 — highlighter singleton (await once)
       const hl = await getHighlighter();
@@ -584,7 +587,7 @@ export class App {
 
       // 2 — markdown → html (SYNC: Shiki via fromHighlighter + KaTeX inline)
       // Shiki snapshots its loaded languages when attached to this parser.
-      installMarkdownHighlighter(md, hl, settings);
+      installMarkdownHighlighter(md, hl, settings, !!view.data);
       const { html, warnings } = renderMarkdownTokens(md, tokens, env);
 
       // 3 — pagination source (inject TOC nav; end-of-doc footnotes → inline float spans)
@@ -649,6 +652,11 @@ export class App {
       );
       if (allWarnings.length > 0) this.banner.warn(allWarnings);
       else this.banner.clear();
+      // A cut-short readable view offers the rest here too; the budget lives in the seam.
+      this.banner.offer(view.data?.readable.truncated ? "This data view was cut short." : null, [
+        { label: "Show more", run: () => { showMoreOf(name); this.scheduleRender("settings"); } },
+        { label: "Show all", run: () => { showAllOf(name); this.scheduleRender("settings"); } },
+      ]);
     } catch (err) {
       if (stale()) return;
       // An incomplete layout was torn down, so no earlier render is left on screen.

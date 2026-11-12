@@ -746,6 +746,20 @@ Real-engine language/dependency, handoff and retry controls live in
 `tests/highlight-reader.test.ts`. The browser request audit checks that a C# reader leaves
 unrelated common grammar assets unloaded until Export PDF… prepares the workspace.
 
+Readable data, D3 webview half (`docs/design/READABLE_DATA.md`). `src/app/renderText.ts`
+`renderTextOf(name, text, scale?)` is the one seam from document text to render text: Markdown
+renders as written; a data document (`dataDocumentKind`: JSON, JSON Lines, plain text in version
+1) renders `toReadable(...).markdown` from `src/data/`, with budgets scaled by the reader's
+"Show more" (doubles) and lifted by "Show all". The reader and the Edit preview (`main.ts`
+`render`) and the PDF workspace (`App.ts`, before front matter) all call it; the document keeps
+its raw text, which the editors show and Save writes (`markdownFilename` keeps a data
+extension). `renderReaderDocument(…, { data: true })` turns actionable controls and the front
+matter card off; caret follow is off (raw lines do not map to the derived view). The status
+line names the format (`dataLabelOf`). `isMarkdownFile` admits the version 1 data extensions,
+so the web and desktop pickers and drops accept them; the large-document confirmation also
+counts the readable view. Tests: `tests/render-text.test.ts`, `tests/input.test.ts`,
+`tests/markdown-download.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`.
+
 Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,
 the bar's Edit toggle with `aria-pressed`) mounts the workspace's own `mountEditor` (Find,
 Format, highlighted backdrop, paste gates; `src/ui/Editor.ts` unchanged) into `#reader-edit`

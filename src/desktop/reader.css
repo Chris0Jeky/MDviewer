@@ -149,3 +149,6 @@ body > #desktop-workspace > #app { min-height: 0; flex: 1; width: 100%; }
 }
 /* The tab already names the document. */
 #reader-edit .editor-head .editor-name { visibility: hidden; }
+/* Readable data (D3): a cut-short view offers the rest. */
+.reader-data-more { margin: 1.5em 0 0; padding: 10px 12px; border: 1px solid var(--reader-line); border-radius: 8px; color: var(--reader-muted); font-size: 14px; }
+.reader-data-more button { margin-left: 6px; padding: 3px 10px; border: 1px solid var(--reader-line); border-radius: 6px; background: var(--reader-paper); color: var(--reader-fg); }
