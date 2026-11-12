@@ -124,3 +124,6 @@
 }
 @media print { .shell-bar, .shell-panel, .shell-menu { display: none !important; } }
 .desktop-reader .shell-palette-input:focus-visible { outline: none; } /* the accent underline is the focus indicator */
+.shell-library-project > .shell-library-item > .shell-library-toggle { flex: 1 1 auto; min-width: 0; }
+.shell-library-item > .shell-library-mini { margin-left: 4px; }
+.shell-library-subtoggle { font-weight: 400; color: var(--reader-muted); font-size: 12px; }

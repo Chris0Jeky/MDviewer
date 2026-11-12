@@ -1,4 +1,5 @@
 import { test, expect, documentTabs, openFiles, readyReader, readyWorkspace, selectDocument, showOutline } from "./helpers";
+import { placeSource } from "../helpers/sourcePosition";
 
 for (const size of [{ width: 560, height: 420 }, { width: 640, height: 480 }]) {
   test(`document navigation stays reachable at ${size.width}×${size.height}`, async ({ page }) => {
@@ -41,7 +42,7 @@ test("reader positions and source selections survive keyboard switches and repea
   await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
   await readyWorkspace(page, source);
   const input = page.locator("#editor-input");
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(100, 130, "backward"); el.scrollTop = 500; });
+  await placeSource(input, 100, 130, "backward", 500);
   const sourcePosition = await input.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.selectionDirection, el.scrollTop]);
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "Navigation λ😀");
