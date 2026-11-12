@@ -55,7 +55,7 @@ import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
-import { renderTextOf, showAllOf, showMoreOf } from "./renderText";
+import { prepareRenderText, renderTextOf, showAllOf, showMoreOf } from "./renderText";
 import { installInputHandlers, SIZE_HARD_BYTES, SIZE_SOFT_BYTES } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
@@ -474,7 +474,7 @@ export class App {
         await this.prepareExport(input);
         const snapshot = this.renderedSnapshot;
         if (!snapshot) throw new Error("No paginated document to export.");
-        const base = snapshot.name.replace(/\.(md|markdown|json|jsonc|jsonl|ndjson|txt|log)$/i, "") || "document";
+        const base = snapshot.name.replace(/\.(md|markdown|json|jsonc|jsonl|ndjson|txt|log|yaml|yml|toml|csv|tsv)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
         let pages = 0;
         try {
@@ -569,7 +569,10 @@ export class App {
 
     try {
       // 0 — raw markdown; leading front matter is document metadata, never printed
-      // A data document paginates its readable view (src/app/renderText.ts, the shared seam).
+      // A data document paginates its readable view (src/app/renderText.ts, the shared seam);
+      // its kind's parser loads first (D4), and a failed load is this render's error.
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (stale()) return; }
       const view = renderTextOf(doc.name, doc.text);
       const src = readFrontMatter(view.text).body;
 

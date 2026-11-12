@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace, selectDocument } from "./helpers";
 
 /** Readable data (D3; docs/design/READABLE_DATA.md). Every fixture here is invented. */
 const CONFIG = JSON.stringify({
@@ -21,7 +21,8 @@ test("a JSON file opens as its readable view: title, overview, tables and sectio
   await expect(doc(page).locator("table").first()).toContainText("demo-service");
   await expect(doc(page).locator("table").first()).toContainText("8080");
   await expect(doc(page).getByRole("heading", { name: "owners" })).toBeVisible();
-  await expect(doc(page).getByRole("heading", { name: "limits" })).toBeVisible();
+  // A small object reads inline in the key/value table (D6).
+  await expect(doc(page).locator("table").first()).toContainText("requests: 100 · burst: 20");
   await expect(page.locator("#reader-status")).toContainText("JSON ·");
   // Data cannot create controls: no checkbox, no front matter card.
   await expect(doc(page).getByRole("checkbox")).toHaveCount(0);
@@ -36,13 +37,15 @@ test("an invalid JSON file names the problem with line and column, then shows th
   await expect(doc(page).locator("pre").last()).toContainText('"port": 80 80');
 });
 
-test("JSON Lines renders one section per record", async ({ page }) => {
+test("JSON Lines of flat records renders as one table, a row per record", async ({ page }) => {
   const lines = ['{"event":"start","at":1}', '{"event":"stop","at":2}', ""].join("\n");
   await openFiles(page, [{ name: "events.jsonl", text: lines }]);
   await ready(page);
   await expect(doc(page)).toContainText("2 records");
-  await expect(doc(page).getByRole("heading", { name: /Record 1/ })).toBeVisible();
-  await expect(doc(page).getByRole("heading", { name: /Record 2/ })).toBeVisible();
+  const rows = doc(page).locator("table tbody tr");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("start");
+  await expect(rows.nth(1)).toContainText("stop");
   await expect(page.locator("#reader-status")).toContainText("JSON Lines ·");
 });
 
@@ -95,7 +98,8 @@ test("a cut-short view offers the next part and Show all", async ({ page }) => {
   await expect(doc(page)).toContainText("Showing 1,000 of 1,200 records.");
   await page.getByRole("button", { name: "Show all", exact: true }).click();
   await ready(page);
-  await expect(doc(page).getByRole("heading", { name: /Record 1200/ })).toBeAttached();
+  // Flat records read as one table (D6): the last record is its last row.
+  await expect(doc(page).locator("table tbody tr").last()).toContainText("1199");
   await expect(page.getByRole("button", { name: "Show all", exact: true })).toHaveCount(0);
 });
 
@@ -123,4 +127,25 @@ test("a transcript-shaped JSON Lines file reads as a conversation", async ({ pag
   await expect(doc(page).getByRole("heading", { name: /^Assistant/ })).toBeVisible();
   // Message text is rendered as Markdown.
   await expect(doc(page).locator("strong", { hasText: "two" })).toBeVisible();
+});
+
+test("YAML, TOML and CSV open as readable views (D4)", async ({ page }) => {
+  await openFiles(page, [
+    { name: "config.yaml", text: "name: demo-service\nport: 8080\nowners:\n  - Ada\n  - Lin\n" },
+    { name: "app.toml", text: 'title = "demo"\n[server]\nport = 9090\n' },
+    { name: "people.csv", text: "name,role\nAda,lead\nLin,ops\n" },
+  ]);
+  await ready(page);
+  await expect(doc(page).locator("h1")).toHaveText("config.yaml");
+  await expect(doc(page)).toContainText("demo-service");
+  await expect(page.locator("#reader-status")).toContainText("YAML ·");
+  await selectDocument(page, "app.toml");
+  await ready(page);
+  await expect(doc(page)).toContainText("9090");
+  await expect(page.locator("#reader-status")).toContainText("TOML ·");
+  await selectDocument(page, "people.csv");
+  await ready(page);
+  await expect(doc(page).locator("table").first()).toContainText("Ada");
+  await expect(doc(page).locator("table").first()).toContainText("ops");
+  await expect(page.locator("#reader-status")).toContainText("CSV ·");
 });

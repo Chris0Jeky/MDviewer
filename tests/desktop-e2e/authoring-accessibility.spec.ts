@@ -43,7 +43,7 @@ test("keyboard New, layout, Find and Save expose usable names, states and focus"
 test("an invalid Open announces a recoverable error and keyboard retry opens the file", async ({ page }) => {
   let choosing = page.waitForEvent("filechooser");
   await page.keyboard.press("Control+o");
-  await (await choosing).setFiles({ name: "not-supported.csv", mimeType: "text/csv", buffer: Buffer.from("Rejected source") });
+  await (await choosing).setFiles({ name: "not-supported.xml", mimeType: "application/xml", buffer: Buffer.from("Rejected source") });
   const notice = page.locator("#reader-notice");
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute("role", "status");

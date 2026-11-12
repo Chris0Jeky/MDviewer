@@ -18,7 +18,7 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
-import { dataDocumentKind, dataLabelOf, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
+import { dataDocumentKind, dataLabelOf, prepareRenderText, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
@@ -271,8 +271,14 @@ function rememberReaderPosition(): void {
  */
 function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
+  // A switch to another document may reuse that document's kept DOM; the one being left is kept.
+  // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
+  const switching = !patching && !!docs.reader.active && docs.reader.active.id !== renderedReaderId;
+  if (kept && !docs.reader.documents.some(open => open.id === kept!.id)) kept = null; // closed since
+  const candidate = switching ? kept : null;
   if (!patching) {
     rememberReaderPosition();
+    if (switching) keepRendered();
     renderedReaderId = null;
   }
   const current = ++renderGeneration;
@@ -283,11 +289,13 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   content.hidden = !doc;
   empty.hidden = !!doc;
   if (!doc) {
+    kept = null; // nothing open: nothing to switch back to
     content.replaceChildren();
     releaseImages();
     status.textContent = "Local files · No uploads";
     return Promise.resolve();
   }
+  if (candidate && reuseRendered(candidate, doc)) return Promise.resolve();
   if (!patching) {
     content.setAttribute("aria-busy", "true");
     content.replaceChildren(); // A failed new document must not display the previous file's contents.
@@ -323,23 +331,21 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       // Relative images load natively into blob URLs (S6); upgrades later happen in place.
       if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
-      for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
-        const link = document.createElement("a");
-        link.href = `#${encodeURIComponent(heading.id)}`;
-        link.textContent = heading.textContent;
-        link.dataset.level = heading.tagName;
-        outline.append(link);
-      }
-      if (!outline.childElementCount) outline.textContent = "This document has no headings.";
+      buildOutline();
       // The outline changes text wrapping and the maximum scroll offset. Reveal
       // it first so saved offsets clamp against the reader geometry.
       // A first open needs no reset (the emptied reader is at 0) and no forced layout.
       if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
     };
-    // A data document renders its readable view; its raw text stays the document (renderText.ts).
-    const view = renderTextOf(doc.name, doc.text);
     try {
+      // A data document renders its readable view; its raw text stays the document (renderText.ts).
+      // Its kind's parser loads first (D4: YAML on demand); a failed load is this render's error.
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (current !== renderGeneration) return; }
+      const view = renderTextOf(doc.name, doc.text);
+      const renderedText = doc.text; // what this DOM shows (S9 reuse compares against it)
+      const renderedSettings = JSON.stringify(settings);
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
         show(first);
@@ -350,6 +356,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
       else if (position && scroll.scrollTop === restoredTop) restore();
       content.setAttribute("aria-busy", "false");
+      renderedState = { id: doc.id, name: doc.name, text: renderedText, settings: renderedSettings, warnings: result.warnings };
       const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk, format: view.data?.label });
       status.textContent = `${parts.where} · ${parts.size}`;
       if (view.data?.readable.truncated) content.append(moreBar(doc.name));
@@ -395,15 +402,17 @@ async function readFiles(files: File[]): Promise<void> {
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, JSON, JSON Lines and plain text files are supported.");
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (bytes.length > SIZE_HARD_BYTES || total + bytes.length > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       total += bytes.length;
       const text = decodeMarkdown(bytes);
-      // A data document's readable view can outgrow its file: confirm on the view too.
-      if (bytes.length <= SIZE_SOFT_BYTES && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
+      // A data document's readable view can outgrow its file: confirm on the view too. (If its
+      // parser cannot load, the document opens and its render shows the error.)
+      if (bytes.length <= SIZE_SOFT_BYTES && dataDocumentKind(file.name) && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
+        && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
         && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
       batch.documents.push({ name: file.name, text, bytes: bytes.length });
     } catch (error) {
@@ -432,9 +441,13 @@ async function openFromLibrary(id: string): Promise<void> {
   catch (error) { report(`Could not open this file: ${errorText(error)}`); }
 }
 
-async function createDocument(): Promise<void> {
-  if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
-  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text: "" };
+/** New: an untitled note in Edit. `text` (from a template) starts it with content, unsaved. */
+async function createDocument(text = ""): Promise<void> {
+  if (changingMode || nativeSaveBusy || app?.exportState.busy) {
+    if (text) report("Wait for the current action to finish, then choose the template again.");
+    return;
+  }
+  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text };
   if (app) {
     if (!canRestoreDocument(doc)) return;
     ++generation;
@@ -448,8 +461,62 @@ async function createDocument(): Promise<void> {
   report(errors.join(" "));
   if (errors.length) return;
   ++generation;
+  // Text from a template is unsaved work: closing asks, and Save goes through Save As.
+  if (text && docs.reader.active) docs.reader.active.dirty = true;
   await setEditing(true); // before the render, so an empty note is not reported as a problem
   await render();
+}
+
+function buildOutline(): void {
+  for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
+    const link = document.createElement("a");
+    link.href = `#${encodeURIComponent(heading.id)}`;
+    link.textContent = heading.textContent;
+    link.dataset.level = heading.tagName;
+    outline.append(link);
+  }
+  if (!outline.childElementCount) outline.textContent = "This document has no headings.";
+}
+
+/**
+ * S9: the last fully rendered Markdown document's DOM, kept when another document is shown, so
+ * switching back is a swap instead of a full render. Reused only for the same document, name,
+ * exact text and settings. Not kept for data documents (their view depends on a budget) or for
+ * documents with local images (their blob URLs are released on every full render).
+ * ponytail: one entry; a small LRU if switching among three or more large documents matters.
+ */
+type RenderedState = { id: string; name: string; text: string; settings: string; warnings: string[] };
+/** What the reader's DOM was rendered from (set when a render completes): not the current text. */
+let renderedState: RenderedState | null = null;
+let kept: (RenderedState & { nodes: Node[] }) | null = null;
+function keepRendered(): void {
+  const state = renderedState;
+  kept = null;
+  renderedState = null;
+  if (!state || state.id !== renderedReaderId || content.getAttribute("aria-busy") !== "false" || dataLabelOf(state.name)
+    || content.querySelector("img[data-local-src]") || !docs.reader.documents.some(doc => doc.id === state.id)) return;
+  kept = { ...state, nodes: [...content.childNodes] };
+}
+function reuseRendered(entry: RenderedState & { nodes: Node[] }, doc: { id: string; name: string; text: string }): boolean {
+  if ( entry.id !== doc.id || entry.name !== doc.name || entry.text !== doc.text || entry.settings !== JSON.stringify(settings)) return false;
+  content.setAttribute("aria-busy", "true"); // the same busy-then-ready signal as a render
+  releaseImages(); // the document left may have held local images; this one has none
+  content.replaceChildren(...entry.nodes);
+  content.setAttribute("data-code-theme", settings.codeTheme);
+  content.setAttribute("aria-busy", "false");
+  performance.mark("mdv:reader-text");
+  renderedState = { id: entry.id, name: entry.name, text: entry.text, settings: entry.settings, warnings: entry.warnings };
+  if (entry.warnings.length) report(entry.warnings.join(" ")); // as its render reported them
+  buildOutline();
+  const position = docs.reader.positions.get(doc.id)?.reader;
+  const behavior = scroll.style.scrollBehavior;
+  scroll.style.scrollBehavior = "auto";
+  scroll.scrollTop = position?.scrollTop ?? 0;
+  scroll.scrollLeft = position?.scrollLeft ?? 0;
+  scroll.style.scrollBehavior = behavior;
+  renderedReaderId = doc.id;
+  syncDocuments();
+  return true;
 }
 
 /** A cut-short readable view offers the next part and everything (budgets live in renderText). */
@@ -593,7 +660,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
     renderedReaderId = null;
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument,
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, () => createDocument(),
       native.available ? { save: () => { void saveDocument(false); }, saveAs: () => { void saveDocument(true); } } : undefined);
     app = mounted.app;
     docs.adoptReaderInto(app);
@@ -811,10 +878,12 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
-      const kindBefore = dataDocumentKind(target.name);
+      // The view depends on the extension, not only the kind (a CSV and a TSV split differently).
+      const viewBefore = dataDocumentKind(target.name) && target.name.split(".").pop()!.toLowerCase();
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
-      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
+      const viewAfter = dataDocumentKind(result.name) && result.name.split(".").pop()!.toLowerCase();
+      if (!app && viewAfter !== viewBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;
@@ -905,7 +974,34 @@ for (const { bar } of conflictBars) {
 
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
-registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
+registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: () => createDocument() });
+// Templates (A4) need the host's read-only template read; until it exists the entry stays hidden.
+const readTemplate = (native.library as { readTemplate?: (id: string) => Promise<{ name: string; text: string }> } | undefined)?.readTemplate;
+if (native.available && readTemplate) {
+  registerCommand({ id: "document.newFromTemplate", title: "New from template…", enabled: () => !app && !changingMode && !nativeSaveBusy,
+    run: async () => {
+      let shell: typeof import("./shell/templates");
+      try { shell = await import("./shell/templates"); } catch (error) { report(`Could not open templates: ${errorText(error)}`); return; }
+      const result = await shell.chooseTemplate({
+        list: async () => {
+          const entries: Array<{ id: string; name: string; project: string }> = [];
+          let incomplete = false;
+          for (const project of (await native.library.list()).projects) {
+            try {
+              const scan = await native.library.scan(project.id);
+              incomplete ||= scan.truncated;
+              for (const file of scan.files) {
+                if (shell.isTemplatePath(file.relative)) entries.push({ id: file.id, name: file.name, project: project.name });
+              }
+            } catch { incomplete = true; } // an unreadable project: the picker says some may be missing
+          }
+          return { entries, incomplete };
+        },
+        read: id => readTemplate(id),
+      });
+      if (result) await createDocument(result.text);
+    } });
+}
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
 registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
@@ -1074,6 +1170,7 @@ registerCommand({ id: "document.reload", title: "Reload from disk", enabled: () 
 
 const moreMenu: MenuEntry[] = [
   { command: "document.new", id: "reader-new" },
+  { command: "document.newFromTemplate" },
   { command: "document.open", id: "reader-open" },
   "separator",
   { command: "document.save", disabled: () => !somethingToSave() },

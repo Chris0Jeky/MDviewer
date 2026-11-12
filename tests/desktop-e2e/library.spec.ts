@@ -22,7 +22,8 @@ async function fakeHost(page: Page): Promise<void> {
       { id: "f1", name: "CLAUDE.md", relative: "CLAUDE.md", path: "C:\\work\\board\\CLAUDE.md", modified: 10, agent: true },
       { id: "f2", name: "todo.md", relative: "docs\\todo.md", path: "C:\\work\\board\\docs\\todo.md", modified: 30, agent: false },
       { id: "f3", name: "old.md", relative: "old.md", path: "C:\\work\\board\\old.md", modified: 5, agent: false },
-    ].map(file => ({ ...file, unseen: file.id !== "f3" && !state.seen.has(file.id) }));
+      { id: "t1", name: "Meeting notes.md", relative: "templates\\Meeting notes.md", path: "C:\\work\\board\\templates\\Meeting notes.md", modified: 1, agent: false },
+    ].map(file => ({ ...file, unseen: !["f3", "t1"].includes(file.id) && !state.seen.has(file.id) }));
     const texts: Record<string, [string, string]> = {
       r1: ["notes.md", "# Notes\n\nRecent file.\n"], r2: ["plan.md", "# Plan\n\nAnother.\n"], f2: ["todo.md", "# Todo\n\nChanged.\n"],
     };
@@ -33,6 +34,10 @@ async function fakeHost(page: Page): Promise<void> {
       take_pending_files: () => ({ documents: [], errors: [], canceled: false }),
       session_restore: () => ({ documents: [], errors: [], canceled: false }),
       library_list: () => ({ recent: state.recent, pinned: state.pinned, projects: state.projects }),
+      library_read_template: ({ id }) => {
+        if (id !== "t1") throw new Error("This library entry is no longer available.");
+        return { name: "Meeting notes.md", text: "# {{title}}\n\nOwner: {{owner}}\nOn {{date}}\n" };
+      },
       library_scan: ({ id }) => {
         if (id === "p2") throw new Error("The folder is missing.");
         return { files: files(), truncated: false };
@@ -181,4 +186,27 @@ test("Clear library asks first and empties every section", async ({ page }) => {
   await clear("accept");
   await expect(recent.getByRole("listitem")).toHaveCount(0);
   await expect(panel(page).getByRole("listitem")).toHaveCount(0);
+});
+
+test("New from template reads the template without opening it and starts a filled note in Edit", async ({ page }) => {
+  await page.goto("/desktop.html");
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menu", { name: "More" }).getByText("New from template…", { exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New from template" });
+  await dialog.getByRole("button", { name: /Meeting notes/ }).click();
+  const owner = dialog.getByRole("textbox", { name: "owner" });
+  await expect(owner).toBeFocused();
+  await owner.fill("Ada {{date}}"); // a typed value stays text
+  await owner.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  const edit = page.locator("#reader-edit #editor-input");
+  await expect(edit).toBeFocused();
+  await expect(edit).toHaveValue(/^# Meeting notes\n\nOwner: Ada \{\{date\}\}\nOn \d{4}-\d{2}-\d{2}\n$/);
+  await expect(page.locator("#reader-document h1")).toHaveText("Meeting notes");
+  await expect(page.locator('#shell-tabs [role="tab"]')).toHaveText(["Untitled.md, unsaved changes"]);
+  // Read-only: no open, no Recent entry, no seen mark.
+  const calls = await page.evaluate(() => window.__fake.calls.map(([cmd]) => cmd));
+  expect(calls).toContain("library_read_template");
+  expect(calls).not.toContain("library_open");
+  expect(calls).not.toContain("library_mark_seen");
 });

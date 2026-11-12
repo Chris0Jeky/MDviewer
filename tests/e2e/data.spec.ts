@@ -47,7 +47,20 @@ test("a cut-short data view offers the rest in the workspace, and plain text sta
   await expect(page.locator("#paged-output")).toContainText("Showing 500 of 600 records.", { timeout: 30_000 });
   await expect(offer).toContainText("This data view was cut short.", { timeout: 30_000 });
   await offer.getByRole("button", { name: "Show all", exact: true }).click();
-  await expect(page.locator("#paged-output")).toContainText("Record 600", { timeout: 60_000 });
+  await expect(page.locator("#paged-output tbody td:nth-child(2)").filter({ hasText: /^599$/ })).toBeVisible({ timeout: 60_000 });
   await waitForPagination(page, 60_000); // partial pages show the text before the run finishes
   await expect(offer).toBeHidden({ timeout: 30_000 });
+});
+
+test("a dropped YAML file loads its parser and shows its readable view", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["name: demo-service\nport: 8080\n"], "config.yaml", { type: "" }));
+    window.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true }));
+  });
+  await waitForPagination(page);
+  await expect(page.locator("#paged-output h1")).toHaveText("config.yaml");
+  await expect(page.locator("#paged-output")).toContainText("demo-service");
+  await expect(page.locator("#warning-banner")).toBeHidden();
 });

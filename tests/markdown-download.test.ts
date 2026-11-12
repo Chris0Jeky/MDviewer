@@ -7,7 +7,7 @@ describe("local source download", () => {
   it.each([
     ["notes.md", "notes.md"], ["C:\\notes\\Research.markdown", "Research.markdown"],
     ["../ideas", "ideas.md"], ["", "Untitled.md"], ["bad?name.md", "bad_name.md"],
-    ["service.json", "service.json"], ["events.jsonl", "events.jsonl"], ["notes.txt", "notes.txt"], ["sheet.csv", "sheet.csv.md"],
+    ["service.json", "service.json"], ["events.jsonl", "events.jsonl"], ["notes.txt", "notes.txt"], ["sheet.csv", "sheet.csv"], ["config.yml", "config.yml"], ["feed.xml", "feed.xml.md"],
   ])("uses a portable Markdown filename for %s", (name, expected) => {
     expect(markdownFilename(name)).toBe(expected);
   });

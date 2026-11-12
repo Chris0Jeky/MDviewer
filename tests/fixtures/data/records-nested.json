@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "owner": {
+      "login": "one",
+      "score": 2,
+      "tags": [
+        "a, b",
+        "c"
+      ]
+    },
+    "stats": {},
+    "notes": "line one\nline two"
+  },
+  {
+    "id": 2,
+    "owner": {
+      "score": 3
+    },
+    "extra": "1"
+  },
+  {
+    "id": 3,
+    "owner": {
+      "login": "three"
+    }
+  }
+]

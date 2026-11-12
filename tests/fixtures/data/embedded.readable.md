@@ -8,7 +8,4 @@ JSON · 47 B · object with 1 key
 | Key | Value |
 | --- | --- |
 | a | 1 |
-
-#### items
-
-true, false
+| items | true, false |

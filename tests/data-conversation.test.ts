@@ -44,6 +44,21 @@ describe("conversation recognition", () => {
 });
 
 describe("conversation layout and fidelity", () => {
+  it("G9 labels only non-empty turns containing exclusively tool results, retaining the actual role", () => {
+    const records = [assistant, { message: { role: "user", content: [{ type: "tool_result", content: "done" }] }, timestamp: "2026-01-01T00:00:00Z" },
+      { role: "custom | role", content: [{ type: "tool_result", content: "one" }, { type: "tool_result", content: "two" }] },
+      { role: "user", content: [] }, { role: "user", content: [{ type: "tool_result", content: "done" }, { type: "text", text: "Hi" }] }];
+    const result = view(records, { timeZone: "UTC" });
+    expect(result.markdown).toContain("## Tool result \\(user\\) · 2026\\-01\\-01 00\\:00 UTC");
+    expect(result.markdown).toContain("## Tool result \\(custom \\| role\\)");
+    expect(result.markdown.match(/^## User$/gm)).toHaveLength(2);
+    expect(result.markdown).toContain("5 turns: 1 assistant, 3 user, 1 custom \\| role");
+    expect(result.truncated).toBe(false);
+    expect(toReadable(records.map(r => JSON.stringify(r)).join("\n"), "jsonl", { timeZone: "UTC" }).markdown).toContain("## Tool result \\(user\\)");
+    const heading = result.markdown.split("\n").findIndex(s => s.startsWith("## Tool result")) + 1;
+    expect(result.map.get(heading)).toBe("$[1]");
+  });
+
   it("maps turn headings to records and text to its source path", () => {
     const result = view([user, { message: assistant, uuid: "invented-id", type: "event" }]);
     const lines = result.markdown.split("\n");
@@ -162,6 +177,11 @@ describe("conversation layout and fidelity", () => {
 });
 
 describe("conversation budgets", () => {
+  it("omits an empty metadata table when it cannot afford its first row", () => {
+    const result = view([{ ...user, items: [{ description: "hello", n: 1 }] }, assistant], { maxValues: 7 });
+    expect(result.markdown).toContain("### items\n\n</details>");
+  });
+
   it("uses the same value totals as the generic lens and never charges a value twice", () => {
     const source = JSON.stringify([user, assistant]); // list + two objects with two scalar members = 7 values
     expect(toReadable(source, "json", { maxValues: 7 }).truncated).toBe(false);

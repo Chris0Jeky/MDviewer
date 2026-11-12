@@ -748,17 +748,43 @@ unrelated common grammar assets unloaded until Export PDF… prepares the worksp
 
 Readable data, D3 webview half (`docs/design/READABLE_DATA.md`). `src/app/renderText.ts`
 `renderTextOf(name, text, scale?)` is the one seam from document text to render text: Markdown
-renders as written; a data document (`dataDocumentKind`: JSON, JSON Lines, plain text in version
-1) renders `toReadable(...).markdown` from `src/data/`, with budgets scaled by the reader's
+renders as written; a data document (`dataDocumentKind`: JSON, JSON Lines, YAML, TOML, CSV/TSV, plain
+text) renders `toReadable(...).markdown` from `src/data/`, with budgets scaled by the reader's
 "Show more" (doubles) and lifted by "Show all". The reader and the Edit preview (`main.ts`
 `render`) and the PDF workspace (`App.ts`, before front matter) all call it; the document keeps
 its raw text, which the editors show and Save writes (`markdownFilename` keeps a data
 extension). `renderReaderDocument(…, { data: true })` turns actionable controls and the front
 matter card off; caret follow is off (raw lines do not map to the derived view). The status
-line names the format (`dataLabelOf`). `isMarkdownFile` admits the version 1 data extensions,
+line names the format (`dataLabelOf`). D4: every render path (reader, Edit preview, workspace)
+first awaits `prepareRenderText(name)` (`prepare(kind)`: the YAML parser loads on demand), so a
+YAML file never reaches `toReadable` unprepared and a failed load is that render's error state
+(`tests/desktop-data-prepare.test.ts`); admission's size check prepares too. `isMarkdownFile` admits the data extensions,
 so the web and desktop pickers and drops accept them; the large-document confirmation also
 counts the readable view. Tests: `tests/render-text.test.ts`, `tests/input.test.ts`,
 `tests/markdown-download.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`.
+
+Templates (A4; `docs/design/ACTIONABLE_MARKDOWN.md` §7). `src/desktop/reader/template.ts` is pure:
+`templateFields` lists each distinct `{{name}}` once (not `date`, `time`, `title`), `fillTemplate`
+fills them in one pass (a typed value is inserted as plain text and is never read as a
+placeholder; a field left empty keeps its `{{name}}` as written). `src/desktop/shell/templates.ts`
+(lazy) `chooseTemplate(source)` lists Markdown files directly inside a pinned project's
+`templates/` folder (`isTemplatePath`, from `library_scan`), reads the chosen one through the
+host's read-only template read, asks the short form, and the entry opens the result as an
+unsaved untitled note in Edit (Save goes through Save As). The command `document.newFromTemplate`
+("New from template…", More menu and palette) needs the host's `native.library.readTemplate`
+(`library_read_template`: no Recent entry, seen mark, binding or library write) and is absent in
+the web build. Tests: `tests/template.test.ts`,
+`tests/desktop-templates.test.ts`.
+
+Reader performance (S9). Switching to another document keeps the DOM of the one being left
+(`keepRendered`, one entry, recorded from the text and settings the render actually used); switching
+back to it swaps those nodes in (`reuseRendered`) when its id, name, text and settings still match,
+with the same busy-then-ready signal and `mdv:reader-text` mark as a render. Re-rendering the shown
+document never reuses; data documents (budgeted views) and documents with local images (blob URLs
+are released on every full render) are not kept. `upgradeCode` sanitizes every upgraded code block
+in one DOMPurify pass (each block in its own indexed wrapper; one that does not survive intact is
+sanitized alone). `content-visibility` was measured and rejected: estimated block heights break
+near-end position restore. Test: `tests/desktop-tab-reuse.test.ts`.
 
 Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,
 the bar's Edit toggle with `aria-pressed`) mounts the workspace's own `mountEditor` (Find,

@@ -133,6 +133,17 @@ describe("desktop owned Save", () => {
     expect(boundary.saveDocument).toHaveBeenCalledWith("b".repeat(32), 0, "draft 2", false);
   });
 
+  it("Save As from .csv to .tsv re-renders the readable view (the delimiter follows the extension)", async () => {
+    boundary.open.mockResolvedValueOnce(bound("people.csv", "name\tauto\nAda\tyes\n"));
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(boundary.render).toHaveBeenCalled());
+    const before = boundary.render.mock.calls.at(-1)![0] as string;
+    boundary.saveDocumentAs.mockResolvedValueOnce(saved("people.tsv", 1));
+    press({ shiftKey: true, key: "S" });
+    await vi.waitFor(() => expect(boundary.render.mock.calls.at(-1)![2]).toBe("people.tsv"));
+    expect(boundary.render.mock.calls.at(-1)![0]).not.toBe(before); // read again with tabs as the delimiter
+  });
+
   it("asks before normalising mixed line endings", async () => {
     const app = await workspaceWith(bound("mixed.md", "a\r\nb\n", { eol: "mixed" }));
     app.store.updateText(app.store.active!.id, "a\nb\nc\n");
