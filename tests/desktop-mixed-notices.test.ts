@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenBatch } from "../src/desktop/native";
+import { tabCount, tabTexts } from "./helpers/desktopTabs";
 
 const boundary = vi.hoisted(() => ({ open: vi.fn(), pending: vi.fn(), render: vi.fn(), workspace: vi.fn(), notify: () => {} }));
 vi.mock("../src/desktop/native", () => ({ native: {
@@ -84,7 +85,7 @@ describe("mixed desktop import and render notices", () => {
     await vi.waitFor(() => expect(boundary.render).toHaveBeenCalledOnce());
     boundary.pending.mockResolvedValueOnce({ ...empty(), documents: [{ name: "later.md", text: "# Later", bytes: 7 }] });
     boundary.notify();
-    await vi.waitFor(() => expect(document.getElementById("reader-documents")!.textContent).toContain("later.md"));
+    await vi.waitFor(() => expect(tabTexts().join(" ")).toContain("later.md"));
     complete(rendered("# Good", ["Obsolete warning"]));
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Later"));
     expect(message()).toBe("");
@@ -137,6 +138,6 @@ describe("mixed desktop import and render notices", () => {
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.getAttribute("aria-busy")).toBe("false"));
     expect(message()).toContain("Close a document first");
     expect(message()).toContain("Empty document warning");
-    expect(document.querySelectorAll("#reader-documents option")).toHaveLength(32);
+    expect(tabCount()).toBe(32);
   });
 });

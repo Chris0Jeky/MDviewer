@@ -78,14 +78,15 @@ flowchart LR
 
 export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  // Ctrl+O works from the empty state, the tabs and the document alike (S3 has no Open button in the bar).
+  await page.keyboard.press("Control+O");
   await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
 }
 
 export async function readyReader(page: Page, heading: string): Promise<void> {
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-document h1")).toHaveText(heading);
-  await expect(page.locator("#reader-shell > footer #reader-status")).toContainText("Reading view");
+  await expect(page.locator("#reader-shell > footer #reader-status")).toContainText(/ words? · /);
 }
 
 export async function readyWorkspace(page: Page, text: string): Promise<void> {
@@ -104,4 +105,28 @@ export async function dropFiles(page: Page, files: Array<{ name: string; text: s
   }, files);
   await page.locator(target).dispatchEvent("drop", { dataTransfer });
   await dataTransfer.dispose();
+}
+
+/** The reader's document tabs (S3). A dirty tab's text ends with ", unsaved changes". */
+export const documentTabs = (page: Page) => page.locator('#shell-tabs [role="tab"]');
+
+/** Select a document tab by its label (a leading "• " dirty mark is ignored). */
+export async function selectDocument(page: Page, label: string): Promise<void> {
+  const name = label.replace(/^• /, "");
+  await page.locator("#shell-tabs").getByText(name, { exact: true }).click();
+}
+
+/** Run a More-menu item by its visible title. */
+export async function moreMenu(page: Page, title: string): Promise<void> {
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menu", { name: "More" }).getByText(title, { exact: true }).click();
+}
+
+/** Open the left panel on its Outline tab. */
+export async function showOutline(page: Page): Promise<void> {
+  const toggle = page.getByRole("button", { name: "Library and outline", exact: true });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+  const tab = page.locator("#shell-panel").getByRole("tab", { name: "Outline", exact: true });
+  await tab.click();
+  await expect(page.locator("#reader-outline")).toBeVisible();
 }

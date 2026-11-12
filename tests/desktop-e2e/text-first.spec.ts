@@ -1,4 +1,4 @@
-import { test, expect } from "./helpers";
+import { test, expect, showOutline } from "./helpers";
 
 declare global {
   interface Window { __firstPaint: { heights: Record<string, number>; pending: number } | null }
@@ -55,7 +55,7 @@ test("scrolling while code and diagrams upgrade keeps the reader's place", async
   const doc = page.locator("#reader-document");
   await expect(doc.locator("pre.reader-pending").first()).toBeAttached();
   await expect(doc).toHaveAttribute("aria-busy", "true");
-  await expect(page.getByRole("navigation", { name: "Document headings" })).toBeVisible();
+  await showOutline(page);
   const scroll = page.locator("#reader-scroll");
   await scroll.evaluate(element => { element.style.scrollBehavior = "auto"; element.scrollTop = 600; });
   await expect(doc).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });

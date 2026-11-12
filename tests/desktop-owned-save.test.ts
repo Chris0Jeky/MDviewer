@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocStore } from "../src/app/state";
 import type { OpenBatch, SaveResult } from "../src/desktop/native";
+import { activeTab } from "./helpers/desktopTabs";
 
 // The real desktop entry, document owner and command registry; the native host
 // and the layout-dependent workspace/render boundaries are stubbed.
@@ -35,7 +36,7 @@ function press(init: KeyboardEventInit): KeyboardEvent {
   return event;
 }
 const notice = () => document.getElementById("workspace-notice")!.textContent ?? "";
-const option = () => (document.getElementById("reader-documents") as HTMLSelectElement).selectedOptions[0]!.text;
+const option = (): string => activeTab();
 
 async function workspaceWith(batch: OpenBatch) {
   boundary.open.mockResolvedValueOnce(batch);

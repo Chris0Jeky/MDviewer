@@ -1,13 +1,13 @@
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, openFiles, readyReader, readyWorkspace, selectDocument, showOutline } from "./helpers";
 
 for (const size of [{ width: 560, height: 420 }, { width: 640, height: 480 }]) {
   test(`document navigation stays reachable at ${size.width}×${size.height}`, async ({ page }) => {
     await page.setViewportSize(size);
     await openFiles(page, [{ name: "one.md", text: "# One" }, { name: "two.md", text: "# Two" }]);
     await readyReader(page, "One");
-    await page.getByRole("button", { name: "Next document", exact: true }).click();
+    await documentTabs(page).nth(1).click();
     await readyReader(page, "Two");
-    await page.getByRole("button", { name: "Previous document", exact: true }).click();
+    await documentTabs(page).nth(0).click();
     await readyReader(page, "One");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
     await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
@@ -26,8 +26,7 @@ test("reader positions and source selections survive keyboard switches and repea
   const source = "# Navigation λ😀\n\n" + Array.from({ length: 45 }, (_, index) => `## Section ${index}\n\nA paragraph of reading text for section ${index}.\n\n`).join("");
   await openFiles(page, [{ name: "same.md", text: source }, { name: "same.md", text: source }]);
   await readyReader(page, "Navigation λ😀");
-  const picker = page.getByRole("combobox", { name: "Open documents" });
-  await expect(picker.locator("option")).toHaveText(["same.md (1 of 2)", "same.md (2 of 2)"]);
+  await expect(documentTabs(page)).toHaveText(["same.md (1 of 2)", "same.md (2 of 2)"]);
   const scroll = page.locator("#reader-scroll");
   await scroll.evaluate(el => { el.style.scrollBehavior = "auto"; el.scrollTop = 800; });
   const first = await scroll.evaluate(el => el.scrollTop);
@@ -65,7 +64,7 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
       `## Section ${index}\n\n${paragraph}\n\n`).join("");
     await openFiles(page, [{ name: "wrapped.md", text: source }, { name: "other.md", text: "# Other" }]);
     await readyReader(page, "Wrapped reader");
-    await expect(page.locator("#reader-outline")).toBeVisible();
+    await showOutline(page);
     await expect(page.locator("#reader-outline a")).toHaveCount(17);
     const scroll = page.locator("#reader-scroll");
     const geometry = () => page.evaluate(() => {
@@ -88,11 +87,10 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
     expect(audit.requests.filter(url => /workspace-|pagedjs/i.test(url)), "reading stays lazy before entering the workspace").toEqual([]);
 
     if (transition === "document switch") {
-      const picker = page.getByRole("combobox", { name: "Open documents" });
-      await picker.selectOption({ label: "other.md" });
+      await selectDocument(page, "other.md");
       await readyReader(page, "Other");
-      await expect(page.locator("#reader-outline")).toBeHidden();
-      await picker.selectOption({ label: "wrapped.md" });
+      await expect(page.locator("#reader-outline a")).toHaveCount(1); // "# Other": one heading
+      await selectDocument(page, "wrapped.md");
     } else {
       await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
       await readyWorkspace(page, source);

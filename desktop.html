@@ -10,38 +10,35 @@
   <body class="desktop-reader">
     <a class="reader-skip" href="#reader-document">Skip to document</a>
     <main id="reader-shell">
-      <header class="reader-toolbar" aria-label="Reader controls">
-        <span class="reader-brand">MD<span>viewer</span></span>
-        <button id="reader-new" type="button" title="New document (Ctrl/Cmd+N)" aria-keyshortcuts="Control+n Meta+n">New</button>
-        <button id="reader-open" type="button" title="Open Markdown (Ctrl+O)">Open</button>
-        <button id="reader-previous" type="button" aria-label="Previous document">↑</button>
-        <label class="reader-document-picker">Document <select id="reader-documents" aria-label="Open documents"><option>No document open</option></select></label>
-        <button id="reader-next" type="button" aria-label="Next document">↓</button>
-        <button id="reader-close" type="button" title="Close document (Ctrl+W)" disabled>Close</button>
-        <label>Screen <select id="reader-theme" aria-label="Screen theme"><option value="light">Light</option><option value="dark">Dark</option><option value="sepia">Sepia</option></select></label>
-        <button id="reader-smaller" type="button" aria-label="Smaller text">A−</button>
-        <button id="reader-larger" type="button" aria-label="Larger text">A+</button>
-        <button id="reader-workspace" class="reader-primary" type="button" disabled>Edit &amp; PDF</button>
+      <header class="shell-bar" aria-label="Document bar">
+        <button id="shell-panel-toggle" class="shell-icon" type="button" aria-label="Library and outline" aria-expanded="false" aria-controls="shell-panel" aria-keyshortcuts="Control+B" title="Library and outline (Ctrl+B)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
+        <div id="shell-tabs" class="shell-tabs" role="tablist" aria-label="Open documents" hidden></div>
+        <span class="shell-spacer"></span>
+        <button id="reader-workspace" class="shell-edit" type="button" disabled aria-keyshortcuts="Control+E" title="Edit the source and export PDF (Ctrl+E)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z"/></svg>Edit &amp; PDF</button>
+        <button id="shell-more" class="shell-icon" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false" aria-controls="shell-more-menu" title="More"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg></button>
+        <div id="shell-more-menu" class="shell-menu" role="menu" aria-label="More" hidden></div>
       </header>
       <p id="reader-notice" class="reader-notice" role="status" aria-live="polite" hidden></p>
       <div class="reader-layout">
-        <nav id="reader-outline" class="reader-outline" aria-label="Document headings" hidden></nav>
+        <aside id="shell-panel" class="shell-panel" aria-label="Library and outline" hidden>
+          <nav id="reader-outline" class="reader-outline" aria-label="Document headings"></nav>
+        </aside>
         <div id="reader-scroll" class="reader-scroll">
           <section id="reader-empty" class="reader-empty">
-            <span class="reader-eyebrow">MDVIEWER DESKTOP · EXPERIMENTAL</span>
             <h1>Read and write Markdown.</h1>
-            <p>Start a new document, or open or drop a .md file from your computer.</p>
-            <p>Code, math and diagrams render locally. Editing and PDF tools are a click away.</p>
+            <p>Start a note, or open a file. You can also drop a .md file anywhere in this window.</p>
             <div class="reader-empty-actions">
-              <button id="reader-new-empty" class="reader-primary" type="button" title="New document (Ctrl/Cmd+N)" aria-keyshortcuts="Control+n Meta+n">New document</button>
-              <button id="reader-sample" type="button">Try a sample</button>
+              <button id="reader-new-empty" class="reader-primary" type="button" title="New document (Ctrl+N)" aria-keyshortcuts="Control+N">New document</button>
+              <button id="reader-open-empty" type="button" title="Open Markdown (Ctrl+O)" aria-keyshortcuts="Control+O">Open…</button>
+              <button id="reader-sample" class="reader-link" type="button">Try a sample</button>
             </div>
-            <small>Documents stay in memory. Use Save Markdown to keep a copy before closing.</small>
+            <p class="reader-empty-hint"><kbd>Ctrl</kbd>+<kbd>K</kbd> commands and files · <kbd>Ctrl</kbd>+<kbd>P</kbd> print or export PDF</p>
+            <small>Files stay on this computer. Nothing is uploaded.</small>
           </section>
           <article id="reader-document" class="doc reader-document" aria-label="Markdown document" tabindex="-1" hidden></article>
         </div>
       </div>
-      <footer class="reader-footer"><span id="reader-status" aria-live="polite">Local files · No uploads</span><span>Ctrl+N New · Ctrl+O Open · Ctrl+F Find · Ctrl+W Close</span></footer>
+      <footer class="reader-footer"><span id="reader-status" aria-live="polite">Local files · No uploads</span><span id="reader-save-state" class="reader-save-state"></span></footer>
     </main>
     <div id="desktop-workspace" hidden>
       <div class="reader-workspace-bar"><button id="reader-return" type="button">← Reading view</button><span>Save Markdown saves a copy.</span></div>

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace } from "./helpers";
 
 test("New starts locally from the empty reader, previews edits and saves exact Markdown", async ({ page, audit }) => {
   await expect(page.locator("#editor-input, #paged-output")).toHaveCount(0);
@@ -23,14 +23,14 @@ test("New starts locally from the empty reader, previews edits and saves exact M
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("A new local note");
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "A new local note");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveText(["• Untitled.md"]);
+  await expect(documentTabs(page)).toHaveText(["Untitled.md, unsaved changes"]);
 });
 
 test("New retains existing files, uses distinct names and reveals a Preview-only source pane", async ({ page }) => {
   const originals = [{ name: "UNTITLED.MD", text: "# Keep this original" }, { name: "Untitled 2.md", text: "# Keep this other file" }];
   await openFiles(page, originals);
   await readyReader(page, "Keep this original");
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await moreMenu(page, "New document");
   const editor = page.locator("#editor-input");
   const picker = page.getByRole("combobox", { name: "Active document" });
   await expect(editor).toBeFocused({ timeout: 30_000 });
@@ -70,7 +70,7 @@ test("reader and workspace New shortcuts keep blank documents distinct and closa
   expect(dialogs, "pristine blank documents contain no edits to discard").toEqual([]);
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await expect(page.locator("#reader-shell")).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveText(["Untitled.md", "Untitled 2.md"]);
+  await expect(documentTabs(page)).toHaveText(["Untitled.md", "Untitled 2.md"]);
   await page.keyboard.press("Meta+n");
   await expect(editor).toBeFocused({ timeout: 30_000 });
   await expect(picker.locator("option")).toHaveText(["Untitled.md", "Untitled 2.md", "Untitled 3.md"]);
@@ -79,9 +79,9 @@ test("reader and workspace New shortcuts keep blank documents distinct and closa
 test("New refuses a full desktop session without replacing the selected file", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Retained document ${index}` })));
   await readyReader(page, "Retained document 0");
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await moreMenu(page, "New document");
   await expect(page.locator("#reader-notice")).toContainText("at most 32 documents");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveCount(32);
+  await expect(documentTabs(page)).toHaveCount(32);
   await expect(page.locator("#reader-document h1")).toHaveText("Retained document 0");
   await expect(page.locator("#editor-input")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();

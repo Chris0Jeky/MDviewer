@@ -68,6 +68,9 @@ Opened documents stay in memory. UNC and device paths are rejected.
 `open_external` accepts only HTTP(S) URLs without embedded credentials or control
 characters. Call it only for an explicit user link action. Other schemes and
 remote top-level navigation/new windows are denied. There are no generic filesystem, shell, HTTP, updater, or telemetry commands.
+The only window permissions are `core:window:allow-destroy` (guarded close) and
+`core:window:allow-set-always-on-top` (the reader's "Keep on top of other windows"
+command, which only toggles the main window's z-order); `core:window:default` is not granted.
 The opener plugin's automatic JavaScript link handler is disabled. Native dialogs
 use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 

@@ -5,6 +5,7 @@ import type { ReaderSession } from "../src/desktop/session";
 import type { OpenBatch } from "../src/desktop/native";
 import type { DownloadDestination } from "../src/export/destination";
 import type { ViewMode } from "../src/app/settings";
+import { tabTexts } from "./helpers/desktopTabs";
 
 // Keep the real entry, admission and document store. The native host and the
 // layout-dependent workspace/render boundaries are exercised in desktop E2E.
@@ -156,8 +157,7 @@ describe("desktop New document", () => {
     const reader = boundary.sessions.at(-1)!;
     expect(reader.active).toMatchObject({ name: "Untitled 2.md", text: edited ? "# My new note\n\nKeep this source." : "", dirty: edited });
     expect(reader.documents[0]).toMatchObject({ name: "Untitled.md", text: "", dirty: false });
-    const options = document.querySelectorAll<HTMLOptionElement>("#reader-documents option");
-    expect([...options].map(option => option.text)).toEqual(["Untitled.md", edited ? "• Untitled 2.md" : "Untitled 2.md"]);
+    expect(tabTexts()).toEqual(["Untitled.md", edited ? "• Untitled 2.md" : "Untitled 2.md"]);
   });
 
   it("can start again after the final workspace document is closed", async () => {

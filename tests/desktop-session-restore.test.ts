@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenBatch } from "../src/desktop/native";
+import { tabTexts } from "./helpers/desktopTabs";
 
 const boundary = vi.hoisted(() => ({
   pending: vi.fn(), render: vi.fn(), restore: vi.fn(), record: vi.fn(), setting: vi.fn(),
@@ -23,7 +24,7 @@ function batch(names: string[], first = 1): OpenBatch {
 }
 const empty: OpenBatch = { documents: [], errors: [], canceled: false };
 const shown = () => document.getElementById("reader-document")!.textContent;
-const options = () => [...(document.getElementById("reader-documents") as HTMLSelectElement).options].map(o => o.text);
+const options = (): string[] => tabTexts();
 
 async function boot(launch: OpenBatch, restored: OpenBatch): Promise<void> {
   boundary.pending.mockResolvedValueOnce(launch).mockResolvedValue(empty);

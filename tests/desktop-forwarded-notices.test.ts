@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenBatch } from "../src/desktop/native";
+import { activeTab, tabCount } from "./helpers/desktopTabs";
 
 const boundary = vi.hoisted(() => ({ open: vi.fn(), pending: vi.fn(), notify: () => {} }));
 vi.mock("../src/desktop/native", () => ({ native: {
@@ -55,10 +56,9 @@ describe("forwarded-file notice lifetime", () => {
     if (nonempty) await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Forwarded"));
 
     complete({ ...empty(), documents: [{ name: "picked.md", text: "# Picked", bytes: 8 }] });
-    await vi.waitFor(() => expect(document.querySelectorAll("#reader-documents option")).toHaveLength(nonempty ? 3 : 2));
+    await vi.waitFor(() => expect(tabCount()).toBe(nonempty ? 3 : 2));
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe(nonempty ? "# Forwarded" : "# Picked"));
-    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
-    expect(picker.selectedOptions[0]!.textContent).toBe(nonempty ? "forwarded.md" : "picked.md");
+    expect(activeTab()).toBe(nonempty ? "forwarded.md" : "picked.md");
   });
 
   it("keeps a newer picker selection when an earlier forwarded read completes", async () => {
@@ -70,10 +70,9 @@ describe("forwarded-file notice lifetime", () => {
     document.getElementById("reader-open")!.click();
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# Picked"));
     complete({ ...empty(), documents: [{ name: "forwarded.md", text: "# Forwarded", bytes: 11 }] });
-    await vi.waitFor(() => expect(document.querySelectorAll("#reader-documents option")).toHaveLength(2));
+    await vi.waitFor(() => expect(tabCount()).toBe(2));
     expect(document.getElementById("reader-document")!.textContent).toBe("# Picked");
-    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
-    expect(picker.selectedOptions[0]!.textContent).toBe("picked.md");
+    expect(activeTab()).toBe("picked.md");
   });
 
   it("clears the previous failure when a clean forwarded document opens", async () => {

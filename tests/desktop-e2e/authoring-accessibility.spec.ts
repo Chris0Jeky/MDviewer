@@ -35,7 +35,7 @@ test("keyboard New, layout, Find and Save expose usable names, states and focus"
   expect(await readFile((await saved.path())!, "utf8")).toBe(text);
   await expect(page.getByRole("button", { name: "Save Markdown", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Open Markdown", exact: true })).toHaveAttribute("aria-keyshortcuts", /Control\+o/);
-  await expect(page.getByRole("button", { name: "New", exact: true })).toHaveAttribute("aria-keyshortcuts", /Control\+n/);
+  await expect(page.locator("#reader-new")).toHaveAttribute("aria-keyshortcuts", /Control\+N/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640);
   await page.screenshot({ path: info.outputPath("keyboard-desktop-reflow.png"), fullPage: true });
 });
@@ -51,13 +51,13 @@ test("an invalid Open announces a recoverable error and keyboard retry opens the
   await expect(notice).toContainText("Markdown");
   const snapshot = await page.locator("#reader-shell").ariaSnapshot();
   expect(snapshot).toContain("Markdown");
-  await expect(page.getByRole("button", { name: "Open", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Open…", exact: true })).toBeEnabled();
   choosing = page.waitForEvent("filechooser");
   await page.keyboard.press("Control+o");
   await (await choosing).setFiles({ name: "valid.md", mimeType: "text/markdown", buffer: Buffer.from("# Recovered note") });
   await expect(page.locator("#reader-document h1")).toHaveText("Recovered note");
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
-  await expect(page.locator("#reader-status")).toContainText("Reading view");
+  await expect(page.locator("#reader-status")).toContainText(/ words? · /);
 });
 
 test("desktop Find and Format retain usable source space together at 560×420", async ({ page }, info) => {
