@@ -1,12 +1,13 @@
 import { cellText, fence } from "./escape";
 import { conversationList, conversationOverview, conversationRecord, isConversation, renderConversation } from "./conversation";
 import { parseJson, type ParseResult } from "./json";
-import { budget, count, Lens, shape } from "./lens";
+import { budget, count, Lens, shape, type TableRow } from "./lens";
 import { parseCsv } from "./csv";
 import { parseToml } from "./toml";
 import { parseYaml, prepareYaml } from "./yaml";
 import type { DataKind, Problem, Readable, ReadableOptions } from "./types";
 export type { DataKind, Problem, Readable, ReadableOptions } from "./types";
+export { valueAt, copyValue, subtreeJson, pathForms } from "./copy";
 
 /** Load optional readers before the synchronous conversion seam is used. */
 export function prepare(kind: DataKind): Promise<void> {
@@ -74,11 +75,36 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
       if (record.parsed.value) lens.total += lens.count(record.parsed.value);
       else problems.push(record.parsed.problem);
     }
-    lens.line(`JSON Lines · ${size(text)} · ${count(recordsTotal, "record")}`); lens.line();
     const conversation = isConversation(records.map(r => r.parsed.value));
+    lens.line(`JSON Lines · ${size(text)} · ${count(recordsTotal, "record")}${!conversation && problems.length ? `, ${problems.length.toLocaleString("en-US")} not valid JSON` : ""}`); lens.line();
     if (conversation) conversationOverview(lens, records.map(r => r.parsed.value));
     const maxRecords = budget(options.maxRecords, 500);
-    for (const [index, record] of records.entries()) {
+    const valid = records.flatMap(r => r.parsed.value ? [r.parsed.value] : []);
+    const table = conversation ? undefined : lens.recordTable(valid);
+    const names = new Set(table?.columns.map(c => c.name));
+    const lineColumn = names.has("line") ? names.has("#") ? undefined : "#" : "line";
+    const badRecord = (record: typeof records[number], index: number): void => {
+      lens.line(`## Record ${index + 1} (line ${record.line})`, `$[${index}]`); lens.line();
+      if (record.parsed.problem) {
+        const p = record.parsed.problem;
+        lens.line(`Line ${p.line}, column ${p.column}: ${cellText(p.message)}`); lens.line();
+        lens.line(fence(record.source)); lens.line();
+      }
+    };
+    if (table && lineColumn) {
+      const rows: TableRow[] = [];
+      const bad: { record: typeof records[number]; index: number }[] = [];
+      for (const [index, record] of records.entries()) {
+        if (recordsShown >= maxRecords || lens.truncated) break;
+        if (record.parsed.value) {
+          if (!lens.take(lens.count(record.parsed.value))) break;
+          rows.push({ value: record.parsed.value, path: `$[${index}]`, line: record.line });
+        } else bad.push({ record, index });
+        recordsShown++;
+      }
+      lens.renderTable(rows, table, "$", 2, "", lineColumn, true);
+      for (const { record, index } of bad) badRecord(record, index);
+    } else for (const [index, record] of records.entries()) {
       if (recordsShown >= maxRecords || lens.truncated) break;
       if (lens.shown >= budget(options.maxValues, 20000) && record.parsed.value) { lens.truncated = true; break; }
       recordsShown++;
@@ -86,13 +112,10 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
         conversationRecord(lens, record.parsed.value, `$[${index}]`, index, record);
         continue;
       }
-      lens.line(`## Record ${index + 1} (line ${record.line})`, `$[${index}]`); lens.line();
-      if (record.parsed.value) lens.render(record.parsed.value, `$[${index}]`, 3);
-      else {
-        const p = record.parsed.problem;
-        lens.line(`Line ${p.line}, column ${p.column}: ${cellText(p.message)}`); lens.line();
-        lens.line(fence(record.source)); lens.line();
-      }
+      if (record.parsed.value) {
+        lens.line(`## Record ${index + 1} (line ${record.line})`, `$[${index}]`); lens.line();
+        lens.render(record.parsed.value, `$[${index}]`, 3);
+      } else badRecord(record, index);
     }
     if (recordsShown < recordsTotal) {
       lens.truncated = true;
@@ -111,9 +134,10 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
     lens.line(`Showing ${lens.shown.toLocaleString("en-US")} of ${lens.total.toLocaleString("en-US")} values.`);
   }
   if (lens.problems.length) {
-    problems.push(...lens.problems);
+    // A loop, not a spread: a hostile file can carry more problems than a call has arguments.
+    for (const p of lens.problems) problems.push(p);
     lens.line(); lens.line("## Expansion problems", "$"); lens.line();
-    for (const p of lens.problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+    for (const line of problemLines(lens.problems)) lens.line(`- ${line}`, "$");
   }
   return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
 }
@@ -135,6 +159,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
     else lens.render(value, path, level);
   };
   if (kind === "csv") {
+    lens.csv = true;
     const csv = parseCsv(text, format === "TSV" ? "\t" : ",");
     problems = csv.problems;
     lens.line(`${format} · ${size(text)} · ${count(csv.value.items.length, "row")}, ${count(csv.columns, "column")}`); lens.line();
@@ -195,7 +220,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
     }
   }
   if (!invalid && (problems.length || lens.problems.length)) {
-    problems.push(...lens.problems);
+    for (const p of lens.problems) problems.push(p);
     lens.line(); lens.line("## Problems", "$"); lens.line();
     for (const line of problemLines(problems)) lens.line(`- ${line}`, "$");
   }

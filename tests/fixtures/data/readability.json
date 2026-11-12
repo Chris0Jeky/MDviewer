@@ -1,0 +1,46 @@
+{
+  "nested": {
+    "child": {
+      "leaf": 1
+    }
+  },
+  "after": true,
+  "description": "Short description.",
+  "list": [
+    "a, b",
+    "c · d",
+    "e: f",
+    "true"
+  ],
+  "object": {
+    "first": "1",
+    "second": " padded "
+  },
+  "emptyObject": {},
+  "emptyList": [],
+  "number": 1,
+  "string": "1",
+  "boolean": true,
+  "booleanString": "true",
+  "nullString": "null",
+  "run": "first line\n  second line\n\nlast line",
+  "long": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "createdAt": 1700000000,
+  "lastSeenTs": 1700000000000,
+  "retry_at": 3,
+  "future_at": 4102444801,
+  "deep": {
+    "a": {
+      "b": {
+        "c": {
+          "nested": {
+            "child": {
+              "leaf": 2
+            }
+          },
+          "after": 3
+        }
+      }
+    }
+  }
+}

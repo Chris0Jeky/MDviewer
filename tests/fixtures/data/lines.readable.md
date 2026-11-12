@@ -1,11 +1,10 @@
 # lines\.jsonl
-JSON Lines · 39 B · 3 records
+JSON Lines · 39 B · 3 records, 1 not valid JSON
 
-## Record 1 (line 1)
-
-| Key | Value |
-| --- | --- |
-| name | A |
+| line | name |
+| ---: | --- |
+| 1 | A |
+| 4 | B |
 
 ## Record 2 (line 3)
 
@@ -14,12 +13,6 @@ Line 3, column 11: Expected a JSON value
 ```
 {"broken":}
 ```
-
-## Record 3 (line 4)
-
-| Key | Value |
-| --- | --- |
-| name | B |
 
 ## Problems
 

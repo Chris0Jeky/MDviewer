@@ -1,9 +1,10 @@
 # prose\.json
 JSON · 115 B · object with 3 keys
 
-## description
-
-> A **bold** description.
+| Key | Value |
+| --- | --- |
+| description | A \*\*bold\*\* description\. |
+| ordinary | literal \| &lt;b\> &amp;amp\; |
 
 ## note
 
@@ -11,7 +12,3 @@ JSON · 115 B · object with 3 keys
 > 
 > - first
 > - second
-
-| Key | Value |
-| --- | --- |
-| ordinary | literal \| &lt;b\> &amp;amp\; |

@@ -107,6 +107,8 @@ export const native = {
     /** Opens the native folder picker; resolves to the new project's id or null on cancel. */
     addProject: (): Promise<string | null> => invoke("library_add_project"),
     clear: (): Promise<void> => invoke("library_clear"),
+    /** A template's text (A4): read-only; no binding, Recent entry, seen mark or library write. */
+    readTemplate: (id: string): Promise<{ name: string; text: string }> => invoke("library_read_template", { id }),
   },
   /** Open a relative Markdown link or @import from the bound document `token`. */
   openRelative: (token: string, href: string): Promise<OpenBatch> => invoke("open_relative", { token, href }),
