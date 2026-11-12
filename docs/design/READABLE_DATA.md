@@ -29,15 +29,16 @@ deterministic function and shows that Markdown in the reader it already has.
 | Phase | Formats | Extensions | New dependency |
 | --- | --- | --- | --- |
 | 1 | JSON, JSON with comments and trailing commas, JSON Lines | `.json`, `.jsonc`, `.jsonl`, `.ndjson` | None |
-| 2 | YAML, TOML, CSV and TSV | `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv` | One parser each for YAML and TOML, loaded only when needed |
 | 1 | Plain text | `.txt`, `.log` | None |
+| 2 | YAML, TOML, CSV and TSV | `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv` | One parser each for YAML and TOML, loaded only when needed |
 
 The kind comes from the extension. A `.json` file that fails strict parsing is retried as JSON with
 comments, and the view says so.
 
 **Plain text** (owner request 2026-11-12: MDviewer should work as a notepad). Its readable view is
 the text itself, wrapped, with no Markdown interpretation: every line is escaped like any other data
-value, so nothing in it becomes structure. No lens and no parsing. Edit shows the raw text. A `.txt`
+value, so nothing in it becomes structure. Line breaks, blank lines and leading spaces are kept as
+written. No lens and no parsing; the budget is 20,000 lines, cut like the other budgets. Edit shows the raw text. A `.txt`
 file is never read as Markdown, even when it looks like Markdown (an assumption the owner can
 reverse).
 
@@ -108,8 +109,9 @@ content (the common chat-message shape), or agent transcript records that wrap s
   `SIZE_HARD_BYTES`). The readable view is built to a budget
   (initially 20,000 values, or 500 records of a JSON Lines file), then offers the next part and
   "Show all". The overview always describes the whole file. Budgets are set by measurement.
-- **PDF.** The existing large-document confirmation (`SIZE_SOFT_BYTES`, about 250 KB, "Pagination
-  may briefly freeze the page") counts the readable view, which can be larger than the file.
+- **Large view.** The large-document confirmation (`SIZE_SOFT_BYTES`, about 250 KB, "Pagination
+  may briefly freeze the page") today measures the file's bytes at open. For a data document it
+  also counts the readable view, which can be larger than the file (listed under Boundaries).
 
 ## Boundaries that change
 
@@ -118,6 +120,7 @@ content (the common chat-message shape), or agent transcript records that wrap s
 | Native open (`file_policy.rs`) | Accepts the listed extensions; same local-path, size and encoding rules |
 | Save and Save As | Write the raw text through the same conflict-safe replace; the destination keeps a data extension |
 | Web build | File picker and drop accept the listed extensions |
+| Large-document confirmation | For a data document, also counts the readable view's size at open |
 | File associations | None registered; MDviewer does not become the default app for data files |
 | Network, telemetry | No change |
 
