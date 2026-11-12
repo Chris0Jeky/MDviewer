@@ -100,7 +100,8 @@ for (const layout of layouts) {
       await visibleStatusGeometry(page);
       expect(await focusPreserved()).toBe(true);
       releaseFirst();
-      await expect(strip).toHaveAttribute("data-phase", "rendering");
+      // One page's capture, not a UI reaction: it took ~7 s on a loaded CI runner (#245).
+      await expect(strip).toHaveAttribute("data-phase", "rendering", { timeout: 30_000 });
       await expect(page.locator(".export-status-text")).toHaveText(`Rendered 1 of ${count} PDF pages…`);
       await expect(page.getByRole("progressbar", { name: "PDF pages rendered" })).toHaveJSProperty("value", 1);
       await expect(live).toHaveAttribute("aria-live", "polite");
