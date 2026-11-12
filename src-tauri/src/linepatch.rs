@@ -9,7 +9,8 @@ use serde::Deserialize;
 /// One line patch: the full old text of the line and its full new text.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Patch {
-    /// The 0-based line the reader last saw this control on.
+    /// The 1-based line the reader last saw this control on, as the webview's parser
+    /// numbers lines (`Control.line`, tests/fixtures/actionable). Line 0 is invalid.
     pub line: usize,
     /// The control's `<!-- id: name -->` name, when it has one. Native placement
     /// does not use it; the parser does when it re-derives an unplaced patch.
@@ -26,7 +27,8 @@ pub enum PatchError {
     Encoding,
     /// A replacement contains a line break, or a patch is malformed.
     Invalid(usize),
-    /// This patch could not be placed after an outside change; nothing was written.
+    /// This patch (its 0-based position in the change) could not be placed after an
+    /// outside change; nothing was written.
     Unplaced(usize),
 }
 
@@ -157,9 +159,11 @@ pub fn apply(raw: &[u8], patches: &[Patch]) -> Result<(Vec<u8>, String), PatchEr
         // Only the remembered line, and only while it still holds exactly the expected
         // text. Everything else (the contract's id and equal-line steps) needs the
         // Markdown syntax, so it is the parser's: it re-derives from the returned text.
-        let placed = (texts.get(patch.line) == Some(&patch.expect)
-            && new_texts[patch.line].is_none())
-        .then(|| (patch.line, patch.replace.clone()));
+        let Some(at) = patch.line.checked_sub(1) else {
+            return Err(PatchError::Invalid(index));
+        };
+        let placed = (texts.get(at) == Some(&patch.expect) && new_texts[at].is_none())
+            .then(|| (at, patch.replace.clone()));
         let Some((line, text)) = placed else {
             return Err(PatchError::Unplaced(index));
         };
@@ -224,11 +228,16 @@ mod tests {
             patches: Vec<Patch>,
             after: String,
         }
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/actionable");
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/actionable");
         let mut checked = 0;
         for entry in std::fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
-            let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".patches.json")) else {
+            let Some(name) = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.strip_suffix(".patches.json"))
+            else {
                 continue;
             };
             let source = std::fs::read(dir.join(format!("{name}.md"))).unwrap();
@@ -247,6 +256,24 @@ mod tests {
             }
         }
         assert!(checked >= 6, "the fixtures were found ({checked} changes)");
+    }
+
+    #[test]
+    fn lines_are_one_based_and_line_zero_is_invalid() {
+        let raw = b"first
+second
+";
+        let (bytes, _) = apply(raw, &[patch(1, None, "first", "1st")]).unwrap();
+        assert_eq!(
+            bytes,
+            b"1st
+second
+"
+        );
+        assert_eq!(
+            apply(raw, &[patch(0, None, "first", "1st")]),
+            Err(PatchError::Invalid(0))
+        );
     }
 
     #[test]
