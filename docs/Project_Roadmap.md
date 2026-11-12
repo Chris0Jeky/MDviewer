@@ -29,11 +29,11 @@ research #205 remain separate.
 
 [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) joined the companion push on 2026-11-11
 (owner: "Yes, add it"): clickable marks, choices, fields and status chips written back byte-exact,
-in slices A1–A5. A1 to A3 are merged on main (see P2); A4 templates is in review; A5 is later.
+in slices A1–A5. A1 to A4 are merged on main (see P2); A5 ([#300](https://github.com/Chris0Jeky/MDviewer/issues/300)) is later.
 
 [Readable data v1](design/READABLE_DATA.md) (owner request, 2026-11-12) opens data files as a
-readable view derived on the device. D0 to D3, the D4 parsers and the D4 native extensions are merged on
-main; the webview follow-up for D4 and D5 are next (see P2).
+readable view derived on the device. D0 to D4 and the D6 readability pass are merged on main, and JSON,
+JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is next (see P2).
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
@@ -164,7 +164,7 @@ export paths.
   **promotes the P4 "optional split editor" item on explicit owner request** and reverses the
   former "no editor pane" non-goal in [`PRODUCT_VISION.md`](./PRODUCT_VISION.md).
   Spec: `design/IMPLEMENTATION_SPEC.md` §12.
-- **Done (2026-11-12): Actionable Markdown, A1 to A3** ([contract](design/ACTIONABLE_MARKDOWN.md)).
+- **Done (2026-11-12): Actionable Markdown, A1 to A4** ([contract](design/ACTIONABLE_MARKDOWN.md)).
   A1 [#252](https://github.com/Chris0Jeky/MDviewer/pull/252) parser, fixtures and static controls (spec
   [#247](https://github.com/Chris0Jeky/MDviewer/pull/247)); A2 [#244](https://github.com/Chris0Jeky/MDviewer/pull/244)
   native line patch, byte-exact and conflict-checked; A3 [#263](https://github.com/Chris0Jeky/MDviewer/pull/263)
@@ -172,24 +172,40 @@ export paths.
   1-based line placement that made every native write-back refuse ([#266](https://github.com/Chris0Jeky/MDviewer/issues/266),
   closed); the native A3 smoke [#275](https://github.com/Chris0Jeky/MDviewer/pull/275) now toggles a
   checkbox in a CRLF file and Undoes it against the real host with exact bytes. Human acceptance on real files
-  is AI-10. **In progress:** A4 templates, with the native template read
-  [#285](https://github.com/Chris0Jeky/MDviewer/pull/285) merged and the picker/command
-  [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) open. **Later:** A5 embeddable element.
+  is AI-10. **A4 templates:** the native template read
+  [#285](https://github.com/Chris0Jeky/MDviewer/pull/285), the picker/command
+  [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) and its wiring
+  [#295](https://github.com/Chris0Jeky/MDviewer/pull/295) are merged: New from template reads a pinned project's
+  `templates/` folder. **Later:** A5 embeddable element ([#300](https://github.com/Chris0Jeky/MDviewer/issues/300)).
   Open follow-ups: [#254](https://github.com/Chris0Jeky/MDviewer/issues/254).
-- **In progress (2026-11-12): Readable data, D0 to D4 parsers merged** ([contract](design/READABLE_DATA.md)).
+- **In progress (2026-11-12): Readable data, D0 to D4 and D6 merged** ([contract](design/READABLE_DATA.md)).
   Merged: D0 spec [#269](https://github.com/Chris0Jeky/MDviewer/pull/269); D1 JSON, JSON Lines and
   plain text [#270](https://github.com/Chris0Jeky/MDviewer/pull/270); D2 conversation lens
   [#273](https://github.com/Chris0Jeky/MDviewer/pull/273); D3 native open/save
   [#272](https://github.com/Chris0Jeky/MDviewer/pull/272) and webview
   [#280](https://github.com/Chris0Jeky/MDviewer/pull/280) (Read, Edit, PDF); D4 YAML, TOML, CSV and TSV
-  parsers [#281](https://github.com/Chris0Jeky/MDviewer/pull/281); relative links open Markdown only
-  [#283](https://github.com/Chris0Jeky/MDviewer/pull/283). Today the Windows app opens `.json`, `.jsonc`,
-  `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. D4 native extensions
-  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) are merged. **Open:** the webview follow-up that awaits
-  `prepare(kind)` and widens `OPENABLE` and the pickers (not started on main). **Next:** D5 (copy value,
-  path and subtree; agent data files in the Library; save the readable view as Markdown). Open
+  parsers [#281](https://github.com/Chris0Jeky/MDviewer/pull/281), native extensions
+  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) and webview
+  [#288](https://github.com/Chris0Jeky/MDviewer/pull/288); relative links open Markdown only
+  [#283](https://github.com/Chris0Jeky/MDviewer/pull/283); the D6 readability pass
+  [#293](https://github.com/Chris0Jeky/MDviewer/pull/293) (small objects and lists inline, record tables with
+  flattened columns and a Line column for JSON Lines, details only for embedded JSON, clear Markdown or block
+  prose); the Library lists agent data files and skips `.claude/worktrees`
+  [#290](https://github.com/Chris0Jeky/MDviewer/pull/290). The Windows app opens `.json`, `.jsonc`, `.jsonl`,
+  `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`, `.txt` and `.log` as readable views. **Open:** D5 pure copy
+  module [#289](https://github.com/Chris0Jeky/MDviewer/pull/289) (not merged); **next:** the D5 webview copy menu
+  and Save readable view as Markdown [#299](https://github.com/Chris0Jeky/MDviewer/issues/299). Open
   issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),
-  [#278](https://github.com/Chris0Jeky/MDviewer/issues/278) and [#282](https://github.com/Chris0Jeky/MDviewer/issues/282).
+  [#278](https://github.com/Chris0Jeky/MDviewer/issues/278), [#282](https://github.com/Chris0Jeky/MDviewer/issues/282),
+  [#291](https://github.com/Chris0Jeky/MDviewer/issues/291), [#292](https://github.com/Chris0Jeky/MDviewer/issues/292)
+  and [#296](https://github.com/Chris0Jeky/MDviewer/issues/296).
+- **In progress (2026-11-12): S9 performance and polish.** Part 1 (tab switch back in about 50 ms, one sanitizer
+  pass for code blocks) [#294](https://github.com/Chris0Jeky/MDviewer/pull/294) is merged. Part 2
+  [#297](https://github.com/Chris0Jeky/MDviewer/pull/297) (native start-up numbers, first frame in the theme
+  colour) and the polish pass [#298](https://github.com/Chris0Jeky/MDviewer/pull/298) are open. Next:
+  [#301](https://github.com/Chris0Jeky/MDviewer/issues/301) (data views after D6),
+  [#302](https://github.com/Chris0Jeky/MDviewer/issues/302) (native window background and closable during a
+  slow start; Core halves #304 and #305) and [#306](https://github.com/Chris0Jeky/MDviewer/issues/306) (clippy).
 - **File lifecycle:** Windows Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
   shipped through the conflict-safe replace (S1a #226) and owned Save/Save As (S1b #231); Save Copy
   stays the explicit copy. Optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
