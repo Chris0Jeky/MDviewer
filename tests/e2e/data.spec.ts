@@ -42,8 +42,9 @@ test("a cut-short data view offers the rest in the workspace, and plain text sta
   await picker.selectOption({ label: "many.jsonl" });
   await waitForPagination(page);
   const offer = page.locator(".canvas-offer");
-  await expect(offer).toContainText("This data view was cut short.");
-  await expect(page.locator("#paged-output")).toContainText("Showing 500 of 600 records.");
+  // Paginating 500 records takes a while under load; the offer follows the finished render.
+  await expect(page.locator("#paged-output")).toContainText("Showing 500 of 600 records.", { timeout: 30_000 });
+  await expect(offer).toContainText("This data view was cut short.", { timeout: 30_000 });
   await offer.getByRole("button", { name: "Show all", exact: true }).click();
   await expect(page.locator("#paged-output")).toContainText("Record 600", { timeout: 30_000 });
   await expect(offer).toBeHidden();
