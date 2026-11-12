@@ -111,7 +111,13 @@ const writeback = createWriteback({
     return docs.applyReload(target, { outcome: "changed", text, generation, encoding: doc.binding.encoding, eol: doc.binding.eol });
   },
   setText: (doc, text) => { doc.text = text; doc.dirty = true; ++generation; syncDocuments(); },
-  rerender: () => { void render(); },
+  // A write re-renders the document: return focus to the same control so keyboard users keep their place.
+  rerender: () => {
+    const key = (document.activeElement as HTMLElement | null)?.dataset?.amKey;
+    void render().then(() => {
+      if (key && !document.querySelector(".am-menu")) content.querySelector<HTMLElement>(`[data-am-key="${key}"]`)?.focus({ preventScroll: true });
+    });
+  },
   notice: showActionNotice,
   report,
 });

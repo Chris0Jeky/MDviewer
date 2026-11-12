@@ -90,6 +90,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
     if (!glyph) continue;
     const button = document.createElement("button");
     button.type = "button";
+    button.dataset.amKey = `${control.kind}-${control.line}`;
     const name = itemLabel(li);
     if (control.kind === "mark") {
       button.className = "am-mark";
@@ -157,6 +158,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
     const value = field.querySelector<HTMLElement>(".am-field-value");
     if (!control || control.kind !== "field" || !value) continue;
     value.tabIndex = 0;
+    value.dataset.amKey = `field-${control.line}`;
     value.setAttribute("role", "button");
     value.setAttribute("aria-label", `Edit ${control.key}: ${control.value || "empty"}`);
     value.title = "Click or press Enter to edit";
@@ -177,8 +179,8 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
         done = true;
         input.remove();
         value.hidden = false;
+        value.focus();
         if (event) act(event, control, { kind: "field", value: input.value });
-        else value.focus();
       };
       input.addEventListener("keydown", event => {
         if (event.key === "Enter") { event.preventDefault(); finish(event); }
@@ -197,6 +199,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
     if (!control || control.kind !== "chip") continue;
     const next = nextOption(control.value, control.options);
     chip.tabIndex = 0;
+    chip.dataset.amKey = `chip-${control.line}`;
     chip.setAttribute("role", "button");
     chip.setAttribute("aria-label", `${control.key}: ${control.value || "none"}. Click for ${next}; right-click for all options`);
     chip.classList.add("am-live");

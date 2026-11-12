@@ -118,6 +118,7 @@ export function createWriteback(deps: WritebackDeps): {
     try {
       const result = await save(doc, saved.undo);
       if (!result) return;
+      if (result.outcome === "failed") { deps.report(`Could not undo (${result.code}). Nothing was written.`); return; }
       if (result.outcome !== "saved") { deps.report("Could not undo: the file changed in another program. Nothing was written."); return; }
       if (deps.adopt(doc, result.text, result.generation)) deps.rerender();
       if (last === saved) last = null;

@@ -75,8 +75,8 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
   await expect(doc.getByRole("checkbox", { name: "To do (In progress)" })).toHaveAttribute("aria-checked", "mixed");
   await expect(page.locator('#shell-tabs [role="tab"]')).toHaveText(["board.md, unsaved changes"]);
 
-  // Space on a focused checkbox steps again.
-  await doc.getByRole("checkbox", { name: "To do (In progress)" }).focus();
+  // Focus stays on the control a write re-rendered; Space steps again.
+  await expect(doc.getByRole("checkbox", { name: "To do (In progress)" })).toBeFocused();
   await page.keyboard.press("Space");
   await readyReader(page, "Board");
   await expect(doc.getByRole("checkbox", { name: "To do (Done)" })).toHaveAttribute("aria-checked", "true");
@@ -89,7 +89,7 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
   await expect(menu.getByRole("menuitemradio", { name: /Done/ })).toBeFocused();
   await page.keyboard.press("5");
   await readyReader(page, "Board");
-  await expect(doc.getByRole("checkbox", { name: "Done (Blocked)" })).toBeVisible();
+  await expect(doc.getByRole("checkbox", { name: "Done (Blocked)" })).toBeFocused();
 
   // A click on a mark outside the cycle opens the menu instead of guessing.
   await doc.getByRole("checkbox", { name: /Question \(Question\)/ }).click();
@@ -105,6 +105,7 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
   await readyReader(page, "Board");
   await expect(doc.getByRole("radio", { name: "Small" })).toHaveAttribute("aria-checked", "true");
   await expect(doc.getByRole("radio", { name: "Large" })).toHaveAttribute("aria-checked", "false");
+  await expect(doc.getByRole("radio", { name: "Small" })).toBeFocused();
 
   // Fields: Enter commits, Escape cancels.
   await doc.getByRole("button", { name: "Edit reviewer: empty" }).click();
@@ -115,7 +116,7 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
   await page.keyboard.type("Lin");
   await page.keyboard.press("Enter");
   await readyReader(page, "Board");
-  await expect(doc.getByRole("button", { name: "Edit reviewer: Lin" })).toBeVisible();
+  await expect(doc.getByRole("button", { name: "Edit reviewer: Lin" })).toBeFocused();
 
   // Chips: a click moves to the next option.
   await doc.getByRole("button", { name: /^status: draft/ }).click();
