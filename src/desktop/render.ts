@@ -47,7 +47,10 @@ export async function renderReaderDocument(
   if (highlight) {
     const lineNumbers = settings.showLineNumbers ? ` ${CLASSES.withLineNumbers}` : "";
     // Shiki's own line structure (inline-block .line spans), so the swap keeps every height.
-    md.options.highlight = code => `<pre class="shiki ${PENDING}${lineNumbers}"><code>${code.replace(/\n$/, "").split("\n")
+    // The info string rides on the placeholder: block patching keys on this markup, so a
+    // changed language or metadata (`ts {1}` -> `ts {2}`) re-highlights an unchanged body.
+    md.options.highlight = (code, lang, attrs) => `<pre class="shiki ${PENDING}${lineNumbers}" data-fence="${
+      md.utils.escapeHtml(`${lang} ${attrs}`.trim())}"><code>${code.replace(/\n$/, "").split("\n")
       .map(line => `<span class="line">${md.utils.escapeHtml(line)}</span>`).join("\n")}</code></pre>`;
   }
   installSourceMap(md);

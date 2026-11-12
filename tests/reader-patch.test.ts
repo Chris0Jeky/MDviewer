@@ -54,6 +54,21 @@ describe("reader block patching", () => {
     expect([...live.querySelectorAll("li")].map(item => item.getAttribute("data-src"))).toEqual(["1-1", "4-4"]);
   });
 
+  it("re-highlights a fence whose language changed but whose body did not", async () => {
+    // `{n}` metadata never reaches the reader's highlighter (markdown-it-attrs takes it), so the
+    // info string that matters is the language; it rides on the placeholder and so on the key.
+    const live = document.createElement("div");
+    const fence = (info: string): string => ["```" + info, "const kept = 1;", "```", ""].join("\n");
+    await patch(live, fence("ts"));
+    const first = live.querySelector(".reader-code")!;
+    expect(await patch(live, fence("js"))).toBe(1);
+    const second = live.querySelector(".reader-code")!;
+    expect(second).not.toBe(first);
+    expect(second.querySelector("code")?.className).toContain("language-js");
+    expect(await patch(live, fence("js"))).toBe(0); // unchanged: still reused
+    expect(live.querySelector(".reader-code")).toBe(second);
+  }, 30_000);
+
   it("replaces blocks it did not insert itself", async () => {
     const live = document.createElement("div");
     live.innerHTML = "<p>Fresh.</p>";
