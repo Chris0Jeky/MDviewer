@@ -36,9 +36,10 @@ The kind comes from the extension. A `.json` file that fails strict parsing is r
 comments, and the view says so.
 
 **Plain text** (owner request 2026-11-12: MDviewer should work as a notepad). Its readable view is
-the text itself, wrapped, with no Markdown interpretation: every line is escaped like any other data
-value, so nothing in it becomes structure. Line breaks, blank lines and leading spaces are kept as
-written. No lens and no parsing; the budget is 20,000 lines, cut like the other budgets. Edit shows the raw text. A `.txt`
+the text itself in one unhighlighted block, wrapped like the reader's code blocks. A Markdown fence
+leaves its content literal, so nothing in the text becomes structure, and every line break, blank
+line and space is kept exactly (escaped paragraphs would collapse leading spaces). No lens and no
+parsing; the budget is 20,000 lines, cut like the other budgets. Edit shows the raw text. A `.txt`
 file is never read as Markdown, even when it looks like Markdown (an assumption the owner can
 reverse).
 
