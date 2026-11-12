@@ -33,7 +33,7 @@ raw audit results may still contain that invalid development-only residue.
 ## 3. The load-bearing render order (NEVER reorder)
 
 ```text
-0  capture raw Markdown and settings for this render
+0  capture raw Markdown and settings for this render; readFrontMatter blanks leading YAML
 1  await getHighlighter()
 1b createMarkdown(null, settings); parse once, retaining tokens and environment
 1c await ensureLang for each parsedFenceLanguages(md, tokens) label
@@ -46,6 +46,17 @@ raw audit results may still contain that invalid development-only residue.
 7  registerHandlersOnce; await paginate(source, css, host)
    inside paginate: await Previewer.preview; repairFootnoteLinks(host); return flow
 ```
+
+Step 0 calls `readFrontMatter(text)` (`src/render/frontmatter.ts`) in both pipelines. A
+leading `---` line closed by `---` or `...`, whose first content line looks like YAML, is
+replaced by the same number of empty lines so source maps keep original line numbers; any
+other document is returned unchanged, so its paginated output is identical. The paginated
+pipeline prints no front matter. The Windows reader prepends a collapsible Properties card
+(`src/desktop/reader/frontmatter.ts`, text nodes only) that lists the fields read by a
+tolerant line reader (flat keys, one nested level, lists, quoted strings, block scalars) or
+the raw YAML in monospace. Its lint, open by default when present: an unquoted value
+containing `: `, an unterminated block, and a missing `name` or `description` in a skill,
+agent definition or memory file (skills by basename, memory files by path or a `metadata.type` key, agents by `.claude/agents/` path).
 
 Grammar preparation uses decoded parser-recognized fences, including nested blockquotes,
 lists and footnotes. Fence-shaped text inside code examples does not request a grammar.

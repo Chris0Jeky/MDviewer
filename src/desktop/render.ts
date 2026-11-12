@@ -4,15 +4,18 @@ import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, rende
 import { renderAllMermaid } from "../render/mermaid";
 import type { Settings } from "../app/settings";
 import { CLASSES, ATTRS } from "../app/dom";
+import { readFrontMatter } from "../render/frontmatter";
+import { frontMatterCard } from "./reader/frontmatter";
 
 /** Continuous reading keeps natural endnotes and never invokes Paged.js. */
-export async function renderReaderDocument(text: string, settings: Settings): Promise<{
+export async function renderReaderDocument(text: string, settings: Settings, fileName = ""): Promise<{
   document: HTMLElement;
   warnings: string[];
 }> {
   const md = createMarkdown(null, settings);
   const env = {};
-  const tokens = md.parse(text, env);
+  const { body, frontMatter } = readFrontMatter(text);
+  const tokens = md.parse(body, env);
   const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
@@ -26,6 +29,7 @@ export async function renderReaderDocument(text: string, settings: Settings): Pr
   document.className = CLASSES.doc;
   document.setAttribute(ATTRS.codeTheme, settings.codeTheme);
   document.innerHTML = result.html;
+  if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
   const diagrams = await renderAllMermaid(document, "default");
   const warnings = result.warnings.map(warning => warning.message);
   if (diagrams.failed) warnings.push(`${diagrams.failed} diagram(s) could not render; their source is shown.`);

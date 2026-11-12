@@ -120,7 +120,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
     try {
-      const result = await renderReaderDocument(doc.text, settings);
+      const result = await renderReaderDocument(doc.text, settings, doc.name);
       if (current !== renderGeneration) return;
       content.replaceChildren(...result.document.childNodes);
       content.setAttribute("data-code-theme", settings.codeTheme);
