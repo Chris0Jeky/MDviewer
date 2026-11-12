@@ -18,6 +18,7 @@ import tocDoneRight from "markdown-it-toc-done-right";
 import container from "markdown-it-container";
 import attrs from "markdown-it-attrs";
 import taskLists from "markdown-it-task-lists";
+import { actionableGlyphs } from "./actionableGlyphs";
 import { fromHighlighter } from "@shikijs/markdown-it/core";
 import {
   transformerNotationHighlight,
@@ -121,7 +122,8 @@ export function createMarkdown(hl: HighlighterCore | null, settings: Settings): 
       containerClass: CLASSES.toc,
     })
     .use(footnote)
-    .use(taskLists, { enabled: true, label: true });
+    .use(taskLists, { enabled: true, label: true })
+    .use(actionableGlyphs);
 
   for (const name of CALLOUTS) {
     // @types/markdown-it-container bundles its own (older) markdown-it types, so the

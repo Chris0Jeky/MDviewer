@@ -8,7 +8,7 @@
  * line 1). Only lines the CommonMark parse puts in a paragraph count, so code blocks, code spans
  * and HTML blocks never hold controls.
  */
-import MarkdownItCtor from "markdown-it";
+import MarkdownItCtor, { type Token } from "markdown-it";
 import container from "markdown-it-container";
 import footnote from "markdown-it-footnote";
 import { readFrontMatter, type FrontMatterEntry } from "./frontmatter";
@@ -97,10 +97,14 @@ function idOf(line: string): { end: number; id?: string } {
   return match ? { end: match.index, id: match[1] } : { end: line.length };
 }
 
-export function parseActionable(text: string): ActionableDocument {
+/**
+ * `tokens` may be a parse of the same text (front matter blanked) by a parser with the same
+ * block structure, such as the reader's; otherwise the document is parsed here.
+ */
+export function parseActionable(text: string, tokens?: readonly Token[]): ActionableDocument {
   const { lines } = splitLines(text);
   const { body, frontMatter } = readFrontMatter(text);
-  const tokens = blockParser().parse(body, {});
+  tokens ??= blockParser().parse(body, {});
   const controls: Control[] = [];
   const problems: string[] = [];
   const lists: Array<{ group: number | null }> = [];
