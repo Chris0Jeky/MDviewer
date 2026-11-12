@@ -235,3 +235,15 @@ describe("prepaid details (Codex on #270)", () => {
     expect(view.truncated).toBe(false);
   });
 });
+
+describe("nested prepaid details (verification of #270)", () => {
+  it("never reports a complete view while a value is missing, at every budget", () => {
+    const payload = JSON.stringify({ items: [{ t: "a\nb" }], after: 1 });
+    const text = JSON.stringify([{ payload }]);
+    for (let maxValues = 1; maxValues <= 40; maxValues++) {
+      const view = toReadable(text, "json", { maxValues });
+      // Either the view says it was cut, or every value is in it.
+      if (!view.truncated) expect(view.markdown, `maxValues ${maxValues}`).toMatch(/\| after \| 1 \|/);
+    }
+  });
+});

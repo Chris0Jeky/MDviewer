@@ -251,12 +251,14 @@ export class Lens {
         this.line();
         // Retain the mandatory flat table and add block views for prose, code, or embedded JSON.
         // These values were charged with their row, so the detail must not spend the budget twice.
+        // A table nested inside a prepaid detail keeps the outer detail's unspent credit.
+        const outer = this.prepaid;
         for (const detail of details) {
           this.prepaid = this.count(detail.value);
           const next = this.heading(detail.label, detail.path, level, indent);
           this.render(detail.value, detail.path, level + 1, next, detail.key);
-          this.prepaid = 0;
         }
+        this.prepaid = outer;
         return;
       }
     }
