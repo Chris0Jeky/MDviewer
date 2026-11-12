@@ -126,7 +126,8 @@ library. Opens and Save As record recents. Commands take opaque per-process ids 
 `library_mark_seen`, `library_add_project` via the native folder picker, `library_clear`); the
 webview never supplies a path. `library_scan` walks a pinned project for `.md`/`.markdown` files
 and agent data files (Readable data D5: a data-extension file inside `.claude/`, `.codex/` or
-`.agent-harness/`, or the root `.mcp.json`, listed with `agent: true`; other data files stay out)
+`.agent-harness/`, or the root `.mcp.json`, listed with `agent: true`; other data files stay out, and credential stores
+named `auth.json`, `.credentials.json` or `credentials.json` are never listed)
 (depth 8, 5,000 files), skips `node_modules`, `.git`, `target`, `dist`, `build`, `.venv` and the
 checkouts under `.claude/worktrees/`,
 includes dot-folders such as `.claude`, never follows junctions or symlinks, and marks agent

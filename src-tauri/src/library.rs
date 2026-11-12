@@ -38,7 +38,14 @@ pub fn is_agent_data(relative: &Path) -> bool {
             AGENT_FOLDERS.iter().any(|f| name.eq_ignore_ascii_case(f))
         })
     });
-    data && (folder || relative.to_string_lossy().eq_ignore_ascii_case(".mcp.json"))
+    // Credential stores are never listed: one click from the panel is one too few.
+    let secret = relative.file_name().is_some_and(|n| {
+        let n = n.to_string_lossy();
+        ["auth.json", ".credentials.json", "credentials.json"]
+            .iter()
+            .any(|s| n.eq_ignore_ascii_case(s))
+    });
+    data && !secret && (folder || relative.to_string_lossy().eq_ignore_ascii_case(".mcp.json"))
 }
 
 /// `.claude/worktrees/` holds whole repository checkouts; the scan never walks into them.
@@ -745,6 +752,9 @@ mod tests {
             (".claude/worktrees/copy/.claude/settings.json", "{}"),
             (".git/config.json", "{}"),
             ("node_modules/pkg/.claude/x.json", "{}"),
+            (".codex/auth.json", "{}"),
+            (".claude/.credentials.json", "{}"),
+            (".CLAUDE/Worktrees/copy2/notes.md", "x"),
         ] {
             let path = root.join(path);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
