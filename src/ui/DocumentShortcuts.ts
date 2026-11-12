@@ -1,5 +1,5 @@
 /** Keyboard access to the existing local document actions, never a second save path. */
-export function mountDocumentShortcuts(root: HTMLElement): () => void {
+export function mountDocumentShortcuts(root: HTMLElement, options: { ownedSave?: boolean } = {}): () => void {
   const open = root.querySelectorAll<HTMLButtonElement>('.workspace-actions > button[data-document-command="open"]');
   const save = root.querySelectorAll<HTMLButtonElement>('.workspace-session > button[data-document-command="save"]');
   const create = root.querySelectorAll<HTMLButtonElement>('.workspace-actions > button[data-document-command="new"]');
@@ -8,7 +8,10 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
   if (open.length !== 1 || save.length !== 1 || create.length > 1 || !privacy || !target) {
     throw new Error("MDviewer: local document shortcut controls failed to mount.");
   }
-  const actions = new Map<string, HTMLButtonElement>([["o", open[0]!], ["s", save[0]!]]);
+  // When the host owns Save (Windows: Ctrl+S saves the file in place), the copy
+  // button must not advertise or receive Ctrl+S.
+  const actions = new Map<string, HTMLButtonElement>([["o", open[0]!]]);
+  if (!options.ownedSave) actions.set("s", save[0]!);
   if (create[0]) actions.set("n", create[0]);
   const previous = [...actions.values()].map((button) => ({
     button, title: button.getAttribute("title"), keys: button.getAttribute("aria-keyshortcuts"),
@@ -20,9 +23,11 @@ export function mountDocumentShortcuts(root: HTMLElement): () => void {
   }
   const hint = root.ownerDocument.createElement("span");
   hint.className = "workspace-shortcuts";
-  hint.textContent = create.length
-    ? "Ctrl/Cmd+N/O/S: new/open/save Markdown"
-    : "Ctrl/Cmd+O/S: open/save Markdown";
+  hint.textContent = options.ownedSave
+    ? `Ctrl+${create.length ? "N/O: new/open" : "O: open"} · Ctrl+S: save · Ctrl+Shift+S: save as`
+    : create.length
+      ? "Ctrl/Cmd+N/O/S: new/open/save Markdown"
+      : "Ctrl/Cmd+O/S: open/save Markdown";
   const navigationHint = privacy.querySelector<HTMLElement>(".workspace-navigation-shortcuts");
   if (navigationHint) hint.append(" · ", navigationHint);
   privacy.append(hint);

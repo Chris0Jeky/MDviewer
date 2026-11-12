@@ -6,13 +6,14 @@ import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import { native, type OpenBatch } from "./native";
+import { native, type OpenBatch, type ReadResult, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
-import { DesktopDocuments } from "./documents";
+import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
 import { renderReaderDocument } from "./render";
 import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
+import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -61,6 +62,28 @@ const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
 document.documentElement.dataset.appTheme = settings.screenTheme;
 
+// Live reload (S1c): a dirty document whose file changed on disk gets a
+// non-modal bar. Nothing is discarded without a click.
+const dismissedConflicts = new Set<string>();
+function conflictBar(after: HTMLElement): { bar: HTMLElement; text: HTMLElement } {
+  const bar = document.createElement("div");
+  bar.className = "reader-notice file-conflict";
+  bar.setAttribute("role", "alert");
+  bar.hidden = true;
+  const text = document.createElement("span");
+  const button = (label: string, action: string): HTMLButtonElement => {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.textContent = label;
+    control.dataset.conflictAction = action;
+    return control;
+  };
+  bar.append(text, " ", button("Reload", "reload"), " ", button("Keep mine", "keep"), " ", button("Save As", "save-as"));
+  after.after(bar);
+  return { bar, text };
+}
+const conflictBars = [conflictBar(notice), conflictBar(workspaceNotice)];
+
 function report(message: string): void {
   ++noticeGeneration;
   notice.textContent = message;
@@ -85,13 +108,26 @@ function syncDocuments(): void {
   select.disabled = !open.length || changingMode;
   readerNavigation.sync();
   closeButton.disabled = !active;
-  workspaceButton.disabled = !active || changingMode;
+  workspaceButton.disabled = !active || changingMode || nativeSaveBusy;
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
   returnButton.disabled = workspaceBusy;
   for (const button of newButtons) button.disabled = workspaceBusy;
   const workspaceNew = appRoot.querySelector<HTMLButtonElement>('.workspace-actions > button[data-document-command="new"]');
   if (workspaceNew) workspaceNew.disabled = workspaceBusy;
+  for (const button of appRoot.querySelectorAll<HTMLButtonElement>("button[data-desktop-command]")) {
+    button.disabled = workspaceBusy || !active;
+  }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  const target = docs.saveTarget();
+  const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
+    && !dismissedConflicts.has(target.binding.token);
+  for (const { bar, text } of conflictBars) {
+    bar.hidden = !conflicted;
+    const message = conflicted ? `${target.name} changed on disk. Your edits are kept until you choose.` : "";
+    // role=alert re-announces on every text write; write only when it changes.
+    if (conflicted && text.textContent !== message) text.textContent = message;
+    for (const control of bar.querySelectorAll("button")) control.disabled = changingMode || nativeSaveBusy;
+  }
 }
 
 function rememberReaderPosition(): void {
@@ -253,7 +289,8 @@ async function createDocument(): Promise<void> {
 }
 
 async function enterWorkspace(revealEditor = false): Promise<void> {
-  if (app || changingMode || !docs.reader.active) return;
+  // A pending save must finish before its document changes owner (FILE_LIFECYCLE).
+  if (app || changingMode || nativeSaveBusy || !docs.reader.active) return;
   rememberReaderPosition();
   changingMode = true; ++generation; ++renderGeneration;
   // Layout needs a visible workspace, but its controls must not accept input
@@ -270,7 +307,8 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
     renderedReaderId = null;
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument);
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument,
+      native.available ? { save: () => { void saveDocument(false); }, saveAs: () => { void saveDocument(true); } } : undefined);
     app = mounted.app;
     docs.adoptReaderInto(app);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
@@ -278,7 +316,8 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
       if (!app) return;
-      docs.pruneBaselines();
+      // A mode transition empties the store; those documents move, they do not close.
+      docs.pruneBaselines(!changingMode);
       if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
       syncDocuments();
     });
@@ -357,9 +396,10 @@ function finishMode(): void {
 function closeDocument(): void {
   const doc = docs.reader.active;
   if (!doc || changingMode) return;
+  if (nativeSaveBusy) { report("Wait for the save to finish before closing this document."); return; }
   if (doc.dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) return;
   ++generation;
-  docs.reader.close(doc.id);
+  docs.closeReaderDocument(doc.id);
   report("");
   void render();
 }
@@ -379,6 +419,10 @@ appRoot.addEventListener("click", event => {
   const button = (event.target as Element | null)?.closest("button.doc-close");
   const doc = app?.store.active;
   if (!button || !doc) return;
+  if (nativeSaveBusy) {
+    report("Wait for the save to finish before closing this document.");
+    event.preventDefault(); event.stopImmediatePropagation(); return;
+  }
   if (docs.workspaceDirty(doc) && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
     event.preventDefault(); event.stopImmediatePropagation();
   }
@@ -418,6 +462,144 @@ window.addEventListener("drop", event => {
   event.preventDefault();
   void readFiles(Array.from(event.dataTransfer.files));
 });
+
+const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
+function conflictText(name: string, reason: Extract<SaveResult, { outcome: "conflict" }>["reason"]): string {
+  const what = reason === "missing" ? "was moved or deleted"
+    : reason === "locked" ? "is open in another program or read-only"
+      : "changed on disk since MDviewer last read or saved it";
+  return `${name} ${what}. Nothing was written and your text is still open. ${SAVE_AS_HINT}`;
+}
+const FAILURES: Record<string, string> = {
+  busy: "Another save or file dialog is already open.",
+  revoked: "is no longer linked to its file.",
+  stale: "was saved from another view since. Try Save again.",
+  unsupported: "is on a network drive, link or disk MDviewer cannot save over safely.",
+  "write-failed": "could not be written. Check free space and access.",
+  "too-large": "is larger than the 25 MB save limit.",
+  "invalid-destination": "needs a .md or .markdown file name.",
+  "revoked-after-write": "was saved, but it was closed while saving.",
+};
+
+/** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
+async function saveDocument(as: boolean): Promise<void> {
+  if (!native.available || changingMode || nativeSaveBusy) return;
+  if (app?.exportState.busy) { report("Wait for the PDF export to finish, then save."); return; }
+  const target: SaveTarget | null = docs.saveTarget();
+  if (!target) return;
+  if (!as && !target.binding) return saveDocument(true);
+  // An outside change the user has not taken (Keep mine, or edits typed while a
+  // reload was being read) must never be overwritten in place.
+  if (!as && target.binding?.disk === "changed") { report(conflictText(target.name, "changed")); return; }
+  if (!as && !target.dirty) { report(`${target.name} has no unsaved changes.`); return; }
+  let acceptLf = false;
+  if (target.binding?.eol === "mixed") {
+    if (!window.confirm(`${target.name} mixes line ending styles. Saving writes every line ending as LF. Continue?`)) return;
+    acceptLf = true;
+  }
+  const captured = target.text; // Later edits, tab switches or a slow dialog never change these bytes.
+  nativeSaveBusy = true;
+  syncDocuments();
+  let result: SaveResult;
+  try {
+    result = as || !target.binding
+      ? await native.saveDocumentAs(target.binding?.token ?? null, target.name, captured, acceptLf)
+      : await native.saveDocument(target.binding.token, target.binding.generation, captured, acceptLf);
+  } catch (error) {
+    report(`Could not save ${target.name}: ${errorText(error)} Your text is still open.`);
+    return;
+  } finally {
+    nativeSaveBusy = false;
+    syncDocuments();
+  }
+  switch (result.outcome) {
+    case "saved": {
+      const applied = docs.completeSave(target, captured, result);
+      syncDocuments();
+      if (applied === "saved") report(`Saved ${result.name}.`);
+      else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
+      return;
+    }
+    case "canceled": report("Save canceled. Your document is still open."); return;
+    case "conflict": report(conflictText(target.name, result.reason)); return;
+    case "mixed-line-endings": report(`${target.name} mixes line ending styles; save again to convert them to LF.`); return;
+    case "failed": {
+      const detail = FAILURES[result.code] ?? "could not be saved.";
+      report(`${target.name} ${detail} ${result.code === "busy" ? "" : "Your text is still open. " + SAVE_AS_HINT}`.trim());
+      return;
+    }
+  }
+}
+
+function saveCopy(): void {
+  const target = docs.saveTarget();
+  if (!target || changingMode || nativeSaveBusy) return;
+  void Promise.resolve(downloadMarkdown(target.name, target.text)).then(
+    () => report(`Saved a copy of ${target.name}. The open document is unchanged.`),
+    error => { if (!(error instanceof SaveCanceled)) report(`Could not save a copy: ${errorText(error)}`); },
+  );
+}
+
+/** Handle one changed file reported by the host watcher. */
+async function followChange(token: string): Promise<void> {
+  const target = docs.byToken(token);
+  if (!target) return;
+  let result: ReadResult;
+  try { result = await native.readDocument(token, !target.dirty, target.binding?.generation ?? 0); }
+  catch { return; } // A failed re-read changes nothing; the next notification retries.
+  const current = docs.byToken(token);
+  if (!current || current.id !== target.id) return;
+  if (result.outcome === "unchanged") {
+    if (current.binding?.disk !== "synced") { docs.markDisk(token, "synced"); syncDocuments(); }
+    return;
+  }
+  if (result.outcome === "missing") {
+    docs.markDisk(token, "missing");
+    report(`${current.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+    syncDocuments();
+    return;
+  }
+  if (result.outcome !== "changed") return;
+  if (result.text === null || current.dirty) {
+    // Dirty: keep the edits and the old read, so Save conflicts instead of overwriting.
+    dismissedConflicts.delete(token);
+    docs.markDisk(token, "changed");
+    syncDocuments();
+    return;
+  }
+  if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  if (current.owner === "reader" && docs.reader.activeId === current.id) void render();
+  syncDocuments();
+}
+
+async function reloadFromDisk(): Promise<void> {
+  const target = docs.saveTarget();
+  if (!target?.binding || changingMode || nativeSaveBusy) return;
+  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
+  if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
+    if (target.owner === "reader") void render();
+    report(`Reloaded ${target.name} from disk.`);
+  } else if (result?.outcome === "unchanged") {
+    docs.markDisk(target.binding.token, "synced");
+    report(`${target.name} already matches the file on disk.`);
+  } else if (result?.outcome === "missing") {
+    docs.markDisk(target.binding.token, "missing");
+    report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+  }
+  syncDocuments();
+}
+
+for (const { bar } of conflictBars) {
+  bar.addEventListener("click", event => {
+    const action = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-conflict-action]")?.dataset.conflictAction;
+    const token = docs.saveTarget()?.binding?.token;
+    if (!action || !token) return;
+    if (action === "reload") void reloadFromDisk();
+    if (action === "keep") { dismissedConflicts.add(token); syncDocuments(); }
+    if (action === "save-as") void saveDocument(true);
+  });
+}
+
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
 registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
@@ -428,7 +610,14 @@ registerCommand({ id: "workspace.return", title: "Return to reading", enabled: (
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
 registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
-installShortcuts(window, () => !app);
+installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
+// Save works in every mode and must claim Ctrl+S before the workspace's own
+// Save Markdown (copy) shortcut, so it listens in the capture phase.
+const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
+registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
+registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
+registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
+installShortcuts(window, command => native.available && command.id.startsWith("document.save"), { capture: true });
 document.addEventListener("click", event => {
   const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
   if (!anchor || !anchor.closest(".doc, #reader-outline")) return;
@@ -451,6 +640,7 @@ window.addEventListener("beforeunload", event => {
   event.preventDefault(); event.returnValue = "";
 });
 if (native.available) {
+  docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
   setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
@@ -479,12 +669,13 @@ if (native.available) {
   });
   void (async () => {
     await native.onPending(() => { void drain(); });
+    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
     await native.onClose(() => {
       if (changingMode || nativeSaveBusy || app?.exportState.busy) {
         report("Please wait for the current operation to finish before closing MDviewer.");
         return false;
       }
-      return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save Markdown to keep them.");
+      return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
     });
     await drain();
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));

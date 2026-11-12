@@ -16,7 +16,7 @@ Current qualification: [editor follow-up checkpoint](../docs/design/2026-11-05-e
 
 ## Product and flow
 
-Local-first Markdown reader/editor and paginated PDF workspace for the web and experimental Windows app. The desktop continuous reader loads the shared workspace on demand. Open documents and latest-close recovery stay in memory; no automatic/app-managed document or session persistence is added. Settings and approved Pulseboard keys are the exceptions for persisted app-managed user state. The content-free SDK is reached only through `src/app/pulse.ts`; document content is never uploaded. Vector print is primary; raster PDF is the fallback. Save Markdown writes an explicit copy through the browser or native destination without adopting an original-file binding or clearing the dirty baseline.
+Local-first Markdown reader/editor and paginated PDF workspace for the web and experimental Windows app. The desktop continuous reader loads the shared workspace on demand. Open documents and latest-close recovery stay in memory; no automatic/app-managed document or session persistence is added. Settings and approved Pulseboard keys are the exceptions for persisted app-managed user state. The content-free SDK is reached only through `src/app/pulse.ts`; document content is never uploaded. Vector print is primary; raster PDF is the fallback. Save Markdown writes an explicit copy through the browser or native destination without adopting an original-file binding or clearing the dirty baseline. On Windows, owned Save/Save As (`src/desktop/main.ts` `saveDocument`, `documents.ts` `saveTarget`/`completeSave`, `src-tauri/src/commands/save.rs`, `replace.rs`) write in place per `docs/design/FILE_LIFECYCLE.md`.
 
 ```text
 input / textarea → DocStore → serialized scheduler → App.runPipeline
@@ -203,8 +203,11 @@ and `returnToReader`; admission and dirty checks through `admitToWorkspace`,
 `addBatch`, `workspaceDirty`, `hasUnsavedWork` and `list()`. Each reader
 document carries a `key` (from `session.ts` `nextDocumentKey`) and, for
 host-opened files with a token, a display-only `Binding {token, path, dir,
-encoding, eol, disk}`. Nothing reads bindings yet; Save (S1b) and the watcher (S1c)
-will. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
+closing releases it through `onRelease` (never during a mode transition). Live reload:
+`src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
+`byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
+`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
 is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
 keys (exact modifiers; a match is always claimed, even repeated or disabled),
 `listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`

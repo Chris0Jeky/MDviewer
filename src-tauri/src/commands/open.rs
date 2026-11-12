@@ -35,6 +35,16 @@ pub(crate) struct OpenBatch {
 }
 
 impl OpenBatch {
+    /// Start following every bound file in this batch.
+    fn follow(self, state: &DesktopState) -> Self {
+        for doc in &self.documents {
+            if let Some(token) = &doc.token {
+                state.follow(token, std::path::Path::new(&doc.path));
+            }
+        }
+        self
+    }
+
     fn from_read_batch(batch: ReadBatch, registry: &mut Registry) -> Self {
         Self {
             documents: batch
@@ -119,7 +129,8 @@ pub(crate) async fn open_files(
                 .registry
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        ),
+        )
+        .follow(&state),
         None => OpenBatch {
             canceled: true,
             ..OpenBatch::default()
@@ -153,7 +164,8 @@ pub(crate) async fn take_pending_files(
             .registry
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()),
-    ))
+    )
+    .follow(&state))
 }
 
 #[cfg(test)]
