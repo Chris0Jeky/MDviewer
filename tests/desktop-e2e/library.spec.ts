@@ -15,7 +15,7 @@ async function fakeHost(page: Page): Promise<void> {
     const state = {
       recent: [entry("r1", "notes.md", "C:\\work\\board"), entry("r2", "plan.md", "C:\\work\\board")],
       pinned: [] as ReturnType<typeof entry>[],
-      projects: [{ ...entry("p1", "board", "C:\\work"), path: "C:\\work\\board" }],
+      projects: [{ ...entry("p1", "board", "C:\\work"), path: "C:\\work\\board" }, { ...entry("p2", "gone", "C:\\work"), path: "C:\\work\\gone" }],
       seen: new Set<string>(),
     };
     const files = () => [
@@ -33,7 +33,10 @@ async function fakeHost(page: Page): Promise<void> {
       take_pending_files: () => ({ documents: [], errors: [], canceled: false }),
       session_restore: () => ({ documents: [], errors: [], canceled: false }),
       library_list: () => ({ recent: state.recent, pinned: state.pinned, projects: state.projects }),
-      library_scan: () => ({ files: files(), truncated: false }),
+      library_scan: ({ id }) => {
+        if (id === "p2") throw new Error("The folder is missing.");
+        return { files: files(), truncated: false };
+      },
       library_open: ({ id }) => {
         const [name, text] = texts[id as string] ?? ["missing.md", "# Missing\n"];
         state.seen.add(id as string);
@@ -98,9 +101,11 @@ test("the library opens, pins, unpins and removes entries by id only", async ({ 
   await pinned.getByRole("button", { name: "Unpin notes.md" }).click();
   await expect(pinned.getByRole("listitem")).toHaveCount(0);
 
-  // Remove from Recent.
+  // Remove from Recent: announced, and focus moves to the section rather than the page.
   await recent.getByRole("button", { name: "Remove plan.md from Recent" }).click();
   await expect(recent.getByRole("button", { name: /^plan\.md/ })).toHaveCount(0);
+  await expect(panel(page).getByRole("status")).toHaveText("Removed plan.md from Recent.");
+  await expect(recent.getByRole("heading", { name: "Recent" })).toBeFocused();
 
   // The webview sent ids, never paths.
   const sent = await page.evaluate(() => window.__fake.calls.filter(([cmd]) => cmd.startsWith("library_")).map(([, args]) => JSON.stringify(args)));
@@ -114,40 +119,66 @@ test("projects show agent files, changes since you looked and activity across pr
 
   // Activity scans only when shown, and lists changed files newest first.
   const scans = () => page.evaluate(() => window.__fake.calls.filter(([cmd]) => cmd === "library_scan").length);
+  await expect(projects.getByRole("button", { name: "Remove project board" })).toBeVisible(); // the library has loaded
   expect(await scans()).toBe(0);
   await activity.getByRole("button", { name: "Changed since you looked" }).click();
   await expect(activity.getByRole("button", { name: "Changed since you looked" })).toHaveAttribute("aria-expanded", "true");
   await expect(activity.locator(".shell-library-name")).toHaveText(["todo.md", "CLAUDE.md"]);
   await expect(activity.getByRole("img", { name: "Changed on disk since you last viewed it" })).toHaveCount(2);
+  await expect(activity.getByText("1 project could not be read.")).toBeVisible();
 
   await projects.getByRole("button", { name: "board", exact: true }).click();
   await expect(projects.getByRole("heading", { name: "Agent files" })).toBeVisible();
   await expect(projects.getByRole("heading", { name: "Changed since you looked" })).toBeVisible();
   await expect(projects.locator(".shell-library-name")).toHaveText(["CLAUDE.md", "todo.md"]);
 
+  // The project stays expanded when the library re-reads (here, after a pin).
+  const recent = panel(page).locator("section", { has: page.getByRole("heading", { name: "Recent" }) });
+  await recent.getByRole("button", { name: "Pin notes.md" }).click();
+  await expect(panel(page).getByRole("status")).toHaveText("Pinned notes.md.");
+  await expect(projects.getByRole("button", { name: "board", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(projects.getByRole("heading", { name: "Agent files" })).toBeVisible();
+
   // Mark all as seen clears the changed marks here and in Activity.
   await projects.getByRole("button", { name: "Mark all as seen" }).click();
   await expect(projects.getByRole("heading", { name: "Changed since you looked" })).toHaveCount(0);
   await expect(projects.getByRole("img", { name: "Changed on disk since you last viewed it" })).toHaveCount(0);
-  await expect(activity.getByRole("listitem")).toHaveCount(0);
+  await expect(panel(page).getByRole("status")).toHaveText("Marked 2 files in board as seen.");
+  await expect(activity.getByRole("button")).toHaveCount(1); // only the section toggle: no changed file remains
+  await expect(activity.getByText("1 project could not be read.")).toBeVisible();
 
   // Remove the project.
   await projects.getByRole("button", { name: "Remove project board" }).click();
-  await expect(projects.getByRole("listitem")).toHaveCount(0);
+  await expect(projects.getByRole("button", { name: "board", exact: true })).toHaveCount(0);
+  await expect(projects.getByRole("button", { name: "gone", exact: true })).toBeVisible();
+
+  // Hidden behind the Outline tab, the library neither re-reads nor scans; it catches up when shown.
+  await page.getByRole("tab", { name: "Outline" }).click();
+  const before = await scans();
+  const lists = () => page.evaluate(() => window.__fake.calls.filter(([cmd]) => cmd === "library_list").length);
+  const listed = await lists();
+  await page.evaluate(() => { window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("mdviewer:library-changed")); });
+  await page.waitForTimeout(300); // nothing should happen; give it the chance to
+  expect([await scans(), await lists()]).toEqual([before, listed]);
+  await page.getByRole("tab", { name: "Library" }).click();
+  await expect.poll(lists).toBeGreaterThan(listed);
 });
 
 test("Clear library asks first and empties every section", async ({ page }) => {
   await openLibrary(page);
   const recent = panel(page).locator("section", { has: page.getByRole("heading", { name: "Recent" }) });
-  page.once("dialog", dialog => void dialog.dismiss());
-  await page.keyboard.press("Control+K");
-  await page.keyboard.type("Clear library");
-  await page.keyboard.press("Enter");
   await expect(recent.getByRole("listitem")).toHaveCount(2);
-  page.once("dialog", dialog => void dialog.accept());
-  await page.keyboard.press("Control+K");
-  await page.keyboard.type("Clear library");
-  await page.keyboard.press("Enter");
+  const clear = async (answer: "accept" | "dismiss"): Promise<void> => {
+    // Answer from the listener: window.confirm blocks the page until it is handled.
+    const asked = new Promise<string>(resolve => page.once("dialog", dialog => { resolve(dialog.message()); void dialog[answer](); }));
+    await page.keyboard.press("Control+K");
+    await page.getByRole("combobox", { name: "Search commands and files" }).fill("Clear library");
+    await page.keyboard.press("Enter");
+    expect(await asked).toContain("No file is deleted.");
+  };
+  await clear("dismiss");
+  await expect(recent.getByRole("listitem")).toHaveCount(2);
+  await clear("accept");
   await expect(recent.getByRole("listitem")).toHaveCount(0);
   await expect(panel(page).getByRole("listitem")).toHaveCount(0);
 });
