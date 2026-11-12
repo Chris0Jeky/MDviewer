@@ -42,6 +42,9 @@ function label(control: Control, line: string): string {
 
 interface LastSave {
   docId: string;
+  /** The binding the change was saved through: the same id can name another file later. */
+  token: string;
+  name: string;
   control: Control;
   line: string;
   before: string;
@@ -65,9 +68,18 @@ export function createWriteback(deps: WritebackDeps): {
     catch (error) { deps.report(`Could not save the change: ${error instanceof Error ? error.message : String(error)}`); return null; }
   }
 
-  async function change(control: Control, action: ControlAction): Promise<void> {
+  /** Apply again and Undo act only on the file they came from, and never over unsaved edits. */
+  function sameFile(doc: ReaderDocument | undefined, saved: LastSave): doc is ReaderDocument {
+    return !!doc && doc.id === saved.docId && doc.binding?.token === saved.token;
+  }
+
+  async function change(control: Control, action: ControlAction, from?: LastSave): Promise<void> {
     const doc = deps.active();
     if (!doc || busy) return;
+    if (from && (!sameFile(doc, from) || doc.dirty)) {
+      deps.report(`Could not apply the change again: “${from.name}” is no longer the open, saved document. Nothing was written.`);
+      return;
+    }
     const lines = doc.text.split(/\r\n?|\n/);
     const line = lines[control.line - 1] ?? "";
     const name = label(control, line);
@@ -104,7 +116,7 @@ export function createWriteback(deps: WritebackDeps): {
       if (result.outcome === "failed") { deps.report(`Could not save “${name}” (${result.code}). Nothing was written.`); return; }
       if (deps.active()?.id === doc.id && deps.adopt(doc, result.text, result.generation)) deps.rerender();
       const patched = patches.find(patch => patch.line === control.line) ?? patches[0]!;
-      last = { docId: doc.id, control, line: patched.replace, before: patched.expect, after: patched.replace, action, undo: inversePatches(patches) };
+      last = { docId: doc.id, token: doc.binding!.token, name: doc.name, control, line: patched.replace, before: patched.expect, after: patched.replace, action, undo: inversePatches(patches) };
       const saved = last;
       deps.notice({ text: describe(control, action), action: { label: "Undo", run: () => { void undo(saved); } } });
     } finally { busy = false; }
@@ -112,7 +124,11 @@ export function createWriteback(deps: WritebackDeps): {
 
   async function undo(saved: LastSave): Promise<void> {
     const doc = deps.active();
-    if (!doc || doc.id !== saved.docId || !doc.binding || busy) return;
+    if (busy) return;
+    if (!sameFile(doc, saved) || doc.dirty) {
+      deps.report(`Could not undo: “${saved.name}” has unsaved edits or is no longer open. Nothing was written.`);
+      return;
+    }
     deps.notice(null);
     busy = true;
     try {
@@ -127,14 +143,15 @@ export function createWriteback(deps: WritebackDeps): {
 
   function checkOverwritten(doc: ReaderDocument): void {
     const saved = last;
-    if (!saved || saved.docId !== doc.id) return;
+    // Only for the document on screen, so the notice and its action name the file the reader sees.
+    if (!saved || !sameFile(doc, saved) || deps.active()?.id !== doc.id) return;
     const lines = doc.text.split(/\r\n?|\n/);
     if (lines.includes(saved.after)) return; // still there
     const found = relocate(doc.text, { ...saved.control, line: saved.control.line }, saved.before);
     if (!found || spanValue(found.control) !== spanValue(saved.control)) return;
     // Another program wrote the old value back while the Undo notice could still show.
     last = null;
-    deps.notice({ text: "Another program overwrote this change.", action: { label: "Apply again", run: () => { void change(found.control, saved.action); } } });
+    deps.notice({ text: "Another program overwrote this change.", action: { label: "Apply again", run: () => { void change(found.control, saved.action, saved); } } });
   }
 
   return { change, checkOverwritten, forget: () => { last = null; } };

@@ -98,3 +98,39 @@ describe("actionable write-back", () => {
     expect(notices).toHaveLength(count);
   });
 });
+
+describe("actionable write-back stays on the file it came from", () => {
+  it("refuses Undo over unsaved edits, and leaves the edits alone", async () => {
+    const text = "- [ ] Task\n";
+    const { doc, deps, notices, writeback } = setup(text, { results: [{ outcome: "saved", generation: 1, text: "- [x] Task\n" }] });
+    await writeback.change(control(text, 1), { kind: "mark", to: "x" });
+    doc.text = "- [x] Task\n\nMore, unsaved.\n";
+    doc.dirty = true;
+    notices.at(-1)!.action!.run();
+    await vi.waitFor(() => expect(deps.report).toHaveBeenCalledWith(expect.stringMatching(/^Could not undo: “card\.md” has unsaved edits/)));
+    expect(deps.native.patchDocument).toHaveBeenCalledOnce();
+    expect(doc.text).toBe("- [x] Task\n\nMore, unsaved.\n");
+  });
+
+  it("shows no overwritten notice for a document in the background, and Apply again never patches another file", async () => {
+    const text = "- [ ] Task <!-- id: t -->\n";
+    const { doc, deps, notices, writeback } = setup(text, { results: [{ outcome: "saved", generation: 1, text: "- [x] Task <!-- id: t -->\n" }] });
+    await writeback.change(control(text, 1), { kind: "mark", to: "x" });
+    const other = { ...doc, id: "d2", name: "other.md", text, binding: { ...doc.binding!, token: "o".repeat(32) } } as ReaderDocument;
+    doc.text = text; // overwritten while the reader shows another document
+    deps.active = () => other;
+    const count = notices.length;
+    writeback.checkOverwritten(doc);
+    expect(notices).toHaveLength(count);
+
+    // The notice appeared while the file was on screen; the reader then switched tabs.
+    deps.active = () => doc;
+    writeback.checkOverwritten(doc);
+    expect(notices.at(-1)).toMatchObject({ action: { label: "Apply again" } });
+    deps.active = () => other;
+    notices.at(-1)!.action!.run();
+    await vi.waitFor(() => expect(deps.report).toHaveBeenCalledWith(expect.stringMatching(/^Could not apply the change again: “card\.md”/)));
+    expect(deps.native.patchDocument).toHaveBeenCalledOnce();
+    expect(other.text).toBe(text);
+  });
+});
