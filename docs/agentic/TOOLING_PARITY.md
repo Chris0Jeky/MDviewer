@@ -29,5 +29,6 @@ the *intent* stays aligned.
 
 ## Current intentional differences
 
-- Only Claude Code has the enforcing `pre_tool_use.py` hook. Codex must apply the
-  same destructive-operation rules by discipline.
+- Neither runtime has an enforcing pre-tool hook: `pre_tool_use.py` exists but is
+  not wired (the estate declares this machine floorless). Both runtimes apply the
+  destructive-operation rules by discipline.

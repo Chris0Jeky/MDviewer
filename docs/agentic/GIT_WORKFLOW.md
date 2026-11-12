@@ -1,17 +1,19 @@
 # Git Workflow — MDviewer
 
-Plain-language git rules for agents (and humans) working in this repo. The
-`scripts/agent_hooks/pre_tool_use.py` hook enforces the destructive-operation
-rules below; this document explains the *why* and the recovery paths.
+Plain-language git rules for agents (and humans) working in this repo. The rules
+are agent-held: `scripts/agent_hooks/pre_tool_use.py` implements them but is not
+wired as a `PreToolUse` hook (the estate declares this machine floorless), so
+nothing blocks a command for you. This document explains the *why* and the
+recovery paths.
 
 ## Branch safety tiers
 
 - **Protected branches** (`main`, `master`, `develop`, `release`): no rebase,
   force-push, hard/soft/mixed reset, `commit --amend`, `checkout -- <path>`,
-  `restore`, or `pull --rebase`. The pre-tool hook blocks these outright.
+  `restore`, or `pull --rebase`. Never run these.
 - **Feature branches** (anything else): the same operations are *allowed* but you
   must explain what you are doing and the risk before running them.
-- **Always blocked, any branch**: `rm -rf`, `sudo`, `chmod -R 777`, bare
+- **Never, on any branch**: `rm -rf`, `sudo`, `chmod -R 777`, bare
   force-push (`--force` without `--force-with-lease`), `git clean -f`,
   piping a download into a shell, and `npm publish`.
 
@@ -23,15 +25,15 @@ rules below; this document explains the *why* and the recovery paths.
 4. Reconcile a diverged remote with `git merge origin/<branch>` (not rebase).
 5. **Never `git commit --amend` after pushing.** Make a new commit instead.
 6. Open a PR (if using a remote) or merge locally after the gates in
-   `CLAUDE.md` › PR Merge Protocol pass.
+   `CLAUDE.md` › Review & Merge Gates pass.
 
 ## Commit style
 
 - Short imperative subject: `fix(paginate): keep tables whole across page breaks`.
 - Scope tags mirror the source folders: `render`, `paginate`, `export`, `app`,
   `ui`, `docs`, `test`, `chore`.
-- **No `Co-Authored-By` trailer** (`includeCoAuthoredBy` is `false` in
-  `.claude/settings.json`). Commits are authored by the human running the agent.
+- **No attribution trailers** (`attribution` is empty in `.claude/settings.json`).
+  Commits are authored by the human running the agent.
 
 ## Explain-before-acting rule
 

@@ -33,7 +33,7 @@ Export click → capture document id/name/text and settings NOW
 
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
-| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
+| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,documents,commands,panels,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime,foundations}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
 | Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, parsed-fence grammar preparation, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-fence-languages.test.ts`, `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
@@ -191,6 +191,25 @@ See spec §12, `tests/editor-edit-safety.test.ts`,
 `tests/e2e/editor-edit-safety.spec.ts` and
 `docs/design/2026-11-05-editor-edit-ownership.md`.
 
+
+## Desktop foundations (companion push S0)
+
+`src/desktop/documents.ts` `DesktopDocuments` is the one ownership map for open
+documents across reading and the PDF workspace: `reader` (the bounded
+`ReaderSession`), `baselines` (DocStore id → `WorkspaceBaseline` with the clean
+source, stable `key` and optional `binding`) and `workspace` (the mounted App).
+Every handoff goes through `adoptReaderInto`, `releaseReader`, `readerSnapshot`
+and `returnToReader`; admission and dirty checks through `admitToWorkspace`,
+`addBatch`, `workspaceDirty`, `hasUnsavedWork` and `list()`. Each reader
+document carries a `key` (from `session.ts` `nextDocumentKey`) and, for
+host-opened files with a token, a display-only `Binding {token, path, dir,
+encoding, eol, disk}`. Nothing reads bindings yet; Save (S1b) and the watcher (S1c)
+will. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
+keys (exact modifiers; a match is always claimed, even repeated or disabled),
+`listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`
+`registerPanel({id, title, mount})` lists side panels for the shell. Unit
+coverage: `tests/desktop-foundations.test.ts`.
 
 ## Desktop New document
 
