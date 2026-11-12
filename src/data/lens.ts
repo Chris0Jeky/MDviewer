@@ -251,12 +251,14 @@ export class Lens {
         this.line();
         // Retain the mandatory flat table and add block views for prose, code, or embedded JSON.
         // These values were charged with their row, so the detail must not spend the budget twice.
+        // A table nested inside a prepaid detail keeps the outer detail's unspent credit.
+        const outer = this.prepaid;
         for (const detail of details) {
           this.prepaid = this.count(detail.value);
           const next = this.heading(detail.label, detail.path, level, indent);
           this.render(detail.value, detail.path, level + 1, next, detail.key);
-          this.prepaid = 0;
         }
+        this.prepaid = outer;
         return;
       }
     }
@@ -297,9 +299,11 @@ export class Lens {
 
   /** Reuse the generic object layout for members of an already charged container. */
   renderMembers(value: Extract<JsonValue, { kind: "object" }>, path: string, level = 3): void {
-    this.prepaid = 1;
+    // Credit for the container only; an enclosing detail keeps whatever credit it has left.
+    const outer = this.prepaid;
+    this.prepaid = outer + 1;
     try { this.renderLiteral(value, path, level); }
-    finally { this.prepaid = 0; }
+    finally { this.prepaid = Math.min(this.prepaid, outer); }
   }
 
   /** A message is prose even when its text happens to parse as JSON. */

@@ -11,11 +11,12 @@ A local Markdown reader and editor with a paginated PDF preview. Code blocks, fi
 
 **Live app:** https://mdviewer-c9r.pages.dev/
 
-**Windows desktop preview:** read local files in a continuous view, start a blank
-document with **New**, or use **Edit & PDF** for source editing, Find/Replace,
-compact Format commands and paginated preview. Session positions and keyboard
-document navigation help you move among open notes. Explorer file opening, multiple documents and screen themes are
-built in. The source editor and pagination load only when you choose New or Edit & PDF.
+**Windows desktop preview:** read local files in a continuous view, write in **Edit**
+(`Ctrl+E`: the source beside the live document, with Find/Replace and Format), start a
+blank note with **New**, or choose **Export PDF…** (More, `Ctrl+Shift+E`) for the paginated preview and export.
+Session positions and keyboard document navigation help you move among open notes.
+Explorer file opening, multiple documents and screen themes are built in. The source
+editor loads only when you edit, and pagination only when you choose Export PDF… or print.
 [Download/build instructions, shortcuts and current limits](docs/WINDOWS_DESKTOP.md).
 
 **Next development:** [prioritized work and acceptance criteria](docs/FUTURE_WORK.md),
@@ -114,7 +115,7 @@ Only what the code actually does:
 
 - **No-slice pagination.** Code blocks, figures, tables and callouts stay on one page when they fit. Oversize blocks shrink slightly (≤ 1.15×) or split cleanly; tables repeat their header. List items fragment like paragraphs so a long checklist does not leave half-blank sheets.
 - **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
-- **New documents on Windows.** **New** (`Ctrl+N`) opens a blank source with an available `Untitled.md` name and keeps existing documents open. The desktop reader loads the editing workspace on demand; **Reading view** returns with your open documents and edits preserved. Document layout starts collapsed to leave more room for writing.
+- **New documents on Windows.** **New** (`Ctrl+N`) opens a blank note in **Edit**, beside its live preview, with an available `Untitled.md` name, and keeps existing documents open. **Export PDF…** loads the paginated workspace on demand; **Reading view** returns with your open documents and edits preserved.
 - **Find and Replace.** Choose **Find** or press `Ctrl/Cmd+F` in the source workspace. Search literal text, match case, see result counts and wrap through matches; the current match stays visibly marked while Find keeps keyboard focus. `Ctrl/Cmd+H` opens replacement controls. In the Find field, `Enter` / `Shift+Enter` moves forward / backward and `Escape` returns to the source. Replace all is one undoable edit. Reader and Preview-only modes keep the host's normal Find.
 - **Markdown formatting.** Open **Format** beside Find for Bold, Italic, inline/fenced code, H1–H3, links and bullet/number/task lists. Source-only `Ctrl/Cmd+B/I/K` shortcuts preserve native Undo. Ambiguous marker boundaries are refused without changing source or selection.
 - **Session navigation.** Caret, selection and source/preview/reader positions follow stable document IDs in a bounded memory cache. Equal names are distinguished; Windows/Linux use `Alt+Shift+P/N/D` for previous/next/picker. Closing the app clears session positions.

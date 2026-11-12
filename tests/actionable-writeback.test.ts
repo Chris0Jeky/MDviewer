@@ -134,3 +134,21 @@ describe("actionable write-back stays on the file it came from", () => {
     expect(other.text).toBe(text);
   });
 });
+
+describe("actionable write-back settles before Edit", () => {
+  it("settled() resolves only after an in-flight host write has been adopted", async () => {
+    const text = "- [ ] Task\n";
+    let finish!: (result: PatchResult) => void;
+    const { doc, deps, writeback } = setup(text);
+    deps.native.patchDocument = vi.fn(() => new Promise<PatchResult>(resolve => { finish = resolve; }));
+    const change = writeback.change(control(text, 1), { kind: "mark", to: "x" });
+    let settled = false;
+    void writeback.settled().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finish({ outcome: "saved", generation: 1, text: "- [x] Task\n" });
+    await change;
+    await vi.waitFor(() => expect(settled).toBe(true));
+    expect(doc.text).toBe("- [x] Task\n");
+  });
+});

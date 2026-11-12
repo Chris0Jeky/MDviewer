@@ -202,3 +202,13 @@ describe("conversation budgets", () => {
     expect(result.truncated).toBe(false);
   });
 });
+
+describe("image data with duplicate keys (verification of #273)", () => {
+  it("withholds every data entry, even duplicated or at both levels", () => {
+    const text = '[{"role":"user","content":"x"},{"role":"assistant","content":[{"type":"image","data":"PARTDATA","source":{"media_type":"image/png","data":"AAAA","data":"BBBB"}}]}]';
+    const result = toReadable(text, "json");
+    for (const secret of ["PARTDATA", "AAAA", "BBBB"]) expect(result.markdown).not.toContain(secret);
+    expect(result.markdown).toContain("data not shown \\(16 characters\\)");
+    expect(result.truncated).toBe(false);
+  });
+});

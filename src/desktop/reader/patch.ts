@@ -27,7 +27,9 @@ export function patchDocument(live: HTMLElement, next: HTMLElement): number {
     if (key !== undefined) available.set(key, [...(available.get(key) ?? []), node]);
   }
   let replaced = 0;
-  const children = [...next.children].map(node => {
+  // Top-level text (whitespace between blocks) is carried over as is; only elements are keyed.
+  const children = [...next.childNodes].map(node => {
+    if (!(node instanceof Element)) return node;
     // Ranges relative to the block's start: same markup with different inner spacing differs.
     const base = Number(stamp(node)?.getAttribute(SOURCE_ATTR)?.split("-")[0] ?? 0);
     const key = node.outerHTML.replace(RANGE, (_, start: string, end: string) => ` r="${Number(start) - base}-${Number(end) - base}"`);

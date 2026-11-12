@@ -33,7 +33,7 @@ Export click → capture document id/name/text and settings NOW
 
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
-| Reader shell: bar, tabs, More menu, palette, panel (Library, Outline), status (S3) | `src/desktop/shell/{tabs,menu,palette,panel,library-panel,status}.ts`, `src/desktop/shell/shell.css`, `desktop.html` | `tests/desktop-e2e/shell.spec.ts`, spec §14 |
+| Reader shell: bar, tabs, More menu, palette, panel (Library, Outline), status (S3) | `src/desktop/shell/{tabs,menu,palette,panel,library-panel,status}.ts`, `src/desktop/shell/shell.css`, `desktop.html` | `tests/desktop-e2e/{shell,library}.spec.ts`, spec §14 |
 | Windows continuous reader and lazy workspace handoff | `src/desktop/{main,documents,commands,panels,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime,foundations}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
 | Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, parsed-fence grammar preparation, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-fence-languages.test.ts`, `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
@@ -48,6 +48,7 @@ Export click → capture document id/name/text and settings NOW
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
 | Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
@@ -238,13 +239,13 @@ coverage: `tests/desktop-foundations.test.ts`.
 ## Desktop New document
 
 `src/desktop/main.ts` owns creation from reader/empty/workspace controls and
-Ctrl/Cmd+N. `src/desktop/session.ts` exports
+Ctrl/Cmd+N; from the reader, New opens the note in Edit (S5). `src/desktop/session.ts` exports
 `nextUntitledName(docs: readonly { name: string }[]): string` for case-insensitive
 open-name collision avoidance. Desktop admits the empty source through current
 count/UTF-8 limits, records a clean baseline, preserves existing sources and late
 open selection ownership, then reveals/focuses the source. Mode transitions,
 export and native save block creation. Reader startup stays lazy until New or
-Edit & PDF. `App.init` forwards optional `createDocument?: () => void` through
+Export PDF…. `App.init` forwards optional `createDocument?: () => void` through
 Toolbar; web defaults remain compatible. See spec §14,
 `tests/desktop-new-document.test.ts`, `tests/desktop-e2e/new-document.spec.ts` and
 `docs/design/DESKTOP_AUTHORING_PLAN.md`.

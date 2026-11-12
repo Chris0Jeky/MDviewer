@@ -1,4 +1,5 @@
-import { test, expect, documentTabs, openFiles, readyReader, readyWorkspace, selectDocument, showOutline } from "./helpers";
+import { test, expect, documentTabs, openFiles, readyReader, readyWorkspace, selectDocument, showOutline, openPdf } from "./helpers";
+import { placeSource } from "../helpers/sourcePosition";
 
 for (const size of [{ width: 560, height: 420 }, { width: 640, height: 480 }]) {
   test(`document navigation stays reachable at ${size.width}×${size.height}`, async ({ page }) => {
@@ -10,7 +11,7 @@ for (const size of [{ width: 560, height: 420 }, { width: 640, height: 480 }]) {
     await documentTabs(page).nth(0).click();
     await readyReader(page, "One");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
-    await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+    await openPdf(page);
     await readyWorkspace(page, "# One");
     await page.getByRole("button", { name: "Next document", exact: true }).click();
     await expect(page.locator("#editor-input")).toHaveValue("# Two");
@@ -38,17 +39,17 @@ test("reader positions and source selections survive keyboard switches and repea
   await page.keyboard.press("Alt+Shift+p");
   await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(first);
   expect(audit.requests.filter(url => /workspace-|pagedjs/i.test(url)), "reading navigation must keep the PDF workspace lazy").toEqual([]);
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   const input = page.locator("#editor-input");
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(100, 130, "backward"); el.scrollTop = 500; });
+  await placeSource(input, 100, 130, "backward", 500);
   const sourcePosition = await input.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.selectionDirection, el.scrollTop]);
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "Navigation λ😀");
   await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(first);
   await page.keyboard.press("Alt+Shift+n");
   await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(second);
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   await page.keyboard.press("Alt+Shift+p");
   await expect.poll(() => input.evaluate((el: HTMLTextAreaElement) => [el.selectionStart, el.selectionEnd, el.selectionDirection, el.scrollTop])).toEqual(sourcePosition);
@@ -92,7 +93,7 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
       await expect(page.locator("#reader-outline a")).toHaveCount(1); // "# Other": one heading
       await selectDocument(page, "wrapped.md");
     } else {
-      await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+      await openPdf(page);
       await readyWorkspace(page, source);
       await page.getByRole("button", { name: "← Reading view", exact: true }).click();
     }

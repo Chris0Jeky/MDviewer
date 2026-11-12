@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { test, expect, RICH_MARKDOWN, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline } from "./helpers";
+import { test, expect, RICH_MARKDOWN, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline, openPdf } from "./helpers";
 import { pdfRegionInk, type PdfRegion } from "./pdfPixels";
 
 test("production reader renders rich Markdown without loading the editing workspace", async ({ page, audit }) => {
@@ -48,7 +48,7 @@ test("production reader renders rich Markdown without loading the editing worksp
   await page.locator("#reader-scroll").evaluate(el => el.scrollTo({ top: 0, behavior: "instant" }));
   await page.screenshot({ path: test.info().outputPath("reader-rich-dark.png"), fullPage: true });
 
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, RICH_MARKDOWN);
   expect(audit.requests.some(url => /\/assets\/workspace-[^/]+\.js$/.test(url))).toBe(true);
 });
@@ -81,7 +81,7 @@ test("hostile HTML cannot execute, navigate or load document resources", async (
   await doc.getByText("Unsafe link", { exact: true }).click();
   expect(await page.evaluate(() => window.__desktopEvidence.hostileRan ?? false)).toBe(false);
   expect(new URL(page.url()).pathname).toBe("/desktop.html");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, hostile);
   await expect(page.locator("#paged-output script, #paged-output iframe, #paged-output [onerror]")).toHaveCount(0);
   expect(await page.evaluate(() => window.__desktopEvidence.hostileRan ?? false)).toBe(false);
@@ -110,7 +110,7 @@ test("repeated edit and reading transitions flush pending edits without stale do
   await readyReader(page, "Alpha");
   let edited = "";
   for (let turn = 1; turn <= 3; turn++) {
-    await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+    await openPdf(page);
     await readyWorkspace(page, turn === 1 ? "# Alpha\n\nOriginal." : edited);
     edited = `# Alpha revision ${turn}\n\nFresh edit ${turn}; retained across transitions.`;
     await page.locator("#editor-input").fill(edited);
@@ -136,7 +136,7 @@ test("repeated edit and reading transitions flush pending edits without stale do
 test("both PDF exports work under the production CSP and use the latest edit", async ({ page }) => {
   await openFiles(page, [{ name: "export.md", text: RICH_MARKDOWN }]);
   await readyReader(page, "Desktop field notes");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, RICH_MARKDOWN);
   const edited = RICH_MARKDOWN.replace("Desktop field notes", "Latest export revision");
   await page.locator("#editor-input").fill(edited);
@@ -200,7 +200,7 @@ test("both PDF exports work under the production CSP and use the latest edit", a
 test("failed capture styles save no PDF, release their iframe and permit a retry", async ({ page }) => {
   await openFiles(page, [{ name: "export.md", text: RICH_MARKDOWN }]);
   await readyReader(page, "Desktop field notes");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, RICH_MARKDOWN);
   let downloads = 0;
   let rejectedStyles = 0;
@@ -260,7 +260,7 @@ test("both reader and workspace bound total session bytes across separate file p
   await expect(page.locator("#reader-notice")).toContainText("memory limit");
   await expect(documentTabs(page)).toHaveText(["small.md", "large-a.md"]);
   await readyReader(page, "Small active document");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Small active document");
   await page.locator("#file-input").setInputFiles({ name: "large-c.md", mimeType: "text/markdown", buffer: Buffer.from(large) });
   await expect(page.locator("#workspace-notice")).toContainText("memory limit");
@@ -272,7 +272,7 @@ test("both reader and workspace bound total session bytes across separate file p
 test("closing an edited workspace tab requires explicit discard", async ({ page }) => {
   await openFiles(page, [{ name: "alpha.md", text: "# Alpha" }, { name: "beta.md", text: "# Beta" }]);
   await readyReader(page, "Alpha");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Alpha");
   await page.locator("#editor-input").fill("# Unsaved Alpha\n\nKeep these edits.");
   const messages: string[] = [];
@@ -297,7 +297,7 @@ test("closing an edited workspace tab requires explicit discard", async ({ page 
 test("opening files in the workspace cannot exceed the desktop session limit", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Document ${index}` })));
   await readyReader(page, "Document 0");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Document 0");
   await page.locator("#file-input").setInputFiles({ name: "overflow.md", mimeType: "text/markdown", buffer: Buffer.from("# Workspace overflow") });
   await expect(page.locator("#workspace-notice")).toContainText(/32|limit/);
@@ -327,7 +327,7 @@ test("workspace teardown releases global listeners and later input fires once", 
   }
   let baseline: Record<string, number> | undefined;
   for (let turn = 0; turn < 3; turn++) {
-    await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+    await openPdf(page);
     await readyWorkspace(page, "# One");
     await page.getByRole("button", { name: "← Reading view", exact: true }).click();
     await readyReader(page, "One");
@@ -337,7 +337,7 @@ test("workspace teardown releases global listeners and later input fires once", 
     if (baseline) expect(counts, "global handlers must not accumulate after the first lazy module load").toEqual(baseline);
     else baseline = counts;
   }
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# One");
   const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("Control+o");
@@ -364,7 +364,7 @@ test("document-authored IDs cannot intercept the application workspace", async (
   const markdown = "# Reserved identifiers\n\n<div id=\"app\">User text survives.</div>\n<div id=\"reader-status\">An authored status label.</div>";
   await openFiles(page, [{ name: "identifiers.md", text: markdown }]);
   await readyReader(page, "Reserved identifiers");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await expect(page.locator("#desktop-workspace #editor-input")).toBeVisible();
   await expect(page.locator("#desktop-workspace #editor-input")).toHaveValue(markdown);
   await expect(page.locator("#desktop-workspace #paged-output")).toContainText("User text survives.");
@@ -377,7 +377,7 @@ test("document-authored input IDs cannot intercept the workspace file picker", a
   const markdown = "# Authored input ID\n\n<div id=\"file-input\">This is document content.</div>";
   await openFiles(page, [{ name: "input-id.md", text: markdown }]);
   await readyReader(page, "Authored input ID");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, markdown);
   const chooser = page.waitForEvent("filechooser", { timeout: 5_000 });
   await page.getByRole("button", { name: "Open Markdown", exact: true }).click();
