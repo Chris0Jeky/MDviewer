@@ -18,7 +18,8 @@ export interface YamlResult { values: JsonValue[]; problems: Problem[]; invalid:
 
 /** Walk source nodes, never toJS(): aliases stay leaves, including cyclic aliases. */
 export function parseYaml(text: string): YamlResult {
-  if (!reader) return { values: [], problems: [{ message: "YAML reader is not loaded yet.", line: 1, column: 1 }], invalid: true };
+  // A caller bug, not bad input: an empty or partial view would look like data. Fail loudly.
+  if (!reader) throw new Error('toReadable(text, "yaml") needs `await prepare("yaml")` first.');
   const yaml = reader;
   const counter = new yaml.LineCounter();
   const problems: Problem[] = [];

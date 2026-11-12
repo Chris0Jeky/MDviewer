@@ -17,10 +17,10 @@ describe("optional YAML reader", () => {
   it("requires preparation, shares its pending load, and leaves other kinds synchronous", async () => {
     vi.resetModules();
     const data = await import("../src/data");
-    expect(data.toReadable("a: 1", "yaml").problems).toEqual([{ message: "YAML reader is not loaded yet.", line: 1, column: 1 }]);
+    expect(() => data.toReadable("a: 1", "yaml")).toThrow('await prepare("yaml")');
     const pending = data.prepare("yaml");
     expect(data.prepare("yaml")).toBe(pending);
-    expect(data.toReadable("a: 1", "yaml").problems[0]?.message).toContain("not loaded yet");
+    expect(() => data.toReadable("a: 1", "yaml")).toThrow('await prepare("yaml")');
     await pending;
     expect(data.toReadable("a: 1", "yaml").problems).toEqual([]);
     await data.prepare("csv");
