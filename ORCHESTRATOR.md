@@ -9,12 +9,12 @@
 >
 > **State of main.** [`dc35c50`](https://github.com/Chris0Jeky/MDviewer/commit/dc35c5022562643888d5561c66f64d38b44ff5e1)
 > (merge of #293). CI [43267320688](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320688) and
-> Windows Desktop [43267320935](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320935) were still
-> **in progress** on it when this was written, so green is **not yet established for `dc35c50`**. The
-> previous main [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
-> (merge of #295) passed CI [43266504555](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504555) and
-> Windows Desktop [43266504492](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504492). The only change
-> since is #293. Check `gh run list --branch main --limit 3` first.
+> Windows Desktop [43267320935](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320935) both completed
+> **success** on it (read with `gh run list --branch main` after the push of #293). The previous main
+> [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
+> (merge of #295) also passed CI [43266504555](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504555) and
+> Windows Desktop [43266504492](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504492). Re-run
+> `gh run list --branch main --limit 3` before relying on this.
 >
 > **What landed (merged), by area**
 > - **Foundations:** native registry and command modules #225 (S0a); one document owner, command and panel

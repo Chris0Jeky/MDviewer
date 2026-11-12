@@ -18,10 +18,9 @@
 - **2026-11-12 (Companion push close-out)** — main
   [`dc35c50`](https://github.com/Chris0Jeky/MDviewer/commit/dc35c5022562643888d5561c66f64d38b44ff5e1) (merge of
   #293). Its CI [43267320688](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320688) and Windows Desktop
-  [43267320935](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320935) were still running when this was
-  written, so green is not yet established for it; the previous main
-  [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792) (merge of #295)
-  passed both. New since the entry below: YAML, TOML, CSV and TSV now open as readable views (D4, #281, #284,
+  [43267320935](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320935) completed success; so did the
+  previous main [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
+  (merge of #295). New since the entry below: YAML, TOML, CSV and TSV now open as readable views (D4, #281, #284,
   #288) and the views are easier to read (D6, #293); New from template reads a pinned project's `templates/`
   folder (A4, #285, #286, #295); the Library lists agent data files (#290); switching tabs is faster (S9 part 1,
   #294). Not on main: copy value, path and subtree (D5, PR #289 open; webview #299), the embeddable reading
