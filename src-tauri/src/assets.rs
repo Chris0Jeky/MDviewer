@@ -48,6 +48,34 @@ pub fn resolve(document: &Path, reference: &str) -> Option<PathBuf> {
     is_local_file_path(&resolved).then_some(resolved)
 }
 
+/// True when no path component of `target` that the user's own open did not already
+/// traverse is a symlink or junction. A link planted in a folder (a cloned repository)
+/// could point at a network share (`\\server\share`), and opening through it would start an SMB
+/// connection, leaking credentials, before any file check runs. Components shared
+/// with the document's own folder were traversed by the user's open and stay allowed;
+/// OneDrive placeholders are not name surrogates and stay allowed.
+/// ponytail: check-then-open, so a local writer could swap a component in between;
+/// open by handle with FILE_FLAG_OPEN_REPARSE_POINT per component if that matters.
+pub fn without_new_links(document: &Path, target: &Path) -> bool {
+    let trusted = document.parent().unwrap_or(document);
+    let mut prefix = PathBuf::new();
+    for part in target.components() {
+        prefix.push(part);
+        if trusted.starts_with(&prefix) {
+            continue;
+        }
+        match std::fs::symlink_metadata(&prefix) {
+            // std reports junctions and symlinks (name-surrogate reparse points) here.
+            Ok(meta) if meta.file_type().is_symlink() => return false,
+            Ok(_) => {}
+            // Nothing deeper exists, so the open fails locally without following anything.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return true,
+            Err(_) => return false,
+        }
+    }
+    true
+}
+
 /// Add `.md` to an extensionless wiki-style name (`[[name]]` → `name.md`).
 pub fn with_markdown_extension(path: PathBuf) -> PathBuf {
     if path.extension().is_none() {
@@ -94,6 +122,40 @@ pub fn read_image(path: &Path) -> Result<(Vec<u8>, &'static str), &'static str> 
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuses_a_junction_below_the_documents_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let docs = dir.path().join("docs");
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir_all(&docs).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("a.png"), b"x").unwrap();
+        std::fs::create_dir_all(docs.join("img")).unwrap();
+        std::fs::write(docs.join("img").join("a.png"), b"x").unwrap();
+        let document = docs.join("guide.md");
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(docs.join("link"))
+            .arg(&elsewhere)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        assert!(without_new_links(
+            &document,
+            &docs.join("img").join("a.png")
+        ));
+        assert!(without_new_links(
+            &document,
+            &docs.join("missing").join("a.png")
+        ));
+        assert!(!without_new_links(
+            &document,
+            &docs.join("link").join("a.png")
+        ));
+        // `../` climbs stay allowed when the climbed-to folders are plain.
+        assert!(without_new_links(&document, &elsewhere.join("a.png")));
+    }
 
     fn doc() -> PathBuf {
         PathBuf::from(r"C:\work\repo\docs\guide.md")

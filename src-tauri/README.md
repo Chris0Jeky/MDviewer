@@ -125,7 +125,9 @@ Markdown file a document links to (`other.md`, `../x.md#part`, `@CLAUDE.md`, or 
 extensionless wiki-style name, which gets `.md`), and `read_asset(token, src)` returns the raw
 bytes of a local image it shows (PNG, JPEG, GIF, WebP, SVG; 20 MB). Both resolve against the
 folder of that document's own binding, refuse URLs, absolute, rooted, drive-relative, UNC and
-device forms, never climb above the drive root, and re-apply the local-file policy (opens go
+device forms, never climb above the drive root, refuse a path through a symlink or junction
+the document's own folder path does not already contain (one could point at a network
+share and start an SMB connection unasked), and re-apply the local-file policy (opens go
 through `read_batch`). The webview sends only the token and the reference as written.
 
 `save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an

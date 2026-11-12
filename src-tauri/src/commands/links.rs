@@ -34,6 +34,12 @@ pub(crate) async fn open_relative(
     let target = assets::resolve(&document, &href)
         .map(assets::with_markdown_extension)
         .ok_or("This link does not point to a local Markdown file next to this document.")?;
+    if !assets::without_new_links(&document, &target) {
+        return Err(
+            "This link goes through a folder shortcut (symlink or junction) and is not followed."
+                .into(),
+        );
+    }
     let batch =
         tauri::async_runtime::spawn_blocking(move || read_batch([target], capture_revision))
             .await
@@ -59,9 +65,14 @@ pub(crate) async fn read_asset(
 ) -> Result<Response, String> {
     let document = base(&state, &token)?;
     let target = assets::resolve(&document, &src).ok_or("not-local")?;
-    tauri::async_runtime::spawn_blocking(move || assets::read_image(&target))
-        .await
-        .map_err(|_| "unreadable".to_string())?
-        .map(|(bytes, _)| Response::new(bytes))
-        .map_err(str::to_owned)
+    tauri::async_runtime::spawn_blocking(move || {
+        if !assets::without_new_links(&document, &target) {
+            return Err("not-local");
+        }
+        assets::read_image(&target)
+    })
+    .await
+    .map_err(|_| "unreadable".to_string())?
+    .map(|(bytes, _)| Response::new(bytes))
+    .map_err(str::to_owned)
 }
