@@ -40,21 +40,26 @@
 >   code hyphenation #259; smoke progress sharing #222; Playwright install retry #238; state-docs sync for
 >   Readable data and Actionable Markdown #287 (S8).
 >
-> **Open PRs from this push (not merged):** D5 pure copy module #289 (value, path and subtree; mergeable, all six
-> checks green when read, no webview yet); S9 part 2, native start-up numbers and first frame in the theme colour
-> #297; S9 polish pass #298 (library row actions, narrow drawer, sepia code). Dependabot #216, #217, #218 are
-> open with all six checks green and were not triaged in this push. D5 is therefore not on main:
-> there is no `src/data/copy.ts` yet.
+> **Also merged at close-out:** D5 pure copy module #289 (`src/data/copy.ts`: value, path, subtree; no webview
+> yet) and the S9 polish pass #298 (library row actions, narrow drawer, sepia code). Main is 6329c7d, with CI and
+> Windows Desktop green.
+>
+> **Open PRs from this push:** S9 part 2 #297 (native start-up numbers, first frame in the theme colour), left open
+> at wind-down: its Windows build and native smoke job failed twice on head b0e3a23 (a save-dialog probe timeout
+> in the export step, run 43266580940) while main's smoke was green; next step is a rerun or a look at that probe.
+> Dependabot #216, #217, #218 are open with all six checks green and were not triaged in this push.
 >
 > **Next queue, in order**
-> 1. D5 webview #299: copy menu (value, path, subtree) and Save readable view as Markdown. Needs #289 merged.
+> 1. D5 webview #299: copy menu (value, path, subtree) and Save readable view as Markdown, on the merged #289.
 > 2. A5 #300: the embeddable reading element and its change event.
-> 3. S9 polish pass #301: data views after D6, horizontal overflow first (PR #298 is the shell side).
+> 3. S9 polish pass #301: data views after D6, horizontal overflow first (the shell side merged in #298).
 > 4. Native window theme background and closable during a slow start: #302, with the Core halves #304 (window
 >    background follows the screen theme) and #305 (a close during webview start-up skips `canClose` and the
 >    session flush). #297 supplies the webview half.
 > 5. Native clippy #306: fix six lints and run clippy in the Windows desktop job.
-> 6. Readable data hints and tests #296 (tera/peta byte keys, bare size, sub-second ms, line-label test).
+> 6. Readable data hints and tests #296 (tera/peta byte keys, bare size, sub-second ms, line-label test); multi-document
+>    YAML conversations map turns to root paths #291; Library Agent files group and batched seen marks #292 (with #265).
+> 6a. Desktop e2e Ctrl+O chooser timeouts under load #303.
 > 7. #197 recovery: parked, design only (see [RECOVERY.md](docs/design/RECOVERY.md)); needs fault, restart and
 >    deletion evidence first.
 > 8. Dependabot #216 to #218: open, green, to triage.

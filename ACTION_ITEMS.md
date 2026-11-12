@@ -23,8 +23,8 @@
   (merge of #295). New since the entry below: YAML, TOML, CSV and TSV now open as readable views (D4, #281, #284,
   #288) and the views are easier to read (D6, #293); New from template reads a pinned project's `templates/`
   folder (A4, #285, #286, #295); the Library lists agent data files (#290); switching tabs is faster (S9 part 1,
-  #294). Not on main: copy value, path and subtree (D5, PR #289 open; webview #299), the embeddable reading
-  element (A5, #300), S9 part 2 and the polish pass (PRs #297, #298 open). These are automated results on
+  #294). The copy functions are on main (D5 pure part, #289) but not yet in the app (webview #299); the S9 polish pass
+  merged (#298). Not on main: the embeddable reading element (A5, #300) and S9 part 2 (PR #297 open). These are automated results on
   unsigned CI builds; nobody has accepted them on real files, which is **AI-10**. **AI-6, AI-7, AI-8, AI-9, AI-10
   and #169 remain OPEN; none was cleared.** No deployment, signed release or performance claim is made; the
   deployed site is unchanged. The ordered queue and every PR/issue number are in

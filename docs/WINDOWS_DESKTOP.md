@@ -178,13 +178,16 @@ coverage and the remaining human Windows checks.
 
 ## Local files and limits
 
-Documents stay in memory until you explicitly export them. The app has no account,
-document uploads, autosave, recently opened list or document telemetry. It saves
-only display settings. Bundled rendering assets work without a network connection
+Documents stay in memory until you save or export them. Save (Ctrl+S) writes a bound document
+back to its own file; Save As writes it to a file you choose. The app has no account, document
+uploads, autosave or document telemetry. It saves display settings and, on Windows, a Library
+file (`library.json`: recent and pinned paths, pinned projects, seen times and the last session's
+files; paths and timestamps only). Bundled rendering assets work without a network connection
 after WebView2 is installed. Clicking a normal HTTP(S) link opens your default
 browser; other link schemes and automatic remote resource loads are blocked.
 
-The host accepts local `.md` and `.markdown` files, including names containing spaces
+The host accepts local Markdown (`.md`, `.markdown`), data (`.json`, `.jsonc`, `.jsonl`, `.ndjson`,
+`.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`) and plain text (`.txt`, `.log`) files, including names containing spaces
 or Unicode. It reads UTF-8, UTF-8 with a BOM, and UTF-16 LE/BE with a BOM. Malformed
 text is rejected. Explicit UNC and device paths are not accepted. File batches and
 open documents, including new notes, are bounded to 32 documents and 25,000,000
@@ -194,8 +197,8 @@ Editing a document can increase its size; returning to reading reports any excee
 session limit and keeps the editing workspace intact so you can save or close files.
 
 Linked local images and remote images are blocked by the shared sanitizer. Embedded
-raster images work. There is no file watcher, direct in-place save, Explorer preview
-handler or shell extension in this first version.
+raster images work. An open, bound file is watched: a change made by another program reloads it, or offers a reload when
+you have unsaved edits. There is no Explorer preview handler or shell extension.
 
 ## Build on Windows
 

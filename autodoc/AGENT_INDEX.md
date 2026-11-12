@@ -282,9 +282,11 @@ detail section (`line 3: message`, or `2: field`) follows the table
 only where the cell cannot show the value well: JSON embedded in a string, clearly Markdown text, or a prose key
 (`description`, `content`, `text`, `message`...) holding a line break or more than 160 characters.
 
-**D5 is not on main yet.** The pure copy module (`src/data/copy.ts`: value, path, subtree) is the open PR #289; the
-webview copy menu and Save readable view as Markdown are issue #299. The native half of D5, agent data files in the
-Library, is merged (#290; see the table above). Do not cite `copy.ts` as a seam until #289 merges.
+**D5, pure part (#289, merged):** `src/data/copy.ts`: `valueAt(text, kind, path, fileName?)` re-parses and walks a
+`Readable.map` path (a table row's path returns the whole record), `copyValue` (scalars as written), `subtreeJson`
+(pretty JSON, source numbers kept), `pathForms(path, kind)` (JSONPath, jq with `jqSlurp` for JSON Lines); tests in
+`tests/data-copy.test.ts`. The webview copy menu and Save readable view as Markdown are issue #299. The native half
+of D5, agent data files in the Library, is merged (#290; see the table above).
 
 ## Actionable Markdown (A1 to A3)
 

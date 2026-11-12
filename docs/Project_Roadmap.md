@@ -192,17 +192,18 @@ export paths.
   flattened columns and a Line column for JSON Lines, details only for embedded JSON, clear Markdown or block
   prose); the Library lists agent data files and skips `.claude/worktrees`
   [#290](https://github.com/Chris0Jeky/MDviewer/pull/290). The Windows app opens `.json`, `.jsonc`, `.jsonl`,
-  `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`, `.txt` and `.log` as readable views. **Open:** D5 pure copy
-  module [#289](https://github.com/Chris0Jeky/MDviewer/pull/289) (not merged); **next:** the D5 webview copy menu
+  `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`, `.txt` and `.log` as readable views. D5 pure copy
+  module [#289](https://github.com/Chris0Jeky/MDviewer/pull/289) is merged; **next:** the D5 webview copy menu
   and Save readable view as Markdown [#299](https://github.com/Chris0Jeky/MDviewer/issues/299). Open
   issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),
   [#278](https://github.com/Chris0Jeky/MDviewer/issues/278), [#282](https://github.com/Chris0Jeky/MDviewer/issues/282),
   [#291](https://github.com/Chris0Jeky/MDviewer/issues/291), [#292](https://github.com/Chris0Jeky/MDviewer/issues/292)
   and [#296](https://github.com/Chris0Jeky/MDviewer/issues/296).
 - **In progress (2026-11-12): S9 performance and polish.** Part 1 (tab switch back in about 50 ms, one sanitizer
-  pass for code blocks) [#294](https://github.com/Chris0Jeky/MDviewer/pull/294) is merged. Part 2
+  pass for code blocks) [#294](https://github.com/Chris0Jeky/MDviewer/pull/294) is merged. The polish pass
+  [#298](https://github.com/Chris0Jeky/MDviewer/pull/298) is merged. Part 2
   [#297](https://github.com/Chris0Jeky/MDviewer/pull/297) (native start-up numbers, first frame in the theme
-  colour) and the polish pass [#298](https://github.com/Chris0Jeky/MDviewer/pull/298) are open. Next:
+  colour) is open: its native smoke failed twice at wind-down. Next:
   [#301](https://github.com/Chris0Jeky/MDviewer/issues/301) (data views after D6),
   [#302](https://github.com/Chris0Jeky/MDviewer/issues/302) (native window background and closable during a
   slow start; Core halves #304 and #305) and [#306](https://github.com/Chris0Jeky/MDviewer/issues/306) (clippy).
