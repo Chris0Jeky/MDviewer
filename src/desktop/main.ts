@@ -67,6 +67,7 @@ mountSelectionCopy(content);
 // Screen theme: a fixed choice, or follow Windows (light or dark) when the setting says so.
 const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
 const systemTheme = (): "light" | "dark" => systemDark?.matches ? "dark" : "light";
+let themeAtEntry = settings.screenTheme;
 function applyTheme(): void {
   if (settings.followSystemTheme && settings.screenTheme !== systemTheme()) {
     // Stored too, so the editing workspace (which reads screenTheme) matches.
@@ -358,6 +359,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
   // A pending save must finish before its document changes owner (FILE_LIFECYCLE).
   if (app || changingMode || nativeSaveBusy || !docs.reader.active) return;
   rememberReaderPosition();
+  themeAtEntry = settings.screenTheme;
   changingMode = true; ++generation; ++renderGeneration;
   // Layout needs a visible workspace, but its controls must not accept input
   // until the initial render and source handoff have finished.
@@ -444,8 +446,9 @@ async function returnToReader(): Promise<void> {
     workspace.hidden = true; shell.hidden = false;
     document.body.classList.remove("desktop-editing");
     Object.assign(settings, loadSettings());
-    // A theme picked in the workspace is an explicit choice: stop following Windows.
-    if (settings.followSystemTheme && settings.screenTheme !== systemTheme()) {
+    // A theme picked in the workspace is an explicit choice: stop following Windows. A Windows
+    // change while the workspace was open is not (the stored theme is then still the entry one).
+    if (settings.followSystemTheme && settings.screenTheme !== themeAtEntry) {
       settings.followSystemTheme = false;
       saveSettings({ ...loadSettings(), followSystemTheme: false });
     }
@@ -691,6 +694,10 @@ registerCommand({ id: "navigate.forward", title: "Forward", keys: ["Alt+ArrowRig
   run: () => step(forwardStack, backStack) });
 registerCommand({ id: "view.textLarger", title: "Larger text", keys: ["Mod+="], enabled: () => !app, run: () => resizeText(1) });
 const modalOpen = (): boolean => !!document.querySelector("dialog[open]");
+// Under the open palette, Ctrl+P and Ctrl+S do nothing rather than reach the webview's own print or save.
+window.addEventListener("keydown", event => {
+  if (modalOpen() && (event.ctrlKey !== event.metaKey) && !event.altKey && ["p", "s"].includes(event.key.toLowerCase())) event.preventDefault();
+}, true);
 installShortcuts(window, command => !app && !modalOpen() && !command.id.startsWith("document.save"));
 // In the workspace Ctrl+P is the paginated print as well, never the webview's own print.
 installShortcuts(window, command => !!app && command.id === "export.pdf");

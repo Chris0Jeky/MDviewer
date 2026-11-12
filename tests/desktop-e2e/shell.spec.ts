@@ -159,6 +159,8 @@ test("review fixes: modal palette, workspace Ctrl+P, narrow drawer and focus aft
   await expect(input).toBeFocused();
   await page.keyboard.press("Control+w");
   await expect(documentTabs(page)).toHaveCount(2);
+  await page.keyboard.press("Control+p"); // never the webview's print, never the paginated one either
+  expect(await page.evaluate(() => window.__desktopEvidence.prints.length)).toBe(0);
   await input.fill("zzzz-nothing");
   await expect(page.locator(".shell-palette [role=status]")).toHaveText("No matches");
   await page.keyboard.press("Escape");
