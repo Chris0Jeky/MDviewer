@@ -18,7 +18,8 @@ export function cellText(text: string): string {
 }
 
 export function fence(text: string): string {
-  const longest = Math.max(2, ...Array.from(text.matchAll(/`+/g), m => m[0].length));
+  let longest = 2;
+  for (const run of text.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
   const marker = "`".repeat(longest + 1);
   return `${marker}\n${text}\n${marker}`;
 }

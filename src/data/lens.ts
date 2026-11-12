@@ -2,6 +2,11 @@ import { cellText, fence } from "./escape";
 import { parseJson, type JsonValue } from "./json";
 import type { Problem, ReadableOptions } from "./types";
 
+/** Flat tables wider than this are shown as records. */
+const MAX_COLUMNS = 32;
+/** Headings to level 4, then nested lists: markdown-it drops content past ~50 list levels. */
+const MAX_LEVEL = 4 + 24;
+
 const proseKeys = new Set(["description", "prompt", "content", "text", "message", "body", "summary", "instructions", "system"]);
 const labels = ["name", "title", "id", "key", "label", "type"];
 
@@ -31,7 +36,8 @@ function hint(value: JsonValue, key: string, timeZone: string): string {
     if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
       const n = Number(text);
       date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
-    } else if (value.kind === "string" && /^\d{4}-\d\d-\d\d(?:T\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d))?$/.test(text)) {
+    } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
+      // Only a full timestamp with a zone: a date alone is already readable and names no instant.
       date = new Date(text);
     }
     if (date && Number.isFinite(date.getTime())) {
@@ -52,9 +58,10 @@ function hint(value: JsonValue, key: string, timeZone: string): string {
     if (n >= 1024) return `${human(n / 1024)} KiB`;
     return `${human(n)} B`;
   }
-  if (/_ms$/i.test(key) || /_seconds$/i.test(key) || /^duration/i.test(key)) {
-    // Bare duration keys use seconds; an explicit ms suffix takes precedence.
-    const seconds = /_ms$/i.test(key) ? n / 1000 : n;
+  // Only when the key names the unit: `elapsed_ms`, `durationMs`, `timeout_seconds`, `waitSecs`.
+  const ms = /(^|_)ms$|[a-z]Ms$/.test(key);
+  if (ms || /(^|_)(seconds|secs)$|[a-z](Seconds|Secs)$/.test(key)) {
+    const seconds = ms ? n / 1000 : n;
     if (Math.abs(seconds) >= 3600) return `${human(seconds / 3600)} h`;
     if (Math.abs(seconds) >= 60) return `${human(seconds / 60)} min`;
     return `${human(seconds)} s`;
@@ -91,7 +98,9 @@ export class Lens {
   }
 
   line(text = "", path?: string): void {
-    for (const part of text.split("\n")) {
+    // Every terminator, so no raw CR can reach markdown-it (which reads it as a line break
+    // and would end an indented block early).
+    for (const part of text.split(/\r\n|\r|\n/)) {
       this.lines.push(part);
       if (path !== undefined) this.map.set(this.lines.length, path);
     }
@@ -155,7 +164,7 @@ export class Lens {
       for (const line of value.value.split(/\r\n|\r|\n/)) this.line(`${indent}> ${line}`, path);
       this.line();
     } else if (codeLike(value.value)) {
-      for (const line of fence(value.value).split("\n")) this.line(indent + line, path);
+      for (const line of fence(value.value).split(/\r\n|\r|\n/)) this.line(indent + line, path);
       this.line();
     } else {
       // The inline span keeps a leading <br> in a paragraph (rather than an HTML block).
@@ -165,6 +174,14 @@ export class Lens {
   }
 
   render(value: JsonValue, path = "$", level = 2, indent = "", key = ""): void {
+    if (level > MAX_LEVEL && !scalar(value)) {
+      // Deeper nested lists would pass the renderer's nesting limit and vanish; show the rest
+      // of this value literally instead, charged to the budget as a whole.
+      if (!this.take(this.count(value))) return;
+      for (const line of fence(jsonText(value)).split("\n")) this.line(indent + line, path);
+      this.line();
+      return;
+    }
     if (!this.take()) return;
     if (value.kind === "string") { this.string(value, key, path, level, indent); return; }
     if (scalar(value) || (value.kind === "array" && !value.items.length) || (value.kind === "object" && !value.entries.length)) {
@@ -199,7 +216,8 @@ export class Lens {
     if (flat) {
       const keys = Array.from(new Set(value.items.flatMap(v => v.kind === "object" ? v.entries.map(e => e.key) : [])));
       // Empty records still need a visible value rather than an invisible zero-column table.
-      if (keys.length) {
+      // Too many distinct keys make an unreadable (and unbounded) table: show records instead.
+      if (keys.length && keys.length <= MAX_COLUMNS) {
         let header = false;
         const details: { value: JsonValue; key: string; path: string; label: string }[] = [];
         for (const [index, item] of value.items.entries()) {
@@ -265,6 +283,16 @@ export class Lens {
   }
 
   finish(): string { return this.lines.join("\n").trimEnd() + "\n"; }
+}
+
+/** The value as compact JSON, numbers and literals exactly as written. */
+function jsonText(value: JsonValue): string {
+  switch (value.kind) {
+    case "object": return `{${value.entries.map(e => `${JSON.stringify(e.key)}: ${jsonText(e.value)}`).join(", ")}}`;
+    case "array": return `[${value.items.map(jsonText).join(", ")}]`;
+    case "string": return JSON.stringify(value.value);
+    default: return value.raw;
+  }
 }
 
 export function budget(value: number | undefined, fallback: number): number {

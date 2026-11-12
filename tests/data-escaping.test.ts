@@ -95,3 +95,21 @@ describe("data escaping conformance", () => {
     }
   }, 30_000);
 });
+
+describe("data cannot create structure (review of #270)", () => {
+  it("keeps a lone CR inside a deep code-like string's block", () => {
+    // Code-like (not Markdown-like), four levels deep so it sits in an indented list item.
+    const value = { a: { b: { c: { d: "const x = 1;\n\r[click](https://evil.example) <b>bold</b>" } } } };
+    const root = html(toReadable(JSON.stringify(value), "json").markdown);
+    expect(root.querySelector("a[href^='https://evil']")).toBeNull();
+    expect(root.querySelector("b")).toBeNull();
+    expect(root.querySelector("pre")?.textContent).toContain("[click](https://evil.example)");
+  });
+
+  it("shows values below the renderer's nesting limit literally instead of dropping them", () => {
+    let value: unknown = "deep leaf";
+    for (let i = 0; i < 60; i++) value = { a: value };
+    const root = html(toReadable(JSON.stringify(value), "json").markdown);
+    expect(root.textContent).toContain("deep leaf");
+  });
+});
