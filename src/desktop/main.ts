@@ -474,7 +474,9 @@ async function setEditing(on: boolean): Promise<void> {
           track: layout, initialRatio: settings.splitRatio, onPreview: applyRatio,
           onCommit: ratio => { applyRatio(ratio); settings.splitRatio = ratio; saveSettings({ ...loadSettings(), splitRatio: ratio }); },
         });
-        editHost.after(layout.lastElementChild!); // the handle sits between the source and the reader
+        const handle = layout.lastElementChild as HTMLElement;
+        handle.hidden = !editing; // shown by syncDocuments while editing
+        editHost.after(handle); // the handle sits between the source and the reader
       }
       editor ??= mountEditor(editHost, {
         onInput: editInput,
@@ -485,9 +487,6 @@ async function setEditing(on: boolean): Promise<void> {
         confirmLargeInsert: async bytes => bytes <= SIZE_HARD_BYTES && window.confirm(
           `Inserting this would make the document about ${(bytes / 1_000_000).toFixed(1)} MB. Insert it anyway?`),
       });
-      // On the host: the editor replaces its textarea when the document changes.
-      editHost.addEventListener("keyup", event => { if (event.target === editor?.input) followCaret(); });
-      editHost.addEventListener("click", event => { if (event.target === editor?.input) followCaret(); });
     } catch (error) { report(`Could not open Edit: ${errorText(error)}`); return; }
   }
   if (app || changingMode || !docs.reader.active) return;
@@ -518,6 +517,10 @@ function flushEdit(): void {
   editTimer = undefined;
   void render([], true);
 }
+
+// On the host, once: the editor replaces its textarea when the document changes.
+editHost.addEventListener("keyup", event => { if (event.target === editor?.input) followCaret(); });
+editHost.addEventListener("click", event => { if (event.target === editor?.input) followCaret(); });
 
 /** Scroll follows the caret (S2a's line map): bring the block holding the caret line into view. */
 function followCaret(): void {
@@ -877,7 +880,7 @@ registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], 
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
 registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
   run: () => setEditing(!editing) });
-registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
+registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !nativeSaveBusy && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", keys: ["Mod+-"], enabled: () => !app, run: () => resizeText(-1) });
@@ -1128,11 +1131,13 @@ async function followRelativeLink(href: string): Promise<void> {
 const imageUrls: string[] = [];
 /** Loaded local images by source, until the next full render: block patches reuse them. */
 const imageCache = new Map<string, string | null>();
+let imageBytesHeld = 0;
 const IMAGE_TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
 };
 function releaseImages(): void {
   imageCache.clear();
+  imageBytesHeld = 0;
   for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
 }
 // Bound what one document can make the reader hold: distinct images and bytes.
@@ -1140,21 +1145,20 @@ const MAX_LOCAL_IMAGES = 100;
 const MAX_LOCAL_IMAGE_BYTES = 200 * 1024 * 1024;
 async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
   const loaded = imageCache;
-  let bytesHeld = 0;
   for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
     if (image.src.startsWith("blob:")) continue; // kept by a block patch, already loaded
     const src = image.dataset.localSrc!;
     const type = IMAGE_TYPES[src.split(/[?#]/, 1)[0]!.split(".").pop()?.toLowerCase() ?? ""];
     if (!type) continue;
     if (!loaded.has(src)) {
-      if (loaded.size >= MAX_LOCAL_IMAGES || bytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
+      if (loaded.size >= MAX_LOCAL_IMAGES || imageBytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
         image.alt ||= `${src} was not loaded: this document shows too many local images`;
         continue;
       }
       try {
         const bytes = await native.readAsset(token, src);
         if (current !== renderGeneration) return; // A newer render owns the DOM now.
-        bytesHeld += bytes.byteLength;
+        imageBytesHeld += bytes.byteLength;
         const url = URL.createObjectURL(new Blob([bytes], { type }));
         imageUrls.push(url);
         loaded.set(src, url);

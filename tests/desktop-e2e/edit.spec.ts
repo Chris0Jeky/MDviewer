@@ -151,6 +151,12 @@ test.describe("notepad behaviours in Edit", () => {
     await page.keyboard.press("ArrowLeft");
     expect((await page.locator("#reader-edit").boundingBox())!.width).toBeLessThan(dragged);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mdviewer.settings.v1")!).splitRatio)).toBeGreaterThan(0.5);
+    // Stacked (narrow) layout: no side-by-side divider to drag.
+    await page.setViewportSize({ width: 600, height: 700 });
+    await expect(divider).toBeHidden();
+    await page.setViewportSize({ width: 1200, height: 700 });
+    await expect(divider).toBeVisible();
+    await edit(page).focus();
     await page.keyboard.press("Control+e");
     await expect(divider).toBeHidden();
   });
