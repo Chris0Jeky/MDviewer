@@ -638,7 +638,10 @@ mod tests {
     #[test]
     fn opens_data_and_text_documents_under_the_same_rules() {
         let dir = TestDirectory::new();
-        for name in ["a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG"] {
+        for name in [
+            "a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG", "g.yaml", "h.YML",
+            "i.toml", "j.csv", "k.TSV",
+        ] {
             let path = dir.write(name, b"{\"k\": 1}\r\n");
             let document = read_markdown(&path, 25_000_000).unwrap();
             assert_eq!(document.text, "{\"k\": 1}\r\n", "{name}");
