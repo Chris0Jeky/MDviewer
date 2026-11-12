@@ -30,9 +30,16 @@ deterministic function and shows that Markdown in the reader it already has.
 | --- | --- | --- | --- |
 | 1 | JSON, JSON with comments and trailing commas, JSON Lines | `.json`, `.jsonc`, `.jsonl`, `.ndjson` | None |
 | 2 | YAML, TOML, CSV and TSV | `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv` | One parser each for YAML and TOML, loaded only when needed |
+| 1 | Plain text | `.txt`, `.log` | None |
 
 The kind comes from the extension. A `.json` file that fails strict parsing is retried as JSON with
-comments, and the view says so. Not in version 1: notebooks, XML, INI and `.env`, logs.
+comments, and the view says so.
+
+**Plain text** (owner request 2026-11-12: MDviewer should work as a notepad). Its readable view is
+the text itself, wrapped, with no Markdown interpretation: every line is escaped like any other data
+value, so nothing in it becomes structure. No lens and no parsing. Edit shows the raw text. A `.txt`
+file is never read as Markdown, even when it looks like Markdown (an assumption the owner can
+reverse). Not in version 1: notebooks, XML, INI and `.env`, logs.
 
 ## The three modes
 
@@ -123,7 +130,7 @@ Copying a block gives its Markdown from day one, so a table pastes straight into
 One module, `src/data/`, with no DOM and no dependencies in phase 1:
 
 ```ts
-export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv";
+export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv" | "text";
 export function dataKindOf(fileName: string): DataKind | null;
 export function toReadable(text: string, kind: DataKind, options?: ReadableOptions): Readable;
 export interface Readable {
@@ -149,7 +156,7 @@ not make. No real file ever becomes a fixture.
 | Slice | Content | Needs |
 | --- | --- | --- |
 | D0 | This specification | — |
-| D1 | `src/data/`: parser for JSON, JSON with comments and JSON Lines; the generic lens; budgets; fixtures | — |
+| D1 | `src/data/`: parser for JSON, JSON with comments and JSON Lines; the generic lens; plain text; budgets; fixtures | — |
 | D2 | The conversation lens | D1 |
 | D3 | Opening and showing data documents: native and web open, Read, Edit and PDF, errors, live reload, Save | D1; the shell (S3) on main |
 | D4 | YAML, TOML, CSV and TSV | D1, D3 |
