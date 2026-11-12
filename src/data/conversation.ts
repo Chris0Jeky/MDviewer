@@ -47,7 +47,11 @@ function clip(text: string): string {
 function firstString(value: JsonValue | undefined): string | undefined {
   if (!value) return undefined;
   if (value.kind === "string") return value.value;
-  const children = value.kind === "object" ? value.entries.map(e => e.value) : value.kind === "array" ? value.items : [];
+  // A content block's `type` names the block, not its content; its `text` is the content.
+  const text = member(value, "text");
+  if (text?.kind === "string") return text.value;
+  const children = value.kind === "object" ? value.entries.filter(e => e.key !== "type").map(e => e.value)
+    : value.kind === "array" ? value.items : [];
   for (const child of children) {
     if (child.kind === "string") return child.value;
     const found = firstString(child);
@@ -121,11 +125,13 @@ export function conversationOverview(lens: Lens, records: readonly (JsonValue | 
       }
     }
   }
-  lens.line(`${count([...roles.values()].reduce((a, b) => a + b, 0), "turn")}: ${[...roles].map(([role, n]) => `${n} ${cellText(role)}`).join(", ")}`);
-  if (tools.size) lens.line(`tool calls: ${[...tools].map(([name, n]) => `${cellText(name)} ${n}`).join(", ")}`);
-  if (times.length) lens.line(`time span: ${cellText(times[0]!)} – ${cellText(times[times.length - 1]!)}`);
+  const facts = [`${count([...roles.values()].reduce((a, b) => a + b, 0), "turn")}: ${[...roles].map(([role, n]) => `${n} ${cellText(role)}`).join(", ")}`];
+  if (tools.size) facts.push(`tool calls: ${[...tools].map(([name, n]) => `${cellText(name)} ${n}`).join(", ")}`);
+  if (times.length) facts.push(`time span: ${cellText(times[0]!)} – ${cellText(times[times.length - 1]!)}`);
   const totals = Object.entries(tokens).filter(([, values]) => values.length).map(([name, values]) => `${cellText(name)}: ${cellText(total(values))}`);
-  if (totals.length) lens.line(`tokens: ${totals.join(", ")}`);
+  if (totals.length) facts.push(`tokens: ${totals.join(", ")}`);
+  // One fact per visual line: the layout's own break, since soft line breaks would run them together.
+  facts.forEach((fact, i) => lens.line(i < facts.length - 1 ? `${fact}<br>` : fact));
   lens.line();
 }
 
@@ -145,9 +151,20 @@ function part(lens: Lens, value: JsonValue, path: string): void {
   // The type is represented by the layout; the name is also retained as metadata.
   if (!lens.take()) return;
   if (type === "image") {
-    const media = string(member(value, "media_type")) ?? string(member(member(value, "source"), "media_type"));
-    if (!lens.take(lens.count(value) - 2)) return;
-    lens.line(cellText(`Image${media ? ` (${media})` : ""}`), path); lens.line();
+    const source = member(value, "source");
+    const media = string(member(value, "media_type")) ?? string(member(source, "media_type"));
+    // Only the encoded image data is withheld, and the view says how much; every other field
+    // (a URL, cache settings) stays visible as metadata.
+    const holder = member(source, "data") ? source : member(value, "data") ? value : undefined;
+    const data = member(holder, "data");
+    const size = data?.kind === "string" ? `, data not shown (${count(data.value.length, "character")})` : data ? ", data not shown" : "";
+    if (data && !lens.take(lens.count(data))) return;
+    lens.line(cellText(`Image${media ? ` (${media})` : ""}`) + cellText(size), path); lens.line();
+    if (source?.kind === "object") {
+      if (!lens.take()) return; // the source object
+      metadata(lens, source, childPath(path, "source"), holder === source ? ["data"] : []);
+      metadata(lens, value, path, holder === value ? ["type", "source", "data"] : ["type", "source"]);
+    } else metadata(lens, value, path, ["type", "data"]);
     return;
   }
   if (type === "text") {

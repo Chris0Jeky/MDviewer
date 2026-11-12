@@ -103,13 +103,14 @@ describe("conversation layout and fidelity", () => {
     const md = createMarkdown(null, DEFAULT_SETTINGS);
     const root = document.createElement("div");
     root.innerHTML = renderMarkdown(md, result.markdown).html;
-    expect(root.querySelectorAll("details > summary")).toHaveLength(5); // three parts and two metadata groups
+    // Three parts, the image source's other fields, and two metadata groups.
+    expect(root.querySelectorAll("details > summary")).toHaveLength(6);
     expect(root.querySelector("summary")?.textContent).toBe("Tool call: Read · " + "a".repeat(80) + "…");
     expect(root.querySelector("blockquote h1")?.textContent).toBe("Heading");
     expect(root.querySelector("blockquote strong")?.textContent).toBe("Bold");
     expect(root.textContent).toContain("Thinking · 5 characters");
     expect(root.textContent).toContain("first\nsecond");
-    expect(root.textContent).toContain("Image (image/png)");
+    expect(root.textContent).toContain("Image (image/png), data not shown (15 characters)");
     expect(result.markdown).not.toContain("NEVER_SHOW_THIS");
     expect(root.querySelector("img")).toBeNull();
     expect(result.truncated).toBe(false);
@@ -188,5 +189,16 @@ describe("conversation budgets", () => {
     expect(cut.markdown).toContain("- Line 502,");
     expect(cut.problems).toHaveLength(1);
     expect(cut.truncated).toBe(true);
+  });
+
+  it("summarises a block-list tool result by its text, and keeps an image's other fields", () => {
+    const result = view([user, { role: "assistant", content: [
+      { type: "tool_result", tool_use_id: "t", content: [{ type: "text", text: "file contents here" }] },
+      { type: "image", source: { type: "url", url: "https://example.test/y.png" }, cache_control: { type: "ephemeral" } },
+    ] }]);
+    expect(result.markdown).toContain("Tool result · file contents here");
+    expect(result.markdown).toContain("https\\:\\/\\/example\\.test\\/y\\.png");
+    expect(result.markdown).toContain("ephemeral");
+    expect(result.truncated).toBe(false);
   });
 });
