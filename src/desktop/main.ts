@@ -18,7 +18,7 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
-import { dataLabelOf, renderTextOf } from "../app/renderText";
+import { dataDocumentKind, dataLabelOf, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
@@ -338,7 +338,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       renderedReaderId = doc.id;
     };
     // A data document renders its readable view; its raw text stays the document (renderText.ts).
-    const view = renderTextOf(doc.name, doc.text, dataScale.get(doc.id) ?? 1);
+    const view = renderTextOf(doc.name, doc.text);
     try {
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
@@ -352,7 +352,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       content.setAttribute("aria-busy", "false");
       const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk, format: view.data?.label });
       status.textContent = `${parts.where} · ${parts.size}`;
-      if (view.data?.readable.truncated) content.append(moreBar(doc.id));
+      if (view.data?.readable.truncated) content.append(moreBar(doc.name));
       // A new open/action may have reported a newer failure while this render ran.
       const warnings = editing ? result.warnings.filter(warning => !warning.startsWith("This document is empty.")) : result.warnings;
       if (warnings.length && currentNotice === noticeGeneration) {
@@ -452,22 +452,21 @@ async function createDocument(): Promise<void> {
   await render();
 }
 
-/** Budget scale per data document ("Show more" doubles it, "Show all" lifts it); memory only. */
-const dataScale = new Map<string, number>();
-function moreBar(docId: string): HTMLElement {
+/** A cut-short readable view offers the next part and everything (budgets live in renderText). */
+function moreBar(name: string): HTMLElement {
   const bar = document.createElement("p");
   bar.className = "reader-data-more";
-  const button = (label: string, scale: () => number): HTMLButtonElement => {
+  const button = (label: string, widen: (name: string) => void): HTMLButtonElement => {
     const control = document.createElement("button");
     control.type = "button";
     control.textContent = label;
     control.addEventListener("click", () => {
-      dataScale.set(docId, scale());
+      widen(name);
       void render().then(() => content.querySelector<HTMLElement>(".reader-data-more button")?.focus({ preventScroll: true }));
     });
     return control;
   };
-  bar.append("This view was cut short. ", button("Show more", () => (dataScale.get(docId) ?? 1) * 2), " ", button("Show all", () => Infinity));
+  bar.append("This view was cut short. ", button("Show more", showMoreOf), " ", button("Show all", showAllOf));
   return bar;
 }
 
@@ -812,8 +811,10 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
+      const kindBefore = dataDocumentKind(target.name);
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
+      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;

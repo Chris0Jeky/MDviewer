@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dataDocumentKind, renderTextOf } from "../src/app/renderText";
+import { dataDocumentKind, renderTextOf, showAllOf, showMoreOf } from "../src/app/renderText";
 import { isMarkdownFile } from "../src/app/input";
 
 describe("renderTextOf, the one seam from document text to render text", () => {
@@ -26,8 +26,12 @@ describe("renderTextOf, the one seam from document text to render text", () => {
   it("scales the budget for Show more and lifts it for Show all", () => {
     const text = Array.from({ length: 700 }, (_, index) => JSON.stringify({ n: index })).join("\n");
     expect(renderTextOf("log.jsonl", text).data?.readable.truncated).toBe(true);
-    expect(renderTextOf("log.jsonl", text, 2).data?.readable.truncated).toBe(false);
-    expect(renderTextOf("log.jsonl", text, Infinity).data?.readable.truncated).toBe(false);
+    showMoreOf("log.jsonl");
+    expect(renderTextOf("log.jsonl", text).data?.readable.truncated).toBe(false);
+    const more = Array.from({ length: 3000 }, (_, index) => JSON.stringify({ n: index })).join("\n");
+    expect(renderTextOf("big.jsonl", more).data?.readable.truncated).toBe(true);
+    showAllOf("big.jsonl");
+    expect(renderTextOf("big.jsonl", more).data?.readable.truncated).toBe(false);
   });
 
   it("opens only the version 1 formats", () => {

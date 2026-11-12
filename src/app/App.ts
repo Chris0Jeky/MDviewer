@@ -474,7 +474,7 @@ export class App {
         await this.prepareExport(input);
         const snapshot = this.renderedSnapshot;
         if (!snapshot) throw new Error("No paginated document to export.");
-        const base = snapshot.name.replace(/\.(md|markdown)$/i, "") || "document";
+        const base = snapshot.name.replace(/\.(md|markdown|json|jsonc|jsonl|ndjson|txt|log)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
         let pages = 0;
         try {

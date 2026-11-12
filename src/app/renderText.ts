@@ -38,12 +38,17 @@ export function dataLabelOf(fileName: string): string | null {
 const BUDGET = { maxValues: 20_000, maxRecords: 500, maxLines: 20_000 };
 
 let last: { name: string; text: string; scale: number; result: RenderText } | null = null;
+/** Budget scale per document name, in memory only: "Show more" doubles it, "Show all" lifts it. */
+const scales = new Map<string, number>();
+export function showMoreOf(name: string): void { scales.set(name, (scales.get(name) ?? 1) * 2); }
+export function showAllOf(name: string): void { scales.set(name, Infinity); }
 
 /**
- * `scale` multiplies the view's budgets (the reader's "Show more"); Infinity shows everything.
- * The last result is kept: the reader and the workspace ask for the same document in turn.
+ * The view's budgets follow the document's scale (so the reader and the PDF workspace show the
+ * same cut). The last result is kept: the reader and the workspace ask for the same document.
  */
-export function renderTextOf(name: string, text: string, scale = 1): RenderText {
+export function renderTextOf(name: string, text: string): RenderText {
+  const scale = scales.get(name) ?? 1;
   if (last && last.name === name && last.text === text && last.scale === scale) return last.result;
   const kind = dataDocumentKind(name);
   const budget = (value: number): number => (scale === Infinity ? Number.MAX_SAFE_INTEGER : Math.round(value * scale));
