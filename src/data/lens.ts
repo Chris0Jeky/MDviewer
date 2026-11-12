@@ -29,7 +29,7 @@ function codeLike(text: string): boolean {
   return /\n/.test(text) && /^(?:\s*(?:const |let |def |class |import |SELECT |#!)|\s*[{}]\s*$)/m.test(text);
 }
 
-function hint(value: JsonValue, key: string, timeZone: string): string {
+export function hint(value: JsonValue, key: string, timeZone: string): string {
   const text = raw(value);
   if (/(^|_)(time|date|at|ts|timestamp|created|updated)$/i.test(key)) {
     let date: Date | undefined;
@@ -86,7 +86,8 @@ export class Lens {
   private stopped = false;
   private prepaid = 0;
   private readonly maxValues: number;
-  private readonly timeZone: string;
+  readonly timeZone: string;
+  private literalStrings = false;
   private readonly counts = new WeakMap<JsonValue, number>();
   private readonly embedded = new WeakMap<JsonValue, JsonValue>();
 
@@ -127,7 +128,7 @@ export class Lens {
     return count;
   }
 
-  private take(n = 1): boolean {
+  take(n = 1): boolean {
     if (this.prepaid >= n) { this.prepaid -= n; return true; }
     if (this.stopped) return false;
     if (this.shown + n > this.maxValues) {
@@ -144,7 +145,7 @@ export class Lens {
 
   private block(value: JsonValue, key: string): boolean {
     return value.kind === "string" && (this.embedded.has(value) || proseKeys.has(key.toLowerCase())
-      || clearlyMarkdown(value.value) || value.value.length > 160 || /[\r\n]/.test(value.value));
+      || (!this.literalStrings && clearlyMarkdown(value.value)) || value.value.length > 160 || /[\r\n]/.test(value.value));
   }
 
   private inline(value: JsonValue, key = ""): string {
@@ -160,12 +161,12 @@ export class Lens {
     return indent + "  ";
   }
 
-  private string(value: Extract<JsonValue, { kind: "string" }>, key: string, path: string, level: number, indent: string): void {
-    const inside = this.embedded.get(value);
+  private string(value: Extract<JsonValue, { kind: "string" }>, key: string, path: string, level: number, indent: string, prose = false): void {
+    const inside = prose ? undefined : this.embedded.get(value);
     if (inside) {
       const next = this.heading("(JSON in a string)", path, level, indent);
       this.render(inside, path, level + 1, next);
-    } else if (value.value && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(value.value))) {
+    } else if (!this.literalStrings && value.value && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(value.value))) {
       for (const line of value.value.split(/\r\n|\r|\n/)) this.line(`${indent}> ${line}`, path);
       this.line();
     } else if (codeLike(value.value)) {
@@ -287,6 +288,27 @@ export class Lens {
       }
     }
     this.line();
+  }
+
+  /** Generic data inside a conversation must not opt into message Markdown. */
+  renderLiteral(value: JsonValue, path: string, level = 3): void {
+    this.literalStrings = true;
+    try { this.render(value, path, level); }
+    finally { this.literalStrings = false; }
+  }
+
+  /** Reuse the generic object layout for members of an already charged container. */
+  renderMembers(value: Extract<JsonValue, { kind: "object" }>, path: string, level = 3): void {
+    // Credit for the container only; an enclosing detail keeps whatever credit it has left.
+    const outer = this.prepaid;
+    this.prepaid = outer + 1;
+    try { this.renderLiteral(value, path, level); }
+    finally { this.prepaid = Math.min(this.prepaid, outer); }
+  }
+
+  /** A message is prose even when its text happens to parse as JSON. */
+  renderProse(value: Extract<JsonValue, { kind: "string" }>, path: string): void {
+    if (this.take(this.count(value))) this.string(value, "content", path, 3, "", true);
   }
 
   finish(): string { return this.lines.join("\n").trimEnd() + "\n"; }
