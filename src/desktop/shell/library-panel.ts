@@ -70,7 +70,7 @@ export function mountLibrary(host: HTMLElement): () => void {
   projects.heading.after(addProject);
   host.append(pinned.root, recent.root, projects.root);
 
-  const open = (id: string) => () => { void openLibraryEntry(id).then(() => native.library.markSeen(id)).then(refresh, () => undefined); };
+  const open = (id: string) => () => { void openLibraryEntry(id).then(refresh, () => undefined); };
 
   async function expand(project: LibraryEntry, item: HTMLElement, toggle: HTMLButtonElement): Promise<void> {
     const expanded = toggle.getAttribute("aria-expanded") === "true";
@@ -109,7 +109,9 @@ export function mountLibrary(host: HTMLElement): () => void {
       const unpin = node("button", "shell-library-mini", "Unpin");
       unpin.type = "button";
       unpin.setAttribute("aria-label", `Unpin ${entry.name}`);
-      unpin.addEventListener("click", () => { void native.library.unpin(entry.id).then(refresh); });
+      unpin.addEventListener("click", () => {
+        void native.library.unpin(entry.id).then(refresh, error => { status.textContent = error instanceof Error ? error.message : String(error); });
+      });
       item.append(unpin);
       return item;
     }));
@@ -127,7 +129,11 @@ export function mountLibrary(host: HTMLElement): () => void {
   }
 
   void refresh();
-  const onFocus = (): void => { void refresh(); };
+  // Refresh when the window regains focus (files may have changed) unless the user is in the list,
+  // and whenever a pin, project or clear happens elsewhere.
+  const onFocus = (): void => { if (!host.contains(document.activeElement)) void refresh(); };
+  const onChanged = (): void => { void refresh(); };
   window.addEventListener("focus", onFocus);
-  return () => window.removeEventListener("focus", onFocus);
+  window.addEventListener("mdviewer:library-changed", onChanged);
+  return () => { window.removeEventListener("focus", onFocus); window.removeEventListener("mdviewer:library-changed", onChanged); };
 }

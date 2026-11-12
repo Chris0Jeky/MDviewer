@@ -66,15 +66,21 @@ mountSelectionCopy(content);
 
 // Screen theme: a fixed choice, or follow Windows (light or dark) when the setting says so.
 const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
+const systemTheme = (): "light" | "dark" => systemDark?.matches ? "dark" : "light";
 function applyTheme(): void {
-  document.documentElement.dataset.appTheme = settings.followSystemTheme
-    ? (systemDark?.matches ? "dark" : "light") : settings.screenTheme;
+  if (settings.followSystemTheme && settings.screenTheme !== systemTheme()) {
+    // Stored too, so the editing workspace (which reads screenTheme) matches.
+    settings.screenTheme = systemTheme();
+    saveSettings({ ...loadSettings(), screenTheme: settings.screenTheme, followSystemTheme: true });
+  }
+  document.documentElement.dataset.appTheme = settings.screenTheme;
 }
-systemDark?.addEventListener?.("change", applyTheme);
+systemDark?.addEventListener?.("change", () => { if (!app) applyTheme(); });
 applyTheme();
 function setTheme(choice: "light" | "dark" | "sepia" | "system"): void {
   if (choice === "system") settings.followSystemTheme = true;
   else { settings.followSystemTheme = false; settings.screenTheme = choice; }
+  if (choice === "system") settings.screenTheme = systemTheme();
   saveSettings({ ...loadSettings(), screenTheme: settings.screenTheme, followSystemTheme: settings.followSystemTheme });
   applyTheme();
 }
@@ -147,6 +153,11 @@ function syncDocuments(): void {
   const labels = documentLabels(open);
   tabs.render(open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), active?.id ?? null, changingMode);
   const target = docs.saveTarget();
+  const shown = !app && active && renderedReaderId === active.id ? docs.reader.active : null;
+  if (shown) {
+    const parts = statusParts({ name: shown.name, path: shown.binding?.path, text: shown.text, dirty: shown.dirty, disk: shown.binding?.disk });
+    status.textContent = `${parts.where} · ${parts.size}`;
+  }
   saveState.textContent = target
     ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
     : "";
@@ -433,6 +444,11 @@ async function returnToReader(): Promise<void> {
     workspace.hidden = true; shell.hidden = false;
     document.body.classList.remove("desktop-editing");
     Object.assign(settings, loadSettings());
+    // A theme picked in the workspace is an explicit choice: stop following Windows.
+    if (settings.followSystemTheme && settings.screenTheme !== systemTheme()) {
+      settings.followSystemTheme = false;
+      saveSettings({ ...loadSettings(), followSystemTheme: false });
+    }
     applyTheme();
     report("");
     await render();
@@ -461,10 +477,11 @@ function closeDocumentById(id: string): void {
   docs.closeReaderDocument(doc.id);
   report("");
   if (wasActive) void render(); else syncDocuments();
+  if (!docs.reader.documents.length && (document.activeElement === document.body || !document.activeElement)) newButtons[0]?.focus();
 }
 
 function activateDocument(id: string): void {
-  if (changingMode || docs.reader.activeId === id) return;
+  if (changingMode || docs.reader.activeId === id || !docs.reader.documents.some(doc => doc.id === id)) return;
   visit(id, docs.reader.activeId);
   ++generation; docs.reader.activeId = id; report(""); void render();
 }
@@ -673,7 +690,10 @@ registerCommand({ id: "navigate.back", title: "Back", keys: ["Alt+ArrowLeft"], e
 registerCommand({ id: "navigate.forward", title: "Forward", keys: ["Alt+ArrowRight"], enabled: () => !app && forwardStack.length > 0,
   run: () => step(forwardStack, backStack) });
 registerCommand({ id: "view.textLarger", title: "Larger text", keys: ["Mod+="], enabled: () => !app, run: () => resizeText(1) });
-installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
+const modalOpen = (): boolean => !!document.querySelector("dialog[open]");
+installShortcuts(window, command => !app && !modalOpen() && !command.id.startsWith("document.save"));
+// In the workspace Ctrl+P is the paginated print as well, never the webview's own print.
+installShortcuts(window, command => !!app && command.id === "export.pdf");
 // Save works in every mode and must claim Ctrl+S before the workspace's own
 // Save Markdown (copy) shortcut, so it listens in the capture phase.
 const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
@@ -682,7 +702,7 @@ const somethingToSave = (): boolean => { const target = docs.saveTarget(); retur
 registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
 registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
 registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
-installShortcuts(window, command => native.available && command.id.startsWith("document.save"), { capture: true });
+installShortcuts(window, command => native.available && !modalOpen() && command.id.startsWith("document.save"), { capture: true });
 
 // ---- Shell (S3): tabs, More menu, panel, palette, print. -------------------------------
 registerCommand({ id: "document.next", title: "Next document", keys: ["Alt+Shift+N"], enabled: () => !app && docs.reader.documents.length > 1, run: () => stepDocument(1) });
@@ -692,13 +712,16 @@ registerCommand({ id: "document.choose", title: "Go to the document tabs", keys:
 // The left panel and the palette load on first use, after the first document has painted.
 let panelHost: { show(id: string): void } | null = null;
 let panelLoading: Promise<void> | null = null;
-async function openPanel(id?: string): Promise<void> {
+const narrow = (): boolean => !!window.matchMedia?.("(max-width: 860px)").matches;
+async function openPanel(id?: string, focus = false): Promise<void> {
   panel.hidden = false;
   panelToggle.setAttribute("aria-expanded", "true");
   document.body.classList.add("shell-panel-open");
   panelLoading ??= import("./shell/panel").then(module => { panelHost = module.mountPanelHost(panel, id ?? null); });
-  await panelLoading;
+  try { await panelLoading; }
+  catch (error) { panelLoading = null; closePanel(); report(`Could not open the panel: ${errorText(error)}`); return; }
   if (id) panelHost?.show(id);
+  if (focus || narrow()) panel.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
 }
 function closePanel(): void {
   if (panel.hidden) return;
@@ -709,26 +732,39 @@ function closePanel(): void {
   if (hadFocus) panelToggle.focus();
 }
 panelToggle.addEventListener("click", () => { if (panel.hidden) void openPanel(); else closePanel(); });
-panel.addEventListener("keydown", event => {
-  // As a drawer on a narrow window, Escape closes the panel.
-  if (event.key === "Escape" && window.matchMedia("(max-width: 860px)").matches) { event.preventDefault(); closePanel(); }
+// Below 860 px the panel is a drawer over the document: it must never hide what has focus,
+// so it closes when focus leaves it, after following a link in it, and on Escape.
+panel.addEventListener("focusout", event => {
+  const next = event.relatedTarget as Node | null;
+  if (narrow() && next && !panel.contains(next) && next !== panelToggle) closePanel();
+});
+panel.addEventListener("click", event => {
+  if (narrow() && (event.target as Element | null)?.closest("#reader-outline a, .shell-library-open")) closePanel();
+});
+window.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !event.defaultPrevented && narrow() && !panel.hidden && !modalOpen()) { event.preventDefault(); closePanel(); }
 });
 if (native.available) {
   registerPanel({ id: "library", title: "Library", mount: host => {
     let teardown: (() => void) | null = null;
-    void import("./shell/library-panel").then(module => { teardown = module.mountLibrary(host); });
+    void import("./shell/library-panel").then(module => { teardown = module.mountLibrary(host); },
+      error => { host.textContent = `The library could not load: ${errorText(error)}`; });
     return () => teardown?.();
   } });
 }
 registerPanel({ id: "outline", title: "Outline", mount: host => { host.append(outline); return () => panel.append(outline); } });
 registerCommand({ id: "view.panel", title: "Show or hide the library and outline", keys: ["Mod+B"], enabled: () => !app,
-  run: () => { if (panel.hidden) void openPanel(); else closePanel(); } });
-registerCommand({ id: "view.outline", title: "Show the outline", enabled: () => !app, run: () => openPanel("outline") });
-if (native.available) registerCommand({ id: "view.library", title: "Show the library", enabled: () => !app, run: () => openPanel("library") });
+  run: () => { if (panel.hidden) void openPanel(undefined, true); else closePanel(); } });
+registerCommand({ id: "view.outline", title: "Show the outline", enabled: () => !app, run: () => openPanel("outline", true) });
+if (native.available) registerCommand({ id: "view.library", title: "Show the library", enabled: () => !app, run: () => openPanel("library", true) });
 
+let paletteSelection: [number, number] | null = null;
 registerCommand({ id: "palette.open", title: "All commands and files…", keys: ["Mod+K"], enabled: () => !app && !changingMode,
   run: async () => {
-    const { openPalette } = await import("./shell/palette");
+    paletteSelection = selectionRange(content, window.getSelection());
+    let openPalette: typeof import("./shell/palette").openPalette;
+    try { ({ openPalette } = await import("./shell/palette")); }
+    catch (error) { report(`Could not open the command palette: ${errorText(error)}`); return; }
     const { docs: open, active } = docs.list();
     const labels = documentLabels(open);
     await openPalette({
@@ -794,7 +830,9 @@ registerCommand({ id: "document.copyReference", title: "Copy reference (path and
         .sort((a, b) => b.length - a.length)[0];
       if (root) where = where.slice(root.length + 1).replace(/\\/g, "/");
     }
-    const range = selectionRange(content, window.getSelection());
+    // Run from the palette, the reader selection is the one captured when it opened.
+    const range = selectionRange(content, window.getSelection()) ?? paletteSelection;
+    paletteSelection = null;
     copyToClipboard(range ? `${where}:${range[0] === range[1] ? range[0] : `${range[0]}-${range[1]}`}` : where, "Copied a reference to the document.");
   } });
 registerCommand({ id: "document.reload", title: "Reload from disk", enabled: () => !!bound() && !changingMode && !nativeSaveBusy, run: reloadFromDisk });
@@ -937,10 +975,11 @@ if (native.available) {
       if (!target?.binding) return;
       report(await native.library.pinDocument(target.binding.token)
         ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+      window.dispatchEvent(new Event("mdviewer:library-changed"));
     } });
   registerCommand({ id: "library.addProject", title: "Pin a project folder…", enabled: () => !changingMode && !nativeSaveBusy,
     run: async () => {
-      try { if (await native.library.addProject()) report("Project pinned to the library."); }
+      try { if (await native.library.addProject()) { report("Project pinned to the library."); window.dispatchEvent(new Event("mdviewer:library-changed")); } }
       catch (error) { report(errorText(error)); }
     } });
   registerCommand({ id: "session.toggleRestore", title: "Reopen last session on launch (on/off)",
@@ -953,7 +992,7 @@ if (native.available) {
   registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
     run: async () => {
       if (!window.confirm("Clear the library? Recent files, pinned files and pinned projects are forgotten. No file is deleted.")) return;
-      try { await native.library.clear(); report("Library cleared."); }
+      try { await native.library.clear(); report("Library cleared."); window.dispatchEvent(new Event("mdviewer:library-changed")); }
       catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };

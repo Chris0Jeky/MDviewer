@@ -28,10 +28,10 @@
 .shell-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Unsaved changes: a filled dot (the Library's on-disk change mark is a hollow diamond). */
 .shell-dirty { position: absolute; right: 13px; width: 7px; height: 7px; border-radius: 50%; background: var(--reader-fg); }
-.desktop-reader .shell-tab-close { position: absolute; right: 5px; top: 50%; width: 22px; height: 22px; margin-top: -11px; padding: 0; display: none; place-items: center; color: var(--reader-fg); font-size: 15px; line-height: 1; }
+.desktop-reader .shell-tab-close { position: absolute; right: 4px; top: 50%; width: 24px; height: 24px; margin-top: -12px; padding: 0; display: none; place-items: center; color: var(--reader-fg); font-size: 15px; line-height: 1; }
 .desktop-reader .shell-tab-close:hover { background: var(--reader-line); }
-.shell-tab:hover .shell-tab-close, .shell-tab:focus-within .shell-tab-close { display: grid; }
-.shell-tab:hover .shell-dirty, .shell-tab:focus-within .shell-dirty { display: none; }
+.shell-tab:hover .shell-tab-close { display: grid; }
+.shell-tab:hover .shell-dirty { display: none; }
 
 /* ---- More menu ---- */
 .shell-menu { position: absolute; top: calc(var(--shell-bar) - 2px); right: 8px; z-index: 40; width: 280px; max-height: calc(100dvh - var(--shell-bar) - 16px); overflow: auto; padding: 6px; background: var(--reader-paper); color: var(--reader-fg); border: 1px solid var(--reader-line); border-radius: 8px; box-shadow: var(--reader-shadow); }
@@ -41,7 +41,9 @@
 .shell-menu-check { width: 14px; color: var(--reader-accent); }
 .shell-menu-title { flex: 1; }
 .shell-menu-keys { color: var(--reader-muted); font-size: 12px; }
-.shell-menu-item[aria-disabled="true"] { opacity: .5; cursor: default; }
+/* Faded text, not opacity, so a focus ring on a disabled item keeps its contrast. */
+.shell-menu-item[aria-disabled="true"] { color: var(--reader-muted); cursor: default; }
+.shell-menu-item[aria-disabled="true"] .shell-menu-keys { opacity: .7; }
 .shell-menu-separator { height: 1px; margin: 6px 0; background: var(--reader-line); }
 
 /* ---- Left panel ---- */
@@ -66,7 +68,7 @@
 .desktop-reader .shell-library-open, .desktop-reader .shell-library-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: none; text-align: left; }
 .desktop-reader .shell-library-open:hover, .desktop-reader .shell-library-toggle:hover { background: var(--reader-hover); }
 .shell-library-toggle { font-weight: 600; }
-.shell-library-toggle::before { content: "›"; width: 10px; color: var(--reader-muted); transition: transform .12s; }
+.shell-library-toggle::before { content: "›" / ""; width: 10px; color: var(--reader-muted); transition: transform .12s; }
 .shell-library-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
 .shell-library-files { padding-left: 14px; }
 .shell-library-name { flex: 0 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -94,10 +96,12 @@
 .shell-palette[open] { display: flex; }
 .shell-palette::backdrop { background: rgb(20 26 36 / .25); }
 .shell-palette-input { flex: none; margin: 0; padding: 12px 16px; border: 0; border-bottom: 2px solid var(--reader-accent); background: none; color: inherit; font: inherit; font-size: 15px; outline: none; }
+.shell-palette-input::placeholder { color: var(--reader-muted); opacity: 1; }
 .shell-palette-list { flex: 1; min-height: 0; overflow: auto; padding: 6px; }
 .shell-palette-group { padding: 8px 10px 2px; font-size: 12px; font-weight: 600; color: var(--reader-muted); }
 .shell-palette-option { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 4px 10px; border-radius: 6px; cursor: default; }
-.shell-palette-option[aria-selected="true"] { background: var(--reader-sel); }
+/* The active option has an accent bar as well as the tint (the tint alone is under 3:1). */
+.shell-palette-option[aria-selected="true"] { background: var(--reader-sel); box-shadow: inset 3px 0 0 var(--reader-accent); }
 .shell-palette-detail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--reader-muted); font-size: 12px; text-align: right; }
 .shell-palette-option kbd { margin-left: auto; font: 11.5px system-ui, sans-serif; padding: 1px 5px; border: 1px solid var(--reader-line); border-radius: 4px; color: var(--reader-muted); }
 .shell-palette-empty { padding: 12px; color: var(--reader-muted); }
@@ -109,13 +113,14 @@
   .shell-panel { position: absolute; left: 0; top: 0; bottom: 0; z-index: 30; box-shadow: var(--reader-shadow); }
   .shell-tab { max-width: 160px; }
 }
-@media (prefers-reduced-motion: reduce) { .shell-library-toggle::before { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .shell-library-toggle::before { transition: none; } .desktop-reader .reader-scroll { scroll-behavior: auto; } }
 @media (forced-colors: active) {
   .shell-tab [role="tab"][aria-selected="true"]::after, .shell-panel-tabs [role="tab"][aria-selected="true"]::after { background: Highlight; }
   .shell-dirty { background: CanvasText; forced-color-adjust: none; }
   .shell-changed { border-color: CanvasText; }
   .shell-menu, .shell-palette, .shell-panel { border: 1px solid CanvasText; }
   .shell-palette-option[aria-selected="true"] { outline: 2px solid Highlight; }
+  .desktop-reader .shell-bar [aria-expanded="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
 @media print { .shell-bar, .shell-panel, .shell-menu { display: none !important; } }
 .desktop-reader .shell-palette-input:focus-visible { outline: none; } /* the accent underline is the focus indicator */

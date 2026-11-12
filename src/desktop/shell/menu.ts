@@ -38,7 +38,7 @@ export function mountMenu(button: HTMLButtonElement, menu: HTMLElement, entries:
     if (entry.id) element.id = entry.id;
     element.addEventListener("click", () => {
       if (element.getAttribute("aria-disabled") === "true") return;
-      close(false);
+      close(true);
       runCommand(entry.command);
     });
     items.push({ element, entry });
@@ -111,7 +111,7 @@ export function mountMenu(button: HTMLButtonElement, menu: HTMLElement, entries:
     else if (event.key === "End") move(list.length - 1);
     else if (event.key === "Escape") { event.preventDefault(); close(); }
     else if (event.key === "Tab") close(false);
-    else if (event.key.length === 1 && /\S/.test(event.key)) {
+    else if (event.key.length === 1 && /\S/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
       // Type-ahead: the next item whose title starts with the letter.
       const letter = event.key.toLowerCase();
       for (let step = 1; step <= list.length; step++) {

@@ -149,3 +149,41 @@ test("shell screenshots: three themes, a narrow window and forced colors", async
   await forcedPage.screenshot({ path: test.info().outputPath("shell-forced-colors.png") });
   await forced.close();
 });
+
+test("review fixes: modal palette, workspace Ctrl+P, narrow drawer and focus after the last tab", async ({ page }) => {
+  await openFiles(page, DOCS);
+  await readyReader(page, "Alpha");
+  // Shortcuts never run under the open palette; it announces its result count.
+  await page.keyboard.press("Control+k");
+  const input = page.getByRole("combobox", { name: "Search commands and files" });
+  await expect(input).toBeFocused();
+  await page.keyboard.press("Control+w");
+  await expect(documentTabs(page)).toHaveCount(2);
+  await input.fill("zzzz-nothing");
+  await expect(page.locator(".shell-palette [role=status]")).toHaveText("No matches");
+  await page.keyboard.press("Escape");
+
+  // Ctrl+P inside the workspace prints the paginated document too.
+  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await readyWorkspace(page, DOCS[0]!.text);
+  await page.keyboard.press("Control+p");
+  await expect.poll(() => page.evaluate(() => window.__desktopEvidence.prints.length)).toBe(1);
+  await page.getByRole("button", { name: "← Reading view", exact: true }).click();
+  await readyReader(page, "Alpha");
+
+  // Narrow: the drawer never hides what has focus.
+  await page.setViewportSize({ width: 760, height: 800 });
+  await page.keyboard.press("Control+b");
+  await expect(page.locator("#shell-panel")).toBeVisible();
+  await expect(page.locator("#shell-panel [role=tab][aria-selected=true]")).toBeFocused();
+  await page.locator("#reader-document").focus();
+  await expect(page.locator("#shell-panel")).toBeHidden();
+
+  // Closing the last document moves focus to New, not to the page.
+  await documentTabs(page).first().focus();
+  await page.keyboard.press("Delete");
+  await readyReader(page, "Beta");
+  await documentTabs(page).first().focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator("#reader-new-empty")).toBeFocused();
+});

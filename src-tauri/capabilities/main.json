@@ -9,6 +9,7 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-destroy",
+    "core:window:allow-set-always-on-top",
     "allow-open-files",
     "allow-take-pending-files",
     "allow-open-external",

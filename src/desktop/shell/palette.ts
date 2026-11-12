@@ -56,10 +56,14 @@ export async function openPalette(source: PaletteSource): Promise<void> {
   list.setAttribute("role", "listbox");
   list.setAttribute("aria-label", "Results");
   list.className = "shell-palette-list";
+  // Announces how many results the query has (the list itself is not a live region).
+  const count = document.createElement("p");
+  count.className = "shell-visually-hidden";
+  count.setAttribute("role", "status");
   const hint = document.createElement("p");
   hint.className = "shell-palette-hint";
   hint.textContent = "↑ ↓ move · Enter run · Esc close";
-  dialog.append(input, list, hint);
+  dialog.append(input, list, count, hint);
   document.body.append(dialog);
 
   const commandEntries = (): Entry[] => listCommands()
@@ -114,6 +118,7 @@ export async function openPalette(source: PaletteSource): Promise<void> {
       option.addEventListener("pointerdown", event => { event.preventDefault(); choose(index); });
       list.append(option);
     });
+    count.textContent = results.length ? `${results.length} ${results.length === 1 ? "result" : "results"}` : "No matches";
     if (!results.length) {
       const none = document.createElement("div");
       none.className = "shell-palette-empty";
@@ -151,7 +156,11 @@ export async function openPalette(source: PaletteSource): Promise<void> {
   dialog.addEventListener("close", () => {
     dialog?.remove();
     dialog = null;
-    if (returnTo?.isConnected) returnTo.focus();
+    // A command may have rebuilt the element that had focus (a tab); fall back to the active tab.
+    const target = returnTo?.isConnected ? returnTo
+      : document.querySelector<HTMLElement>('#shell-tabs [role="tab"][aria-selected="true"]');
+    if (target && !target.contains(document.activeElement) && document.activeElement === document.body) target.focus();
+    else if (returnTo?.isConnected) returnTo.focus();
   });
   dialog.addEventListener("pointerdown", event => { if (event.target === dialog) close(); });
 
