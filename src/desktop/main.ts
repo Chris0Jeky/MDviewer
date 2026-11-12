@@ -407,7 +407,7 @@ async function readFiles(files: File[]): Promise<void> {
       const text = decodeMarkdown(bytes);
       // A data document's readable view can outgrow its file: confirm on the view too. (If its
       // parser cannot load, the document opens and its render shows the error.)
-      if (bytes.length <= SIZE_SOFT_BYTES && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
+      if (bytes.length <= SIZE_SOFT_BYTES && dataDocumentKind(file.name) && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
         && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
         && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
       batch.documents.push({ name: file.name, text, bytes: bytes.length });
