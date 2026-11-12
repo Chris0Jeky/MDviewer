@@ -17,7 +17,7 @@ interface Region { sheet: number; u0: number; v0: number; u1: number; v1: number
  * glyphs, and html2canvas-pro drew each hyphen-wrapped word over the start of its line and
  * indented the continuation row in Download PDF. Every continuation row of every wrapped line in
  * an unshrunk code block must start with ink where the live preview starts it. Tier 3 blocks drawn
- * with CSS `zoom` still misplace wrapped rows in the raster for another reason (#255) and are
+ * with CSS `zoom` still misplace wrapped rows in the raster for another reason (#258) and are
  * excluded here. Adapted from the draft raster probe written while reviewing #237.
  */
 test("Download PDF draws wrapped code lines where the preview does, without hyphenation", async ({ page }) => {
@@ -34,7 +34,7 @@ test("Download PDF draws wrapped code lines where the preview does, without hyph
       hyphens.add(getComputedStyle(pre).hyphens);
       const code = pre.querySelector("code");
       if (code) hyphens.add(getComputedStyle(code).hyphens);
-      if (pre.hasAttribute("data-shrunk")) continue; // #255
+      if (pre.hasAttribute("data-shrunk")) continue; // #258
       const sheet = pre.closest(".pagedjs_page")!;
       const paper = sheet.getBoundingClientRect();
       const u = (x: number) => (x - paper.left) / paper.width;
