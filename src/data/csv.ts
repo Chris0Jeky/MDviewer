@@ -1,7 +1,7 @@
 import type { JsonValue } from "./json";
 import type { Problem } from "./types";
 
-export interface CsvResult { value: Extract<JsonValue, { kind: "array" }>; columns: number; problems: Problem[] }
+export interface CsvResult { value: Extract<JsonValue, { kind: "array" }>; columns: number; keys: string[]; problems: Problem[] }
 
 /** RFC 4180 fields, with all three common record terminators. No scalar coercion. */
 export function parseCsv(text: string, delimiter = ","): CsvResult {
@@ -36,8 +36,9 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
           while (at < text.length && ![delimiter, "\r", "\n"].includes(text[at]!)) value += next();
         }
       } else {
+        let quoted = false; // one problem per field, however many stray quotes it holds
         while (at < text.length && ![delimiter, "\r", "\n"].includes(text[at]!)) {
-          if (text[at] === '"') problems.push({ line, column, message: "Quote in an unquoted field" });
+          if (text[at] === '"' && !quoted) { quoted = true; problems.push({ line, column, message: "Quote in an unquoted field" }); }
           value += next();
         }
       }
@@ -53,10 +54,12 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
   const columns = rows.reduce((n, row) => Math.max(n, row.length), header.length);
   // Reserve names globally: literal headers such as "x (2)" or "column 3" must not collide.
   const used = new Set<string>();
+  const nextSuffix = new Map<string, number>(); // per base name, so many duplicates stay linear
   const keys = Array.from({ length: columns }, (_, index) => {
     const base = header[index]?.value || `column ${index + 1}`;
-    let key = base, suffix = 2;
+    let key = base, suffix = nextSuffix.get(base) ?? 2;
     while (used.has(key)) key = `${base} (${suffix++})`;
+    nextSuffix.set(base, suffix);
     used.add(key);
     return key;
   });
@@ -65,6 +68,6 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
       kind: "object", line: row[0]!.line, column: row[0]!.column,
       entries: row.map((value, index) => ({ key: keys[index]!, value })),
     })) },
-    columns, problems,
+    columns, keys, problems,
   };
 }

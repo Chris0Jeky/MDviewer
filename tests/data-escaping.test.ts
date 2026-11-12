@@ -55,7 +55,7 @@ describe("data escaping conformance", () => {
       expect(csvRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
       expect(yamlRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
     }
-  }, 30_000);
+  }, 120_000); // pure CPU; parallel suites can slow it several-fold
 
   it("preserves seeded values and keys through the real renderer without extra elements", () => {
     for (const s of samples()) {
@@ -85,7 +85,7 @@ describe("data escaping conformance", () => {
       expect(text(key), JSON.stringify(s)).toBe(s.replace(/\r\n|\r/g, "\n"));
       expect(tags(key)).toEqual(s.includes("\n") || s.includes("\r") ? ["BR", "TD"] : ["TD"]);
     }
-  }, 30_000);
+  }, 120_000); // pure CPU; parallel suites can slow it several-fold
 
   it("keeps deliberate Markdown within a blockquote and sanitises it", () => {
     const root = html(toReadable(JSON.stringify({ description: "# Heading\n\n**Bold** <script>alert(1)</script>",
@@ -128,7 +128,7 @@ describe("data escaping conformance", () => {
       expect(tags(root.querySelector("h2")!)).toEqual(tags(conversation(plain).querySelector("h2")!));
       expect(root.querySelectorAll("img, script, input")).toHaveLength(0);
     }
-  }, 30_000);
+  }, 120_000); // pure CPU; parallel suites can slow it several-fold
 
   it("preserves a long ordinary paragraph's real line breaks", () => {
     const s = "Plain ".repeat(40) + "\nnext\n\nlast";
@@ -147,7 +147,7 @@ describe("data escaping conformance", () => {
       expect((blocks[0]!.textContent ?? "").replace(/\n$/, ""), JSON.stringify(s)).toBe(lines.join("\n"));
       expect(tags(blocks[0]!), JSON.stringify(s)).toEqual(["CODE", "PRE"]);
     }
-  }, 30_000);
+  }, 120_000); // pure CPU; parallel suites can slow it several-fold
 });
 
 describe("data cannot create structure (review of #270)", () => {

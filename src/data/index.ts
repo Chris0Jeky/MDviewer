@@ -118,6 +118,13 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
   return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
 }
 
+/** At most 100 problems are listed; the rest are counted (the full list stays in `problems`). */
+function problemLines(problems: readonly Problem[]): string[] {
+  const lines = problems.slice(0, 100).map(p => `Line ${p.line}, column ${p.column}: ${cellText(p.message)}`);
+  if (problems.length > 100) lines.push(`And ${count(problems.length - 100, "more problem")}.`);
+  return lines;
+}
+
 function structured(text: string, kind: "yaml" | "toml" | "csv", options: ReadableOptions, lens: Lens): Readable {
   let problems: Problem[];
   const format = kind === "csv" && /\.tsv$/i.test(options.fileName ?? "") ? "TSV" : kind.toUpperCase();
@@ -131,6 +138,8 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
     const csv = parseCsv(text, format === "TSV" ? "\t" : ",");
     problems = csv.problems;
     lens.line(`${format} · ${size(text)} · ${count(csv.value.items.length, "row")}, ${count(csv.columns, "column")}`); lens.line();
+    // A header with no rows (a template) still names its columns.
+    if (!csv.value.items.length && csv.keys.length) { lens.line(`Columns: ${csv.keys.map(cellText).join(", ")}`, "$"); lens.line(); }
     lens.total = lens.count(csv.value);
     // Charge whole rows to the values budget, including their containers and cells. No 500-row cap.
     let cost = 1, shown = 0;
@@ -155,7 +164,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
     const values = result.values;
     lens.line(`${format} · ${size(text)} · ${invalid ? "invalid document" : values.length > 1 ? count(values.length, "document") : cellText(shape(values[0]!))}`); lens.line();
     if (invalid) {
-      for (const p of problems) { lens.line(`Line ${p.line}, column ${p.column}: ${cellText(p.message)}`); lens.line(); }
+      for (const line of problemLines(problems)) { lens.line(line); lens.line(); }
       lens.line(fence(text));
     } else {
       lens.total = values.reduce((n, value) => n + lens.count(value), 0);
@@ -188,7 +197,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
   if (!invalid && (problems.length || lens.problems.length)) {
     problems.push(...lens.problems);
     lens.line(); lens.line("## Problems", "$"); lens.line();
-    for (const p of problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+    for (const line of problemLines(problems)) lens.line(`- ${line}`, "$");
   }
   return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
 }

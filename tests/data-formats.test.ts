@@ -232,3 +232,31 @@ describe("CSV and TSV fields", () => {
     expect(parseCsv('a\tb\nx\ty').columns).toBe(1);
   });
 });
+
+describe("hostile sizes (review of #281)", () => {
+  it("parses a very wide TOML table in linear time", () => {
+    const text = Array.from({ length: 150_000 }, (_, i) => `k${i} = ${i}`).join("\n");
+    const started = performance.now();
+    const view = toReadable(text, "toml", { maxValues: 10 });
+    expect(view.problems).toEqual([]);
+    // Quadratic key checks took minutes here; linear is well under a second.
+    expect(performance.now() - started).toBeLessThan(15_000);
+  }, 60_000);
+
+  it("lists at most 100 problems and counts one stray quote per field", () => {
+    const view = toReadable("a\n" + '5"x"\n'.repeat(5_000), "csv");
+    expect(view.problems).toHaveLength(5_000);
+    expect(view.markdown.match(/^- Line /gm)?.length).toBe(100);
+    expect(view.markdown).toContain("- And 4,900 more problems.");
+  });
+
+  it("names many duplicate headers without a quadratic search", () => {
+    const view = toReadable(Array.from({ length: 50_000 }, () => "x").join(",") + "\n", "csv", { maxValues: 5 });
+    expect(view.markdown).toContain("50,000 columns");
+    expect(view.markdown).toContain("x \\(50000\\)");
+  }, 60_000);
+
+  it("names the columns of a header-only CSV", () => {
+    expect(toReadable("name,age\n", "csv").markdown).toContain("Columns: name, age");
+  });
+});

@@ -11,7 +11,8 @@ class TomlProblem extends Error {
 export function parseToml(text: string): ParseResult {
   let at = 0, line = 1, column = 1;
   const pos = (): { line: number; column: number } => ({ line, column });
-  const tables = new WeakMap<Table, { defined: boolean; sealed: boolean; dotted: boolean }>();
+  // `keys` indexes each table's entries by key, so a wide table is linear, not quadratic.
+  const tables = new WeakMap<Table, { defined: boolean; sealed: boolean; dotted: boolean; keys: Map<string, JsonValue> }>();
   const tableArrays = new WeakSet<List>();
   function fail(message: string, location = pos()): never { throw new TomlProblem({ message, ...location }); }
   function next(): string {
@@ -45,7 +46,7 @@ export function parseToml(text: string): ParseResult {
   }
   function table(defined: boolean, location = pos()): Table {
     const value: Table = { ...location, kind: "object", entries: [] };
-    tables.set(value, { defined, sealed: false, dotted: false });
+    tables.set(value, { defined, sealed: false, dotted: false, keys: new Map() });
     return value;
   }
   function string(key = false): string {
@@ -120,11 +121,12 @@ export function parseToml(text: string): ParseResult {
   }
   function descend(parent: Table, key: string, dotted: boolean, location: { line: number; column: number }): Table {
     if (tables.get(parent)!.sealed) fail("Cannot extend an inline table");
-    let child = parent.entries.find(e => e.key === key)?.value;
+    let child = tables.get(parent)!.keys.get(key);
     if (!child) {
       child = table(dotted, location);
       tables.get(child)!.dotted = dotted;
       parent.entries.push({ key, value: child });
+      tables.get(parent)!.keys.set(key, child);
     }
     if (child.kind === "array" && tableArrays.has(child)) child = child.items[child.items.length - 1]!;
     if (child.kind !== "object") fail(`Key '${key}' is already a value`);
@@ -135,8 +137,9 @@ export function parseToml(text: string): ParseResult {
   function assign(parent: Table, keys: string[], value: JsonValue, location: { line: number; column: number }): void {
     for (const key of keys.slice(0, -1)) parent = descend(parent, key, true, location);
     const key = keys[keys.length - 1]!;
-    if (parent.entries.some(e => e.key === key)) fail(`Duplicate key '${key}'`, location);
+    if (tables.get(parent)!.keys.has(key)) fail(`Duplicate key '${key}'`, location);
     parent.entries.push({ key, value });
+    tables.get(parent)!.keys.set(key, value);
   }
   function validDate(raw: string): boolean {
     const match = /^(\d{4})-(\d\d)-(\d\d)(?:[Tt ](\d\d):(\d\d):(\d\d)(?:\.\d+)?(?:[Zz]|([+-])(\d\d):(\d\d))?)?$/.exec(raw);
@@ -221,17 +224,17 @@ export function parseToml(text: string): ParseResult {
         let parent = root;
         for (const key of keys.slice(0, -1)) parent = descend(parent, key, false, start);
         const key = keys[keys.length - 1]!;
-        const existing = parent.entries.find(e => e.key === key)?.value;
+        const existing = tables.get(parent)!.keys.get(key);
         if (array) {
           if (existing && (existing.kind !== "array" || !tableArrays.has(existing))) fail(`Redefined table '${key}'`, start);
           const list: List = existing as List | undefined ?? { ...start, kind: "array", items: [] };
-          if (!existing) { tableArrays.add(list); parent.entries.push({ key, value: list }); }
+          if (!existing) { tableArrays.add(list); parent.entries.push({ key, value: list }); tables.get(parent)!.keys.set(key, list); }
           current = table(true, start); list.items.push(current);
         } else {
           if (existing && (existing.kind !== "object" || tables.get(existing)!.defined || tables.get(existing)!.sealed)) fail(`Redefined table '${key}'`, start);
           current = existing as Table | undefined ?? table(true, start);
           tables.get(current)!.defined = true;
-          if (!existing) parent.entries.push({ key, value: current });
+          if (!existing) { parent.entries.push({ key, value: current }); tables.get(parent)!.keys.set(key, current); }
         }
       } else {
         const keys = keyPath();

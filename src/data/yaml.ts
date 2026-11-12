@@ -11,7 +11,8 @@ class YamlProblem extends Error {
 }
 
 export function prepareYaml(): Promise<void> {
-  return loading ??= import("yaml").then(module => { reader = module; });
+  // A failed load (offline, a missing chunk) is not cached: the next prepare() tries again.
+  return loading ??= import("yaml").then(module => { reader = module; }, error => { loading = undefined; throw error; });
 }
 
 export interface YamlResult { values: JsonValue[]; problems: Problem[]; invalid: boolean }
@@ -72,7 +73,7 @@ export function parseYaml(text: string): YamlResult {
     return { ...pos, kind: "literal", raw: source(node) };
   }
   try {
-    const docs = yaml.parseAllDocuments(text, { keepSourceTokens: true, lineCounter: counter, uniqueKeys: false, intAsBigInt: true, prettyErrors: false });
+    const docs = yaml.parseAllDocuments(text, { keepSourceTokens: true, lineCounter: counter, uniqueKeys: false, prettyErrors: false });
     for (const doc of docs) {
       for (const error of [...doc.errors, ...doc.warnings]) {
         problems.push({ message: error.message.split("\n")[0]!, ...position(error.pos[0]) });
