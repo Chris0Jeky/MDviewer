@@ -771,8 +771,9 @@ placeholder; a field left empty keeps its `{{name}}` as written). `src/desktop/s
 `templates/` folder (`isTemplatePath`, from `library_scan`), reads the chosen one through the
 host's read-only template read, asks the short form, and the entry opens the result as an
 unsaved untitled note in Edit (Save goes through Save As). The command `document.newFromTemplate`
-("New from template…") registers only when `native.library.readTemplate` exists (the Core lane's
-`library_read_template`: no Recent entry, seen mark or binding). Tests: `tests/template.test.ts`,
+("New from template…", More menu and palette) needs the host's `native.library.readTemplate`
+(`library_read_template`: no Recent entry, seen mark, binding or library write) and is absent in
+the web build. Tests: `tests/template.test.ts`,
 `tests/desktop-templates.test.ts`.
 
 Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,

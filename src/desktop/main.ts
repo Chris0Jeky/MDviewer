@@ -1114,6 +1114,7 @@ registerCommand({ id: "document.reload", title: "Reload from disk", enabled: () 
 
 const moreMenu: MenuEntry[] = [
   { command: "document.new", id: "reader-new" },
+  { command: "document.newFromTemplate" },
   { command: "document.open", id: "reader-open" },
   "separator",
   { command: "document.save", disabled: () => !somethingToSave() },
