@@ -490,6 +490,7 @@ pub(crate) async fn save_document_as(
         if let Some(new) = new {
             state.follow(new, Path::new(path));
         }
+        crate::commands::library::remember(&app, [std::path::PathBuf::from(path)]);
     }
     Ok(result)
 }

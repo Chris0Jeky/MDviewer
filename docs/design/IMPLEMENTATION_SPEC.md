@@ -473,6 +473,19 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Links and images (S6 native half): `src/render/sanitize.ts` keeps a relative image `src` as an
+inert `data-local-src` (web output unchanged otherwise, still counted as blocked). The desktop
+reader fills those through `native.readAsset` as blob URLs (revoked on the next render).
+Document clicks on relative links and `@path` imports call `native.openRelative`; web links keep
+`open_external`. `navigate.back` / `navigate.forward` (Alt+Left/Right) step through documents
+reached by links or the picker. The paginated workspace does not load local images yet.
+
+Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
+`src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
+batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:
+`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel UI is
+the shell's (S4 panel half).
+
 Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
 `main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
 replaces its text and baseline (the reader re-renders; S2c's block patching and change
@@ -601,6 +614,19 @@ ranges moved; only the others are replaced and upgraded. Live reload (S1c) and E
 are its callers. Coverage: `tests/desktop-e2e/text-first.spec.ts` (first text under
 100 ms for the sample in the production build; code heights within 1 px),
 `tests/reader-patch.test.ts`.
+
+Actionable Markdown, A1 (static; `docs/design/ACTIONABLE_MARKDOWN.md`).
+`src/render/actionable.ts` is DOM-free: `parseActionable(text, tokens?)` finds marks, choices
+(grouped per list), fields, front matter chips and ids from the CommonMark block parse (never in
+code or HTML blocks), the `marks:` cycle and the `actionable:` version; `planChange` and
+`applyPatches` produce and apply byte-exact line patches (BOM, every terminator and the final
+newline kept). `src/render/actionableGlyphs.ts`, in `createMarkdown`, draws `[/] [-] [!] [?]`
+and `( ) (x)` as named static glyphs in both pipelines; `[ ]`/`[x]` stay with task lists, so
+ordinary documents render unchanged. The reader (`src/desktop/reader/actionable.ts`) labels field
+keys, shows chips above the document and reports actionable problems on the Properties card; the
+paginated output keeps fields as text and omits chips with the front matter. Nothing is
+interactive yet (A3). Conformance: `tests/fixtures/actionable/*` (byte-exact, `-text` in
+`.gitattributes`), `tests/actionable.test.ts`, `tests/desktop-e2e/actionable.spec.ts`.
 
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,

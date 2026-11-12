@@ -1,0 +1,57 @@
+[
+  {
+    "name": "check by id",
+    "target": {
+      "id": "notes"
+    },
+    "action": {
+      "kind": "mark",
+      "to": "x"
+    },
+    "patches": [
+      {
+        "line": 3,
+        "id": "notes",
+        "expect": "- [ ] Write the notes <!-- id: notes -->",
+        "replace": "- [x] Write the notes <!-- id: notes -->"
+      }
+    ],
+    "after": "# Release checklist\n\n- [x] Write the notes <!-- id: notes -->\n- [x] Tag the build\n- [X] Upload the installer\n  - [ ] Nested step\n1. [ ] Numbered step\n\n> - [ ] Quoted task\n\nPlain paragraph with [ ] brackets.\n\n```text\n- [ ] not a control (fenced code)\n```\n\n    - [ ] not a control (indented code)\n\n- `[ ]` not a control (code span)\n- [x]not a control (no space)\n"
+  },
+  {
+    "name": "upper-case X becomes to do",
+    "target": {
+      "line": 5
+    },
+    "action": {
+      "kind": "mark",
+      "to": " "
+    },
+    "patches": [
+      {
+        "line": 5,
+        "expect": "- [X] Upload the installer",
+        "replace": "- [ ] Upload the installer"
+      }
+    ],
+    "after": "# Release checklist\n\n- [ ] Write the notes <!-- id: notes -->\n- [x] Tag the build\n- [ ] Upload the installer\n  - [ ] Nested step\n1. [ ] Numbered step\n\n> - [ ] Quoted task\n\nPlain paragraph with [ ] brackets.\n\n```text\n- [ ] not a control (fenced code)\n```\n\n    - [ ] not a control (indented code)\n\n- `[ ]` not a control (code span)\n- [x]not a control (no space)\n"
+  },
+  {
+    "name": "nested and quoted keep their prefixes",
+    "target": {
+      "line": 9
+    },
+    "action": {
+      "kind": "mark",
+      "to": "x"
+    },
+    "patches": [
+      {
+        "line": 9,
+        "expect": "> - [ ] Quoted task",
+        "replace": "> - [x] Quoted task"
+      }
+    ],
+    "after": "# Release checklist\n\n- [ ] Write the notes <!-- id: notes -->\n- [x] Tag the build\n- [X] Upload the installer\n  - [ ] Nested step\n1. [ ] Numbered step\n\n> - [x] Quoted task\n\nPlain paragraph with [ ] brackets.\n\n```text\n- [ ] not a control (fenced code)\n```\n\n    - [ ] not a control (indented code)\n\n- `[ ]` not a control (code span)\n- [x]not a control (no space)\n"
+  }
+]

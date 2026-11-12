@@ -117,6 +117,9 @@ function sanitizeHtml(html: string, allowSvgStyles: boolean): SanitizedHtml {
       if (src && !SAFE_EMBEDDED_IMAGE.test(src.trim())) {
         element.removeAttribute("src");
         removedCount += 1;
+        // A relative reference loads nothing here; the Windows reader may resolve
+        // it natively against the document's folder (desktop main.ts, S6).
+        if (!/^[a-z][a-z0-9+.-]*:|^[\\/]/i.test(src.trim())) element.setAttribute("data-local-src", src.trim());
       }
     } else if (element.hasAttribute("src")) {
       element.removeAttribute("src");

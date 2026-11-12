@@ -23,3 +23,5 @@
 *.woff  binary
 *.woff2 binary
 *.ttf   binary
+# Actionable Markdown conformance fixtures carry exact bytes (BOM, CRLF, mixed endings).
+tests/fixtures/actionable/** -text

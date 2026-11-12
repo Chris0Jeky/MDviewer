@@ -1,0 +1,44 @@
+[
+  {
+    "kind": "field",
+    "line": 3,
+    "key": "owner",
+    "value": "Ada"
+  },
+  {
+    "kind": "field",
+    "line": 4,
+    "key": "due",
+    "value": ""
+  },
+  {
+    "kind": "field",
+    "line": 5,
+    "key": "reviewer",
+    "value": ""
+  },
+  {
+    "kind": "field",
+    "line": 6,
+    "id": "budget",
+    "key": "budget",
+    "value": "120"
+  },
+  {
+    "kind": "field",
+    "line": 8,
+    "key": "status",
+    "value": "waiting"
+  },
+  {
+    "kind": "mark",
+    "line": 9,
+    "state": " "
+  },
+  {
+    "kind": "field",
+    "line": 12,
+    "key": "key",
+    "value": "a field inside a paragraph"
+  }
+]

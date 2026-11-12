@@ -73,6 +73,14 @@ body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .reader-toast.is-visible { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .reader-document .reader-copy, .reader-document .reader-heading-tool, .reader-toast { transition: none; } }
 @media (forced-colors: active) { .reader-document .reader-copy, .reader-document .reader-heading-tool { opacity: 1; } .reader-toast { border: 1px solid CanvasText; } }
+/* Actionable Markdown (A1, static): field labels and front matter chips. */
+.reader-document .am-field-key { display: inline-block; min-width: 6.5em; margin-right: .6em; color: var(--reader-muted); font-size: .85em; font-weight: 600; letter-spacing: .02em; }
+.am-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 1em; }
+.am-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 10px; border: 1px solid var(--reader-line); border-radius: 999px; font-size: 13px; color: var(--reader-fg); background: var(--reader-paper); }
+.am-chip-key { color: var(--reader-muted); font-size: 12px; }
+.am-chip-value { font-weight: 600; }
+.am-chip.am-off { border-style: dashed; border-color: #b45309; }
+:root[data-app-theme="dark"] .reader-document .am-box, :root[data-app-theme="dark"] .reader-document .am-radio { background-color: var(--reader-paper); }
 .reader-empty { max-width: 540px; margin: clamp(30px, 10vh, 110px) auto; }
 .reader-eyebrow { font-size: 11px; font-weight: 700; color: var(--reader-muted); letter-spacing: 1.5px; }
 .reader-empty h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.2; letter-spacing: -1px; margin: 18px 0; }
