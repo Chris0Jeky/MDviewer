@@ -98,7 +98,8 @@ test("a cut-short view offers the next part and Show all", async ({ page }) => {
   await expect(doc(page)).toContainText("Showing 1,000 of 1,200 records.");
   await page.getByRole("button", { name: "Show all", exact: true }).click();
   await ready(page);
-  await expect(doc(page).getByRole("heading", { name: /Record 1200/ })).toBeAttached();
+  // Flat records read as one table (D6): the last record is its last row.
+  await expect(doc(page).locator("table tbody tr").last()).toContainText("1199");
   await expect(page.getByRole("button", { name: "Show all", exact: true })).toHaveCount(0);
 });
 
