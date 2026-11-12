@@ -92,8 +92,8 @@ edits are not kept between runs; save before closing.
 The library remembers recent files and lets you pin files and project folders. A pinned
 project lists its Markdown files newest first, groups agent files (CLAUDE.md, AGENTS.md,
 SKILL.md, agent definitions, memory files, ACTION_ITEMS.md and similar) and marks files that
-changed since you last opened them. Data files (JSON, YAML, TOML, CSV and the like) inside a project's
-`.claude`, `.codex` or `.agent-harness` folder, and its root `.mcp.json`, are listed with the agent files;
+changed since you last opened them. Data files (JSON, YAML, TOML, CSV and the like) inside a `.claude`,
+`.codex` or `.agent-harness` folder anywhere in a project, and its root `.mcp.json`, are listed with the agent files;
 credential files such as `auth.json` are never listed, and checkouts under `.claude/worktrees` are not scanned.
 It stores only paths and times in `library.json` in the
 app's local data folder, never file contents; **Clear library** forgets everything.

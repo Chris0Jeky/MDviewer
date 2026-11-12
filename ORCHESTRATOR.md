@@ -7,10 +7,10 @@
 > Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
 > listed by area; open ones are marked **open**. Re-read GitHub before starting work.
 >
-> **State of main.** [`dc35c50`](https://github.com/Chris0Jeky/MDviewer/commit/dc35c5022562643888d5561c66f64d38b44ff5e1)
-> (merge of #293). CI [43267320688](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320688) and
-> Windows Desktop [43267320935](https://github.com/Chris0Jeky/MDviewer/actions/runs/43267320935) both completed
-> **success** on it (read with `gh run list --branch main` after the push of #293). The previous main
+> **State of main.** [`6329c7d`](https://github.com/Chris0Jeky/MDviewer/commit/6329c7d31b6d1efd4aaad03636dd3d3d0bbb194b)
+> (merge of #289) when this was written. CI [43270081330](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081330) and
+> Windows Desktop [43270081280](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081280) both completed
+> **success** on it. Re-measure with `gh run list --branch main` before relying on this. The previous main
 > [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
 > (merge of #295) also passed CI [43266504555](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504555) and
 > Windows Desktop [43266504492](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504492). Re-run
@@ -18,7 +18,7 @@
 >
 > **What landed (merged), by area**
 > - **Foundations:** native registry and command modules #225 (S0a); one document owner, command and panel
->   registries #224 (S0b); agentic setup sync #219, #220.
+>   registries #224 (S0b); dropped the project `bypassPermissions` default #219; agentic setup sync #220.
 > - **Reader (S2):** front matter as a Properties card #221 (S2b); source map and copy toolkit #228 (S2a);
 >   text first, then upgrade in place #232 (S2c).
 > - **Shell (S3 to S5):** slim bar, tabs, More menu, palette, panel and status line #260 (S3); Library panel
@@ -36,7 +36,7 @@
 >   readability pass #293; agent data files in the Library, `.claude/worktrees` skipped #290 (boundary change).
 > - **Performance:** S9 part 1, tab switch back in about 50 ms and one sanitizer pass for code blocks #294.
 > - **Pagination, export, CI, docs:** never drop or hide content when a block cannot stay whole #237; raster
->   PDF draws Tier 3 shrunk blocks as the preview does #261 (#258); Firefox selection scroll #267 (#227, #245);
+>   PDF draws Tier 3 shrunk blocks as the preview does #261 (#258); keep the restored source scroll in Firefox #267 (#227, #245);
 >   code hyphenation #259; smoke progress sharing #222; Playwright install retry #238; state-docs sync for
 >   Readable data and Actionable Markdown #287 (S8).
 >
@@ -45,8 +45,9 @@
 > Windows Desktop green.
 >
 > **Open PRs from this push:** S9 part 2 #297 (native start-up numbers, first frame in the theme colour), left open
-> at wind-down: its Windows build and native smoke job failed twice on head b0e3a23 (a save-dialog probe timeout
-> in the export step, run 43266580940) while main's smoke was green; next step is a rerun or a look at that probe.
+> at wind-down: its Windows build and native smoke job failed twice on head b0e3a23 (run 43266580940: a native
+> UI 'save-dialog' worker operation timeout) while main's smoke was green. Its head is now f8d1d43 (main merged
+> in), with checks running when this was written; the Experience lane owns it.
 > Dependabot #216, #217, #218 are open with all six checks green and were not triaged in this push.
 >
 > **Next queue, in order**

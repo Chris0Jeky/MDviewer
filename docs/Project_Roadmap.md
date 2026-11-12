@@ -203,7 +203,7 @@ export paths.
   pass for code blocks) [#294](https://github.com/Chris0Jeky/MDviewer/pull/294) is merged. The polish pass
   [#298](https://github.com/Chris0Jeky/MDviewer/pull/298) is merged. Part 2
   [#297](https://github.com/Chris0Jeky/MDviewer/pull/297) (native start-up numbers, first frame in the theme
-  colour) is open: its native smoke failed twice at wind-down. Next:
+  colour) is open: its native smoke failed twice at wind-down and it is rechecking on a refreshed head. Next:
   [#301](https://github.com/Chris0Jeky/MDviewer/issues/301) (data views after D6),
   [#302](https://github.com/Chris0Jeky/MDviewer/issues/302) (native window background and closable during a
   slow start; Core halves #304 and #305) and [#306](https://github.com/Chris0Jeky/MDviewer/issues/306) (clippy).
