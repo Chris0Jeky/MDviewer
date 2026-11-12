@@ -349,6 +349,10 @@ pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, Strin
     template_project(projects, path).ok_or("This is not a template of a pinned project.")?;
     for part in [path.parent().unwrap_or(path), path] {
         match fs::symlink_metadata(part) {
+            // The template's own cap, stated as such (the reader's message names 25 MB).
+            Ok(metadata) if metadata.is_file() && metadata.len() > MAX_TEMPLATE_BYTES => {
+                return Err("This template is larger than 1 MB.".into());
+            }
             Ok(metadata) if !is_reparse(&metadata) => {}
             Ok(_) => {
                 return Err("This template goes through a folder shortcut and is not read.".into())
@@ -637,6 +641,14 @@ mod tests {
             ("Run card.md", "# {{title}}\r\n- [ ] step\r\n")
         );
         // The folder name matches case-insensitively, like Windows.
+        let upper = tempfile::tempdir().unwrap();
+        fs::create_dir_all(upper.path().join("TEMPLATES")).unwrap();
+        fs::write(upper.path().join("TEMPLATES").join("t.MD"), "x").unwrap();
+        assert!(read_template(
+            &pinned(upper.path()),
+            &upper.path().join("TEMPLATES").join("t.MD")
+        )
+        .is_ok());
         fs::create_dir_all(root.join("other").join("TEMPLATES")).unwrap();
         // Outside templates/, nested below it, not Markdown, or in an unpinned project: refused.
         fs::write(root.join("note.md"), "x").unwrap();
@@ -658,7 +670,10 @@ mod tests {
             vec![b'a'; MAX_TEMPLATE_BYTES as usize + 1],
         )
         .unwrap();
-        assert!(read_template(&pinned(root), &root.join("templates").join("big.md")).is_err());
+        assert_eq!(
+            read_template(&pinned(root), &root.join("templates").join("big.md")).unwrap_err(),
+            "This template is larger than 1 MB."
+        );
     }
 
     #[cfg(windows)]
