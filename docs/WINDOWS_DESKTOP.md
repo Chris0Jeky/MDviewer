@@ -68,6 +68,10 @@ an `@path` import resolves against the folder of the document you are reading. *
 **Alt+Right** go back and forward. Images stored next to a document show in the reader. Web
 links open in your browser as before.
 
+MDviewer reopens the files you had open (from disk) when you start it again. It remembers
+only their paths. Turn this off with the command **Reopen last session on launch**. Unsaved
+edits are not kept between runs; save before closing.
+
 The library remembers recent files and lets you pin files and project folders. A pinned
 project lists its Markdown files newest first, groups agent files (CLAUDE.md, AGENTS.md,
 SKILL.md, agent definitions, memory files, ACTION_ITEMS.md and similar) and marks files that

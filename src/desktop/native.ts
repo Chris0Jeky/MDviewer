@@ -112,13 +112,23 @@ export const native = {
   openRelative: (token: string, href: string): Promise<OpenBatch> => invoke("open_relative", { token, href }),
   /** Bytes of a local image referenced by the bound document `token` (typed, 20 MB cap). */
   readAsset: (token: string, src: string): Promise<ArrayBuffer> => invoke("read_asset", { token, src }),
+  /** The last session (S7): paths stay native; the webview sends tokens. */
+  session: {
+    record: (tokens: string[]): Promise<void> => invoke("session_record", { tokens }),
+    restore: (): Promise<OpenBatch> => invoke("session_restore"),
+    setting: (restore: boolean | null): Promise<{ restore: boolean; persisted: boolean }> =>
+      invoke("session_setting", { restore }),
+  },
   /** Changed files arrive as capability tokens only, never paths or contents. */
   onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
     listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),
   onPending: (callback: () => void): Promise<() => void> => listen("mdviewer:files-pending", callback),
-  onClose: (canClose: () => boolean): Promise<() => void> => getCurrentWindow().onCloseRequested(async event => {
-    // Prevent before awaiting: the host otherwise destroys the window immediately.
-    event.preventDefault();
-    if (canClose()) await getCurrentWindow().destroy();
-  }),
+  onClose: (canClose: () => boolean, beforeClose: () => Promise<void> = async () => {}): Promise<() => void> =>
+    getCurrentWindow().onCloseRequested(async event => {
+      // Prevent before awaiting: the host otherwise destroys the window immediately.
+      event.preventDefault();
+      if (!canClose()) return;
+      await beforeClose().catch(() => undefined);
+      await getCurrentWindow().destroy();
+    }),
 };

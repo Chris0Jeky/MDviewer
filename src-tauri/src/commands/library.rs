@@ -340,3 +340,107 @@ pub(crate) fn library_clear(app: AppHandle) -> Result<(), String> {
 }
 
 pub(crate) type LibrarySlot = Mutex<Option<Library>>;
+
+/// Remember which bound files are open (paths only), so the next launch can
+/// reopen them. The webview sends tokens; paths come from the registry.
+#[tauri::command]
+pub(crate) async fn session_record(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    tokens: Vec<String>,
+) -> Result<(), String> {
+    let paths: Vec<PathBuf> = {
+        let registry = state
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        tokens
+            .iter()
+            .filter_map(|token| Token::parse(token))
+            .filter_map(|token| registry.get(&token).map(|binding| binding.path.clone()))
+            .collect()
+    };
+    let at = library::now_ms();
+    // Awaited, so a record sent while the window closes is on disk before exit.
+    tauri::async_runtime::spawn_blocking(move || {
+        with_library(&app, |library| {
+            // With reopen off, no session is kept at all.
+            if library.store.restore_off {
+                return;
+            }
+            library.store.record_session(&paths, at);
+            let _ = library.persist();
+        });
+    })
+    .await
+    .map_err(|_| "The session could not be recorded.".to_string())
+}
+
+/// Reopen the last session's files that are not already open (setting on by default).
+#[tauri::command]
+pub(crate) async fn session_restore(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+) -> Result<OpenBatch, String> {
+    let (open, free) = {
+        let registry = state
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let open = registry.paths();
+        // Never restore more files than can stay bound to their capability.
+        (
+            open,
+            crate::file_policy::MAX_BATCH_FILES.saturating_sub(registry.len()),
+        )
+    };
+    let restore = {
+        let app = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            with_library(&app, |library| {
+                let mut restore = library.store.session_to_restore(&open);
+                restore.truncate(free);
+                restore
+            })
+        })
+        .await
+        .map_err(|_| "The last session could not be read.".to_string())?
+    };
+    let batch = tauri::async_runtime::spawn_blocking(move || read_batch(restore, capture_revision))
+        .await
+        .map_err(|_| "The last session could not be reopened.".to_string())?;
+    Ok(OpenBatch::from_read_batch(
+        batch,
+        &mut state
+            .registry
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    )
+    .follow(&state))
+}
+
+#[derive(Serialize)]
+pub(crate) struct SessionSetting {
+    restore: bool,
+    /// False when the preference could not be written (it then lasts this run only).
+    persisted: bool,
+}
+
+/// Read or change "Reopen last session on launch".
+#[tauri::command]
+pub(crate) fn session_setting(app: AppHandle, restore: Option<bool>) -> SessionSetting {
+    with_library(&app, |library| {
+        let mut persisted = true;
+        if let Some(restore) = restore {
+            library.store.restore_off = !restore;
+            if !restore {
+                library.store.session.clear();
+            }
+            persisted = library.persist();
+        }
+        SessionSetting {
+            restore: !library.store.restore_off,
+            persisted,
+        }
+    })
+}

@@ -21,6 +21,9 @@ fn main() {
             "library_clear",
             "open_relative",
             "read_asset",
+            "session_record",
+            "session_restore",
+            "session_setting",
         ]),
     ))
     .expect("failed to prepare the desktop application");

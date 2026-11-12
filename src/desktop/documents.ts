@@ -125,6 +125,15 @@ export class DesktopDocuments {
     return "stale";
   }
 
+  /** Tokens of every open bound document, in display order (for session restore). */
+  boundTokens(): string[] {
+    const app = this.workspace;
+    const tokens = app
+      ? app.store.openDocs.map(doc => this.baselines.get(doc.id)?.binding?.token)
+      : this.reader.documents.map(doc => doc.binding?.token);
+    return tokens.filter((token): token is string => !!token);
+  }
+
   /** The open document bound to `token`, in whichever mode owns it now. */
   byToken(token: string): SaveTarget | null {
     const app = this.workspace;

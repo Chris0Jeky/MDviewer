@@ -72,12 +72,18 @@ impl Registry {
         self.bindings.get_mut(token)
     }
 
+    /// Paths of every live binding (to avoid reopening a file that is already open).
+    pub fn paths(&self) -> Vec<PathBuf> {
+        self.bindings
+            .values()
+            .map(|binding| binding.path.clone())
+            .collect()
+    }
+
     pub fn revoke(&mut self, token: &Token) {
         self.bindings.remove(token);
     }
 
-    // Retained for bounded-state inspection and later lifecycle commands.
-    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.bindings.len()
     }

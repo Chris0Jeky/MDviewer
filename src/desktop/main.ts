@@ -97,6 +97,35 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Remember which bound files are open (tokens -> paths natively), coalesced.
+let sessionReady = false;
+let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+let lastSession = "";
+function recordSession(): void {
+  if (!native.available || !sessionReady) return;
+  // A mode transition empties one owner before the other takes over: never record that.
+  if (changingMode) return;
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    if (changingMode) return; // finishMode syncs and schedules again.
+    const tokens = docs.boundTokens();
+    const key = tokens.join(",");
+    if (key === lastSession) return;
+    lastSession = key;
+    void native.session.record(tokens).catch(() => undefined);
+  }, 500);
+}
+
+/** On window close: send the current open set now instead of after the debounce. */
+async function flushSession(): Promise<void> {
+  if (!native.available || !sessionReady) return;
+  clearTimeout(sessionTimer);
+  const tokens = docs.boundTokens();
+  if (tokens.join(",") === lastSession) return;
+  lastSession = tokens.join(",");
+  await native.session.record(tokens);
+}
+
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
@@ -119,6 +148,7 @@ function syncDocuments(): void {
     button.disabled = workspaceBusy || !active;
   }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  recordSession();
   const target = docs.saveTarget();
   const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
     && !dismissedConflicts.has(target.binding.token);
@@ -759,6 +789,13 @@ if (native.available) {
       try { if (await native.library.addProject()) report("Project pinned to the library."); }
       catch (error) { report(errorText(error)); }
     } });
+  registerCommand({ id: "session.toggleRestore", title: "Reopen last session on launch (on/off)",
+    run: async () => {
+      const current = await native.session.setting(null);
+      const next = await native.session.setting(!current.restore);
+      if (!next.persisted) { report("The preference could not be saved; it applies until MDviewer closes."); return; }
+      report(next.restore ? "MDviewer will reopen your open files next time." : "MDviewer will start empty next time.");
+    } });
   registerCommand({ id: "library.clear", title: "Clear library (recent files, pins and projects)",
     run: async () => {
       if (!window.confirm("Clear the library? Recent files, pinned files and pinned projects are forgotten. No file is deleted.")) return;
@@ -801,8 +838,23 @@ if (native.available) {
         return false;
       }
       return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
-    });
+    }, flushSession);
     await drain();
+    // Reopen the last session's files after launch files, without taking focus
+    // from them (paths only; the preference is on by default).
+    try {
+      const startedAt = generation;
+      const restored = await native.session.restore();
+      if (restored.documents.length || restored.errors.length) {
+        // Like a forwarded batch: a newer user action (an Open click) keeps ownership.
+        const owns = startedAt === generation && !docs.reader.activeId && !app;
+        commitBatch({ ...restored, errors: restored.errors.length
+          ? [{ name: "Last session", message: `${restored.errors.length} file(s) could not be reopened.` }] : [] },
+        owns ? ++generation : -1);
+      }
+      sessionReady = true;
+      recordSession();
+    } catch { /* A missing or unreadable library never blocks startup; nothing is recorded. */ }
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));
 }
 syncDocuments();
