@@ -34,6 +34,10 @@ export function fillTemplate(text: string, values: Readonly<Record<string, strin
     time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
     title,
   };
-  return text.replace(PLACEHOLDER, (whole, name: string) =>
-    automatic[name.toLowerCase()] ?? (Object.hasOwn(values, name) ? values[name]! : whole));
+  // Own properties only: `{{constructor}}` is a field like any other, not Object's constructor.
+  return text.replace(PLACEHOLDER, (whole, name: string) => {
+    const key = name.toLowerCase();
+    if (Object.hasOwn(automatic, key)) return automatic[key]!;
+    return Object.hasOwn(values, name) ? values[name]! : whole;
+  });
 }

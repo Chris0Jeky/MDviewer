@@ -25,6 +25,12 @@ describe("templates (A4)", () => {
     expect(fillTemplate("{{a}} {{b}}", { a: "{{b}}", b: "B" }, NOW, "T")).toBe("{{b}} B");
   });
 
+  it("treats names like constructor as ordinary fields", () => {
+    const text = "{{constructor}} {{toString}} {{hasOwnProperty}}";
+    expect(templateFields(text)).toEqual(["constructor", "toString", "hasOwnProperty"]);
+    expect(fillTemplate(text, { constructor: "a", toString: "b" }, NOW, "T")).toBe("a b {{hasOwnProperty}}");
+  });
+
   it("titles a template by its file name", () => {
     expect(templateTitle("Meeting notes.md")).toBe("Meeting notes");
     expect(templateTitle("plan.markdown")).toBe("plan");

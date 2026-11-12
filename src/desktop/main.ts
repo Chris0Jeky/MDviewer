@@ -434,7 +434,10 @@ async function openFromLibrary(id: string): Promise<void> {
 
 /** New: an untitled note in Edit. `text` (from a template) starts it with content, unsaved. */
 async function createDocument(text = ""): Promise<void> {
-  if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
+  if (changingMode || nativeSaveBusy || app?.exportState.busy) {
+    if (text) report("Wait for the current action to finish, then choose the template again.");
+    return;
+  }
   const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text };
   if (app) {
     if (!canRestoreDocument(doc)) return;
@@ -919,14 +922,17 @@ if (native.available && readTemplate) {
       const result = await shell.chooseTemplate({
         list: async () => {
           const entries: Array<{ id: string; name: string; project: string }> = [];
+          let incomplete = false;
           for (const project of (await native.library.list()).projects) {
             try {
-              for (const file of (await native.library.scan(project.id)).files) {
+              const scan = await native.library.scan(project.id);
+              incomplete ||= scan.truncated;
+              for (const file of scan.files) {
                 if (shell.isTemplatePath(file.relative)) entries.push({ id: file.id, name: file.name, project: project.name });
               }
-            } catch { /* An unreadable project lists no templates; Projects shows why. */ }
+            } catch { incomplete = true; } // an unreadable project: the picker says some may be missing
           }
-          return entries;
+          return { entries, incomplete };
         },
         read: id => readTemplate(id),
       });

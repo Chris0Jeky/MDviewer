@@ -8,7 +8,8 @@ import { fillTemplate, templateFields, templateTitle } from "../reader/template"
  */
 export interface TemplateEntry { id: string; name: string; project: string }
 export interface TemplateSource {
-  list(): Promise<TemplateEntry[]>;
+  /** `incomplete`: a project could not be read, or its scan was cut short, so some may be missing. */
+  list(): Promise<{ entries: TemplateEntry[]; incomplete: boolean }>;
   read(id: string): Promise<{ name: string; text: string }>;
 }
 
@@ -85,11 +86,12 @@ export async function chooseTemplate(source: TemplateSource, now: () => Date = (
       inputs[0]!.focus();
     };
 
-    void source.list().then(entries => {
+    void source.list().then(({ entries, incomplete }) => {
       if (settled) return;
+      const partial = "Some projects could not be scanned in full, so templates may be missing.";
       if (!entries.length) {
-        body.replaceChildren(element("p", "shell-template-note",
-          "No templates yet. Put Markdown files in a templates folder inside a pinned project."));
+        body.replaceChildren(element("p", "shell-template-note", incomplete ? partial
+          : "No templates yet. Put Markdown files in a templates folder inside a pinned project."));
         const close = element("button", "shell-template-cancel", "Close");
         close.type = "button";
         close.addEventListener("click", () => finish(null));
@@ -113,6 +115,7 @@ export async function chooseTemplate(source: TemplateSource, now: () => Date = (
         list.append(item);
       }
       body.replaceChildren(list);
+      if (incomplete) body.append(element("p", "shell-template-note", partial));
       list.querySelector("button")?.focus();
     }, error => {
       status.textContent = `Could not list templates: ${error instanceof Error ? error.message : String(error)}`;

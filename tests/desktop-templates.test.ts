@@ -38,7 +38,7 @@ describe("template module", () => {
   });
 
   it("asks each field once; a typed value is plain text and cannot add a placeholder", async () => {
-    const source = { list: vi.fn(async () => [{ id: "t1", name: "Meeting notes.md", project: "board" }]), read: vi.fn(async () => ({ name: "Meeting notes.md", text: TEMPLATE })) };
+    const source = { list: vi.fn(async () => ({ entries: [{ id: "t1", name: "Meeting notes.md", project: "board" }], incomplete: false })), read: vi.fn(async () => ({ name: "Meeting notes.md", text: TEMPLATE })) };
     const chosen = chooseTemplate(source, () => new Date(2026, 10, 12, 9, 5));
     await vi.waitFor(() => expect(document.querySelector(".shell-template-pick")).not.toBeNull());
     (document.querySelector(".shell-template-pick") as HTMLButtonElement).click();
@@ -55,15 +55,22 @@ describe("template module", () => {
   });
 
   it("an unfilled name the form did not ask for stays as written; Escape cancels", async () => {
-    const source = { list: vi.fn(async () => [{ id: "t1", name: "plain.md", project: "board" }]), read: vi.fn(async () => ({ name: "plain.md", text: "# {{title}}\n" })) };
+    const source = { list: vi.fn(async () => ({ entries: [{ id: "t1", name: "plain.md", project: "board" }], incomplete: false })), read: vi.fn(async () => ({ name: "plain.md", text: "# {{title}}\n" })) };
     const chosen = chooseTemplate(source);
     await vi.waitFor(() => expect(document.querySelector(".shell-template-pick")).not.toBeNull());
     document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
     expect(await chosen).toBeNull();
   });
 
+  it("says when a project could not be scanned in full", async () => {
+    const chosen = chooseTemplate({ list: vi.fn(async () => ({ entries: [], incomplete: true })), read: vi.fn() });
+    await vi.waitFor(() => expect(document.querySelector("dialog")!.textContent).toContain("could not be scanned in full"));
+    (document.querySelector(".shell-template-cancel") as HTMLButtonElement).click();
+    expect(await chosen).toBeNull();
+  });
+
   it("says where templates come from when there are none", async () => {
-    const chosen = chooseTemplate({ list: vi.fn(async () => []), read: vi.fn() });
+    const chosen = chooseTemplate({ list: vi.fn(async () => ({ entries: [], incomplete: false })), read: vi.fn() });
     await vi.waitFor(() => expect(document.querySelector("dialog")!.textContent).toContain("templates folder inside a pinned project"));
     (document.querySelector(".shell-template-cancel") as HTMLButtonElement).click();
     expect(await chosen).toBeNull();
