@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-11-05.
+> Last updated: 2026-11-12 (Readable data and Actionable Markdown status; other sections as of 2026-11-05).
 
 ## Status legend
 
@@ -28,7 +28,11 @@ research #205 remain separate.
 
 [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) joined the companion push on 2026-11-11
 (owner: "Yes, add it"): clickable marks, choices, fields and status chips written back byte-exact,
-in slices A1–A5. Specification only; nothing is implemented yet.
+in slices A1–A5. A1 to A3 are merged on main (see P2); A4 templates is in review; A5 is later.
+
+[Readable data v1](design/READABLE_DATA.md) (owner request, 2026-11-12) opens data files as a
+readable view derived on the device. D0 to D3 and the D4 parsers are merged on main; the D4
+native extensions are in review; D5 is next (see P2).
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
@@ -159,6 +163,32 @@ export paths.
   **promotes the P4 "optional split editor" item on explicit owner request** and reverses the
   former "no editor pane" non-goal in [`PRODUCT_VISION.md`](./PRODUCT_VISION.md).
   Spec: `design/IMPLEMENTATION_SPEC.md` §12.
+- **Done (2026-11-12): Actionable Markdown, A1 to A3** ([contract](design/ACTIONABLE_MARKDOWN.md)).
+  A1 [#252](https://github.com/Chris0Jeky/MDviewer/pull/252) parser, fixtures and static controls (spec
+  [#247](https://github.com/Chris0Jeky/MDviewer/pull/247)); A2 [#244](https://github.com/Chris0Jeky/MDviewer/pull/244)
+  native line patch, byte-exact and conflict-checked; A3 [#263](https://github.com/Chris0Jeky/MDviewer/pull/263)
+  interaction with write-back and Undo. [#268](https://github.com/Chris0Jeky/MDviewer/pull/268) fixed the
+  1-based line placement that made every native write-back refuse ([#266](https://github.com/Chris0Jeky/MDviewer/issues/266),
+  closed); the native A3 smoke [#275](https://github.com/Chris0Jeky/MDviewer/pull/275) now toggles a
+  checkbox in a CRLF file and Undoes it against the real host with exact bytes. Human acceptance on real files
+  is AI-10. **In progress:** A4 templates, with the native template read
+  [#285](https://github.com/Chris0Jeky/MDviewer/pull/285) and the picker/command
+  [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) both open. **Later:** A5 embeddable element.
+  Open follow-ups: [#254](https://github.com/Chris0Jeky/MDviewer/issues/254).
+- **In progress (2026-11-12): Readable data, D0 to D4 parsers merged** ([contract](design/READABLE_DATA.md)).
+  Merged: D0 spec [#269](https://github.com/Chris0Jeky/MDviewer/pull/269); D1 JSON, JSON Lines and
+  plain text [#270](https://github.com/Chris0Jeky/MDviewer/pull/270); D2 conversation lens
+  [#273](https://github.com/Chris0Jeky/MDviewer/pull/273); D3 native open/save
+  [#272](https://github.com/Chris0Jeky/MDviewer/pull/272) and webview
+  [#280](https://github.com/Chris0Jeky/MDviewer/pull/280) (Read, Edit, PDF); D4 YAML, TOML, CSV and TSV
+  parsers [#281](https://github.com/Chris0Jeky/MDviewer/pull/281); relative links open Markdown only
+  [#283](https://github.com/Chris0Jeky/MDviewer/pull/283). Today the Windows app opens `.json`, `.jsonc`,
+  `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. **Open:** D4 native extensions
+  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) (in review); the webview follow-up that awaits
+  `prepare(kind)` and widens `OPENABLE` and the pickers (not started on main). **Next:** D5 (copy value,
+  path and subtree; agent data files in the Library; save the readable view as Markdown). Open
+  issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),
+  [#278](https://github.com/Chris0Jeky/MDviewer/issues/278) and [#282](https://github.com/Chris0Jeky/MDviewer/issues/282).
 - **Implementation pending after reviewed designs:** file ownership/Save/Save As
   [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) requires a bounded Windows
   conflict-safe replacement proof. Optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
