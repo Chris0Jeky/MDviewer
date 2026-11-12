@@ -176,6 +176,21 @@ public static class SmokeWindow {
                 Write-ProbePhase 'toggling-checkbox'
                 $pattern.Toggle()
                 Write-ProbePhase 'checkbox-toggled'
+                # The Undo notice closes after 10 s unless focused; a later cold worker could miss
+                # it. Focus it from this warm worker, which keeps it open for the Undo step.
+                $undoCondition = [System.Windows.Automation.AndCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, 'Undo'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+                $undoClock = [System.Diagnostics.Stopwatch]::StartNew()
+                while ($undoClock.Elapsed.TotalSeconds -lt 6) {
+                    $undo = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $undoCondition)
+                    if ($null -ne $undo) { $undo.SetFocus(); $result.undoFocused = $true; break }
+                    Start-Sleep -Milliseconds 100
+                }
+                Write-ProbeResult
+                Write-ProbePhase 'undo-focused'
                 exit 0
             }
             if ($ProbeAction -eq 'save-dialog') {
@@ -734,6 +749,18 @@ try {
         $bytes.Length -eq $expectedOwnedBytes.Length -and
             [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($expectedOwnedBytes)
     }
+    $metrics.exports = [ordered]@{
+        workspaceOpened = $true
+        nativeSaveDialogsVerified = 3
+        ownedSaveAsExactSourceBytes = $true
+        ownedSaveAs = $ownedEvidence
+        markdownExactUtf8Bytes = $true
+        markdown = $markdownEvidence
+        pdfHeaderAndEofVerified = $true
+        pdf = $pdfEvidence
+    }
+    Start-Sleep -Seconds $SettleSeconds
+    $metrics.samples += Get-MemorySample 'workspace-after-export'
     # Actionable write-back (A3): a reader checkbox saves the bound file in place, changing
     # exactly the mark; Undo restores the original bytes. CRLF endings must survive both.
     Invoke-SmokeAction 'button' "$([char]0x2190) Reading view"
@@ -764,18 +791,6 @@ try {
         undoneExactBytes = $true; undone = $undoneEvidence
         lineEndings = 'crlf'
     }
-    $metrics.exports = [ordered]@{
-        workspaceOpened = $true
-        nativeSaveDialogsVerified = 3
-        ownedSaveAsExactSourceBytes = $true
-        ownedSaveAs = $ownedEvidence
-        markdownExactUtf8Bytes = $true
-        markdown = $markdownEvidence
-        pdfHeaderAndEofVerified = $true
-        pdf = $pdfEvidence
-    }
-    Start-Sleep -Seconds $SettleSeconds
-    $metrics.samples += Get-MemorySample 'workspace-after-export'
     $metrics.status = 'passed'
 } catch {
     $failure = $_.Exception.Message
