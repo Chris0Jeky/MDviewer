@@ -130,8 +130,8 @@ files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
 
 `library_read_template(id) -> { name, text }` (A4; boundary change: one read-only command and its
-permission) reads a template to fill a new note. The id must come from `library_scan` and name a
-Markdown file directly inside a pinned project's `templates/` folder; a junction or symlink at the
+permission) reads a template to fill a new note. It takes an opaque library id (as `library_scan`
+hands out) whose path is a Markdown file directly inside a pinned project's `templates/` folder; a junction or symlink at the
 folder or the file is refused; the usual local-path and encoding rules apply, with a 1 MB cap
 (`MAX_TEMPLATE_BYTES`). Nothing is bound, watched, recorded as recent or seen, or written to
 `library.json`.

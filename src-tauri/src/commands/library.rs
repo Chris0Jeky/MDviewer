@@ -233,8 +233,8 @@ fn template_target(library: &Library, id: &str) -> Option<(PathBuf, Vec<library:
     ))
 }
 
-/// Read a pinned project's template to fill a new note (A4). Read-only: the id must name a
-/// Markdown file directly inside a pinned project's `templates/` folder (from `library_scan`);
+/// Read a pinned project's template to fill a new note (A4). Read-only: the id (as `library_scan`
+/// hands out) must name a Markdown file directly inside a pinned project's `templates/` folder;
 /// nothing is bound, watched, recorded as recent or seen, or written to `library.json`.
 #[tauri::command]
 pub(crate) async fn library_read_template(
