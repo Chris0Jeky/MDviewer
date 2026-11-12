@@ -41,6 +41,7 @@ export interface Settings {
   zoom: "fit" | 1 | 0.5; // preview canvas zoom (UI only, persisted for convenience)
   viewMode: ViewMode; // editor / split / preview (screen layout only)
   splitRatio: number; // editor pane fraction of the workspace in split mode
+  followSystemTheme: boolean; // desktop reader: follow Windows light/dark instead of screenTheme
 }
 
 export const SETTINGS_KEY = "mdviewer.settings.v1";
@@ -48,6 +49,7 @@ export const SETTINGS_KEY = "mdviewer.settings.v1";
 export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
   screenTheme: "light",
+  followSystemTheme: false,
   codeTheme: "github",
   docFont: "serif",
   fontSizePt: 11,
@@ -131,6 +133,8 @@ export function migrateSettings(raw: unknown): Settings {
     screenTheme: SCREEN_THEMES.includes(r.screenTheme as ScreenTheme)
       ? (r.screenTheme as ScreenTheme)
       : DEFAULT_SETTINGS.screenTheme,
+    followSystemTheme:
+      typeof r.followSystemTheme === "boolean" ? r.followSystemTheme : DEFAULT_SETTINGS.followSystemTheme,
     codeTheme: CODE_THEMES.includes(r.codeTheme as CodeThemeId)
       ? (r.codeTheme as CodeThemeId)
       : DEFAULT_SETTINGS.codeTheme,

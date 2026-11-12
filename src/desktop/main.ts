@@ -1,6 +1,7 @@
 import "../styles/document.css";
 import "../styles/shiki.css";
 import "./reader.css";
+import "./shell/shell.css";
 import { loadSettings, saveSettings } from "../app/settings";
 import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
@@ -10,12 +11,17 @@ import { native, type OpenBatch, type ReadResult, type SaveResult } from "./nati
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
+import { registerPanel } from "./panels";
+import { mountTabs } from "./shell/tabs";
+import { mountMenu, type MenuEntry } from "./shell/menu";
+import { statusParts } from "./shell/status";
+import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
 import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
-import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
+import { documentLabels } from "../ui/DocumentNavigation";
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -27,7 +33,6 @@ const shell = element("reader-shell");
 const content = element("reader-document");
 const empty = element("reader-empty");
 const outline = element("reader-outline");
-const select = element<HTMLSelectElement>("reader-documents");
 const notice = element("reader-notice");
 const workspaceNotice = element("workspace-notice");
 const appRoot = element("app");
@@ -36,8 +41,10 @@ const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
 const workspaceButton = element<HTMLButtonElement>("reader-workspace");
-const newButtons = [element<HTMLButtonElement>("reader-new"), element<HTMLButtonElement>("reader-new-empty")];
-const closeButton = element<HTMLButtonElement>("reader-close");
+const newButtons = [element<HTMLButtonElement>("reader-new-empty")];
+const saveState = element("reader-save-state");
+const panel = element("shell-panel");
+const panelToggle = element<HTMLButtonElement>("shell-panel-toggle");
 const returnButton = element<HTMLButtonElement>("reader-return");
 const settings = loadSettings();
 // The single owner of open documents across reading and the PDF workspace.
@@ -53,15 +60,24 @@ let textSize = 17;
 let nativeSaveBusy = false;
 const queuedBatches: Array<{ batch: OpenBatch; request: number }> = [];
 let renderedReaderId: string | null = null;
-const readerNavigation = mountDocumentNavigation(shell, select,
-  element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
-  shell.querySelector<HTMLElement>(".reader-footer")!);
+const tabs = mountTabs(element("shell-tabs"), { activate: activateDocument, close: closeDocumentById });
 
 mountSelectionCopy(content);
 
-const theme = element<HTMLSelectElement>("reader-theme");
-theme.value = settings.screenTheme;
-document.documentElement.dataset.appTheme = settings.screenTheme;
+// Screen theme: a fixed choice, or follow Windows (light or dark) when the setting says so.
+const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
+function applyTheme(): void {
+  document.documentElement.dataset.appTheme = settings.followSystemTheme
+    ? (systemDark?.matches ? "dark" : "light") : settings.screenTheme;
+}
+systemDark?.addEventListener?.("change", applyTheme);
+applyTheme();
+function setTheme(choice: "light" | "dark" | "sepia" | "system"): void {
+  if (choice === "system") settings.followSystemTheme = true;
+  else { settings.followSystemTheme = false; settings.screenTheme = choice; }
+  saveSettings({ ...loadSettings(), screenTheme: settings.screenTheme, followSystemTheme: settings.followSystemTheme });
+  applyTheme();
+}
 
 // Live reload (S1c): a dirty document whose file changed on disk gets a
 // non-modal bar. Nothing is discarded without a click.
@@ -129,15 +145,11 @@ async function flushSession(): Promise<void> {
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
-  select.replaceChildren(...open.map(doc => {
-    const option = new Option(`${doc.dirty ? "• " : ""}${labels.get(doc.id)!}`, doc.id);
-    option.selected = doc.id === active?.id;
-    return option;
-  }));
-  if (!open.length) select.append(new Option("No document open", ""));
-  select.disabled = !open.length || changingMode;
-  readerNavigation.sync();
-  closeButton.disabled = !active;
+  tabs.render(open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), active?.id ?? null, changingMode);
+  const target = docs.saveTarget();
+  saveState.textContent = target
+    ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
+    : "";
   workspaceButton.disabled = !active || changingMode || nativeSaveBusy;
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
   returnButton.disabled = workspaceBusy;
@@ -149,7 +161,6 @@ function syncDocuments(): void {
   }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
   recordSession();
-  const target = docs.saveTarget();
   const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
     && !dismissedConflicts.has(target.binding.token);
   for (const { bar, text } of conflictBars) {
@@ -175,7 +186,6 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   const doc = docs.reader.active;
   syncDocuments();
   outline.replaceChildren();
-  outline.hidden = true;
   content.hidden = !doc;
   empty.hidden = !!doc;
   if (!doc) {
@@ -220,7 +230,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
         link.dataset.level = heading.tagName;
         outline.append(link);
       }
-      outline.hidden = outline.childElementCount < 2;
+      if (!outline.childElementCount) outline.textContent = "This document has no headings.";
       // The outline changes text wrapping and the maximum scroll offset. Reveal
       // it first so saved offsets clamp against the reader geometry.
       // A first open needs no reset (the emptied reader is at 0) and no forced layout.
@@ -238,7 +248,8 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
       else if (position && scroll.scrollTop === restoredTop) restore();
       content.setAttribute("aria-busy", "false");
-      status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
+      const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk });
+      status.textContent = `${parts.where} · ${parts.size}`;
       // A new open/action may have reported a newer failure while this render ran.
       if (result.warnings.length && currentNotice === noticeGeneration) {
         report([...importErrors, ...result.warnings].join(" "));
@@ -422,8 +433,7 @@ async function returnToReader(): Promise<void> {
     workspace.hidden = true; shell.hidden = false;
     document.body.classList.remove("desktop-editing");
     Object.assign(settings, loadSettings());
-    theme.value = settings.screenTheme;
-    document.documentElement.dataset.appTheme = settings.screenTheme;
+    applyTheme();
     report("");
     await render();
     content.focus({ preventScroll: true });
@@ -438,17 +448,36 @@ function finishMode(): void {
 }
 
 function closeDocument(): void {
-  const doc = docs.reader.active;
+  if (docs.reader.activeId) closeDocumentById(docs.reader.activeId);
+}
+
+function closeDocumentById(id: string): void {
+  const doc = docs.reader.documents.find(candidate => candidate.id === id);
   if (!doc || changingMode) return;
   if (nativeSaveBusy) { report("Wait for the save to finish before closing this document."); return; }
   if (doc.dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) return;
   ++generation;
+  const wasActive = docs.reader.activeId === doc.id;
   docs.closeReaderDocument(doc.id);
   report("");
-  void render();
+  if (wasActive) void render(); else syncDocuments();
 }
 
-element("reader-open").addEventListener("click", () => { void open(); });
+function activateDocument(id: string): void {
+  if (changingMode || docs.reader.activeId === id) return;
+  visit(id, docs.reader.activeId);
+  ++generation; docs.reader.activeId = id; report(""); void render();
+}
+
+function stepDocument(delta: number): void {
+  const open = docs.reader.documents;
+  if (app || changingMode || open.length < 2) return;
+  const at = open.findIndex(doc => doc.id === docs.reader.activeId);
+  activateDocument(open[(at + delta + open.length) % open.length]!.id);
+  tabs.focusActive();
+}
+
+element("reader-open-empty").addEventListener("click", () => { void open(); });
 for (const button of newButtons) button.addEventListener("click", () => { void createDocument(); });
 for (const input of [fileInput, element<HTMLInputElement>("file-input")]) {
   input.addEventListener("change", () => {
@@ -471,12 +500,6 @@ appRoot.addEventListener("click", event => {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
-select.addEventListener("change", () => {
-  if (changingMode || docs.reader.activeId === select.value) return;
-  visit(select.value, docs.reader.activeId);
-  ++generation; docs.reader.activeId = select.value; report(""); void render();
-});
-closeButton.addEventListener("click", closeDocument);
 workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
 function openSample(): void {
@@ -486,18 +509,9 @@ function openSample(): void {
   void render(errors);
 }
 element("reader-sample").addEventListener("click", openSample);
-theme.addEventListener("change", () => {
-  if (!["light", "dark", "sepia"].includes(theme.value)) return;
-  settings.screenTheme = theme.value as typeof settings.screenTheme;
-  document.documentElement.dataset.appTheme = settings.screenTheme;
-  saveSettings({ ...loadSettings(), screenTheme: settings.screenTheme });
-});
 function resizeText(delta: number): void {
   textSize = Math.min(26, Math.max(13, textSize + delta));
   content.style.setProperty("--reader-text-size", `${textSize}px`);
-}
-for (const [id, delta] of [["reader-smaller", -1], ["reader-larger", 1]] as const) {
-  element(id).addEventListener("click", () => resizeText(delta));
 }
 window.addEventListener("dragover", event => {
   if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
@@ -650,23 +664,163 @@ const reading = (): boolean => !changingMode;
 registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
-registerCommand({ id: "workspace.enter", title: "Edit & PDF", enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
+registerCommand({ id: "workspace.enter", title: "Edit & PDF", keys: ["Mod+E"], enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
-registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
+registerCommand({ id: "view.textSmaller", title: "Smaller text", keys: ["Mod+-"], enabled: () => !app, run: () => resizeText(-1) });
 registerCommand({ id: "navigate.back", title: "Back", keys: ["Alt+ArrowLeft"], enabled: () => !app && backStack.length > 0,
   run: () => step(backStack, forwardStack) });
 registerCommand({ id: "navigate.forward", title: "Forward", keys: ["Alt+ArrowRight"], enabled: () => !app && forwardStack.length > 0,
   run: () => step(forwardStack, backStack) });
-registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
+registerCommand({ id: "view.textLarger", title: "Larger text", keys: ["Mod+="], enabled: () => !app, run: () => resizeText(1) });
 installShortcuts(window, command => !app && !command.id.startsWith("document.save"));
 // Save works in every mode and must claim Ctrl+S before the workspace's own
 // Save Markdown (copy) shortcut, so it listens in the capture phase.
 const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
-registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
+// Save is offered only when there is something to save: unsaved edits, or a document with no file yet.
+const somethingToSave = (): boolean => { const target = docs.saveTarget(); return !!target && (target.dirty || !target.binding); };
+registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: () => saving() && somethingToSave(), run: () => saveDocument(false) });
 registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
 registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
 installShortcuts(window, command => native.available && command.id.startsWith("document.save"), { capture: true });
+
+// ---- Shell (S3): tabs, More menu, panel, palette, print. -------------------------------
+registerCommand({ id: "document.next", title: "Next document", keys: ["Alt+Shift+N"], enabled: () => !app && docs.reader.documents.length > 1, run: () => stepDocument(1) });
+registerCommand({ id: "document.previous", title: "Previous document", keys: ["Alt+Shift+P"], enabled: () => !app && docs.reader.documents.length > 1, run: () => stepDocument(-1) });
+registerCommand({ id: "document.choose", title: "Go to the document tabs", keys: ["Alt+Shift+D"], enabled: () => !app && !!docs.reader.active, run: () => tabs.focusActive() });
+
+// The left panel and the palette load on first use, after the first document has painted.
+let panelHost: { show(id: string): void } | null = null;
+let panelLoading: Promise<void> | null = null;
+async function openPanel(id?: string): Promise<void> {
+  panel.hidden = false;
+  panelToggle.setAttribute("aria-expanded", "true");
+  document.body.classList.add("shell-panel-open");
+  panelLoading ??= import("./shell/panel").then(module => { panelHost = module.mountPanelHost(panel, id ?? null); });
+  await panelLoading;
+  if (id) panelHost?.show(id);
+}
+function closePanel(): void {
+  if (panel.hidden) return;
+  const hadFocus = panel.contains(document.activeElement);
+  panel.hidden = true;
+  panelToggle.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("shell-panel-open");
+  if (hadFocus) panelToggle.focus();
+}
+panelToggle.addEventListener("click", () => { if (panel.hidden) void openPanel(); else closePanel(); });
+panel.addEventListener("keydown", event => {
+  // As a drawer on a narrow window, Escape closes the panel.
+  if (event.key === "Escape" && window.matchMedia("(max-width: 860px)").matches) { event.preventDefault(); closePanel(); }
+});
+if (native.available) {
+  registerPanel({ id: "library", title: "Library", mount: host => {
+    let teardown: (() => void) | null = null;
+    void import("./shell/library-panel").then(module => { teardown = module.mountLibrary(host); });
+    return () => teardown?.();
+  } });
+}
+registerPanel({ id: "outline", title: "Outline", mount: host => { host.append(outline); return () => panel.append(outline); } });
+registerCommand({ id: "view.panel", title: "Show or hide the library and outline", keys: ["Mod+B"], enabled: () => !app,
+  run: () => { if (panel.hidden) void openPanel(); else closePanel(); } });
+registerCommand({ id: "view.outline", title: "Show the outline", enabled: () => !app, run: () => openPanel("outline") });
+if (native.available) registerCommand({ id: "view.library", title: "Show the library", enabled: () => !app, run: () => openPanel("library") });
+
+registerCommand({ id: "palette.open", title: "All commands and files…", keys: ["Mod+K"], enabled: () => !app && !changingMode,
+  run: async () => {
+    const { openPalette } = await import("./shell/palette");
+    const { docs: open, active } = docs.list();
+    const labels = documentLabels(open);
+    await openPalette({
+      documents: () => open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, active: doc.id === active?.id,
+        detail: docs.reader.documents.find(item => item.id === doc.id)?.binding?.dir || "In memory" })),
+      recent: async () => native.available
+        ? (await native.library.list()).recent.slice(0, 20).map(entry => ({ id: entry.id, label: entry.name, detail: entry.dir }))
+        : [],
+      activate: activateDocument,
+      openRecent: id => { void openFromLibrary(id); },
+    });
+  } });
+
+/** Ctrl+P: the paginated print/PDF path. The webview's own print of the reading view must never run. */
+async function printOrExport(): Promise<void> {
+  if (changingMode || nativeSaveBusy) return;
+  if (!app) {
+    if (!docs.reader.active) return;
+    await enterWorkspace();
+  }
+  await app?.exportPrint();
+}
+registerCommand({ id: "export.pdf", title: "Print or export PDF…", keys: ["Mod+P"],
+  enabled: () => !changingMode && !nativeSaveBusy && !!(app ? app.store.active : docs.reader.active), run: printOrExport });
+
+for (const [choice, title] of [["light", "Light theme"], ["dark", "Dark theme"], ["sepia", "Sepia theme"], ["system", "Follow Windows theme"]] as const) {
+  registerCommand({ id: `view.theme.${choice}`, title, run: () => setTheme(choice) });
+}
+const themeChecked = (choice: string) => (): boolean =>
+  choice === "system" ? settings.followSystemTheme : !settings.followSystemTheme && settings.screenTheme === choice;
+
+let pinnedOnTop = false;
+if (native.available) {
+  registerCommand({ id: "view.pinOnTop", title: "Keep on top of other windows", run: async () => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().setAlwaysOnTop(!pinnedOnTop);
+      pinnedOnTop = !pinnedOnTop;
+      report(pinnedOnTop ? "MDviewer stays on top of other windows." : "MDviewer no longer stays on top.");
+    } catch (error) { report(`Could not change pin on top: ${errorText(error)}`); }
+  } });
+}
+
+/** Copy text from a command and say what was copied. */
+function copyToClipboard(text: string, done: string): void {
+  void navigator.clipboard.writeText(text).then(() => report(done), error => report(`Could not copy: ${errorText(error)}`));
+}
+const bound = () => docs.saveTarget()?.binding;
+registerCommand({ id: "document.copyPath", title: "Copy file path", enabled: () => !!bound(), run: () => {
+  const binding = bound();
+  if (binding) copyToClipboard(binding.path, "Copied the file path.");
+} });
+registerCommand({ id: "document.copyReference", title: "Copy reference (path and selected lines)", enabled: () => !app && !!docs.reader.active,
+  run: async () => {
+    const doc = docs.reader.active;
+    if (!doc) return;
+    let where = doc.binding?.path ?? doc.name;
+    if (doc.binding && native.available) {
+      // Inside a pinned project the reference is relative to the project root.
+      const projects = await native.library.list().then(view => view.projects, () => []);
+      const lower = where.toLowerCase();
+      const root = projects.map(project => project.path).filter(path => lower.startsWith(`${path.toLowerCase()}\\`) || lower.startsWith(`${path.toLowerCase()}/`))
+        .sort((a, b) => b.length - a.length)[0];
+      if (root) where = where.slice(root.length + 1).replace(/\\/g, "/");
+    }
+    const range = selectionRange(content, window.getSelection());
+    copyToClipboard(range ? `${where}:${range[0] === range[1] ? range[0] : `${range[0]}-${range[1]}`}` : where, "Copied a reference to the document.");
+  } });
+registerCommand({ id: "document.reload", title: "Reload from disk", enabled: () => !!bound() && !changingMode && !nativeSaveBusy, run: reloadFromDisk });
+
+const moreMenu: MenuEntry[] = [
+  { command: "document.new", id: "reader-new" },
+  { command: "document.open", id: "reader-open" },
+  "separator",
+  { command: "document.save" },
+  { command: "document.saveAs" },
+  { command: "document.saveCopy" },
+  { command: "export.pdf" },
+  "separator",
+  { command: "view.theme.light", role: "menuitemradio", checked: themeChecked("light") },
+  { command: "view.theme.dark", role: "menuitemradio", checked: themeChecked("dark") },
+  { command: "view.theme.sepia", role: "menuitemradio", checked: themeChecked("sepia") },
+  { command: "view.theme.system", role: "menuitemradio", checked: themeChecked("system") },
+  "separator",
+  { command: "view.textSmaller" },
+  { command: "view.textLarger" },
+  { command: "view.pinOnTop", role: "menuitemcheckbox", checked: () => pinnedOnTop },
+  "separator",
+  { command: "palette.open" },
+  { command: "document.close", id: "reader-close" },
+];
+mountMenu(element<HTMLButtonElement>("shell-more"), element("shell-more-menu"), moreMenu);
 document.addEventListener("click", event => {
   const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
   if (!anchor || !anchor.closest(".doc, #reader-outline")) return;
