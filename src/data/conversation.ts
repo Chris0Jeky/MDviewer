@@ -99,7 +99,7 @@ function total(values: string[]): string {
 export function conversationOverview(lens: Lens, records: readonly (JsonValue | undefined)[]): void {
   const roles = new Map<string, number>();
   const tools = new Map<string, number>();
-  const times: string[] = [];
+  const stamps: JsonValue[] = [];
   const tokens = { input_tokens: [] as string[], output_tokens: [] as string[] };
   for (const record of records) {
     const msg = turn(record);
@@ -113,8 +113,8 @@ export function conversationOverview(lens: Lens, records: readonly (JsonValue | 
         tools.set(name, (tools.get(name) ?? 0) + 1);
       }
     }
-    const stamp = time(lens, timestamp(record));
-    if (stamp) times.push(stamp);
+    const stamp = timestamp(record);
+    if (stamp) stamps.push(stamp);
     for (const holder of record === msg ? [record] : [record, msg]) {
       const usage = member(holder, "usage");
       if (usage?.kind !== "object") continue;
@@ -127,7 +127,12 @@ export function conversationOverview(lens: Lens, records: readonly (JsonValue | 
   }
   const facts = [`${count([...roles.values()].reduce((a, b) => a + b, 0), "turn")}: ${[...roles].map(([role, n]) => `${n} ${cellText(role)}`).join(", ")}`];
   if (tools.size) facts.push(`tool calls: ${[...tools].map(([name, n]) => `${cellText(name)} ${n}`).join(", ")}`);
-  if (times.length) facts.push(`time span: ${cellText(times[0]!)} – ${cellText(times[times.length - 1]!)}`);
+  // Format only what the span shows: the first and last readable timestamps, not every record's.
+  let first = "";
+  for (const stamp of stamps) { first = time(lens, stamp); if (first) break; }
+  let last = "";
+  for (let i = stamps.length - 1; i >= 0 && first && !last; i--) last = time(lens, stamps[i]!);
+  if (first && last) facts.push(`time span: ${cellText(first)} – ${cellText(last)}`);
   const totals = Object.entries(tokens).filter(([, values]) => values.length).map(([name, values]) => `${cellText(name)}: ${cellText(total(values))}`);
   if (totals.length) facts.push(`tokens: ${totals.join(", ")}`);
   // One fact per visual line: the layout's own break, since soft line breaks would run them together.
@@ -209,9 +214,12 @@ export function conversationRecord(lens: Lens, value: JsonValue | undefined, pat
   if (!lens.take()) return; // role
   const role = string(member(msg, "role"))!;
   const stamp = time(lens, timestamp(value));
-  lens.line(`## ${cellText(role.charAt(0).toUpperCase() + role.slice(1))}${stamp ? ` · ${cellText(stamp)}` : ""}`, path); lens.line();
-  const msgPath = wrapped ? childPath(path, "message") : path;
   const content = member(msg, "content")!;
+  const toolOnly = content.kind === "array" && content.items.length > 0
+    && content.items.every(p => string(member(p, "type")) === "tool_result");
+  const label = toolOnly ? `Tool result (${role})` : role.charAt(0).toUpperCase() + role.slice(1);
+  lens.line(`## ${cellText(label)}${stamp ? ` · ${cellText(stamp)}` : ""}`, path); lens.line();
+  const msgPath = wrapped ? childPath(path, "message") : path;
   const contentPath = childPath(msgPath, "content");
   if (content.kind === "array") {
     if (lens.take()) {

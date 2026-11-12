@@ -5,17 +5,6 @@ TOML · 672 B · object with 25 keys
 | --- | --- |
 | basic | hello&#9;world |
 | literal | C\:\\invented\\path |
-
-## multibasic
-
-<span>one two<br>three<br></span>
-
-## multiliteral
-
-<span>one<br>\\two<br></span>
-
-| Key | Value |
-| --- | --- |
 | decimal | 1\_000 |
 | hex | 0x1F |
 | octal | 0o755 |
@@ -31,39 +20,31 @@ TOML · 672 B · object with 25 keys
 | local | 1979\-05\-27 07\:32\:00\.123 |
 | date | 1979\-05\-27 |
 | time | 07\:32\:00 |
-
-## owner
-
-| Key | Value |
-| --- | --- |
-| name | Invented Reader |
-
-| Key | Value |
-| --- | --- |
+| owner | name: Invented Reader |
 | key\.with\.dots | verbatim |
+| ports | 8080, 8443 |
+| point | x: 1 · y: 2 · label: origin |
+| server | host: localhost · tls: false |
 
-## ports
+## multibasic
 
-8080, 8443
+```
+one two
+three
 
-## point
+```
 
-| Key | Value |
-| --- | --- |
-| x | 1 |
-| y | 2 |
-| label | origin |
+## multiliteral
 
-## server
+```
+one
+\two
 
-| Key | Value |
-| --- | --- |
-| host | localhost |
-| tls | false |
+```
 
 ## products
 
 | name | price |
-| --- | --- |
+| --- | ---: |
 | Pencil | 1\.25 |
 | Paper | 2\.0 |

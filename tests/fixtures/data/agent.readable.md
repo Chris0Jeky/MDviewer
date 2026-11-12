@@ -49,12 +49,9 @@ I should inspect the plan before suggesting a change.
 
 <details><summary>Metadata</summary>
 
-### usage
-
 | Key | Value |
 | --- | --- |
-| input\_tokens | 100 |
-| output\_tokens | 20 |
+| usage | input\_tokens: 100 · output\_tokens: 20 |
 
 </details>
 
@@ -67,7 +64,7 @@ I should inspect the plan before suggesting a change.
 
 </details>
 
-## User · 2026\-04\-03 10\:02 UTC
+## Tool result \(user\) · 2026\-04\-03 10\:02 UTC
 
 <details><summary>Tool result · Mint lives in a pot&#46;</summary>
 
@@ -134,13 +131,7 @@ Image \(image\/png\)\, data not shown \(22 characters\)
 | --- | --- |
 | type | assistant |
 | timestamp | 2026\-04\-03T10\:03\:00Z (2026\-04\-03 10\:03 UTC) |
-
-### usage
-
-| Key | Value |
-| --- | --- |
-| input\_tokens | 25 |
-| output\_tokens | 12 |
+| usage | input\_tokens: 25 · output\_tokens: 12 |
 
 </details>
 

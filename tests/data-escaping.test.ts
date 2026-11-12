@@ -18,7 +18,16 @@ function text(element: Element): string {
   for (const br of clone.querySelectorAll("br")) br.replaceWith("\n");
   // CommonMark normalises CR and CRLF to LF. No trimming or whitespace collapsing is used:
   // the lens encodes spaces and tabs so Markdown cannot discard or reinterpret them.
-  return (clone.textContent ?? "").replace(/\r\n|\r/g, "\n");
+  const result = (clone.textContent ?? "").replace(/\r\n|\r/g, "\n");
+  return element.tagName === "CODE" ? result.replace(/\n$/, "") : result;
+}
+function valueTarget(root: HTMLElement): Element | null {
+  return root.querySelector("tbody td:nth-child(2)") ?? root.querySelector("h2 + p") ?? root.querySelector("h2 + pre code");
+}
+function displayed(s: string): string {
+  const quoted = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(s)
+    || /^(?:true|false|null)$/.test(s) || (!/[\r\n]/.test(s) && /^\s|\s$/.test(s));
+  return s === "" ? '"" (empty string)' : quoted ? `"${s}"` : s;
 }
 function samples(): string[] {
   let seed = 0x5eed1234;
@@ -46,11 +55,11 @@ describe("data escaping conformance", () => {
       const csvRoot = html(toReadable(csv, "csv").markdown);
       const yamlRoot = html(toReadable(yaml, "yaml").markdown);
       const cell = csvRoot.querySelector("tbody td");
-      const value = yamlRoot.querySelector("tbody td:nth-child(2)") ?? yamlRoot.querySelector("h2 + p");
+      const value = valueTarget(yamlRoot);
       expect(cell, JSON.stringify(s)).not.toBeNull();
       expect(value, JSON.stringify(s)).not.toBeNull();
       expect(text(cell!), JSON.stringify(s)).toBe(normal);
-      expect(text(value!), JSON.stringify(s)).toBe(normal);
+      expect(text(value!), JSON.stringify(s)).toBe(value!.tagName === "TD" ? displayed(normal) : normal);
       expect(tags(cell!)).toEqual(/[\r\n]/.test(s) ? ["BR", "TD"] : ["TD"]);
       expect(csvRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
       expect(yamlRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
@@ -63,12 +72,13 @@ describe("data escaping conformance", () => {
       const plain = s.replace(/[^\r\n\t ]/g, "a");
       const valueRoot = html(toReadable(JSON.stringify({ k: s }), "json").markdown);
       expect(tags(valueRoot), JSON.stringify(s)).toEqual(tags(html(toReadable(JSON.stringify({ k: plain }), "json").markdown)));
-      const target = valueRoot.querySelector("tbody td:nth-child(2)") ?? valueRoot.querySelector("h2 + p");
+      const target = valueTarget(valueRoot);
       expect(target, JSON.stringify(s)).not.toBeNull();
-      expect(text(target!), JSON.stringify(s)).toBe(s.replace(/\r\n|\r/g, "\n"));
+      const normal = s.replace(/\r\n|\r/g, "\n");
+      expect(text(target!), JSON.stringify(s)).toBe(target!.tagName === "CODE" ? normal : displayed(normal));
       const expectedTags = [target!.tagName];
       if (target!.tagName === "P") expectedTags.push("SPAN");
-      if (s.includes("\n") || s.includes("\r")) expectedTags.push("BR");
+      if (target!.tagName !== "CODE" && (s.includes("\n") || s.includes("\r"))) expectedTags.push("BR");
       expectedTags.sort();
       expect(tags(target!), JSON.stringify(s)).toEqual([...new Set(expectedTags)]);
 
@@ -76,7 +86,7 @@ describe("data escaping conformance", () => {
       expect(tags(table), JSON.stringify(s)).toEqual(tags(html(toReadable(JSON.stringify([{ k: plain }]), "json").markdown)));
       const cell = table.querySelector("tbody td")!;
       expect(cell, JSON.stringify(s)).not.toBeNull();
-      expect(text(cell), JSON.stringify(s)).toBe(s.replace(/\r\n|\r/g, "\n"));
+      expect(text(cell), JSON.stringify(s)).toBe(displayed(normal));
       expect(tags(cell)).toEqual(s.includes("\n") || s.includes("\r") ? ["BR", "TD"] : ["TD"]);
 
       const keyRoot = html(toReadable(JSON.stringify({ [s]: "plain" }), "json").markdown);
@@ -86,6 +96,28 @@ describe("data escaping conformance", () => {
       expect(tags(key)).toEqual(s.includes("\n") || s.includes("\r") ? ["BR", "TD"] : ["TD"]);
     }
   }, 120_000); // pure CPU; parallel suites can slow it several-fold
+
+  it("round-trips generated strings in inline lists, inline objects and flattened columns", () => {
+    for (const s of [...samples(), "a, b", "a · b", "a: b", "true", "-0.5e+3", "null"]) {
+      const normal = s.replace(/\r\n|\r/g, "\n");
+      const flat = html(toReadable(JSON.stringify([{ outer: { value: s } }]), "json").markdown);
+      expect(text(flat.querySelector("tbody td")!), JSON.stringify(s)).toBe(displayed(normal));
+      expect(flat.querySelector("thead th")?.textContent).toBe("outer.value");
+      expect(tags(flat.querySelector("tbody td")!)).toEqual(/[\r\n]/.test(s) ? ["BR", "TD"] : ["TD"]);
+      // Blocks and values reaching 80 characters cannot be inline (G2); their flattened
+      // cells above still exercise every generated sample without a size restriction.
+      const compound = displayed(s) === s && /, | · |: /.test(s) ? `"${s}"` : displayed(s);
+      if (/[\r\n]/.test(s) || compound.length + 5 >= 80) continue;
+      for (const [value, expected] of [[{ k: [s, "end"] }, `${compound}, end`], [{ k: { v: s } }, `v: ${compound}`]] as const) {
+        const root = html(toReadable(JSON.stringify(value), "json").markdown);
+        const target = root.querySelector("tbody td:nth-child(2)")!;
+        expect(text(target), JSON.stringify(s)).toBe(expected);
+        expect(tags(target)).toEqual(["TD"]);
+        expect(root.querySelectorAll("h2, img, script, input, a:not(.header-anchor)")).toHaveLength(0);
+      }
+      expect(flat.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
+    }
+  }, 120_000);
 
   it("keeps deliberate Markdown within a blockquote and sanitises it", () => {
     const root = html(toReadable(JSON.stringify({ description: "# Heading\n\n**Bold** <script>alert(1)</script>",
@@ -118,11 +150,11 @@ describe("data escaping conformance", () => {
       const summary = text(call.querySelector("summary")!);
       const oneLine = Array.from(normal.replace(/\n/g, " "));
       expect(summary, JSON.stringify(s)).toBe(`Tool call: ${normal} · ${oneLine.slice(0, 80).join("")}${oneLine.length > 80 ? "…" : ""}`);
-      const name = call.querySelector("details tbody td:nth-child(2)") ?? call.querySelector("details h3 + p");
+      const name = call.querySelector("details tbody td:nth-child(2)") ?? call.querySelector("details h3 + p, details h3 + pre code");
       // The complete tool name also remains in generic metadata, including whitespace.
-      expect(text(name!), JSON.stringify(s)).toBe(normal);
-      const input = call.querySelector("tbody td:nth-child(2)") ?? call.querySelector("h3 + p");
-      expect(text(input!), JSON.stringify(s)).toBe(normal);
+      expect(text(name!), JSON.stringify(s)).toBe(name!.tagName === "CODE" ? normal : displayed(normal));
+      const input = call.querySelector("tbody td:nth-child(2)") ?? call.querySelector("h3 + p, h3 + pre code");
+      expect(text(input!), JSON.stringify(s)).toBe(input!.tagName === "CODE" ? normal : displayed(normal));
       const result = Array.from(root.querySelectorAll("details")).find(e => e.querySelector(":scope > summary")?.textContent?.startsWith("Tool result"))!;
       expect((result.querySelector("pre")!.textContent ?? "").replace(/\n$/, ""), JSON.stringify(s)).toBe(normal);
       expect(tags(root.querySelector("h2")!)).toEqual(tags(conversation(plain).querySelector("h2")!));
@@ -133,8 +165,8 @@ describe("data escaping conformance", () => {
   it("preserves a long ordinary paragraph's real line breaks", () => {
     const s = "Plain ".repeat(40) + "\nnext\n\nlast";
     const root = html(toReadable(JSON.stringify({ k: s }), "json").markdown);
-    expect(text(root.querySelector("h2 + p")!)).toBe(s);
-    expect(tags(root.querySelector("h2 + p")!)).toEqual(["BR", "P", "SPAN"]);
+    expect(text(root.querySelector("h2 + pre code")!)).toBe(s);
+    expect(tags(root.querySelector("h2 + pre")!)).toEqual(["CODE", "PRE"]);
   });
 
   it("shows plain text literally: every sample, exactly, in one block", () => {
