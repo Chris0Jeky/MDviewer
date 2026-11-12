@@ -276,11 +276,12 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
           offline.validate();
         }
         prepareRasterClone(cloneDocument, sheet, page);
-        unzoomShrunkBlocks(sheet);
         // Revealing the sheet can use fonts after html2canvas's fonts.ready
         // wait. Resolve layout first, then start a fresh font deadline.
         sheet.getBoundingClientRect();
         await waitForClonedFonts(cloneDocument, Date.now() + 10_000);
+        // Measures settled geometry, so it runs once the fonts have loaded.
+        unzoomShrunkBlocks(sheet);
         offline?.validate();
         paintFootnoteMarkers(sheet, page);
         prepared = true;
