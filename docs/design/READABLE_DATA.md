@@ -39,7 +39,10 @@ comments, and the view says so.
 the text itself, wrapped, with no Markdown interpretation: every line is escaped like any other data
 value, so nothing in it becomes structure. No lens and no parsing. Edit shows the raw text. A `.txt`
 file is never read as Markdown, even when it looks like Markdown (an assumption the owner can
-reverse). Not in version 1: notebooks, XML, INI and `.env`, logs.
+reverse).
+
+Not in version 1: notebooks, XML, INI and `.env`, and log parsing (a `.log` file opens as plain
+text).
 
 ## The three modes
 
