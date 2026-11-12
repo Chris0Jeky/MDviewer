@@ -3,7 +3,33 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-11-05 (Windows editor follow-up qualified):**
+> **CURRENT CHECKPOINT — 2026-11-12 (companion push; Readable data and Actionable Markdown):**
+> Main [8984b9b](https://github.com/Chris0Jeky/MDviewer/commit/8984b9b7fa29a7d5bafc16f56b96597ef1c454ed)
+> (merge of #281). CI [43221710538](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710538) and
+> Windows Desktop [43221710658](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710658) passed on it.
+> The Windows app is now a companion reader: Read, Edit, owned Save/Save As, live reload, Library, relative
+> links and session restore are merged (#221, #224–#226, #228, #231–#233, #235, #239, #241, #260, #264, #271).
+> **Actionable Markdown** ([spec](docs/design/ACTIONABLE_MARKDOWN.md)): A1 #252, A2 #244 and A3 #263
+> are merged; #268 fixed the 1-based write-back line (#266) and the native A3 smoke #275 proves toggle and
+> Undo with exact CRLF bytes in the Windows job. A4 templates is in progress: native template read #285 is merged and
+> the picker/command #286 is open. A5 (embeddable element) is later.
+> **Readable data** ([spec](docs/design/READABLE_DATA.md)): D0 #269, D1 #270, D2 #273, D3 native #272 and
+> webview #280, D4 parsers #281 and Markdown-only relative links #283 are merged. The app opens `.json`,
+> `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. D4 native extensions #284
+> (YAML, TOML, CSV, TSV) merged. **Next:** the Experience-lane webview follow-up for D4 (await
+> `prepare(kind)` at admission, widen `OPENABLE` in `src/app/renderText.ts`, the pickers), then D5 (copy
+> value/path/subtree, agent data files in the Library, save the readable view as Markdown).
+> Open issues from these slices: #276 (live reload starves on a fast-appended log), #277 (alternate data
+> stream name in launch arguments), #278 (conversation lens accuracy), #282 (memory before the display
+> budget; YAML/CSV fidelity), #254 (A1 review follow-ups); #262 (raster PDF, nested Tier 3 block) is
+> separate. Queue: [Future work](docs/FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+> **New human item AI-10** (try the build on your own files) joins #169 and AI-6/AI-7/AI-8/AI-9, all OPEN.
+> Documents stay in memory except explicit saves and the Windows Library/session files of paths only. No
+> signing, updater, deployment or performance claim follows. Re-read GitHub before starting work.
+
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT — 2026-11-05 (Windows editor follow-up qualified):**
 > Application revision [18afeeb8](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),
 > tree `2ede86cc07caf53a8afb3106716ece69c49d8a41`. #209/#210/#208/#213/#212/#211/#214 are merged.
 > Delivered: compact native-Undo Markdown commands; bounded in-session source,
@@ -27,8 +53,6 @@
 > **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** The deployment anchor is unchanged.
 > No signing, updater, human acceptance or comparative performance claim follows.
 > Re-read GitHub before starting work; older checkpoints below are historical.
-
-## Historical checkpoints
 
 > **HISTORICAL CANDIDATE SLICE — 2026-11-05, #203:** production Firefox authoring lane and
 > accessible keyboard/contrast/reflow regressions prepared from main `5cb2dbb3`.
