@@ -79,7 +79,8 @@ use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 through one handle (`replace::snapshot_read`), splits lines over raw UTF-8 bytes or UTF-16
 code units after a BOM, and changes only the placed lines' content bytes: the BOM, every line
 terminator (mixed endings included) and a final terminator are kept. Placement: the remembered
-`line` if it still equals `expect`, and only that natively. The contract's later steps (the
+`line` (1-based, as the webview parser numbers lines; 0 is invalid) if it still equals `expect`,
+and only that natively; `unplaced.index` is the patch's 0-based position in the change. The contract's later steps (the
 one line carrying the id, then the one equal line) need the Markdown syntax (code blocks,
 control kinds), so when the remembered line does not match, nothing is written and `unplaced` returns the current text so the parser can re-derive
 the patch (syntax-aware span edits stay in the webview). A replacement with a line break is
