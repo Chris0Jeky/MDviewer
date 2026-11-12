@@ -72,7 +72,9 @@ test("hostile HTML cannot execute, navigate or load document resources", async (
   await readyReader(page, "Hostile input stays inert");
   const doc = page.locator("#reader-document");
   await expect(doc).toContainText("Safe visible text");
-  await expect(doc.locator("script, iframe, object, style, form, button, [onerror], [onload]")).toHaveCount(0);
+  // The reader's own copy controls are the only buttons; authored ones are removed.
+  await expect(doc.locator("script, iframe, object, style, form, button:not(.reader-copy, .reader-heading-tool), [onerror], [onload]")).toHaveCount(0);
+  await expect(doc.getByRole("button", { name: "Submit secret" })).toHaveCount(0);
   await expect(doc.locator('[src^="http"], [href^="javascript:"], [style*="url("]')).toHaveCount(0);
   await doc.getByText("Unsafe link", { exact: true }).click();
   expect(await page.evaluate(() => window.__desktopEvidence.hostileRan ?? false)).toBe(false);

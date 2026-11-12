@@ -11,6 +11,7 @@ import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
 import { renderReaderDocument } from "./render";
+import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
@@ -54,6 +55,8 @@ let renderedReaderId: string | null = null;
 const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
   shell.querySelector<HTMLElement>(".reader-footer")!);
+
+mountSelectionCopy(content);
 
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
