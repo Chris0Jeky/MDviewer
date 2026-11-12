@@ -386,6 +386,26 @@
   display: none;
 }
 
+/* A quiet action line (the rest of a cut-short data view); below the warning toast. */
+#app > #workspace > #canvas > .canvas-notices > .canvas-offer {
+  position: absolute;
+  bottom: auto;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: 12px;
+  pointer-events: auto;
+}
+#app > #workspace > #canvas > .canvas-notices > .canvas-offer[hidden] { display: none; }
+.canvas-offer-action { padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-toolbar); color: var(--fg); font: inherit; }
+
 .warning-banner .warning-icon {
   flex: 0 0 auto;
   font-size: 14px;
@@ -681,3 +701,4 @@
     page-break-after: auto;
   }
 }
+#app > #workspace > #canvas > .canvas-notices > #warning-banner:not([hidden]) ~ .canvas-offer { top: 84px; }

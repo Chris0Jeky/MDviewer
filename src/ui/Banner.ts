@@ -31,6 +31,8 @@ export interface BannerController {
   clearFatal(): void;
   /** Clear render warnings and the error card, preserving ingestion notices. */
   clear(): void;
+  /** Offer actions on the current document (null hides it), such as the rest of a data view. */
+  offer(message: string | null, actions: ReadonlyArray<{ label: string; run(): void }>): void;
 }
 
 /** Pluralize a count with its noun. */
@@ -100,11 +102,15 @@ export function mountBanner(root: HTMLElement): BannerController {
     dismissBtn,
   );
 
+  // A quiet, non-alerting line with actions (never printed: it is not in #paged-output).
+  const offerBar = el("div", { class: "canvas-offer", attrs: { role: "status", hidden: "" } });
+
   // Zero-height sticky rail keeping the toast in the canvas viewport (see header).
   const notices = el(
     "div",
     { class: CLASSES.canvasNotices, attrs: { "aria-hidden": "false" } },
     warningBanner,
+    offerBar,
   );
 
   // ---- Fatal error card ----
@@ -204,6 +210,17 @@ export function mountBanner(root: HTMLElement): BannerController {
       renderWarnings = [];
       renderWarningText();
       hideError();
+    },
+    offer(message, actions): void {
+      offerBar.replaceChildren();
+      offerBar.hidden = !message;
+      if (!message) return;
+      offerBar.append(el("span", {}, message));
+      for (const action of actions) {
+        const button = el("button", { type: "button", class: "canvas-offer-action" }, action.label);
+        button.addEventListener("click", () => action.run());
+        offerBar.append(button);
+      }
     },
   };
 }

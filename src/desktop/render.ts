@@ -45,7 +45,8 @@ export async function renderReaderDocument(
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
   // use the existing transformers even when the fence has no syntax grammar.
-  const highlight = languages.length > 0 || needsCodeTransformers(md, tokens, settings.showLineNumbers);
+  // A data view keeps fence text literal: notation directives never trigger a transformer.
+  const highlight = languages.length > 0 || (options.data ? settings.showLineNumbers : needsCodeTransformers(md, tokens, settings.showLineNumbers));
   if (highlight) {
     const lineNumbers = settings.showLineNumbers ? ` ${CLASSES.withLineNumbers}` : "";
     // Shiki's own line structure (inline-block .line spans), so the swap keeps every height.
@@ -88,7 +89,7 @@ export async function renderReaderDocument(
   // The text is already on screen: an upgrade failure is a warning, never a failed render.
   if (highlight) {
     try {
-      installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings);
+      installMarkdownHighlighter(md, await getReaderHighlighter(languages), settings, options.data);
       upgradeCode(md, tokens, env, root);
     } catch (error) {
       warnings.push(`Code highlighting is unavailable: ${reason(error)}`);

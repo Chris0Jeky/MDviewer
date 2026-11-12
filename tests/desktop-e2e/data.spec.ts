@@ -47,7 +47,7 @@ test("JSON Lines renders one section per record", async ({ page }) => {
 });
 
 test("plain text stays literal, never Markdown", async ({ page }) => {
-  const text = "# not a heading\n- [ ] not a task\n    indented line\n";
+  const text = "# not a heading\n- [ ] not a task\n    indented line\n// [!code highlight]\n";
   await openFiles(page, [{ name: "notes.txt", text }]);
   await ready(page);
   await expect(doc(page).locator("h1")).toHaveText("notes.txt");
@@ -55,6 +55,9 @@ test("plain text stays literal, never Markdown", async ({ page }) => {
   await expect(doc(page).getByRole("checkbox")).toHaveCount(0);
   await expect(doc(page).locator("pre")).toContainText("# not a heading");
   expect(await doc(page).locator("pre").innerText()).toContain("    indented line");
+  // Notation directives stay text: nothing is highlighted or removed.
+  await expect(doc(page).locator("pre")).toContainText("// [!code highlight]");
+  await expect(doc(page).locator(".highlighted")).toHaveCount(0);
   await expect(page.locator("#reader-status")).toContainText("Plain text ·");
 });
 
