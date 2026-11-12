@@ -101,6 +101,15 @@ describe("YAML source nodes", () => {
     expect(conversation.markdown).toContain("## User");
     expect(conversation.markdown).toContain("> Welcome");
   });
+
+  it("uses the D6 generic layout inside unchanged YAML multi-document framing", () => {
+    const result = toReadable('---\nnested: {x: 1}\nafter: "true"\nrun: "one\\ntwo"\n---\nlast: done', "yaml");
+    expect(result.markdown).toContain("YAML · 63 B · 2 documents");
+    expect(result.markdown).toContain("## Document 1 (line 2)");
+    expect(result.markdown).toContain("| nested | x: 1 |\n| after | \\\"true\\\" |");
+    expect(result.markdown).toContain("### run\n\n```\none\ntwo\n```");
+    expect(result.markdown).toContain("## Document 2 (line 6)");
+  });
 });
 
 describe("TOML 1.0", () => {
@@ -176,6 +185,25 @@ describe("TOML 1.0", () => {
 });
 
 describe("CSV and TSV fields", () => {
+  it("G6 keeps CSV text and empty cells unquoted; G3a aligns only JSON-grammar numeric columns", () => {
+    const view = toReadable('n,mixed,leading,empty,bool\n1,2,01,,true\n-2.5e+3,text,02,,false', "csv");
+    expect(view.markdown).toContain("| ---: | --- | --- | --- | --- |");
+    expect(view.markdown).toContain("| 1 | 2 | 01 |  | true |");
+    expect(view.markdown).not.toContain("empty string");
+    expect(view.markdown).not.toContain("## 0");
+    expect(toReadable("n\tempty\n1\t\n", "csv", { fileName: "values.tsv" }).markdown).toContain("| 1 |  |");
+  });
+
+  it("G6 quotes typed-looking YAML and TOML strings without coercing the parser nodes", async () => {
+    await prepare("yaml");
+    for (const [kind, source] of [["yaml", 'port: "1"\nflag: "true"\nword: " padded "'], ["toml", 'port="1"\nflag="true"\nword=" padded "']] as const) {
+      const md = toReadable(source, kind).markdown;
+      expect(md).toContain('| port | \\"1\\" |');
+      expect(md).toContain('| flag | \\"true\\" |');
+      expect(md).toContain('| word | \\"&#32;padded&#32;\\" |');
+    }
+  });
+
   it("decodes RFC quotes and keeps ragged records, headers and strings", () => {
     const parsed = parseCsv(fixture("people.csv"));
     expect(parsed.problems).toEqual([]);

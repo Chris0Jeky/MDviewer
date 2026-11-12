@@ -6,7 +6,4 @@ Parsed as JSON with comments and trailing commas.
 | Key | Value |
 | --- | --- |
 | a | 1 |
-
-## b
-
-2, 3
+| b | 2, 3 |

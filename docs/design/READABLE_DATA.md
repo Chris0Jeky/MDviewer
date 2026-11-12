@@ -1,6 +1,7 @@
 # Readable data, version 1
 
-Status: **specification drafted 2026-11-12 on the owner's request. D1 (`src/data/`) and the
+Status: **specification drafted 2026-11-12 on the owner's request. D6's readability pass is
+implemented. D1 (`src/data/`) and the
 webview half of D3 (opening, Read, Edit, PDF, Save, errors) are implemented; the native half of
 D3 lands with the Core lane.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
 files" and create "structured more human readable versions".
@@ -59,29 +60,51 @@ No new chrome. The status bar names the format.
 
 ## The generic lens
 
-It must make any valid file readable. Rules, in source order throughout:
+It must make any valid file readable:
+
+The same generic layout applies inside YAML multi-document and conversation views; their framing stays intact.
 
 - **Top.** A title (the file name) and one overview line: format, size and top-level shape, for
   example "object with 12 keys" or "list of 340 records".
-- **Object.** Scalar members form a two-column key and value table. Each member that holds an
-  object or a list becomes a section headed by its key. Sections nest as headings down to level 4,
-  then as nested lists.
-- **List of flat records** (objects that share keys and hold only scalars or short lists of
-  scalars) becomes a table, one column per key.
+- **Object.** One key and value table comes first, then sections for the larger members. Both
+  groups keep file order, at every depth. Sections use headings down to level 4, then nested lists.
+- **Row-sized values** stay in that table: non-block scalars, empty objects and lists, lists of
+  at most eight non-block scalars, and objects of at most four non-block scalar members. Inline
+  lists use commas; inline objects use `key: value · key: value`. Either must be under 80 characters.
+  String items containing a separator (`, `, ` · ` or `: `) are quoted. Inline values spend their
+  full value count; hints apply to scalar rows, not inside inline collections.
+- **Lists of records** become tables when their objects have unique keys and scalar or short
+  scalar-list values (at most eight items). One nested object level is flattened as `parent.child`;
+  an empty nested object stays `{}`. Columns follow first appearance across all records, with
+  blanks for missing members. A collision or more than 32 columns falls back to the unflattened
+  test, then sections. Columns containing only non-empty numbers are right-aligned; CSV numbers
+  must match JSON's number grammar. Details follow only for Markdown or JSON embedded in strings.
+- **JSON Lines records** use the same table when all valid records qualify, even beyond the shown
+  range. A right-aligned `line` column gives source line numbers (`#` if `line` collides; sections
+  if both collide). Invalid records in the shown range follow the table, with their original record
+  numbers and source. The overview includes the invalid count; record and value budgets still apply.
 - **List of other objects** becomes one subsection per item, labelled by the first of `name`,
-  `title`, `id`, `key`, `label`, `type` that the item has, else by its index.
+  `title`, `id`, `key`, `label`, `type` that the item has, else by `key[index]` using the list's key,
+  or `[index]` for a root list or a list directly inside another list. Labels use plain text.
 - **List of scalars** is an inline list when short, else a bulleted list.
-- **Long or multi-line strings** are set as a block with their real line breaks. A string is
-  rendered as Markdown when its key is a prose key (`description`, `prompt`, `content`, `text`,
-  `message`, `body`, `summary`, `instructions`, `system`) or it clearly contains Markdown; code-like
-  strings become a fenced block. A string that itself holds JSON is expanded and labelled as such.
+- **Block strings** exceed 160 characters, contain line breaks, clearly contain Markdown, or hold
+  embedded JSON. A prose key alone never makes a short string a block. Embedded JSON is expanded
+  and labelled first; otherwise a prose key (`description`, `prompt`, `content`, `text`, `message`,
+  `body`, `summary`, `instructions`, `system`) or clear Markdown gives a Markdown blockquote unless
+  literal text is forced. Other multi-line strings use an unlabelled fence, preserving indentation;
+  other long lines use a literal span. Cells keep their full text with line breaks as `<br>`.
+- **Typed-looking strings** are double-quoted: JSON numbers, `true`, `false`, `null`, or text with
+  leading or trailing whitespace in a string with no line break. Empty strings keep
+  `"" (empty string)`. CSV and TSV cells stay plain text, including empty cells.
 - **Hints are appended, never substituted.** An epoch or ISO time under a time-like key gains a
-  local date in muted text. Durations and byte sizes gain a human form when the key names the unit.
+  local date in muted text. Time-like keys include camelCase endings such as `createdAt`,
+  `startTime` and `lastSeenTs`; numeric epochs must fall between 2000-01-01 and 2100-01-01 UTC.
+  Durations and byte sizes gain a human form when the key names the unit.
 - **Empty values** (`{}`, `[]`, `""`, `null`) are shown as what they are.
 
 ## Fidelity
 
-1. Keys are shown verbatim and order is the file's order.
+1. Keys are shown verbatim. Within an object's table and among its sections the order is the file's order; the table comes before the sections.
 2. Every scalar is shown exactly as written. Numbers keep their source text, so large integers and
    `1.0` are not altered. This needs MDviewer's own small parser, which also gives line and column
    for errors, tolerates comments, keeps duplicate keys and records where each value sits.
@@ -96,6 +119,7 @@ Recognised by shape, not by file name: a list or JSON Lines file whose records c
 content (the common chat-message shape), or agent transcript records that wrap such a message.
 
 - One section per turn, labelled by role, with its time when present.
+- A turn carrying only tool results is headed as a tool result, with its actual role in parentheses.
 - Message text is rendered as Markdown.
 - Tool calls, tool results and thinking are collapsed, each with its name and a one-line summary.
 - The overview counts turns and tool calls by name, and gives the time span and token totals when
@@ -172,6 +196,7 @@ not make. No real file ever becomes a fixture.
 | D3 | Opening and showing data documents: native and web open, Read, Edit and PDF, errors, live reload, Save | D1; the shell (S3) on main |
 | D4 | YAML, TOML, CSV and TSV | D1, D3 |
 | D5 | Copy value, path and subtree; agent data files in the Library; save the readable view as Markdown | D3 |
+| D6 | Readability pass: one table per object, row-sized values inline, record tables with shallow nesting and for JSON Lines, typed strings quoted, literal blocks | D1 to D4 |
 
 ## Later, not in version 1
 

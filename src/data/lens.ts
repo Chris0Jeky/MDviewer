@@ -9,6 +9,11 @@ const MAX_LEVEL = 4 + 24;
 
 const proseKeys = new Set(["description", "prompt", "content", "text", "message", "body", "summary", "instructions", "system"]);
 const labels = ["name", "title", "id", "key", "label", "type"];
+const jsonNumber = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
+
+interface Column { name: string; keys: string[]; numeric: boolean }
+export interface RecordTable { columns: Column[]; flatten: boolean }
+export interface TableRow { value: JsonValue; path: string; line?: number }
 
 export function childPath(path: string, key: string): string {
   return /^[A-Za-z_$][\w$]*$/.test(key) ? `${path}.${key}` : `${path}[${JSON.stringify(key)}]`;
@@ -25,17 +30,15 @@ function clearlyMarkdown(text: string): boolean {
   return /^ {0,3}#{1,6} /m.test(text) || /^ {0,3}(?:`{3,}|~{3,})/m.test(text)
     || (text.match(/^ {0,3}(?:[-+*]|\d+[.)])\s+\S/gm)?.length ?? 0) >= 2;
 }
-function codeLike(text: string): boolean {
-  return /\n/.test(text) && /^(?:\s*(?:const |let |def |class |import |SELECT |#!)|\s*[{}]\s*$)/m.test(text);
-}
-
 export function hint(value: JsonValue, key: string, timeZone: string): string {
   const text = raw(value);
-  if (/(^|_)(time|date|at|ts|timestamp|created|updated)$/i.test(key)) {
+  if (/(^|_)(time|date|at|ts|timestamp|created|updated)$/i.test(key)
+    || /[a-z](?:Time|Date|At|Ts|Timestamp)$/.test(key)) {
     let date: Date | undefined;
     if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
       const n = Number(text);
       date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
+      if (date.getTime() < Date.UTC(2000, 0, 1) || date.getTime() > Date.UTC(2100, 0, 1)) date = undefined;
     } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
       // Only a full timestamp with a zone: a date alone is already readable and names no instant.
       date = new Date(text);
@@ -88,6 +91,7 @@ export class Lens {
   private readonly maxValues: number;
   readonly timeZone: string;
   private literalStrings = false;
+  csv = false;
   private readonly counts = new WeakMap<JsonValue, number>();
   private readonly embedded = new WeakMap<JsonValue, JsonValue>();
 
@@ -143,13 +147,46 @@ export class Lens {
     return this.prepaid === 0 && (this.stopped || this.shown >= this.maxValues);
   }
 
-  private block(value: JsonValue, key: string): boolean {
-    return value.kind === "string" && (this.embedded.has(value) || proseKeys.has(key.toLowerCase())
+  private block(value: JsonValue): boolean {
+    return value.kind === "string" && (this.embedded.has(value)
       || (!this.literalStrings && clearlyMarkdown(value.value)) || value.value.length > 160 || /[\r\n]/.test(value.value));
   }
 
+  private quoted(text: string): boolean {
+    return jsonNumber.test(text) || /^(?:true|false|null)$/.test(text) || (!/[\r\n]/.test(text) && /^\s|\s$/.test(text));
+  }
+
+  private scalarText(value: JsonValue, compound = false): string {
+    if (value.kind !== "string") return cellText(raw(value));
+    if (this.csv) return cellText(value.value);
+    const quote = value.value !== "" && (this.quoted(value.value) || (compound && /, | · |: /.test(value.value)));
+    return quote ? `${cellText('"')}${cellText(value.value)}${cellText('"')}` : cellText(raw(value));
+  }
+
+  private compoundText(value: JsonValue): string {
+    if (value.kind === "array" && value.items.length) return value.items.map(v => this.scalarText(v, true)).join(", ");
+    if (value.kind === "object" && value.entries.length) return value.entries.map(e => `${cellText(e.key)}: ${this.scalarText(e.value, true)}`).join(" · ");
+    return this.scalarText(value);
+  }
+
+  private rowSized(value: JsonValue): boolean {
+    if (scalar(value)) return !this.block(value);
+    if (value.kind === "array") return !value.items.length || (value.items.length <= 8
+      && value.items.every(v => scalar(v) && !this.block(v)) && this.compoundLength(value) < 80);
+    return value.kind === "object" && (!value.entries.length || (value.entries.length <= 4
+      && value.entries.every(e => scalar(e.value) && !this.block(e.value)) && this.compoundLength(value) < 80));
+  }
+
+  /** Measure visible text, before Markdown escaping expands punctuation and whitespace. */
+  private compoundLength(value: JsonValue): number {
+    const item = (v: JsonValue): string => v.kind === "string" && v.value && (this.quoted(v.value) || /, | · |: /.test(v.value)) ? `"${v.value}"` : raw(v);
+    return (value.kind === "array" ? value.items.map(item).join(", ")
+      : value.kind === "object" ? value.entries.map(e => `${e.key}: ${item(e.value)}`).join(" · ") : item(value)).length;
+  }
+
   private inline(value: JsonValue, key = ""): string {
-    const text = value.kind === "array" && value.items.length ? value.items.map(v => this.inline(v, key)).join(", ") : cellText(raw(value));
+    if (!scalar(value)) return this.compoundText(value);
+    const text = this.scalarText(value);
     const annotation = hint(value, key, this.timeZone);
     return annotation ? `${text} (${cellText(annotation)})` : text;
   }
@@ -169,7 +206,7 @@ export class Lens {
     } else if (!this.literalStrings && value.value && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(value.value))) {
       for (const line of value.value.split(/\r\n|\r|\n/)) this.line(`${indent}> ${line}`, path);
       this.line();
-    } else if (codeLike(value.value)) {
+    } else if (/[\r\n]/.test(value.value)) {
       for (const line of fence(value.value).split(/\r\n|\r|\n/)) this.line(indent + line, path);
       this.line();
     } else {
@@ -195,11 +232,14 @@ export class Lens {
     }
     if (value.kind === "object") {
       let table = false;
-      for (const entry of value.entries) {
+      const fits = (entry: typeof value.entries[number]): boolean => this.rowSized(entry.value);
+      const rows = value.entries.filter(fits);
+      const sections = value.entries.filter(e => !fits(e));
+      for (const entry of [...rows, ...sections]) {
         if (this.exhausted()) break;
         const target = childPath(path, entry.key);
-        if (scalar(entry.value) && !this.block(entry.value, entry.key)) {
-          if (!this.take()) break;
+        if (fits(entry)) {
+          if (!this.take(this.count(entry.value))) break;
           if (!table) {
             this.line(`${indent}| Key | Value |`, path); this.line(`${indent}| --- | --- |`); table = true;
           }
@@ -216,67 +256,26 @@ export class Lens {
       return;
     }
     if (value.kind !== "array") return;
-    const flat = value.items.every(v => v.kind === "object"
-      && new Set(v.entries.map(e => e.key)).size === v.entries.length
-      && v.entries.every(e => scalar(e.value) || (e.value.kind === "array" && e.value.items.length <= 8 && e.value.items.every(scalar))));
-    if (flat) {
-      const keys = Array.from(new Set(value.items.flatMap(v => v.kind === "object" ? v.entries.map(e => e.key) : [])));
-      // Empty records still need a visible value rather than an invisible zero-column table.
-      // Too many distinct keys make an unreadable (and unbounded) table: show records instead.
-      if (keys.length && keys.length <= MAX_COLUMNS) {
-        let header = false;
-        const details: { value: JsonValue; key: string; path: string; label: string }[] = [];
-        for (const [index, item] of value.items.entries()) {
-          if (!this.take(this.count(item))) break;
-          if (!header) {
-            this.line(`${indent}| ${keys.map(cellText).join(" | ")} |`, path);
-            this.line(`${indent}| ${keys.map(() => "---").join(" | ")} |`); header = true;
-          }
-          const entries = item.kind === "object" ? item.entries : [];
-          this.line(`${indent}| ${keys.map(k => {
-            const v = entries.find(e => e.key === k)?.value;
-            return v ? this.inline(v, k) : "";
-          }).join(" | ")} |`, `${path}[${index}]`);
-          for (const entry of entries) {
-            const target = childPath(`${path}[${index}]`, entry.key);
-            if (this.block(entry.value, entry.key)) {
-              details.push({ ...entry, path: target, label: `${index}: ${entry.key}` });
-            } else if (entry.value.kind === "array") {
-              for (const [i, v] of entry.value.items.entries()) {
-                if (this.block(v, entry.key)) details.push({ value: v, key: entry.key, path: `${target}[${i}]`, label: `${index}: ${entry.key}[${i}]` });
-              }
-            }
-          }
-        }
-        this.line();
-        // Retain the mandatory flat table and add block views for prose, code, or embedded JSON.
-        // These values were charged with their row, so the detail must not spend the budget twice.
-        // A table nested inside a prepaid detail keeps the outer detail's unspent credit.
-        const outer = this.prepaid;
-        for (const detail of details) {
-          this.prepaid = this.count(detail.value);
-          const next = this.heading(detail.label, detail.path, level, indent);
-          this.render(detail.value, detail.path, level + 1, next, detail.key);
-        }
-        this.prepaid = outer;
-        return;
-      }
+    const plan = this.recordTable(value.items);
+    if (plan) {
+      this.renderTable(value.items.map((item, index) => ({ value: item, path: `${path}[${index}]` })), plan, path, level, indent);
+      return;
     }
     if (value.items.every(scalar) && value.items.length <= 8
-      && value.items.map(raw).join(", ").length < 80 && !value.items.some(v => this.block(v, key))
+      && this.compoundLength(value) < 80 && !value.items.some(v => this.block(v))
       && this.shown + value.items.length <= this.maxValues) {
-      if (this.take(value.items.length)) { this.line(indent + value.items.map(v => this.inline(v, key)).join(", "), path); this.line(); }
+      if (this.take(value.items.length)) { this.line(indent + this.compoundText(value), path); this.line(); }
       return;
     }
     for (const [index, item] of value.items.entries()) {
       if (this.exhausted()) break;
       const target = `${path}[${index}]`;
-      if (scalar(item) && !this.block(item, key)) {
+      if (scalar(item) && !this.block(item)) {
         if (!this.take()) break;
         this.line(`${indent}- ${this.inline(item, key)}`, target);
       } else {
         if (this.exhausted()) { this.take(); break; }
-        let label = String(index);
+        let label = `${key}[${index}]`;
         if (item.kind === "object") {
           for (const name of labels) {
             const member = item.entries.find(e => e.key === name);
@@ -284,10 +283,100 @@ export class Lens {
           }
         }
         const next = this.heading(label, target, level, indent);
-        this.render(item, target, level + 1, next, key);
+        this.render(item, target, level + 1, next, item.kind === "array" ? "" : key);
       }
     }
     this.line();
+  }
+
+  /** One bounded schema pass over all records, independent of the display budget. */
+  recordTable(items: readonly JsonValue[]): RecordTable | undefined {
+    for (const flatten of [true, false]) {
+      const columns = new Map<string, Column>();
+      const seen = new Set<string>();
+      let valid = items.length > 0;
+      for (const item of items) {
+        const cells = this.tableCells(item, flatten);
+        if (!cells) { valid = false; break; }
+        for (const [name, cell] of cells) {
+          const column = columns.get(name);
+          if (column && JSON.stringify(column.keys) !== JSON.stringify(cell.keys)) { valid = false; break; }
+          const next = column ?? { name, keys: cell.keys, numeric: true };
+          if (!column) columns.set(name, next);
+          if (columns.size > MAX_COLUMNS) { valid = false; break; }
+          if (raw(cell.value) !== "" && !(this.csv && cell.value.kind === "string" && cell.value.value === "")) {
+            seen.add(name);
+            next.numeric &&= cell.value.kind === "number" || (this.csv && cell.value.kind === "string" && jsonNumber.test(cell.value.value));
+          }
+        }
+        if (!valid) break;
+      }
+      if (valid && columns.size) return { columns: [...columns.values()].map(c => ({ ...c, numeric: seen.has(c.name) && c.numeric })), flatten };
+    }
+    return undefined;
+  }
+
+  private tableCells(value: JsonValue, flatten: boolean): Map<string, { value: JsonValue; keys: string[] }> | undefined {
+    if (value.kind !== "object" || new Set(value.entries.map(e => e.key)).size !== value.entries.length) return;
+    const cells = new Map<string, { value: JsonValue; keys: string[] }>();
+    const flatValue = (v: JsonValue): boolean => scalar(v) || (v.kind === "array" && v.items.length <= 8 && v.items.every(scalar));
+    for (const entry of value.entries) {
+      if (flatten && entry.value.kind === "object") {
+        const nested = entry.value.entries;
+        if (new Set(nested.map(e => e.key)).size !== nested.length || !nested.every(e => flatValue(e.value))) return;
+        if (!nested.length) {
+          if (cells.has(entry.key)) return;
+          cells.set(entry.key, { value: entry.value, keys: [entry.key] });
+        }
+        for (const child of nested) {
+          const name = `${entry.key}.${child.key}`;
+          if (cells.has(name)) return;
+          cells.set(name, { value: child.value, keys: [entry.key, child.key] });
+        }
+      } else {
+        if (!flatValue(entry.value) || cells.has(entry.key)) return;
+        cells.set(entry.key, { value: entry.value, keys: [entry.key] });
+      }
+    }
+    return cells;
+  }
+
+  /** Whole rows are charged once; JSON Lines may charge them while choosing its shown range. */
+  renderTable(rows: readonly TableRow[], plan: RecordTable, path = "$", level = 2, indent = "", lineColumn?: string, charged = false): void {
+    let header = false;
+    const details: { value: JsonValue; key: string; path: string; label: string }[] = [];
+    for (const [index, row] of rows.entries()) {
+      if (!charged && !this.take(this.count(row.value))) break;
+      if (!header) {
+        this.line(`${indent}| ${[...(lineColumn ? [cellText(lineColumn)] : []), ...plan.columns.map(c => cellText(c.name))].join(" | ")} |`, path);
+        this.line(`${indent}| ${[...(lineColumn ? ["---:"] : []), ...plan.columns.map(c => c.numeric ? "---:" : "---")].join(" | ")} |`);
+        header = true;
+      }
+      const cells = this.tableCells(row.value, plan.flatten)!;
+      this.line(`${indent}| ${[...(lineColumn ? [String(row.line)] : []), ...plan.columns.map(c => {
+        const cell = cells.get(c.name);
+        return cell ? this.inline(cell.value, cell.keys[cell.keys.length - 1]) : "";
+      })].join(" | ")} |`, row.path);
+      for (const [name, cell] of cells) {
+        const key = cell.keys[cell.keys.length - 1]!;
+        const target = cell.keys.reduce(childPath, row.path);
+        const detail = (v: JsonValue): boolean => v.kind === "string" && (this.embedded.has(v)
+          || (v.value !== "" && !this.literalStrings && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(v.value))));
+        if (detail(cell.value)) details.push({ value: cell.value, key, path: target, label: `${index}: ${name}` });
+        else if (cell.value.kind === "array") for (const [i, v] of cell.value.items.entries()) {
+          if (detail(v)) details.push({ value: v, key, path: `${target}[${i}]`, label: `${index}: ${name}[${i}]` });
+        }
+      }
+    }
+    if (header) this.line();
+    // A detail shows a second representation of values already paid for by its row.
+    const outer = this.prepaid;
+    for (const detail of details) {
+      this.prepaid = this.count(detail.value);
+      const next = this.heading(detail.label, detail.path, level, indent);
+      this.render(detail.value, detail.path, level + 1, next, detail.key);
+    }
+    this.prepaid = outer;
   }
 
   /** Generic data inside a conversation must not opt into message Markdown. */

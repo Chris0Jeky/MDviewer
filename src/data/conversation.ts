@@ -209,9 +209,12 @@ export function conversationRecord(lens: Lens, value: JsonValue | undefined, pat
   if (!lens.take()) return; // role
   const role = string(member(msg, "role"))!;
   const stamp = time(lens, timestamp(value));
-  lens.line(`## ${cellText(role.charAt(0).toUpperCase() + role.slice(1))}${stamp ? ` · ${cellText(stamp)}` : ""}`, path); lens.line();
-  const msgPath = wrapped ? childPath(path, "message") : path;
   const content = member(msg, "content")!;
+  const toolOnly = content.kind === "array" && content.items.length > 0
+    && content.items.every(p => string(member(p, "type")) === "tool_result");
+  const label = toolOnly ? `Tool result (${role})` : role.charAt(0).toUpperCase() + role.slice(1);
+  lens.line(`## ${cellText(label)}${stamp ? ` · ${cellText(stamp)}` : ""}`, path); lens.line();
+  const msgPath = wrapped ? childPath(path, "message") : path;
   const contentPath = childPath(msgPath, "content");
   if (content.kind === "array") {
     if (lens.take()) {
