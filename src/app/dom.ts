@@ -124,6 +124,7 @@ export const PREVIEW_ZOOM_VAR = "--preview-zoom";
 export const PAGEDJS = {
   pagesClass: "pagedjs_pages",
   pageClass: "pagedjs_page",
+  pageContentClass: "pagedjs_page_content",
   insertedStylesSelector: "style[data-pagedjs-inserted-styles]",
   pageNumberAttr: "data-page-number",
 } as const;
