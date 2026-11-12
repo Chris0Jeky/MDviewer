@@ -432,9 +432,10 @@ async function openFromLibrary(id: string): Promise<void> {
   catch (error) { report(`Could not open this file: ${errorText(error)}`); }
 }
 
-async function createDocument(): Promise<void> {
+/** New: an untitled note in Edit. `text` (from a template) starts it with content, unsaved. */
+async function createDocument(text = ""): Promise<void> {
   if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
-  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text: "" };
+  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text };
   if (app) {
     if (!canRestoreDocument(doc)) return;
     ++generation;
@@ -448,6 +449,8 @@ async function createDocument(): Promise<void> {
   report(errors.join(" "));
   if (errors.length) return;
   ++generation;
+  // Text from a template is unsaved work: closing asks, and Save goes through Save As.
+  if (text && docs.reader.active) docs.reader.active.dirty = true;
   await setEditing(true); // before the render, so an empty note is not reported as a problem
   await render();
 }
@@ -905,7 +908,31 @@ for (const { bar } of conflictBars) {
 
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
-registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
+registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: () => createDocument() });
+// Templates (A4) need the host's read-only template read; until it exists the entry stays hidden.
+const readTemplate = (native.library as { readTemplate?: (id: string) => Promise<{ name: string; text: string }> } | undefined)?.readTemplate;
+if (native.available && readTemplate) {
+  registerCommand({ id: "document.newFromTemplate", title: "New from template…", enabled: () => !app && !changingMode && !nativeSaveBusy,
+    run: async () => {
+      let shell: typeof import("./shell/templates");
+      try { shell = await import("./shell/templates"); } catch (error) { report(`Could not open templates: ${errorText(error)}`); return; }
+      const result = await shell.chooseTemplate({
+        list: async () => {
+          const entries: Array<{ id: string; name: string; project: string }> = [];
+          for (const project of (await native.library.list()).projects) {
+            try {
+              for (const file of (await native.library.scan(project.id)).files) {
+                if (shell.isTemplatePath(file.relative)) entries.push({ id: file.id, name: file.name, project: project.name });
+              }
+            } catch { /* An unreadable project lists no templates; Projects shows why. */ }
+          }
+          return entries;
+        },
+        read: id => readTemplate(id),
+      });
+      if (result) await createDocument(result.text);
+    } });
+}
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
 registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
