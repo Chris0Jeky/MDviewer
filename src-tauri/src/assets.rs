@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
-use crate::file_policy::is_local_file_path;
+use crate::file_policy::{is_local_file_path, MARKDOWN_EXTENSIONS};
 
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 
@@ -83,6 +83,19 @@ pub fn with_markdown_extension(path: PathBuf) -> PathBuf {
     } else {
         path
     }
+}
+
+/// A link from a document may open another Markdown document, never a data or text file:
+/// those open only through the user's own choice (dialog, launch, Library), because a link
+/// opens and binds its target writable with no dialog (docs/design/READABLE_DATA.md).
+pub fn is_markdown_target(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            MARKDOWN_EXTENSIONS
+                .iter()
+                .any(|md| ext.eq_ignore_ascii_case(md))
+        })
 }
 
 pub fn image_type(path: &Path) -> Option<&'static str> {
@@ -233,5 +246,27 @@ mod tests {
             with_markdown_extension(PathBuf::from(r"C:\a\b.markdown")),
             PathBuf::from(r"C:\a\b.markdown")
         );
+    }
+
+    #[test]
+    fn links_open_markdown_targets_only() {
+        for name in ["a.md", "b.MARKDOWN", "c"] {
+            assert!(
+                is_markdown_target(&with_markdown_extension(PathBuf::from(name))),
+                "{name}"
+            );
+        }
+        for name in [
+            "settings.json",
+            "x.jsonl",
+            "notes.txt",
+            "run.LOG",
+            "a.md.json",
+        ] {
+            assert!(
+                !is_markdown_target(&with_markdown_extension(PathBuf::from(name))),
+                "{name}"
+            );
+        }
     }
 }
