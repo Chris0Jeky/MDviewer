@@ -111,10 +111,18 @@ A `templates/` folder inside a pinned folder offers "New from template". `{{name
 - **When it saves.** If the document is bound to a file and has no unsaved edits, the change is
   saved at once and a short notice offers Undo. Otherwise it is applied in memory and saved with
   the document. In the web build it is always in memory.
-- **Placement after an outside change.** MDviewer re-reads the file and places each patch, in this
-  order: the remembered line if it still equals `expect`; the one line carrying the same id and the
-  same kind of control; the one line equal to `expect`. If a patch cannot be placed, nothing is
-  written and the reader is told which item could not be saved.
+- **Overwritten after saving.** If the file changes outside while the Undo notice is showing and
+  the span is back at its old value, the notice says another program overwrote the change and
+  offers to apply it again.
+- **Placement after an outside change.** MDviewer re-reads the file and places each patch on the
+  first of these that exists: the remembered line, if it still equals `expect`; the one line
+  carrying the same id and the same kind of control; the one line equal to `expect`.
+- **A line found by id that no longer equals `expect`.** A generator changed the item's text.
+  MDviewer changes only the editable span on the line as it now stands, and only if that span
+  still holds the value the reader saw. If the span itself changed, the patch cannot be placed.
+  The `replace` text is never written over a line that differs from `expect`.
+- If any patch of a change cannot be placed, nothing is written and the reader is told which item
+  could not be saved.
 - **Gesture only.** A write needs a trusted click or key press on a control MDviewer built from the
   source text. Authored HTML inputs are inert. A value containing a line break is refused.
 - MDviewer's own save does not count as an outside change, and Undo applies the inverse patch.
@@ -129,6 +137,13 @@ A `templates/` folder inside a pinned folder offers "New from template". `{{name
 4. Never depend on line numbers.
 5. Rewrite a file at most once a second; coalesce your changes.
 6. Prefer UTF-8 without a byte order mark, line feeds and a final line feed.
+7. Just before the rename, read the file again. If an editable span differs from what you read in
+   step 2, carry it forward into your output and repeat this step.
+
+Steps 2 and 7 narrow the window in which a generator can overwrite a mark the reader has just
+made. They do not close it: a mark saved between a generator's last read and its rename is lost.
+MDviewer shows the reader when that happens (see "Overwritten after saving"). Version 1 has no
+lock protocol.
 
 ## Elsewhere
 
