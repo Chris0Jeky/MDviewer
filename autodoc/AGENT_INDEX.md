@@ -208,7 +208,11 @@ encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
 closing releases it through `onRelease` (never during a mode transition). Live reload:
 `src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
 `byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
-`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+`tests/desktop-live-reload.test.ts`. Links/images: `src-tauri/src/{assets.rs,commands/links.rs}`, `main.ts`
+`followRelativeLink`/`loadLocalImages`/back-forward, sanitizer `data-local-src`; tests
+`tests/desktop-links.test.ts`. Library: `src-tauri/src/{library.rs,commands/library.rs}`,
+`src/desktop/library.ts` (`openLibraryEntry`), `native.library.*`; tests in `library.rs` and
+`tests/desktop-library.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
 is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
 keys (exact modifiers; a match is always claimed, even repeated or disabled),
 `listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`

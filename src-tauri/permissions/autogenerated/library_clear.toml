@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-library-clear"
+description = "Enables the library_clear command without any pre-configured scope."
+commands.allow = ["library_clear"]
+
+[[permission]]
+identifier = "deny-library-clear"
+description = "Denies the library_clear command without any pre-configured scope."
+commands.deny = ["library_clear"]

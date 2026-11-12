@@ -473,6 +473,19 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Links and images (S6 native half): `src/render/sanitize.ts` keeps a relative image `src` as an
+inert `data-local-src` (web output unchanged otherwise, still counted as blocked). The desktop
+reader fills those through `native.readAsset` as blob URLs (revoked on the next render).
+Document clicks on relative links and `@path` imports call `native.openRelative`; web links keep
+`open_external`. `navigate.back` / `navigate.forward` (Alt+Left/Right) step through documents
+reached by links or the picker. The paginated workspace does not load local images yet.
+
+Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
+`src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
+batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:
+`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel UI is
+the shell's (S4 panel half).
+
 Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
 `main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
 replaces its text and baseline (the reader re-renders; S2c's block patching and change
