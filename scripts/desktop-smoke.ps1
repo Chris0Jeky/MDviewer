@@ -57,11 +57,20 @@ if ($Probe) {
     function Find-Button($Parent, [string]$Name) {
         # Workspace entry keeps its controls inert until rendering is ready.
         # Poll actual UIA availability; do not substitute a fixed settling delay.
+        # "#id" addresses an element by its DOM id (WebView2's AutomationId), such as a More
+        # menu item whose name also carries its shortcut; otherwise a button by its name.
+        if ($Name.StartsWith('#')) {
+            $identity = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $Name.Substring(1))
+        } else {
+            $identity = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, $Name),
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        }
         $condition = [System.Windows.Automation.AndCondition]::new(
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::NameProperty, $Name),
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button),
+            $identity,
             [System.Windows.Automation.PropertyCondition]::new(
                 [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true),
             [System.Windows.Automation.PropertyCondition]::new(
@@ -687,7 +696,9 @@ try {
     $markdownPath = Join-Path $exportDirectory 'saved-source.md'
     $pdfPath = Join-Path $exportDirectory 'saved-document.pdf'
     $expectedSourceBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($secondText)
-    Invoke-SmokeAction 'button' 'Edit & PDF'
+    # The paginated workspace is More > Export PDF… (S5: the bar keeps one mode button, Edit).
+    Invoke-SmokeAction 'button' 'More'
+    Invoke-SmokeAction 'button' '#reader-workspace'
     Invoke-SmokeAction 'button' 'Save Markdown'
     Invoke-SmokeAction 'save-dialog' -Destination $markdownPath
     $markdownEvidence = Wait-ExportFile $markdownPath {
