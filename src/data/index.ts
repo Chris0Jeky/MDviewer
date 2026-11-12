@@ -61,7 +61,8 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
   } else {
     const records: { parsed: ParseResult; source: string; line: number }[] = [];
     for (const [index, source] of text.split(/\r\n|\r|\n/).entries()) {
-      if (source.trim()) records.push({ parsed: parseJson(source, false, index), source, line: index + 1 });
+      // Blank means JSON whitespace only; any other character is a record (possibly a bad one).
+      if (/[^ \t\r\n]/.test(source)) records.push({ parsed: parseJson(source, false, index), source, line: index + 1 });
     }
     recordsTotal = records.length;
     for (const record of records) {
@@ -95,7 +96,8 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
     // Bad lines remain discoverable even beyond the record display budget.
     if (problems.length) {
       lens.line("## Problems", "$"); lens.line();
-      for (const p of problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+      for (const p of problems.slice(0, 100)) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+      if (problems.length > 100) lens.line(`- And ${count(problems.length - 100, "more problem")}.`, "$");
       lens.line();
     }
   }

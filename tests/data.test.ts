@@ -79,7 +79,8 @@ describe("source-preserving JSON", () => {
     const view = toReadable("[".repeat(512) + '"{}"' + "]".repeat(512), "json");
     expect(view.problems[0]?.message).toContain("maximum combined depth of 512");
     expect(view.markdown).toContain("## Expansion problems");
-    expect(view.markdown).toContain("\\{\\}");
+    // The array itself is deeper than the renderer can nest, so it is shown literally.
+    expect(view.markdown).toContain('"{}"');
   });
 });
 
@@ -190,5 +191,38 @@ describe("plain text", () => {
     expect(view.markdown).toContain("```\na\nb\n```");
     expect(view.markdown).toContain("Showing 2 of 3 lines.");
     expect(toReadable("one", "text").markdown).toContain("Plain text · 3 B · 1 line\n");
+  });
+});
+
+describe("bounds and hints (review of #270)", () => {
+  it("shows records instead of a table when keys are too many", () => {
+    const items = Array.from({ length: 40 }, (_, i) => ({ [`k${i}`]: i }));
+    const view = toReadable(JSON.stringify(items), "json");
+    expect(view.markdown).not.toMatch(/^\| k0 \| k1 \|/m);
+    expect(view.markdown).toContain("| k39 | 39 |");
+  });
+
+  it("fences text with very many backtick runs", () => {
+    expect(() => toReadable("`a`".repeat(200_000), "text")).not.toThrow();
+  });
+
+  it("adds no shifted instant to a date without a time", () => {
+    const view = toReadable('{"date":"2024-01-15","created_at":"2024-01-15T12:00:00Z"}', "json", { timeZone: "America/New_York" });
+    expect(view.markdown).toContain("| date | 2024\\-01\\-15 |");
+    expect(view.markdown).toContain("(2024\\-01\\-15 07\\:00 America\\/New\\_York)");
+  });
+
+  it("adds a duration hint only when the key names the unit", () => {
+    const view = toReadable('{"durationMs":5000,"timeout_seconds":90,"duration":5}', "json", { timeZone: "UTC" });
+    expect(view.markdown).toContain("| durationMs | 5000 (5 s) |");
+    expect(view.markdown).toContain("| timeout\\_seconds | 90 (1\\.5 min) |");
+    expect(view.markdown).toContain("| duration | 5 |");
+  });
+
+  it("lists at most 100 bad JSON Lines and counts the rest; whitespace-only lines are not blank", () => {
+    const view = toReadable(Array.from({ length: 150 }, () => "x").join("\n"), "jsonl");
+    expect(view.markdown).toContain("- And 50 more problems.");
+    expect(view.problems).toHaveLength(150);
+    expect(toReadable("{}\n\u00a0\n{}", "jsonl").problems).toHaveLength(1);
   });
 });
