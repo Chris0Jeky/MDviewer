@@ -106,7 +106,9 @@ export function subtreeJson(value: JsonValue): string {
 /**
  * Both spellings of a path into the PARSED data, for YAML, TOML and CSV as much as JSON;
  * this is not a position in the file. CSV `$[n].column` names row n (0-based, header excluded).
- * JSON Lines jq paths index the slurped array (`jq -s`); other kinds do not require slurping.
+ * JSON Lines jq paths index the slurped array (`jq -s`), which jq can only build when every line
+ * parses. A multi-document YAML file also indexes a list of documents (`$[n]`), but jq reads YAML
+ * only through a converter, so no slurp flag is claimed for it (`jqSlurp` is false).
  * jsonPath retains the given normalised readable-view path. Throws for malformed paths.
  */
 export function pathForms(path: string, kind: DataKind): { jsonPath: string; jq: string; jqSlurp: boolean } {
