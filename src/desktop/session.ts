@@ -1,11 +1,21 @@
 /** Bounded, memory-only document state for the standalone reader. */
 import { SessionPositions } from "../app/positions";
+import type { Binding } from "./documents";
 
 export interface ReaderDocument {
   id: string;
+  /** Stable logical-document key, carried across Read, Edit and PDF (documents.ts). */
+  key: string;
   name: string;
   text: string;
   dirty: boolean;
+  binding?: Binding;
+}
+
+let keySequence = 0;
+/** A stable logical-document key; never a filename, path or UI id. */
+export function nextDocumentKey(): string {
+  return `k${++keySequence}`;
 }
 
 /** Names are local to the open set; compare case-insensitively for Windows. */
@@ -28,7 +38,7 @@ export class ReaderSession {
     return this.documents.find(doc => doc.id === this.activeId);
   }
 
-  append(docs: readonly { name: string; text: string; dirty?: boolean }[], activate = true): string[] {
+  append(docs: readonly { name: string; text: string; dirty?: boolean; key?: string; binding?: Binding }[], activate = true): string[] {
     const encoder = new TextEncoder();
     let used = this.documents.reduce((total, doc) => total + encoder.encode(doc.text).length, 0);
     const errors: string[] = [];
@@ -45,7 +55,10 @@ export class ReaderSession {
       }
       used += bytes;
       const id = `reader-${++this.sequence}`;
-      this.documents.push({ id, name: doc.name, text: doc.text, dirty: doc.dirty ?? false });
+      this.documents.push({
+        id, key: doc.key ?? nextDocumentKey(), name: doc.name, text: doc.text, dirty: doc.dirty ?? false,
+        ...(doc.binding ? { binding: doc.binding } : {}),
+      });
       first ??= id;
     }
     if (first && (activate || !this.activeId)) this.activeId = first;
