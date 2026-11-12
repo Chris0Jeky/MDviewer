@@ -80,8 +80,18 @@ function prepareWorkspace(viewMode: ViewMode = "split") {
   };
 }
 async function entered(t: ReturnType<typeof prepareWorkspace>): Promise<void> {
+  // From the reader, New opens Edit (S5); the PDF workspace is one action further.
+  await vi.waitFor(() => expect(!document.getElementById("desktop-workspace")!.hidden || editOpen()).toBe(true));
+  if (document.getElementById("desktop-workspace")!.hidden) click("reader-workspace");
   await vi.waitFor(() => expect(document.activeElement).toBe(t.input));
   expect(document.getElementById("desktop-workspace")!.hidden).toBe(false);
+}
+const editOpen = (): boolean => !!document.activeElement?.closest("#reader-edit");
+/** New from the reader opens Edit; then enter the PDF workspace as the user would. */
+async function newThenWorkspace(): Promise<void> {
+  key();
+  await vi.waitFor(() => expect(editOpen()).toBe(true));
+  click("reader-workspace");
 }
 async function openReader(documents: Array<{ name: string; text: string }>): Promise<void> {
   boundary.open.mockResolvedValueOnce(batch(documents)); click("reader-open");
@@ -205,7 +215,7 @@ describe("desktop New document", () => {
   it("retains all reader sources after a failed workspace mount and permits retry", async () => {
     await openReader([{ name: "keep.md", text: "# Keep the original" }]);
     boundary.start.mockImplementationOnce(() => { throw new Error("Workspace unavailable"); });
-    key();
+    await newThenWorkspace();
     await vi.waitFor(() => expect(document.getElementById("reader-notice")!.textContent).toContain("Workspace unavailable"));
     expect(boundary.sessions[0]!.documents.map(({ name, text }) => ({ name, text }))).toEqual([
       { name: "keep.md", text: "# Keep the original" }, { name: "Untitled.md", text: "" },
@@ -222,7 +232,7 @@ describe("desktop New document", () => {
     const t = prepareWorkspace();
     let finishRender!: () => void;
     t.app.flushRender.mockImplementationOnce(() => new Promise<void>(resolve => { finishRender = resolve; }));
-    key();
+    await newThenWorkspace();
     await vi.waitFor(() => expect(t.app.store.active?.name).toBe("Untitled.md"));
     finishOpen(batch([{ name: "late.md", text: "# Late file" }]));
     await Promise.resolve(); await Promise.resolve();
@@ -237,7 +247,7 @@ describe("desktop New document", () => {
     const t = prepareWorkspace();
     let finishEntry!: () => void;
     t.app.flushRender.mockImplementationOnce(() => new Promise<void>(resolve => { finishEntry = resolve; }));
-    key();
+    await newThenWorkspace();
     await vi.waitFor(() => expect(t.app.store.openDocs).toHaveLength(1));
     const returnButton = document.getElementById("reader-return") as HTMLButtonElement;
     expect(document.getElementById("app")!.inert).toBe(true);

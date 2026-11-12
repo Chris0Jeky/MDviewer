@@ -681,7 +681,7 @@ command palette (S3). Coverage: `tests/reader-sourcemap.test.ts`,
 shared machine state on Windows hosts).
 
 Reader shell (S3; `src/desktop/shell/*`, `desktop.html`). With a document open the window
-shows one 40 px bar (Library and outline toggle, document tabs, Edit & PDF, More), the document
+shows one 40 px bar (Library and outline toggle, document tabs, Edit, More), the document
 and a 24 px status line (display path or name, words, a ~4-characters-per-token estimate, save
 state). Every former control is a registered command: the More menu, the Ctrl+K palette and
 the shortcuts read the same registry (`commands.ts`). Tabs replace the document picker (APG
@@ -744,4 +744,31 @@ startup-time improvement. Unit admission/transformer controls and production bro
 checks live in `tests/desktop-lazy-highlight.test.ts` and `tests/desktop-e2e/startup.spec.ts`.
 Real-engine language/dependency, handoff and retry controls live in
 `tests/highlight-reader.test.ts`. The browser request audit checks that a C# reader leaves
-unrelated common grammar assets unloaded until Edit & PDF prepares the workspace.
+unrelated common grammar assets unloaded until Export PDF… prepares the workspace.
+
+Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,
+the bar's Edit toggle with `aria-pressed`) mounts the workspace's own `mountEditor` (Find,
+Format, highlighted backdrop, paste gates; `src/ui/Editor.ts` unchanged) into `#reader-edit`
+beside the reader, in a lazy chunk that loads `editor.css` and no App, preview or Paged.js code.
+`editor.css` selectors read `:is(#app > #workspace, #reader-edit) > #editor-pane`, so the
+workspace's specificity is unchanged; `reader.css` maps the editor's colour tokens to the
+reader's. Typing sets the open text and marks it dirty at once, then renders in patch mode
+120 ms later: `render([], true)` keeps the shown document and paints through `patchDocument`,
+which also keys every block on a full render so the first keystroke reuses unchanged code and
+diagrams; the reader then scrolls the block holding the caret into view. Another document,
+settings or a reload is a full render, and the editor follows the active document
+(`setDocument` keeps caret and undo for the same text). Hiding Edit keeps the editor mounted,
+so undo survives; entering the workspace (Export PDF…: More, Ctrl+Shift+E, the palette; Ctrl+P
+also prints) destroys it and its divider (shared ids) and opens the workspace on its source pane.
+The bar has one mode button, Edit (`aria-pressed`). Edit and the reader share `.reader-split`;
+the workspace's `Splitter` sits between them (pointer and arrow keys) and stores its ratio in
+the existing `Settings.splitRatio`; below 760 px they stack and the divider hides. Focus in Edit
+shows as an accent line on the editor header (forced colours keep the outline), and the header
+does not repeat the file name. While Edit is open, an actionable control changes the open text
+(saved with the document) instead of writing the file, so it cannot race the typing; patch
+renders reuse loaded local images (`imageCache`). More menu items check enablement at click
+time. New in the reader opens a blank note in Edit. Without the host (web build),
+Ctrl+S in the reader saves a Markdown copy. Proof: `tests/desktop-e2e/edit.spec.ts`
+(patching keeps the highlighted block, undo across a toggle, Find and Ctrl+B in the source,
+two patched diagrams with distinct SVG ids, no pagination code loaded),
+`tests/desktop-e2e/new-document.spec.ts`, `tests/desktop-new-document.test.ts`.

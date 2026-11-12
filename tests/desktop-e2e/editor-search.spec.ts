@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 test("desktop source Find and Replace preserves the exact saved note and reading view", async ({ page }) => {
   const source = "# Local writing\n\nA cat and another cat.\n";
   await openFiles(page, [{ name: "writing.md", text: source }]);
   await readyReader(page, "Local writing");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   await page.locator("#editor-input").press("Control+h");
   await page.getByRole("searchbox", { name: "Find in Markdown" }).fill("cat");
@@ -35,7 +35,7 @@ for (const width of [560, 1280]) {
     const source = "# Short window\n\nFind a cat and another cat.\n";
     await openFiles(page, [{ name: "short.md", text: source }]);
     await readyReader(page, "Short window");
-    await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+    await openPdf(page);
     await readyWorkspace(page, source);
     await page.getByRole("button", { name: "Split", exact: true }).click();
     const originalMode = await page.locator("#workspace").getAttribute("data-view-mode");

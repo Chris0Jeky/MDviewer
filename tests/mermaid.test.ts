@@ -172,3 +172,13 @@ describe("renderAllMermaid: initialization", () => {
     expect(r.querySelector(`figure.${CLASSES.mermaidFigure} svg`)).not.toBeNull();
   });
 });
+
+describe("Mermaid SVG ids", () => {
+  it("never repeat across runs, so a kept figure and a new one cannot share ids", async () => {
+    await renderAllMermaid(root('<pre><code class="language-mermaid">graph TD; A-->B</code></pre>'));
+    await renderAllMermaid(root('<pre><code class="language-mermaid">graph TD; C-->D</code></pre>'));
+    const ids = renderMock.mock.calls.map(([id]) => id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+});

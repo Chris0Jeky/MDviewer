@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace, selectDocument } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, selectDocument, openPdf } from "./helpers";
 
 const grammarAsset = /\/assets\/(?:wasm|github-light|github-dark|typescript|csharp)-[^/]+\.js$/;
 const commonGrammarAsset = /\/assets\/(?:typescript|javascript|python|bash|shellscript|json|markdown|html|css|rust|go|java|c|cpp|sql|yaml|diff)-[^/]+\.js$/;
@@ -24,7 +24,7 @@ test("reader loads only its grammar before the editing workspace prepares the re
   await page.screenshot({ path: test.info().outputPath("reader-lazy-code.png"), fullPage: true });
 
   const engineRequests = audit.requests.filter(url => /\/assets\/wasm-[^/]+\.js$/.test(url)).length;
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   expect(audit.requests.some(url => /\/assets\/cpp-[^/]+\.js$/.test(url))).toBe(true);
   expect(audit.requests.some(url => /\/assets\/markdown-[^/]+\.js$/.test(url))).toBe(true);

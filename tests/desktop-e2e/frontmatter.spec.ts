@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 const SKILL = `---
 name: broken-skill
@@ -27,7 +27,7 @@ test("front matter is a Properties card in the reader and omitted from the pagin
   await expect(card).not.toHaveAttribute("open", "");
   await expect(card.locator("dl")).toBeHidden();
 
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, SKILL);
   const pages = page.locator("#paged-output");
   await expect(pages.locator("h1")).toHaveText("Body heading");

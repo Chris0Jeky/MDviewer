@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 const fixture = (name: string): string => readFileSync(resolve("tests/fixtures/actionable", `${name}.md`), "utf8");
 
@@ -124,7 +124,7 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
   await expect(doc.getByRole("button", { name: /^status: review/ })).toBeVisible();
 
   // The edited source reaches the editing workspace byte for byte.
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await expect(page.locator("#editor-input")).toHaveValue(DOC
     .replace("status: draft", "status: review")
     .replace("- [ ] To do", "- [x] To do")
@@ -136,7 +136,7 @@ test("in memory (web build), gestures change exactly the span, by pointer and ke
 test("the paginated output shows marks and choices as glyphs, fields as text and no chips", async ({ page }) => {
   await openFiles(page, [{ name: "board.md", text: DOC }]);
   await readyReader(page, "Board");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, DOC);
   const pages = page.locator("#paged-output");
   await expect(pages.locator(".am-box")).toHaveCount(4);
