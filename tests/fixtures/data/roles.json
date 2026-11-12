@@ -1,0 +1,5 @@
+[
+  { "role": "gardener", "name": "Aster" },
+  { "role": "planner", "name": "Fern" },
+  { "role": "helper", "name": "Moss" }
+]

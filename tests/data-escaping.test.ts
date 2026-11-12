@@ -76,6 +76,40 @@ describe("data escaping conformance", () => {
     expect(root.querySelector("script")).toBeNull();
   });
 
+  it("preserves generated conversation roles, tool names, inputs and results without data-created elements", () => {
+    function conversation(s: string): HTMLElement {
+      return html(toReadable(JSON.stringify([
+        { role: `Role ${s}`, content: "Message" },
+        { role: "assistant", content: [
+          { type: "tool_use", name: s, input: { value: s } },
+          { type: "tool_result", content: s },
+        ] },
+      ]), "json").markdown);
+    }
+    for (const s of [...samples(), "# heading", "# heading\n\n- one\n- two", "</summary></details><img src=x onerror=alert(1)>", "```\n</details>\n```"]) {
+      const root = conversation(s);
+      const plain = s.replace(/[^\r\n\t ]/g, "a");
+      expect(tags(root), JSON.stringify(s)).toEqual(tags(conversation(plain)));
+      expect(Array.from(root.querySelectorAll("*"), e => e.tagName), JSON.stringify(s))
+        .toEqual(Array.from(conversation(plain).querySelectorAll("*"), e => e.tagName));
+      const normal = s.replace(/\r\n|\r/g, "\n");
+      expect(text(root.querySelector("h2")!), JSON.stringify(s)).toBe(`Role ${normal}`);
+      const call = root.querySelector("details")!;
+      const summary = text(call.querySelector("summary")!);
+      const oneLine = Array.from(normal.replace(/\n/g, " "));
+      expect(summary, JSON.stringify(s)).toBe(`Tool call: ${normal} · ${oneLine.slice(0, 80).join("")}${oneLine.length > 80 ? "…" : ""}`);
+      const name = call.querySelector("details tbody td:nth-child(2)") ?? call.querySelector("details h3 + p");
+      // The complete tool name also remains in generic metadata, including whitespace.
+      expect(text(name!), JSON.stringify(s)).toBe(normal);
+      const input = call.querySelector("tbody td:nth-child(2)") ?? call.querySelector("h3 + p");
+      expect(text(input!), JSON.stringify(s)).toBe(normal);
+      const result = Array.from(root.querySelectorAll("details")).find(e => e.querySelector(":scope > summary")?.textContent?.startsWith("Tool result"))!;
+      expect((result.querySelector("pre")!.textContent ?? "").replace(/\n$/, ""), JSON.stringify(s)).toBe(normal);
+      expect(tags(root.querySelector("h2")!)).toEqual(tags(conversation(plain).querySelector("h2")!));
+      expect(root.querySelectorAll("img, script, input")).toHaveLength(0);
+    }
+  }, 30_000);
+
   it("preserves a long ordinary paragraph's real line breaks", () => {
     const s = "Plain ".repeat(40) + "\nnext\n\nlast";
     const root = html(toReadable(JSON.stringify({ k: s }), "json").markdown);

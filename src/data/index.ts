@@ -1,4 +1,5 @@
 import { cellText, fence } from "./escape";
+import { conversationList, conversationOverview, conversationRecord, isConversation, renderConversation } from "./conversation";
 import { parseJson, type ParseResult } from "./json";
 import { budget, count, Lens, shape } from "./lens";
 import type { DataKind, Problem, Readable, ReadableOptions } from "./types";
@@ -47,7 +48,9 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
       lens.line(`JSON · ${size(text)} · ${shape(parsed.value)}`); lens.line();
       if (!strict.value) { lens.line("Parsed as JSON with comments and trailing commas."); lens.line(); }
       lens.total = lens.count(parsed.value);
-      lens.render(parsed.value);
+      const conversation = conversationList(parsed.value);
+      if (conversation) renderConversation(lens, parsed.value, conversation);
+      else lens.render(parsed.value);
     } else {
       lens.line(`JSON · ${size(text)} · invalid document`); lens.line();
       // Report the tolerant parser's first error: it can get past valid JSONC prefixes.
@@ -67,11 +70,17 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
       else problems.push(record.parsed.problem);
     }
     lens.line(`JSON Lines · ${size(text)} · ${count(recordsTotal, "record")}`); lens.line();
+    const conversation = isConversation(records.map(r => r.parsed.value));
+    if (conversation) conversationOverview(lens, records.map(r => r.parsed.value));
     const maxRecords = budget(options.maxRecords, 500);
     for (const [index, record] of records.entries()) {
       if (recordsShown >= maxRecords || lens.truncated) break;
       if (lens.shown >= budget(options.maxValues, 20000) && record.parsed.value) { lens.truncated = true; break; }
       recordsShown++;
+      if (conversation) {
+        conversationRecord(lens, record.parsed.value, `$[${index}]`, index, record);
+        continue;
+      }
       lens.line(`## Record ${index + 1} (line ${record.line})`, `$[${index}]`); lens.line();
       if (record.parsed.value) lens.render(record.parsed.value, `$[${index}]`, 3);
       else {
