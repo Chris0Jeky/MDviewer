@@ -1,6 +1,7 @@
 import { test, expect, type Frame, type Page } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { loadMarkdownIntoApp, waitForPagination } from "../helpers/pagedDom";
+import { placeSource } from "../helpers/sourcePosition";
 
 const markdown = "# Export status\n\n" + Array.from({ length: 28 }, (_, index) =>
   `Paragraph ${index + 1}. Find this source while PDF capture runs. The original text, selection, and scroll position remain available.`,
@@ -64,11 +65,7 @@ for (const layout of layouts) {
     if (layout.mode === "preview") await page.locator("#canvas").focus();
     else {
       await editor.focus();
-      await editor.evaluate(element => {
-        const input = element as HTMLTextAreaElement;
-        input.setSelectionRange(30, 50, "backward");
-        input.scrollTop = 120;
-      });
+      await placeSource(editor, 30, 50, "backward", 120);
     }
     if (layout.find) {
       await editor.press("Control+h");
