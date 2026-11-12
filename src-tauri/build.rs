@@ -12,6 +12,7 @@ fn main() {
             "read_document",
             "library_list",
             "library_scan",
+            "library_read_template",
             "library_open",
             "library_pin",
             "library_unpin",

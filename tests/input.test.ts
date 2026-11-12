@@ -55,7 +55,7 @@ describe("input: isMarkdownFile", () => {
 
   it("rejects non-markdown extensions with non-markdown MIME", () => {
     expect(isMarkdownFile("photo.png", "image/png")).toBe(false);
-    expect(isMarkdownFile("sheet.csv", "text/csv")).toBe(false); // phase 2 (READABLE_DATA.md)
+    expect(isMarkdownFile("feed.xml", "application/xml")).toBe(false); // not a readable data format
     expect(isMarkdownFile("archive.md.zip", "application/zip")).toBe(false);
   });
 });
@@ -67,12 +67,12 @@ describe("input: classifyFiles", () => {
       fileOf("b.markdown", ""),
       fileOf("c.png", "image/png"),
       fileOf("d.txt", "text/plain"),
-      fileOf("e.yaml", "application/yaml"),
+      fileOf("e.xml", "application/xml"),
     ];
     const { accept, reject } = classifyFiles(files);
     expect(accept.map((f) => f.name)).toEqual(["a.md", "b.markdown", "d.txt"]);
     expect(reject).toContain("c.png");
-    expect(reject).toContain("e.yaml");
+    expect(reject).toContain("e.xml");
   });
 
   it("returns empty arrays for an empty input", () => {

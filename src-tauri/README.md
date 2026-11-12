@@ -125,10 +125,21 @@ library. Opens and Save As record recents. Commands take opaque per-process ids 
 `library_scan`, `library_open`, `library_pin` by token or id, `library_unpin`, `library_forget`,
 `library_mark_seen`, `library_add_project` via the native folder picker, `library_clear`); the
 webview never supplies a path. `library_scan` walks a pinned project for `.md`/`.markdown` files
-(depth 8, 5,000 files), skips `node_modules`, `.git`, `target`, `dist`, `build` and `.venv`,
+and agent data files (Readable data D5: a data-extension file inside `.claude/`, `.codex/` or
+`.agent-harness/`, or the root `.mcp.json`, listed with `agent: true`; other data files stay out, and credential stores
+named `auth.json`, `.credentials.json` or `credentials.json` are never listed)
+(depth 8, 5,000 files), skips `node_modules`, `.git`, `target`, `dist`, `build`, `.venv` and the
+checkouts under `.claude/worktrees/`,
 includes dot-folders such as `.claude`, never follows junctions or symlinks, and marks agent
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
+
+`library_read_template(id) -> { name, text }` (A4; boundary change: one read-only command and its
+permission) reads a template to fill a new note. It takes an opaque library id (as `library_scan`
+hands out) whose path is a Markdown file directly inside a pinned project's `templates/` folder; a junction or symlink at the
+folder or the file is refused; the usual local-path and encoding rules apply, with a 1 MB cap
+(`MAX_TEMPLATE_BYTES`). Nothing is bound, watched, recorded as recent or seen, or written to
+`library.json`.
 
 Session (S7): `library.json` also keeps the bound files open when the open set last changed
 (`session`, 32 paths with timestamps) and `restore_off` (reopen on launch is on by default; Clear

@@ -21,6 +21,7 @@
     "allow-read-document",
     "allow-library-list",
     "allow-library-scan",
+    "allow-library-read-template",
     "allow-library-open",
     "allow-library-pin",
     "allow-library-unpin",
