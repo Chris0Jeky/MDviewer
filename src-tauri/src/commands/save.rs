@@ -922,7 +922,7 @@ mod tests {
                 (ExportKind::Markdown, "plan.md", "md")
             );
             // Anything unrecognised (or unsafe) saves as Markdown under a fresh name.
-            for odd in ["data.yaml", "a/b.json", "CON.json", ""] {
+            for odd in ["data.xml", "a/b.json", "CON.json", ""] {
                 let (kind, name, _) = save_as_choice(odd.into());
                 assert_eq!(
                     (kind, name.as_str()),

@@ -10,9 +10,11 @@ pub const MAX_FILE_BYTES: u64 = 25_000_000;
 
 /// Markdown documents. With [`DATA_EXTENSIONS`], every extension MDviewer opens and saves.
 pub const MARKDOWN_EXTENSIONS: &[&str] = &["md", "markdown"];
-/// Data and plain-text documents (docs/design/READABLE_DATA.md, phase 1): read and saved as
+/// Data and plain-text documents (docs/design/READABLE_DATA.md, phases 1 and 2): read and saved as
 /// raw text under the same path, size and encoding rules; the webview derives their view.
-pub const DATA_EXTENSIONS: &[&str] = &["json", "jsonc", "jsonl", "ndjson", "txt", "log"];
+pub const DATA_EXTENSIONS: &[&str] = &[
+    "json", "jsonc", "jsonl", "ndjson", "txt", "log", "yaml", "yml", "toml", "csv", "tsv",
+];
 
 /// The lower-case extension of `name` when it is one MDviewer opens, else None.
 pub fn document_extension(name: &str) -> Option<String> {
@@ -268,7 +270,7 @@ pub fn read_markdown(
     if !supported {
         return Err(error_for(
             path,
-            "Only Markdown (.md, .markdown), JSON (.json, .jsonc, .jsonl, .ndjson) and plain text (.txt, .log) files are supported.",
+            "Only Markdown, JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text (.txt, .log) files are supported.",
         ));
     }
     let metadata = fs::metadata(path).map_err(|_| {
@@ -645,7 +647,8 @@ mod tests {
         assert!(read_markdown(&dir.write("bin.json", b"{\0}"), 25_000_000).is_err());
         assert!(read_markdown(&dir.write("big.txt", b"12345"), 4).is_err());
         assert_eq!(document_extension("x.Json").as_deref(), Some("json"));
-        assert_eq!(document_extension("x.yaml"), None);
+        assert_eq!(document_extension("x.YML").as_deref(), Some("yml"));
+        assert_eq!(document_extension("x.xml"), None);
     }
 
     #[test]
@@ -704,7 +707,7 @@ mod tests {
     #[test]
     fn rejects_non_markdown_files_and_directories() {
         let dir = TestDirectory::new();
-        for name in ["notes.yaml", "notes.md.exe", "notes.json.bak", "notes"] {
+        for name in ["notes.xml", "notes.md.exe", "notes.json.bak", "notes"] {
             let path = dir.write(name, b"# Valid text");
             assert!(read_markdown(&path, 25_000_000).is_err());
         }

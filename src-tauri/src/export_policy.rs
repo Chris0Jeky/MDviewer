@@ -102,7 +102,10 @@ mod tests {
         ] {
             assert_eq!(export_name(name), Ok(ExportKind::Data), "{name}");
         }
-        assert!(export_name("a.yaml").is_err());
+        assert!(export_name("a.xml").is_err());
+        for name in ["a.yaml", "a.YML", "a.toml", "a.csv", "a.tsv"] {
+            assert_eq!(export_name(name), Ok(ExportKind::Data), "{name}");
+        }
         for reserved in ["CON.json", "aux.log", "com1.TXT", "a:b.json", "a.json "] {
             assert!(export_name(reserved).is_err(), "accepted {reserved:?}");
         }
