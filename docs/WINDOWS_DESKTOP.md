@@ -1,7 +1,8 @@
 # MDviewer for Windows
 
 The experimental Windows app opens Markdown directly in a continuous reading view. JSON,
-JSON Lines and plain text files open as a readable view of their data; Edit shows their raw
+JSON Lines and plain text files open as a readable view of their data (YAML, TOML and CSV/TSV
+too in the web build; natively once the host accepts those extensions); Edit shows their raw
 text and Save writes it unchanged ([Readable data](design/READABLE_DATA.md)).
 It uses Windows' WebView2 runtime in its own window. The source editor loads when you
 choose **Edit** (`Ctrl+E`) or **New**; the paginated PDF workspace when you choose
