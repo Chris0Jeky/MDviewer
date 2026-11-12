@@ -489,6 +489,8 @@ async function setEditing(on: boolean): Promise<void> {
       });
     } catch (error) { report(`Could not open Edit: ${errorText(error)}`); return; }
   }
+  // A control write in flight would adopt the host's text after typing began: let it land first.
+  await writeback.settled();
   if (app || changingMode || !docs.reader.active) return;
   editing = true;
   syncDocuments();
