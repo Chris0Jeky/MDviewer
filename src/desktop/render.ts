@@ -112,14 +112,27 @@ function upgradeCode(md: MarkdownIt, tokens: Token[], env: Parameters<MarkdownIt
   const byLine = new Map<string, number>();
   tokens.forEach((token, index) => { if (token.type === "fence") byLine.set(String(token.attrGet("data-src") ?? ""), index); });
   const fence = md.renderer.rules.fence!;
-  const template = window.document.createElement("template");
+  const work: Array<{ pending: HTMLElement; html: string }> = [];
   for (const pending of root.querySelectorAll<HTMLElement>(`pre.${PENDING}`)) {
     const index = byLine.get(pending.getAttribute("data-src") ?? "");
-    if (index === undefined) continue;
-    template.innerHTML = sanitizeRenderedHtml(fence(tokens, index, md.options, env, md.renderer)).html;
-    const highlighted = template.content.firstElementChild;
-    if (highlighted) pending.replaceWith(highlighted);
+    if (index !== undefined) work.push({ pending, html: fence(tokens, index, md.options, env, md.renderer) });
   }
+  // One sanitizer pass for every block (S9: thousands of separate passes cost more than the
+  // highlighting). Each block keeps its own wrapper; one that does not survive intact is
+  // sanitized on its own, exactly as before.
+  const template = window.document.createElement("template");
+  template.innerHTML = sanitizeRenderedHtml(work.map((item, i) => `<div data-upgrade="${i}">${item.html}</div>`).join("")).html;
+  const wrappers = [...template.content.children];
+  work.forEach((item, i) => {
+    const wrapper = wrappers[i];
+    let highlighted = wrapper?.getAttribute("data-upgrade") === String(i) && wrapper.childElementCount === 1 ? wrapper.firstElementChild : null;
+    if (!highlighted) {
+      const single = window.document.createElement("template");
+      single.innerHTML = sanitizeRenderedHtml(item.html).html;
+      highlighted = single.content.firstElementChild;
+    }
+    if (highlighted) item.pending.replaceWith(highlighted);
+  });
 }
 
 function needsCodeTransformers(md: MarkdownIt, tokens: Token[], lineNumbers: boolean): boolean {

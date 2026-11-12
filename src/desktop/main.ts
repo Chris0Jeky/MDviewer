@@ -271,8 +271,13 @@ function rememberReaderPosition(): void {
  */
 function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
+  // A switch to another document may reuse that document's kept DOM; the one being left is kept.
+  // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
+  const switching = !patching && !!docs.reader.active && docs.reader.active.id !== renderedReaderId;
+  const candidate = switching ? kept : null;
   if (!patching) {
     rememberReaderPosition();
+    if (switching) keepRendered();
     renderedReaderId = null;
   }
   const current = ++renderGeneration;
@@ -288,6 +293,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
     status.textContent = "Local files · No uploads";
     return Promise.resolve();
   }
+  if (candidate && reuseRendered(candidate, doc)) return Promise.resolve();
   if (!patching) {
     content.setAttribute("aria-busy", "true");
     content.replaceChildren(); // A failed new document must not display the previous file's contents.
@@ -323,14 +329,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       // Relative images load natively into blob URLs (S6); upgrades later happen in place.
       if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
-      for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
-        const link = document.createElement("a");
-        link.href = `#${encodeURIComponent(heading.id)}`;
-        link.textContent = heading.textContent;
-        link.dataset.level = heading.tagName;
-        outline.append(link);
-      }
-      if (!outline.childElementCount) outline.textContent = "This document has no headings.";
+      buildOutline();
       // The outline changes text wrapping and the maximum scroll offset. Reveal
       // it first so saved offsets clamp against the reader geometry.
       // A first open needs no reset (the emptied reader is at 0) and no forced layout.
@@ -339,6 +338,8 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
     };
     // A data document renders its readable view; its raw text stays the document (renderText.ts).
     const view = renderTextOf(doc.name, doc.text);
+    const renderedText = doc.text;
+    const renderedSettings = JSON.stringify(settings);
     try {
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
@@ -350,6 +351,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
       else if (position && scroll.scrollTop === restoredTop) restore();
       content.setAttribute("aria-busy", "false");
+      renderedState = { id: doc.id, name: doc.name, text: renderedText, settings: renderedSettings };
       const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk, format: view.data?.label });
       status.textContent = `${parts.where} · ${parts.size}`;
       if (view.data?.readable.truncated) content.append(moreBar(doc.name));
@@ -456,6 +458,56 @@ async function createDocument(text = ""): Promise<void> {
   if (text && docs.reader.active) docs.reader.active.dirty = true;
   await setEditing(true); // before the render, so an empty note is not reported as a problem
   await render();
+}
+
+function buildOutline(): void {
+  for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
+    const link = document.createElement("a");
+    link.href = `#${encodeURIComponent(heading.id)}`;
+    link.textContent = heading.textContent;
+    link.dataset.level = heading.tagName;
+    outline.append(link);
+  }
+  if (!outline.childElementCount) outline.textContent = "This document has no headings.";
+}
+
+/**
+ * S9: the last fully rendered Markdown document's DOM, kept when another document is shown, so
+ * switching back is a swap instead of a full render. Reused only for the same document, name,
+ * exact text and settings. Not kept for data documents (their view depends on a budget) or for
+ * documents with local images (their blob URLs are released on every full render).
+ * ponytail: one entry; a small LRU if switching among three or more large documents matters.
+ */
+type RenderedState = { id: string; name: string; text: string; settings: string };
+/** What the reader's DOM was rendered from (set when a render completes): not the current text. */
+let renderedState: RenderedState | null = null;
+let kept: (RenderedState & { nodes: Node[] }) | null = null;
+function keepRendered(): void {
+  const state = renderedState;
+  kept = null;
+  renderedState = null;
+  if (!state || state.id !== renderedReaderId || content.getAttribute("aria-busy") !== "false" || dataLabelOf(state.name)
+    || content.querySelector("img[data-local-src]")) return;
+  kept = { ...state, nodes: [...content.childNodes] };
+}
+function reuseRendered(entry: RenderedState & { nodes: Node[] }, doc: { id: string; name: string; text: string }): boolean {
+  if ( entry.id !== doc.id || entry.name !== doc.name || entry.text !== doc.text || entry.settings !== JSON.stringify(settings)) return false;
+  content.setAttribute("aria-busy", "true"); // the same busy-then-ready signal as a render
+  content.replaceChildren(...entry.nodes);
+  content.setAttribute("data-code-theme", settings.codeTheme);
+  content.setAttribute("aria-busy", "false");
+  performance.mark("mdv:reader-text");
+  renderedState = { id: entry.id, name: entry.name, text: entry.text, settings: entry.settings };
+  buildOutline();
+  const position = docs.reader.positions.get(doc.id)?.reader;
+  const behavior = scroll.style.scrollBehavior;
+  scroll.style.scrollBehavior = "auto";
+  scroll.scrollTop = position?.scrollTop ?? 0;
+  scroll.scrollLeft = position?.scrollLeft ?? 0;
+  scroll.style.scrollBehavior = behavior;
+  renderedReaderId = doc.id;
+  syncDocuments();
+  return true;
 }
 
 /** A cut-short readable view offers the next part and everything (budgets live in renderText). */
