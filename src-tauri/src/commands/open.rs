@@ -130,7 +130,10 @@ pub(crate) async fn open_files(
             .set_title("Open")
             .add_filter("Markdown, data and text", &every)
             .add_filter("Markdown documents", MARKDOWN_EXTENSIONS)
-            .add_filter("Data and text (JSON, JSON Lines, text)", DATA_EXTENSIONS);
+            .add_filter(
+                "Data and text (JSON, YAML, TOML, CSV, text)",
+                DATA_EXTENSIONS,
+            );
         if let Some(window) = dialog_app.get_webview_window("main") {
             picker = picker.set_parent(&window);
         }

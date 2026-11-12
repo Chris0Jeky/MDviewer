@@ -8,7 +8,7 @@ other). Each runtime uses its native tools; the intent here is shared. See
 
 A local Markdown reader and editor for the web and an experimental Windows desktop app,
 with a paginated **Markdown → PDF** workspace for research and code-heavy documents.
-The Windows app also opens JSON, JSON Lines and plain text as readable documents
+The Windows app also opens JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text as readable documents
 (`docs/design/READABLE_DATA.md`, slices in progress).
 The Windows reader loads editing and pagination on demand. The defining export contract
 keeps code blocks, figures, tables and callouts whole when they fit on a page; oversized
