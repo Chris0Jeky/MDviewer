@@ -42,6 +42,8 @@ pub enum Stage {
 pub enum ReplaceError {
     Conflict(ConflictKind),
     Io(io::ErrorKind, Stage),
+    // The reason is for Debug output only; Display never exposes it.
+    #[allow(dead_code)]
     Unsupported(&'static str),
 }
 

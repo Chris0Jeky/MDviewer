@@ -17,10 +17,8 @@ smallest safe, reviewable change.
 
 Use [Future work](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 for the issue-backed queue. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
-and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs
-merged in #209; native proof, measurement and implementation gates remain open.
-Current Save Copy, memory-only sessions and privacy contracts remain in force until their
-reviewed implementation updates those contracts together.
+is implemented on Windows (companion push S1b); recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
+remains design-only and sessions stay memory-only.
 
 ## Human Action Items
 
@@ -49,7 +47,7 @@ hook (this machine is declared floorless), so nothing blocks a command for you.
 ## Default Work Style
 
 - Prefer narrow diffs over rewrites; preserve existing behavior unless the task asks for a change.
-- Keep the app **local-first**: no document network calls or automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports write the requested output; Save Copy does not adopt an original-file binding or clear its dirty baseline. Persisted app-managed user state remains limited to `Settings` and the approved Pulseboard keys in `AGENTS.md`. The SDK (`public/pulseboard.js`) is reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
+- Keep the app **local-first**: no document network calls or automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Persisted app-managed user state remains limited to `Settings` and the approved Pulseboard keys in `AGENTS.md`. The SDK (`public/pulseboard.js`) is reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
 - The **render order is load-bearing** (parse → Shiki → KaTeX → Mermaid await → fonts → paginate). Never paginate before async content settles — that defeats the no-slice guarantee.
 - Do not mix render-pipeline, pagination, export, and UI concerns in one slice unless the seam requires it.
 - Do not silently ignore failures. Classify as blocker, non-blocking risk, pre-existing noise, or invalid signal.

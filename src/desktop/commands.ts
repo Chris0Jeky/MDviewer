@@ -63,15 +63,16 @@ export function commandForEvent(event: KeyboardEvent): Command | undefined {
  * shortcut is always claimed (preventDefault), even when repeated or disabled,
  * so the browser default never runs in its place.
  */
-export function installShortcuts(target: Window, active: () => boolean): () => void {
+export function installShortcuts(target: Window, active: (command: Command) => boolean,
+  options: { capture?: boolean } = {}): () => void {
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!active() || event.defaultPrevented || event.isComposing) return;
+    if (event.defaultPrevented || event.isComposing) return;
     const command = commandForEvent(event);
-    if (!command) return;
+    if (!command || !active(command)) return;
     event.preventDefault();
     if (event.repeat || !isEnabled(command)) return;
     void command.run();
   };
-  target.addEventListener("keydown", onKeyDown);
-  return () => target.removeEventListener("keydown", onKeyDown);
+  target.addEventListener("keydown", onKeyDown, options.capture ?? false);
+  return () => target.removeEventListener("keydown", onKeyDown, options.capture ?? false);
 }
