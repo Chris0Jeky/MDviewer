@@ -226,3 +226,12 @@ describe("bounds and hints (review of #270)", () => {
     expect(toReadable("{}\n\u00a0\n{}", "jsonl").problems).toHaveLength(1);
   });
 });
+
+describe("prepaid details (Codex on #270)", () => {
+  it("shows the expanded detail a flat-table row already paid for, even when that spent the budget", () => {
+    const view = toReadable(JSON.stringify([{ payload: JSON.stringify({ a: { b: 1 } }) }]), "json", { maxValues: 6 });
+    expect(view.markdown).toContain("\\(JSON in a string\\)");
+    expect(view.markdown).toMatch(/\| b \| 1 \|/);
+    expect(view.truncated).toBe(false);
+  });
+});
