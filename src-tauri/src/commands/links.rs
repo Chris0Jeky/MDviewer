@@ -33,7 +33,7 @@ pub(crate) async fn open_relative(
     let document = base(&state, &token)?;
     let target = assets::resolve(&document, &href)
         .map(assets::with_markdown_extension)
-        .ok_or("This link does not point to a local Markdown file next to this document.")?;
+        .ok_or("This link does not point to a local document next to this one.")?;
     if !assets::without_new_links(&document, &target) {
         return Err(
             "This link goes through a folder shortcut (symlink or junction) and is not followed."
