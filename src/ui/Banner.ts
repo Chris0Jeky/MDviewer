@@ -148,6 +148,11 @@ export function mountBanner(root: HTMLElement): BannerController {
     warningText.textContent = "";
   }
 
+  function hideOffer(): void {
+    offerBar.hidden = true;
+    offerBar.replaceChildren();
+  }
+
   function hideError(): void {
     errorCard.hidden = true;
     errorMessage.textContent = "";
@@ -193,6 +198,7 @@ export function mountBanner(root: HTMLElement): BannerController {
       renderWarningText();
     },
     fatal(msg: string): void {
+      hideOffer(); // an offer belongs to a rendered document
       errorMessage.textContent = msg;
       errorCard.hidden = false;
       // The absolute card starts at the canvas origin, which may be offscreen.
@@ -210,6 +216,7 @@ export function mountBanner(root: HTMLElement): BannerController {
       renderWarnings = [];
       renderWarningText();
       hideError();
+      hideOffer(); // a successful render re-offers if its document still needs it
     },
     offer(message, actions): void {
       offerBar.replaceChildren();
