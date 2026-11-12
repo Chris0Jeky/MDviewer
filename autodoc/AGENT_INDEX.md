@@ -46,6 +46,9 @@ Export click → capture document id/name/text and settings NOW
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
+| Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
+| Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
+| Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
 | Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
 | Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
