@@ -52,7 +52,7 @@ function fixture() {
     store, workspaceEl, settings: { ...DEFAULT_SETTINGS }, renderToken: 0, hasGoodRender: false,
     renderedSnapshot: null, visiblePreviewId: null, editorDocumentId: a!.id,
     emptyEl: document.createElement("div"),
-    banner: { fatal: vi.fn(), warn: vi.fn(), clear: vi.fn() },
+    banner: { fatal: vi.fn(), warn: vi.fn(), clear: vi.fn(), offer: vi.fn() },
     editor: { capturePosition: () => ({ start: 0, end: 0, direction: "none", scrollTop: 0, scrollLeft: 0 }) },
     canvas: { host, capturePosition: () => ({ ...position }), restorePosition: restore,
       setPaginating: vi.fn(), setProgress: vi.fn(), setPageCount: vi.fn() },

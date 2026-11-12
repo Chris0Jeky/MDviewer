@@ -122,7 +122,7 @@ function appFixture() {
     editor: { setCodeTheme: vi.fn(), setDocument: vi.fn() },
     splitter: { sync: vi.fn() },
     workspaceEl: document.createElement("div"),
-    banner: { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn() }, emptyEl: document.createElement("div"),
+    banner: { fatal: vi.fn(), clear: vi.fn(), clearFatal: vi.fn(), warn: vi.fn(), offer: vi.fn() }, emptyEl: document.createElement("div"),
   });
   store.on("change", () => app.scheduleRender("content"));
   return { app, store, scheduler };
