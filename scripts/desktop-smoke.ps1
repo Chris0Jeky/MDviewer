@@ -156,13 +156,16 @@ public static class SmokeWindow {
                 }
                 if (-not $current.IsEnabled -or $current.IsOffscreen) { throw 'The requested button is no longer available.' }
                 Write-ProbePhase 'getting-button-pattern'
-                $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                # A menu button (aria-haspopup, such as More) offers ExpandCollapse, not Invoke.
+                $pattern = $null
+                $expand = -not $button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)
+                if ($expand) { $pattern = $button.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern) }
                 $result.found = $true
                 # Invoke can remain blocked while a modal dialog is visible. Publish
                 # the attempt first; the next worker verifies the resulting state.
                 Write-ProbeResult
                 Write-ProbePhase 'invoking-button'
-                $pattern.Invoke()
+                if ($expand) { $pattern.Expand() } else { $pattern.Invoke() }
                 Write-ProbePhase 'button-invoked'
                 exit 0
             }
