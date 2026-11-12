@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument } from "./helpers";
+import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace } from "./helpers";
 
 test("New starts locally from the empty reader, previews edits and saves exact Markdown", async ({ page, audit }) => {
   await expect(page.locator("#editor-input, #paged-output")).toHaveCount(0);
@@ -39,16 +39,16 @@ test("New retains existing files, uses distinct names and reveals a Preview-only
   await readyWorkspace(page, "# Keep the new source too");
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   await expect(editor).toBeHidden();
-  await moreMenu(page, "New document");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.locator("#workspace")).toHaveAttribute("data-view-mode", "editor");
   await expect(editor).toBeVisible();
   await expect(editor).toBeFocused();
   await expect(editor).toHaveValue("");
   await expect(picker.locator("option")).toHaveText(["UNTITLED.MD", "Untitled 2.md", "Untitled 3.md", "Untitled 4.md"]);
-  await selectDocument(page, "Untitled 3.md");
+  await picker.selectOption({ label: "Untitled 3.md" });
   await expect(editor).toHaveValue("# Keep the new source too");
   for (const original of originals) {
-    await selectDocument(page, original.name);
+    await picker.selectOption({ label: original.name });
     await expect(editor).toHaveValue(original.text);
   }
   await page.screenshot({ path: test.info().outputPath("desktop-new-reveals-source.png"), fullPage: true });
@@ -86,7 +86,7 @@ test("New refuses a full desktop session without replacing the selected file", a
   await expect(page.locator("#editor-input")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
   await readyWorkspace(page, "# Retained document 0");
-  await moreMenu(page, "New document");
+  await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.locator("#workspace-notice")).toContainText("at most 32 documents");
   await expect(page.getByRole("combobox", { name: "Active document" }).locator("option")).toHaveCount(32);
   await expect(page.locator("#editor-input")).toHaveValue("# Retained document 0");

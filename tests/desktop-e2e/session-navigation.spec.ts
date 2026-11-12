@@ -89,7 +89,7 @@ for (const transition of ["document switch", "workspace round-trip"] as const) {
     if (transition === "document switch") {
       await selectDocument(page, "other.md");
       await readyReader(page, "Other");
-      await expect(page.locator("#reader-outline a")).toHaveCount(0);
+      await expect(page.locator("#reader-outline a")).toHaveCount(1); // "# Other": one heading
       await selectDocument(page, "wrapped.md");
     } else {
       await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
