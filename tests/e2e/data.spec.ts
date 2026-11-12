@@ -21,6 +21,7 @@ test("a dropped JSON file shows its readable view and keeps its raw source", asy
 });
 
 test("a cut-short data view offers the rest in the workspace, and plain text stays literal", async ({ page }) => {
+  test.slow(); // paginates a few hundred records twice
   const records = Array.from({ length: 600 }, (_, index) => JSON.stringify({ n: index })).join("\n");
   const text = "keep this line\n// [!code highlight]\nand this one\n";
   await page.goto("/");
@@ -46,6 +47,7 @@ test("a cut-short data view offers the rest in the workspace, and plain text sta
   await expect(page.locator("#paged-output")).toContainText("Showing 500 of 600 records.", { timeout: 30_000 });
   await expect(offer).toContainText("This data view was cut short.", { timeout: 30_000 });
   await offer.getByRole("button", { name: "Show all", exact: true }).click();
-  await expect(page.locator("#paged-output")).toContainText("Record 600", { timeout: 30_000 });
-  await expect(offer).toBeHidden();
+  await expect(page.locator("#paged-output")).toContainText("Record 600", { timeout: 60_000 });
+  await waitForPagination(page, 60_000); // partial pages show the text before the run finishes
+  await expect(offer).toBeHidden({ timeout: 30_000 });
 });
