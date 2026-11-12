@@ -129,4 +129,32 @@ mod tests {
         assert_eq!(std::fs::read(occupied.join("keep")).unwrap(), b"untouched");
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
     }
+
+    #[test]
+    fn a_data_copy_keeps_its_data_extension() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("copy.json");
+        assert!(
+            !persist_export(
+                Some(destination.clone()),
+                ExportKind::Data,
+                b"{\"k\": 1}
+"
+            )
+            .unwrap()
+            .canceled
+        );
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"{\"k\": 1}
+"
+        );
+        assert!(persist_export(
+            Some(directory.path().join("copy.md")),
+            ExportKind::Data,
+            b"{}"
+        )
+        .is_err());
+        assert!(!directory.path().join("copy.md").exists());
+    }
 }

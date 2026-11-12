@@ -455,23 +455,7 @@ pub(crate) async fn save_document_as(
     let Some(_busy) = Busy::claim(&state.picker_open) else {
         return Ok(failed("busy"));
     };
-    // A data or text document keeps a data or text extension; anything else saves as Markdown.
-    let (kind, name) = match export_name(&body.name) {
-        Ok(kind @ (ExportKind::Markdown | ExportKind::Data)) => (kind, body.name),
-        _ => (ExportKind::Markdown, "Untitled.md".into()),
-    };
-    // The document's own extension first, so a name typed without one keeps its kind.
-    let own = name
-        .rsplit_once('.')
-        .map(|(_, ext)| ext.to_ascii_lowercase())
-        .unwrap_or_default();
-    let family = if kind == ExportKind::Data {
-        DATA_EXTENSIONS
-    } else {
-        MARKDOWN_EXTENSIONS
-    };
-    let mut extensions: Vec<&str> = family.iter().copied().filter(|ext| *ext == own).collect();
-    extensions.extend(family.iter().copied().filter(|ext| *ext != own));
+    let (kind, name, extensions) = save_as_choice(body.name);
     let (token, text, accept_lf) = (body.token, body.text.to_owned(), body.accept_lf);
     let dialog_app = app.clone();
     let chosen: Option<PathBuf> = tauri::async_runtime::spawn_blocking(move || {
@@ -527,6 +511,29 @@ pub(crate) async fn save_document_as(
         crate::commands::library::remember(&app, [std::path::PathBuf::from(path)]);
     }
     Ok(result)
+}
+
+/// The Save As dialog's kind, suggested name and extensions for a document name: a data or
+/// text document keeps a data or text extension, its own first (so a name typed without one
+/// keeps its kind); anything else saves as Markdown.
+fn save_as_choice(name: String) -> (ExportKind, String, Vec<&'static str>) {
+    let (kind, name) = match export_name(&name) {
+        Ok(kind @ (ExportKind::Markdown | ExportKind::Data)) => (kind, name),
+        _ => (ExportKind::Markdown, "Untitled.md".to_owned()),
+    };
+    let own = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    let family = if kind == ExportKind::Data {
+        DATA_EXTENSIONS
+    } else {
+        MARKDOWN_EXTENSIONS
+    };
+    let mut extensions: Vec<&'static str> =
+        family.iter().copied().filter(|ext| *ext == own).collect();
+    extensions.extend(family.iter().copied().filter(|ext| *ext != own));
+    (kind, name, extensions)
 }
 
 /// Release a closed document's capability. Unknown tokens are ignored.
@@ -894,5 +901,35 @@ mod tests {
             body(SaveResult::MixedLineEndings),
             map(&[("outcome", "mixed-line-endings")])
         );
+    }
+
+    #[cfg(test)]
+    mod save_as_choice_tests {
+        use super::*;
+
+        #[test]
+        fn a_data_or_text_document_keeps_its_own_extension_first() {
+            let (kind, name, extensions) = save_as_choice("notes.JSON".into());
+            assert_eq!(kind, ExportKind::Data);
+            assert_eq!(name, "notes.JSON");
+            assert_eq!(extensions[0], "json");
+            assert_eq!(extensions.len(), DATA_EXTENSIONS.len());
+            let (kind, _, extensions) = save_as_choice("run.log".into());
+            assert_eq!((kind, extensions[0]), (ExportKind::Data, "log"));
+            let (kind, name, extensions) = save_as_choice("plan.md".into());
+            assert_eq!(
+                (kind, name.as_str(), extensions[0]),
+                (ExportKind::Markdown, "plan.md", "md")
+            );
+            // Anything unrecognised (or unsafe) saves as Markdown under a fresh name.
+            for odd in ["data.yaml", "a/b.json", "CON.json", ""] {
+                let (kind, name, _) = save_as_choice(odd.into());
+                assert_eq!(
+                    (kind, name.as_str()),
+                    (ExportKind::Markdown, "Untitled.md"),
+                    "{odd:?}"
+                );
+            }
+        }
     }
 }
