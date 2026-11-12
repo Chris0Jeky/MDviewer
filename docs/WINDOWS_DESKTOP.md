@@ -48,6 +48,14 @@ start writing a blank note in Edit. Existing files stay open. New notes use the 
 available name (`Untitled.md`, `Untitled 2.md`, and so on), and the source pane is
 shown and focused. An untouched blank note can close without a discard prompt.
 
+Choose **New from template…** (More menu or the command palette) to start from a Markdown file in the
+`templates/` folder of a pinned project. The picker lists those templates; a template with `{{name}}`
+placeholders opens a short form that asks once for each distinct name (`{{date}}`, `{{time}}` and
+`{{title}}` fill themselves). A typed value is inserted as written, and a name left empty or unknown stays as
+written, so nothing is lost silently. The result opens as an untitled note in Edit and is saved through Save As.
+The template itself is only read (a read-only native command, `library_read_template`; a template larger than
+1 MB, or one reached through a folder shortcut, is refused). The entry is hidden outside the Windows app.
+
 Choose **Export PDF…** in More (`Ctrl+Shift+E`) to edit with the existing page-safe preview
 and export. Drag the divider between the source and the document (or focus it and use the
 arrow keys) to change their widths; the split is remembered.
@@ -84,7 +92,10 @@ edits are not kept between runs; save before closing.
 The library remembers recent files and lets you pin files and project folders. A pinned
 project lists its Markdown files newest first, groups agent files (CLAUDE.md, AGENTS.md,
 SKILL.md, agent definitions, memory files, ACTION_ITEMS.md and similar) and marks files that
-changed since you last opened them. It stores only paths and times in `library.json` in the
+changed since you last opened them. Data files (JSON, YAML, TOML, CSV and the like) inside a `.claude`,
+`.codex` or `.agent-harness` folder anywhere in a project, and its root `.mcp.json`, are listed with the agent files;
+credential files such as `auth.json` are never listed, and checkouts under `.claude/worktrees` are not scanned.
+It stores only paths and times in `library.json` in the
 app's local data folder, never file contents; **Clear library** forgets everything.
 
 Open files follow their changes on disk. When an agent or another program writes
@@ -167,13 +178,16 @@ coverage and the remaining human Windows checks.
 
 ## Local files and limits
 
-Documents stay in memory until you explicitly export them. The app has no account,
-document uploads, autosave, recently opened list or document telemetry. It saves
-only display settings. Bundled rendering assets work without a network connection
+Documents stay in memory until you save or export them. Save (Ctrl+S) writes a bound document
+back to its own file; Save As writes it to a file you choose. The app has no account, document
+uploads, autosave or document telemetry. It saves display settings and, on Windows, a Library
+file (`library.json`: recent and pinned paths, pinned projects, seen times and the last session's
+files; paths and timestamps only). Bundled rendering assets work without a network connection
 after WebView2 is installed. Clicking a normal HTTP(S) link opens your default
 browser; other link schemes and automatic remote resource loads are blocked.
 
-The host accepts local `.md` and `.markdown` files, including names containing spaces
+The host accepts local Markdown (`.md`, `.markdown`), data (`.json`, `.jsonc`, `.jsonl`, `.ndjson`,
+`.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`) and plain text (`.txt`, `.log`) files, including names containing spaces
 or Unicode. It reads UTF-8, UTF-8 with a BOM, and UTF-16 LE/BE with a BOM. Malformed
 text is rejected. Explicit UNC and device paths are not accepted. File batches and
 open documents, including new notes, are bounded to 32 documents and 25,000,000
@@ -183,8 +197,8 @@ Editing a document can increase its size; returning to reading reports any excee
 session limit and keeps the editing workspace intact so you can save or close files.
 
 Linked local images and remote images are blocked by the shared sanitizer. Embedded
-raster images work. There is no file watcher, direct in-place save, Explorer preview
-handler or shell extension in this first version.
+raster images work. An open, bound file is watched: a change made by another program reloads it, or offers a reload when
+you have unsaved edits. There is no Explorer preview handler or shell extension.
 
 ## Build on Windows
 
@@ -250,6 +264,25 @@ behavior and your preferred print driver still need acceptance on a normal Windo
 desktop. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169) tracks those
 checks, representative performance measurements and the signing/distribution decision.
 Existing web human acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open.
+
+## Local Windows builds and native checks
+
+Local builds are kept outside the repository, in `C:\Users\jekyt\source\mdv-builds\main-<rev>\` (the
+installer and a `portable` folder), so a later session can reuse them. The build and the UI Automation check
+scripts are in `C:\Users\jekyt\source\mdv-builds\tools\`; its `README.md` is the reference. `build.sh` builds
+a detached worktree of `origin/main` (about five minutes). `run-all.ps1 -Exe <portable\mdviewer.exe>` launches
+that build and runs every UI Automation check (write-back and Undo, Edit, data files) on copies of invented
+fixtures, never on a real document.
+
+Two lessons these checks follow, and any new local launch must too:
+
+- **Protect the owner's state.** The app is single-instance, so before any local native launch check that no
+  `mdviewer` process is running (if one is, it is the owner's: stop). Back up the owner's
+  `%LOCALAPPDATA%\dev.chris0jeky.mdviewer\library.json` before the first launch, and after the app has closed
+  restore those exact bytes and compare the hash.
+- **UI Automation timing is not a paint measurement.** Chromium builds its accessibility tree only after the
+  first query, so a UI Automation poll measures that query, not when the window painted. Measure start-up
+  inside the app, not with these scripts.
 
 ## Future work
 

@@ -48,10 +48,13 @@ Export click → capture document id/name/text and settings NOW
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
 | Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
-| Templates: New from template, placeholder form (A4) | `src/desktop/reader/template.ts` (pure), `src/desktop/shell/templates.ts` (picker and form), `document.newFromTemplate` in `src/desktop/main.ts` | `tests/template.test.ts`, `tests/desktop-templates.test.ts` |
-| Readable data: render-text seam for data documents (D3 webview) | `src/app/renderText.ts` (`renderTextOf`, `dataDocumentKind`, `dataLabelOf`), `src/data/` (D1), callers in `src/desktop/main.ts` and `src/app/App.ts` | `tests/render-text.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`, spec §14 |
-| Readable data: pure conversion of JSON, JSON Lines, YAML, TOML, CSV/TSV and plain text to derived Markdown (D1, D2, D4) | `src/data/{index,types,json,lens,conversation,yaml,toml,csv,escape}.ts` | `tests/data{,-conversation,-escaping,-formats}.test.ts`, `tests/fixtures/data/` (`*.readable.md` goldens); `docs/design/READABLE_DATA.md` |
+| Templates: New from template, placeholder form (A4, #286, wired to the native read in #295) | `src/desktop/reader/template.ts` (pure: `templateFields`, `templateTitle`, `fillTemplate`), `src/desktop/shell/templates.ts` (`chooseTemplate`, `isTemplatePath`), `document.newFromTemplate` in `src/desktop/main.ts` (More menu and palette), `native.library.readTemplate` in `src/desktop/native.ts` | `tests/template.test.ts`, `tests/desktop-templates.test.ts` |
+| Templates: native read-only template read (A4, #285; boundary change) | `src-tauri/src/library.rs` (`read_template`, `MAX_TEMPLATE_BYTES`), `src-tauri/src/commands/library.rs` (`library_read_template`), registered in `src-tauri/src/main.rs` | Rust unit tests in `library.rs` and `commands/library.rs`; `src-tauri/README.md` |
+| Readable data: render-text seam for data documents (D3 webview, D4 webview #288) | `src/app/renderText.ts` (`renderTextOf`, `dataDocumentKind`, `dataLabelOf`, `prepareRenderText`), `src/data/`, callers in `src/desktop/main.ts` and `src/app/App.ts` | `tests/render-text.test.ts`, `tests/desktop-data-prepare.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`, spec §14 |
+| Readable data: pure conversion of JSON, JSON Lines, YAML, TOML, CSV/TSV and plain text to derived Markdown (D1, D2, D4, D6 layout) | `src/data/{index,types,json,lens,conversation,yaml,toml,csv,escape}.ts` | `tests/data{,-conversation,-escaping,-formats}.test.ts`, `tests/fixtures/data/` (`*.readable.md` goldens); `docs/design/READABLE_DATA.md` |
 | Readable data: native open/save boundary for data and text files (D3 native, #272; D4 extensions #284 merged) | `src-tauri/src/file_policy.rs` (`DATA_EXTENSIONS`, `document_extension`), `export_policy.rs` (`ExportKind::Data`), `commands/save.rs` (`save_as_choice`), `assets.rs` (`is_markdown_target`) | Rust unit tests in those modules, `scripts/desktop-smoke.ps1` data step; `src-tauri/README.md` |
+| Library lists agent data files; the scan skips `.claude/worktrees` (D5 scan, #290; boundary change) | `src-tauri/src/library.rs` (`is_agent_data`, `AGENT_FOLDERS`, `is_nested_checkouts`, scan sets `agent`) | Rust unit tests in `library.rs` (`scan_lists_agent_data_files_and_never_walks_nested_worktrees`) |
+| Reader performance (S9 part 1, #294): tab switch reuses the rendered reader DOM; one batched sanitizer pass for code upgrades | `src/desktop/main.ts` (`keepRendered`, `reuseRendered`, `renderedState`), `src/desktop/render.ts` (`upgradeCode`, one `sanitizeRenderedHtml` pass over all blocks) | `tests/desktop-tab-reuse.test.ts` |
 | Actionable Markdown: native line-patch write-back (A2, #244; 1-based fix #268) | `src-tauri/src/linepatch.rs`, `src-tauri/src/commands/patch.rs` (`patch_document`), webview side `src/desktop/reader/writeback.ts` | Rust unit tests in both modules, shared fixtures `tests/fixtures/actionable/` (also read by `tests/actionable.test.ts` and `tests/desktop-e2e/actionable.spec.ts`), native smoke step in `scripts/desktop-smoke.ps1` (#275); `docs/design/ACTIONABLE_MARKDOWN.md` |
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
@@ -215,7 +218,7 @@ See spec §12, `tests/editor-edit-safety.test.ts`,
 `docs/design/2026-11-05-editor-edit-ownership.md`.
 
 
-## Readable data (`src/data/`, D1 to D4)
+## Readable data (`src/data/`, D1 to D4 and D6)
 
 Pure and DOM-free: a data document's raw text becomes derived Markdown that the existing reader,
 Edit preview and PDF workspace render unchanged. Contract: `docs/design/READABLE_DATA.md`.
@@ -233,6 +236,8 @@ type JsonValue; type ParseResult;                       // the tree every format
 
 // src/data/lens.ts: the generic lens (tables, sections, records, hints, budgets)
 class Lens { line(text?, path?); render(value, path?, level?, indent?, key?); count(value); take(n?); finish(); readonly map }
+Lens.recordTable(items): RecordTable | undefined;       // D6: one schema pass; columns, `flatten` for one level of nested objects
+Lens.renderTable(rows, plan, path?, level?, indent?, lineColumn?, charged?): void; // record table; `lineColumn` adds a Line column (JSON Lines)
 childPath(path: string, key: string): string;           // JSONPath-style child path
 hint(value: JsonValue, key: string, timeZone: string): string; shape(value: JsonValue): string;
 budget(value: number | undefined, fallback: number): number; count(n: number, noun: string): string;
@@ -257,17 +262,31 @@ dataLabelOf(fileName: string): string | null;           // status-line format na
 showMoreOf(name: string): void; showAllOf(name: string): void;       // per-document budget scale, memory only
 ```
 
-`OPENABLE` in `renderText.ts` is currently `json`, `jsonl` and `text`: YAML, TOML, CSV and TSV
-convert (D4, #281) but do not open as data until the webview follow-up awaits `prepare(kind)` at
-admission and widens `OPENABLE` and the pickers; the native half is #284 (merged). Relative links
+`OPENABLE` in `renderText.ts` is `json`, `jsonl`, `text`, `yaml`, `toml` and `csv` (TSV is the `csv` kind): every
+format `src/data/` reads opens as a readable view. `prepareRenderText(name)` awaits `prepare(kind)` before a
+render path derives a view, so the lazy YAML parser is loaded first (D4 webview, #288). Relative links
 open Markdown only (#283): `assets.rs` `is_markdown_target`. Native side: `file_policy.rs`
 `DATA_EXTENSIONS` (`json`, `jsonc`, `jsonl`, `ndjson`, `txt`, `log`, `yaml`, `yml`, `toml`, `csv`, `tsv`) and
 `document_extension(name)` are the one list the open checks, the Open dialog filter (`commands/open.rs`),
 Save Copy (`commands/export.rs`) and Save As read;
 `export_policy.rs` `ExportKind::Data` admits those names under the Markdown text rules (UTF-8, no NUL, 128 MiB cap);
 `commands/save.rs` `save_as_choice(name)` keeps a data document's own extension first in Save As
-and falls back to Markdown for anything else. D5 (copy value, path, subtree; agent data files in
-the Library; save the readable view as Markdown) is not started.
+and falls back to Markdown for anything else.
+
+Layout (D6, #293), in `lens.ts`: an object puts its row-sized members (a scalar, or at most four scalars, or at most
+eight short list items, under 80 characters) inline in one `Key | Value` table and gives anything larger a section;
+a small list of scalars is one inline line. A list of objects with a common shape becomes a record table
+(`recordTable`/`renderTable`): one column per key, one level of nested objects flattened to `parent.child`
+columns, numeric columns right-aligned, and for JSON Lines a leading **Line** column holding the source line. A
+detail section (`line 3: message`, or `2: field`) follows the table
+only where the cell cannot show the value well: JSON embedded in a string, clearly Markdown text, or a prose key
+(`description`, `content`, `text`, `message`...) holding a line break or more than 160 characters.
+
+**D5, pure part (#289, merged):** `src/data/copy.ts`: `valueAt(text, kind, path, fileName?)` re-parses and walks a
+`Readable.map` path (a table row's path returns the whole record), `copyValue` (scalars as written), `subtreeJson`
+(pretty JSON, source numbers kept), `pathForms(path, kind)` (JSONPath, jq with `jqSlurp` for JSON Lines); tests in
+`tests/data-copy.test.ts`. The webview copy menu and Save readable view as Markdown are issue #299. The native half
+of D5, agent data files in the Library, is merged (#290; see the table above).
 
 ## Actionable Markdown (A1 to A3)
 
@@ -307,8 +326,9 @@ placed line content. `commands/patch.rs` `patch_document(token, patches)` reads,
 through the conflict-safe replace and returns `PatchResult` (`saved { generation, text }`,
 `unplaced { index, text }`, `failed { code }`); the webview sends a document token, never a path.
 Line numbers are 1-based on both sides (#266, fixed in #268; native smoke #275 proves toggle and
-Undo against exact CRLF bytes). Templates (A4): the native `library_read_template` (#285) is merged; the picker and command
-(#286) are open, so templates are not yet current behavior in the app; A5 (embeddable element) is later.
+Undo against exact CRLF bytes). Templates (A4): the native `library_read_template` (#285), the picker and command (#286) and their wiring (#295) are merged:
+"New from template…" (More menu and palette) reads a `templates/` file of a pinned project and opens the filled text as an
+untitled note in Edit. A5 (embeddable element, #300) is later.
 
 ## Desktop foundations (companion push S0)
 
