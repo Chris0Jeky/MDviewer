@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-app-theme="light">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,7 +7,7 @@
     <title>MDviewer</title>
     <meta name="description" content="A local Markdown reader with editing and page-safe PDF export on demand." />
     <!-- S9: the first frame, before any script loads, is the reader's own background in the system
-         theme (never a white flash in dark mode). A file, never an inline style block: Tauri hashes inline
+         theme (never a white flash in dark mode): src/desktop/first-frame.css. A file, never an inline style block: Tauri hashes inline
          styles into the CSP, which voids 'unsafe-inline' and blocks Paged.js's injected styles. -->
     <link rel="stylesheet" href="/src/desktop/first-frame.css" />
   </head>

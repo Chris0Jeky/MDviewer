@@ -47,7 +47,7 @@ test("the first frame is the reader's background in the system theme, before any
     // Hold every script back: what shows now is what a slow WebView2 start shows.
     await page.route(/\.js$/, route => route.abort());
     await page.goto("/desktop.html");
-    expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe(colour);
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(colour);
     await page.unroute(/\.js$/);
   }
 });
