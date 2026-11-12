@@ -137,7 +137,7 @@ fn lock(registry: &Mutex<Registry>) -> std::sync::MutexGuard<'_, Registry> {
 
 /// Whether two absolute paths name the same location regardless of spelling:
 /// a verbatim `\\?\` prefix, `/` versus `\`, `.` components and case. A path
-/// with `..` never matches (it could alias anything).
+/// with `..` is resolved lexically, as Win32 normalisation does.
 fn same_location(a: &Path, b: &Path) -> bool {
     use std::path::{Component, Prefix};
     let parts = |path: &Path| -> Option<Vec<String>> {
@@ -251,6 +251,10 @@ pub(crate) fn save_to_path(
             )
         })
     });
+    // A capability revoked while the picker was open never falls back to "no binding".
+    if previous.is_some() && own.is_none() {
+        return failed("revoked");
+    }
     let (encoding, eol) = own
         .as_ref()
         .map_or((Encoding::Utf8, Eol::Lf), |own| (own.1, own.2));
