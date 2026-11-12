@@ -21,7 +21,8 @@ test("a JSON file opens as its readable view: title, overview, tables and sectio
   await expect(doc(page).locator("table").first()).toContainText("demo-service");
   await expect(doc(page).locator("table").first()).toContainText("8080");
   await expect(doc(page).getByRole("heading", { name: "owners" })).toBeVisible();
-  await expect(doc(page).getByRole("heading", { name: "limits" })).toBeVisible();
+  // A small object reads inline in the key/value table (D6).
+  await expect(doc(page).locator("table").first()).toContainText("requests: 100 · burst: 20");
   await expect(page.locator("#reader-status")).toContainText("JSON ·");
   // Data cannot create controls: no checkbox, no front matter card.
   await expect(doc(page).getByRole("checkbox")).toHaveCount(0);
@@ -36,13 +37,15 @@ test("an invalid JSON file names the problem with line and column, then shows th
   await expect(doc(page).locator("pre").last()).toContainText('"port": 80 80');
 });
 
-test("JSON Lines renders one section per record", async ({ page }) => {
+test("JSON Lines of flat records renders as one table, a row per record", async ({ page }) => {
   const lines = ['{"event":"start","at":1}', '{"event":"stop","at":2}', ""].join("\n");
   await openFiles(page, [{ name: "events.jsonl", text: lines }]);
   await ready(page);
   await expect(doc(page)).toContainText("2 records");
-  await expect(doc(page).getByRole("heading", { name: /Record 1/ })).toBeVisible();
-  await expect(doc(page).getByRole("heading", { name: /Record 2/ })).toBeVisible();
+  const rows = doc(page).locator("table tbody tr");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("start");
+  await expect(rows.nth(1)).toContainText("stop");
   await expect(page.locator("#reader-status")).toContainText("JSON Lines ·");
 });
 
