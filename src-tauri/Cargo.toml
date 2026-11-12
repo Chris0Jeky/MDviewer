@@ -19,6 +19,8 @@ tauri-build = { version = "=2.7.3", features = [] }
 [dependencies]
 getrandom = "=0.3.4"
 sha2 = "=0.10.9"
+# OS change notifications for open files' folders (no polling). CC0-1.0.
+notify = { version = "=8.2.0", default-features = false }
 percent-encoding = "=2.3.2"
 tempfile = "=3.27.0"
 serde = { version = "=1.0.228", features = ["derive"] }

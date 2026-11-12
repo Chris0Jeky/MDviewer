@@ -71,6 +71,19 @@ remote top-level navigation/new windows are denied. There are no generic filesys
 The opener plugin's automatic JavaScript link handler is disabled. Native dialogs
 use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 
+`patch_document(token, patches)` (actionable Markdown write-back, A2) applies line patches
+`{line, id?, expect, replace}` to a bound file as one change. It reads raw bytes and identity
+through one handle (`replace::snapshot_read`), splits lines over raw UTF-8 bytes or UTF-16
+code units after a BOM, and changes only the placed lines' content bytes: the BOM, every line
+terminator (mixed endings included) and a final terminator are kept. Placement: the remembered
+`line` if it still equals `expect`, and only that natively. The contract's later steps (the
+one line carrying the id, then the one equal line) need the Markdown syntax (code blocks,
+control kinds), so when the remembered line does not match, nothing is written and `unplaced` returns the current text so the parser can re-derive
+the patch (syntax-aware span edits stay in the webview). A replacement with a line break is
+refused; patches are all-or-nothing. The commit goes through `replace_if_unchanged` against
+the bytes just read, with one re-read and retry on conflict; the binding then moves to the new
+bytes, so the watcher sees no outside change.
+
 `save_document` and `save_document_as` are the owned writes (FILE_LIFECYCLE.md,
 #196). Each takes the UTF-8 text as a raw body plus headers: an opaque
 `x-mdviewer-token`, the `x-mdviewer-generation` the frontend last saw, and
@@ -84,6 +97,16 @@ Results are `{outcome: "saved" | "canceled" | "conflict" | "mixed-line-endings" 
 "failed", ...}` with stable codes and no paths. One dialog or write runs at a time;
 each save first reconciles interrupted saves in its folder.
 
+Live reload: `watch.rs` follows the parent folder of each bound file through OS
+change notifications (`notify` 8.2.0, ReadDirectoryChangesW; no polling). It starts
+with the first bound document, watches each folder once and non-recursively, and
+unwatches a folder with its last file. Bursts are coalesced (150 ms quiet) into one
+`mdviewer:files-changed` event whose payload is capability tokens only.
+`read_document(token, adopt)` then reports `unchanged` (the bytes this binding last
+read or saved, so this app's own save never echoes), `missing`, or `changed`; only
+`adopt: true` returns the text and moves the binding to the new bytes, so a dirty
+document's Save still conflicts.
+
 `save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a
@@ -91,7 +114,8 @@ Blob into memory, and the host checks it before copying the request or opening a
 dialog. A native Save dialog runs on a background thread. Only its chosen path
 can be written. The host writes a temporary file in that directory, syncs it,
 and atomically replaces the chosen destination; cancellation and validation
-failure preserve existing bytes. Documents are never saved automatically.
+failure preserve existing bytes. Documents are never saved automatically; a line patch
+runs only for an explicit actionable-Markdown gesture (enforced by the webview).
 
 Browser download events are denied. This avoids opening modal UI inside
 WebView2's synchronous download event, which does not support reentrancy. The
@@ -164,12 +188,15 @@ on-close disposition explicitly cancels that creation flag before renaming.
 The destination can be briefly absent between renames: this is **not an atomic
 namespace exchange**. A process claiming that name wins; its file is never
 overwritten. `create_new` uses the same no-clobber commit without an original.
-`recover_journal` rolls the verified aside back when the name is empty, otherwise
-preserves the existing destination and cleans only verified transaction artifacts.
-Repeated recovery is harmless. Modified artifacts, malformed journals or locked
-files are refused and retained for resolution. An error after commit can leave
-the complete new file in place; callers must reconcile rather than assume failure
-means nothing changed. New files inherit directory defaults; timestamps, custom
+`recover_journal` rolls the verified aside back when the name is empty and the save
+never committed. If an outside file took the name, or the committed file was later
+moved away, the original's bytes are kept as a visible `name (MDviewer recovered
+<id>).ext` sibling rather than deleted. Otherwise it preserves the existing
+destination and cleans only verified transaction artifacts. Repeated recovery is
+harmless, and one stuck journal does not stop the rest of the folder. Modified
+artifacts, malformed journals or locked files are refused and retained. Once the
+new file is in place a save returns success even if cleanup failed; the leftover
+aside or journal is reconciled by the next recovery. New files inherit directory defaults; timestamps, custom
 ACLs, alternate streams and other metadata are not preserved by this byte API.
 
 The release tests re-invoke their own executable as a separate OS process. Four

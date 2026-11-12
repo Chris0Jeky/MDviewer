@@ -46,6 +46,9 @@ Export click → capture document id/name/text and settings NOW
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
+| Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
+| Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
+| Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
 | Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
 | Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
@@ -201,7 +204,10 @@ and `returnToReader`; admission and dirty checks through `admitToWorkspace`,
 document carries a `key` (from `session.ts` `nextDocumentKey`) and, for
 host-opened files with a token, a display-only `Binding {token, path, dir,
 encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
-closing releases it through `onRelease` (never during a mode transition). `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+closing releases it through `onRelease` (never during a mode transition). Live reload:
+`src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
+`byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
+`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
 is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
 keys (exact modifiers; a match is always claimed, even repeated or disabled),
 `listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`

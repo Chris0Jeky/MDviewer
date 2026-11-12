@@ -6,6 +6,7 @@ const boundary = vi.hoisted(() => ({ open: vi.fn(), pending: vi.fn(), notify: ()
 vi.mock("../src/desktop/native", () => ({ native: {
   available: true, open: boundary.open, takePending: boundary.pending,
   onPending: vi.fn(async (callback: () => void) => { boundary.notify = callback; return () => {}; }),
+  onFilesChanged: vi.fn(async () => () => {}),
   onClose: vi.fn(async () => () => {}),
 } }));
 vi.mock("../src/desktop/render", () => ({ renderReaderDocument: async (text: string) => {

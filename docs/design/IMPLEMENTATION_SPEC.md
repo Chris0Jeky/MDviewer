@@ -33,7 +33,7 @@ raw audit results may still contain that invalid development-only residue.
 ## 3. The load-bearing render order (NEVER reorder)
 
 ```text
-0  capture raw Markdown and settings for this render
+0  capture raw Markdown and settings for this render; readFrontMatter blanks leading YAML
 1  await getHighlighter()
 1b createMarkdown(null, settings); parse once, retaining tokens and environment
 1c await ensureLang for each parsedFenceLanguages(md, tokens) label
@@ -46,6 +46,17 @@ raw audit results may still contain that invalid development-only residue.
 7  registerHandlersOnce; await paginate(source, css, host)
    inside paginate: await Previewer.preview; repairFootnoteLinks(host); return flow
 ```
+
+Step 0 calls `readFrontMatter(text)` (`src/render/frontmatter.ts`) in both pipelines. A
+leading `---` line closed by `---` or `...`, whose first content line looks like YAML, is
+replaced by the same number of empty lines so source maps keep original line numbers; any
+other document is returned unchanged, so its paginated output is identical. The paginated
+pipeline prints no front matter. The Windows reader prepends a collapsible Properties card
+(`src/desktop/reader/frontmatter.ts`, text nodes only) that lists the fields read by a
+tolerant line reader (flat keys, one nested level, lists, quoted strings, block scalars) or
+the raw YAML in monospace. Its lint, open by default when present: an unquoted value
+containing `: `, an unterminated block, and a missing `name` or `description` in a skill,
+agent definition or memory file (skills by basename, memory files by path or a `metadata.type` key, agents by `.claude/agents/` path).
 
 Grammar preparation uses decoded parser-recognized fences, including nested blockquotes,
 lists and footnotes. Fence-shaped text inside code examples does not request a grammar.
@@ -462,6 +473,14 @@ native host is present; the browser build of the desktop entry keeps today's key
 `DocStore.rename`). Unbound documents go to Save As. Closing a bound document calls
 `release_document`; mode transitions never do. Save Markdown remains the copy.
 
+Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
+`main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
+replaces its text and baseline (the reader re-renders; S2c's block patching and change
+flash will replace the full re-render). A dirty document re-reads with `adopt: false`,
+is marked `disk: "changed"` and shows the `.file-conflict` bar (Reload / Keep mine /
+Save As) next to the notice line; Keep mine hides it for that token until the next
+change. `missing` keeps the text and reports it.
+
 `desktop.html` and `vite.desktop.config.ts` build a separate `dist-desktop` entry.
 `src/desktop/main.ts` starts a continuous, sanitized reader with no editor, Paged.js,
 service worker or Pulseboard SDK. Rich rendering shares highlighter/Markdown/KaTeX
@@ -565,6 +584,38 @@ restarting an unknown worker. The existing Windows path runs the pure deadline
 policy tests and still requires actual rendered headings, single-instance routing,
 owned native Save dialogs and exact saved Markdown/PDF bytes. See
 `NATIVE_SMOKE_BOOTSTRAP.md`; these are harness limits, not app performance claims.
+
+Reader text first (`src/desktop/render.ts`). `renderReaderDocument(text, settings,
+fileName?, paint?)` parses and renders synchronously with fences as plain-text
+placeholders (`pre.shiki.reader-pending` holding Shiki's own `span.line` structure, so
+heights match within a pixel), hands that document to `paint` and marks
+`mdv:reader-text`. It then loads the reader highlighter, replaces each placeholder still
+in the live root with its sanitized highlighted fence, runs `renderAllMermaid` on the live
+root and marks `mdv:reader-rich`. All of this stays inside main's serialized
+`renderChain`, so Mermaid is never re-entered and an obsolete render's `paint` returns
+null. A highlighter failure leaves readable plain code and a warning. Without `paint`
+the returned document is complete. `src/desktop/reader/patch.ts` `patchDocument(live,
+next)` is the `paint` step for re-rendering an open document: top-level blocks whose
+source text is unchanged keep their live node (highlighted code, figures) with line
+ranges moved; only the others are replaced and upgraded. Live reload (S1c) and Edit (S5)
+are its callers. Coverage: `tests/desktop-e2e/text-first.spec.ts` (first text under
+100 ms for the sample in the production build; code heights within 1 px),
+`tests/reader-patch.test.ts`.
+
+Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
+the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
+clamped, trailing blank lines dropped) and stamps the rules that print their own tag
+(fences, display math, callouts). The paginated pipeline never installs it, so its
+output is unchanged. Fence bodies are captured before rendering because Shiki's notation
+transformers rewrite token content. Each fenced code block gets a Copy button (shown on
+hover and focus) that copies the fence body exactly; top-level headings get Copy link
+(`name.md#id`) and Copy section as Markdown (to the next heading of the same or higher
+level). Ctrl/Cmd+Shift+C copies the source lines of every block the selection touches;
+Ctrl+C stays the browser default. Heading buttons hold no text so heading text and the
+outline are unchanged. Copy path and Copy reference wait for display paths (S0) and the
+command palette (S3). Coverage: `tests/reader-sourcemap.test.ts`,
+`tests/desktop-e2e/copy.spec.ts` (asserts the text the app writes; the OS clipboard is
+shared machine state on Windows hosts).
 
 ## 15. Reader-only syntax-engine admission
 

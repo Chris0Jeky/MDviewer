@@ -6,11 +6,12 @@ import { SIZE_HARD_BYTES, SIZE_SOFT_BYTES, isMarkdownFile } from "../app/input";
 import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import { native, type OpenBatch, type SaveResult } from "./native";
+import { native, type OpenBatch, type ReadResult, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
 import { renderReaderDocument } from "./render";
+import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
@@ -55,9 +56,33 @@ const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
   shell.querySelector<HTMLElement>(".reader-footer")!);
 
+mountSelectionCopy(content);
+
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
 document.documentElement.dataset.appTheme = settings.screenTheme;
+
+// Live reload (S1c): a dirty document whose file changed on disk gets a
+// non-modal bar. Nothing is discarded without a click.
+const dismissedConflicts = new Set<string>();
+function conflictBar(after: HTMLElement): { bar: HTMLElement; text: HTMLElement } {
+  const bar = document.createElement("div");
+  bar.className = "reader-notice file-conflict";
+  bar.setAttribute("role", "alert");
+  bar.hidden = true;
+  const text = document.createElement("span");
+  const button = (label: string, action: string): HTMLButtonElement => {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.textContent = label;
+    control.dataset.conflictAction = action;
+    return control;
+  };
+  bar.append(text, " ", button("Reload", "reload"), " ", button("Keep mine", "keep"), " ", button("Save As", "save-as"));
+  after.after(bar);
+  return { bar, text };
+}
+const conflictBars = [conflictBar(notice), conflictBar(workspaceNotice)];
 
 function report(message: string): void {
   ++noticeGeneration;
@@ -93,6 +118,16 @@ function syncDocuments(): void {
     button.disabled = workspaceBusy || !active;
   }
   document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  const target = docs.saveTarget();
+  const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
+    && !dismissedConflicts.has(target.binding.token);
+  for (const { bar, text } of conflictBars) {
+    bar.hidden = !conflicted;
+    const message = conflicted ? `${target.name} changed on disk. Your edits are kept until you choose.` : "";
+    // role=alert re-announces on every text write; write only when it changes.
+    if (conflicted && text.textContent !== message) text.textContent = message;
+    for (const control of bar.querySelectorAll("button")) control.disabled = changingMode || nativeSaveBusy;
+  }
 }
 
 function rememberReaderPosition(): void {
@@ -119,16 +154,30 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   }
   content.setAttribute("aria-busy", "true");
   content.replaceChildren(); // A failed new document must not display the previous file's contents.
+  // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
+  const behavior = scroll.style.scrollBehavior;
+  scroll.style.scrollBehavior = "auto";
+  scroll.scrollTop = 0;
+  scroll.scrollLeft = 0;
+  scroll.style.scrollBehavior = behavior;
   status.textContent = `Opening ${doc.name}…`;
   // Mermaid's singleton is not re-entrant; serialize and skip obsolete renders.
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
-    try {
-      const result = await renderReaderDocument(doc.text, settings);
-      if (current !== renderGeneration) return;
-      content.replaceChildren(...result.document.childNodes);
+    const position = docs.reader.positions.get(doc.id)?.reader;
+    const restore = (): void => {
+      const previousBehavior = scroll.style.scrollBehavior;
+      scroll.style.scrollBehavior = "auto";
+      scroll.scrollTop = position?.scrollTop ?? 0;
+      scroll.scrollLeft = position?.scrollLeft ?? 0;
+      scroll.style.scrollBehavior = previousBehavior;
+    };
+    let restoredTop = -1;
+    // Text first: the document is readable, navigable and scrollable from this point;
+    // code and diagrams upgrade in place afterwards.
+    const show = (from: HTMLElement): void => {
+      content.replaceChildren(...from.childNodes);
       content.setAttribute("data-code-theme", settings.codeTheme);
-      content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
         const link = document.createElement("a");
         link.href = `#${encodeURIComponent(heading.id)}`;
@@ -138,14 +187,22 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       }
       outline.hidden = outline.childElementCount < 2;
       // The outline changes text wrapping and the maximum scroll offset. Reveal
-      // it first so saved offsets clamp against the final reader geometry.
-      const position = docs.reader.positions.get(doc.id)?.reader;
-      const previousBehavior = scroll.style.scrollBehavior;
-      scroll.style.scrollBehavior = "auto";
-      scroll.scrollTop = position?.scrollTop ?? 0;
-      scroll.scrollLeft = position?.scrollLeft ?? 0;
-      scroll.style.scrollBehavior = previousBehavior;
+      // it first so saved offsets clamp against the reader geometry.
+      // A first open needs no reset (the emptied reader is at 0) and no forced layout.
+      if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
+    };
+    try {
+      const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
+        if (current !== renderGeneration) return null;
+        show(first);
+        return content;
+      });
+      if (current !== renderGeneration) return;
+      if (result.document !== content) show(result.document); // A renderer that did not paint early.
+      // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
+      else if (position && scroll.scrollTop === restoredTop) restore();
+      content.setAttribute("aria-busy", "false");
       status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
       // A new open/action may have reported a newer failure while this render ran.
       if (result.warnings.length && currentNotice === noticeGeneration) {
@@ -431,6 +488,9 @@ async function saveDocument(as: boolean): Promise<void> {
   const target: SaveTarget | null = docs.saveTarget();
   if (!target) return;
   if (!as && !target.binding) return saveDocument(true);
+  // An outside change the user has not taken (Keep mine, or edits typed while a
+  // reload was being read) must never be overwritten in place.
+  if (!as && target.binding?.disk === "changed") { report(conflictText(target.name, "changed")); return; }
   if (!as && !target.dirty) { report(`${target.name} has no unsaved changes.`); return; }
   let acceptLf = false;
   if (target.binding?.eol === "mixed") {
@@ -478,6 +538,66 @@ function saveCopy(): void {
     () => report(`Saved a copy of ${target.name}. The open document is unchanged.`),
     error => { if (!(error instanceof SaveCanceled)) report(`Could not save a copy: ${errorText(error)}`); },
   );
+}
+
+/** Handle one changed file reported by the host watcher. */
+async function followChange(token: string): Promise<void> {
+  const target = docs.byToken(token);
+  if (!target) return;
+  let result: ReadResult;
+  try { result = await native.readDocument(token, !target.dirty, target.binding?.generation ?? 0); }
+  catch { return; } // A failed re-read changes nothing; the next notification retries.
+  const current = docs.byToken(token);
+  if (!current || current.id !== target.id) return;
+  if (result.outcome === "unchanged") {
+    if (current.binding?.disk !== "synced") { docs.markDisk(token, "synced"); syncDocuments(); }
+    return;
+  }
+  if (result.outcome === "missing") {
+    docs.markDisk(token, "missing");
+    report(`${current.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+    syncDocuments();
+    return;
+  }
+  if (result.outcome !== "changed") return;
+  if (result.text === null || current.dirty) {
+    // Dirty: keep the edits and the old read, so Save conflicts instead of overwriting.
+    dismissedConflicts.delete(token);
+    docs.markDisk(token, "changed");
+    syncDocuments();
+    return;
+  }
+  if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  if (current.owner === "reader" && docs.reader.activeId === current.id) void render();
+  syncDocuments();
+}
+
+async function reloadFromDisk(): Promise<void> {
+  const target = docs.saveTarget();
+  if (!target?.binding || changingMode || nativeSaveBusy) return;
+  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
+  if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
+    if (target.owner === "reader") void render();
+    report(`Reloaded ${target.name} from disk.`);
+  } else if (result?.outcome === "unchanged") {
+    docs.markDisk(target.binding.token, "synced");
+    report(`${target.name} already matches the file on disk.`);
+  } else if (result?.outcome === "missing") {
+    docs.markDisk(target.binding.token, "missing");
+    report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+  }
+  syncDocuments();
+}
+
+for (const { bar } of conflictBars) {
+  bar.addEventListener("click", event => {
+    const action = (event.target as Element | null)?.closest<HTMLButtonElement>("button[data-conflict-action]")?.dataset.conflictAction;
+    const token = docs.saveTarget()?.binding?.token;
+    if (!action || !token) return;
+    if (action === "reload") void reloadFromDisk();
+    if (action === "keep") { dismissedConflicts.add(token); syncDocuments(); }
+    if (action === "save-as") void saveDocument(true);
+  });
 }
 
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
@@ -549,6 +669,7 @@ if (native.available) {
   });
   void (async () => {
     await native.onPending(() => { void drain(); });
+    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
     await native.onClose(() => {
       if (changingMode || nativeSaveBusy || app?.exportState.busy) {
         report("Please wait for the current operation to finish before closing MDviewer.");

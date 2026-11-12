@@ -15,6 +15,14 @@ export interface OpenBatch {
   canceled: boolean;
 }
 
+/** One actionable-Markdown line patch (docs/design/ACTIONABLE_MARKDOWN.md, "Write-back"). */
+export interface LinePatch { line: number; id?: string | null; expect: string; replace: string }
+/** A2 result. `unplaced`: nothing written; re-derive patch `index` from `text` and retry once. */
+export type PatchResult =
+  | { outcome: "saved"; generation: number; text: string }
+  | { outcome: "unplaced"; index: number; text: string }
+  | { outcome: "failed"; code: string };
+
 /** A native Save / Save As completion (src-tauri/src/commands/save.rs). */
 export type SaveResult =
   | {
@@ -24,6 +32,16 @@ export type SaveResult =
   | { outcome: "canceled" }
   | { outcome: "conflict"; reason: "changed" | "missing" | "replaced" | "locked" }
   | { outcome: "mixed-line-endings" }
+  | { outcome: "failed"; code: string };
+
+/** A live-reload re-read (src-tauri/src/commands/reload.rs). */
+export type ReadResult =
+  | { outcome: "unchanged" }
+  | {
+    outcome: "changed"; text: string | null; generation: number;
+    encoding: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be"; eol: "lf" | "crlf" | "cr" | "mixed" | "none";
+  }
+  | { outcome: "missing" }
   | { outcome: "failed"; code: string };
 
 const SAVE_LIMIT = 25_000_000;
@@ -47,6 +65,9 @@ export const native = {
       headers: { "x-mdviewer-filename": encodeURIComponent(filename) },
     });
   },
+  /** Apply line patches to the bound document `token` as one conflict-checked change. */
+  patchDocument: (token: string, patches: LinePatch[]): Promise<PatchResult> =>
+    invoke("patch_document", { token, patches }),
   /** Save in place through the document's capability; never sends a path. */
   saveDocument: (token: string, generation: number, text: string, acceptLf: boolean): Promise<SaveResult> =>
     invoke("save_document", saveBody(text), { headers: {
@@ -58,6 +79,12 @@ export const native = {
       "x-mdviewer-token": token ?? "", "x-mdviewer-filename": encodeURIComponent(name), "x-mdviewer-accept-lf": acceptLf ? "1" : "0",
     } }),
   releaseDocument: (token: string): Promise<void> => invoke("release_document", { token }),
+  /** Re-read a bound file after a change notification; `adopt` moves the binding to the new bytes. */
+  readDocument: (token: string, adopt: boolean, generation: number): Promise<ReadResult> =>
+    invoke("read_document", { token, adopt, generation }),
+  /** Changed files arrive as capability tokens only, never paths or contents. */
+  onFilesChanged: (callback: (tokens: string[]) => void): Promise<() => void> =>
+    listen<string[]>("mdviewer:files-changed", event => callback(event.payload)),
   onPending: (callback: () => void): Promise<() => void> => listen("mdviewer:files-pending", callback),
   onClose: (canClose: () => boolean): Promise<() => void> => getCurrentWindow().onCloseRequested(async event => {
     // Prevent before awaiting: the host otherwise destroys the window immediately.

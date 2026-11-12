@@ -421,7 +421,11 @@ mod win {
         // Kernel copies synchronously.
         unsafe {
             (*ptr).FileNameLength = ((name.len() - 1) * 2) as u32;
-            std::ptr::copy_nonoverlapping(name.as_ptr(), (*ptr).FileName.as_mut_ptr(), name.len());
+            std::ptr::copy_nonoverlapping(
+                name.as_ptr(),
+                (&raw mut (*ptr).FileName).cast::<u16>(),
+                name.len(),
+            );
             let mut status = IO_STATUS_BLOCK::default();
             let code = NtSetInformationFile(
                 file.as_raw_handle(),
@@ -700,9 +704,12 @@ mod win {
                 rename(f, &back)?;
                 touched.extend([aside_path.clone(), back]);
                 aside = None;
-            } else if old.is_some() {
+            } else if old.is_some() && temp.is_some() {
+                // Uncommitted, and the original is gone from both names: refuse.
                 return Err(io::ErrorKind::NotFound.into());
             }
+            // Otherwise the save committed and its file was moved away later:
+            // nothing remains to reconcile but the journal itself.
         }
         if let Some(f) = aside {
             disposition(&f, true)?;

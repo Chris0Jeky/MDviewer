@@ -34,7 +34,8 @@ test("production reader renders rich Markdown without loading the editing worksp
 
   await expect(page.locator("#editor-input, #paged-output, .pagedjs_page")).toHaveCount(0);
   expect(audit.requests.filter(url => /\/assets\/workspace-[^/]+\.(?:js|css)$/.test(url)), "no lazy workspace resources before Edit & PDF").toEqual([]);
-  expect(audit.requests.filter(url => /pulseboard|sw\.js|registerSW/i.test(url))).toEqual([]);
+  // Match the service worker by path segment: content hashes such as "-DumBJSSw.js" are not one.
+  expect(audit.requests.filter(url => /pulseboard|\/sw\.js|registerSW/i.test(url))).toEqual([]);
   expect(await page.evaluate(() => navigator.serviceWorker.getRegistrations().then(items => items.length))).toBe(0);
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("private-field-notes");
 
@@ -72,7 +73,9 @@ test("hostile HTML cannot execute, navigate or load document resources", async (
   await readyReader(page, "Hostile input stays inert");
   const doc = page.locator("#reader-document");
   await expect(doc).toContainText("Safe visible text");
-  await expect(doc.locator("script, iframe, object, style, form, button, [onerror], [onload]")).toHaveCount(0);
+  // The reader's own copy controls are the only buttons; authored ones are removed.
+  await expect(doc.locator("script, iframe, object, style, form, button:not(.reader-copy, .reader-heading-tool), [onerror], [onload]")).toHaveCount(0);
+  await expect(doc.getByRole("button", { name: "Submit secret" })).toHaveCount(0);
   await expect(doc.locator('[src^="http"], [href^="javascript:"], [style*="url("]')).toHaveCount(0);
   await doc.getByText("Unsafe link", { exact: true }).click();
   expect(await page.evaluate(() => window.__desktopEvidence.hostileRan ?? false)).toBe(false);
