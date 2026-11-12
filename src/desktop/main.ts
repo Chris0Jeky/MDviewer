@@ -596,7 +596,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
     renderedReaderId = null;
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument,
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, () => createDocument(),
       native.available ? { save: () => { void saveDocument(false); }, saveAs: () => { void saveDocument(true); } } : undefined);
     app = mounted.app;
     docs.adoptReaderInto(app);
