@@ -660,6 +660,22 @@ command palette (S3). Coverage: `tests/reader-sourcemap.test.ts`,
 `tests/desktop-e2e/copy.spec.ts` (asserts the text the app writes; the OS clipboard is
 shared machine state on Windows hosts).
 
+Reader shell (S3; `src/desktop/shell/*`, `desktop.html`). With a document open the window
+shows one 40 px bar (Library and outline toggle, document tabs, Edit & PDF, More), the document
+and a 24 px status line (display path or name, words, a ~4-characters-per-token estimate, save
+state). Every former control is a registered command: the More menu, the Ctrl+K palette and
+the shortcuts read the same registry (`commands.ts`). Tabs replace the document picker (APG
+tabs with automatic activation; Delete or Ctrl+W closes; close buttons sit beside each tab);
+a tab's filled dot means unsaved changes, while the Library's hollow diamond means changed on
+disk since last viewed, each with a name and a tooltip. Ctrl+P runs the paginated Print / Save as
+PDF path (entering the workspace if needed); the webview's own print of the reading view never
+runs. The More menu offers Save only when there is something to save; Ctrl+S still explains
+why not. The left panel (Library in the native app, Outline) and the palette are separate
+chunks loaded on first use, after the first document paints. Below 860 px the panel is a
+drawer that Escape closes. `Settings.followSystemTheme` follows Windows light or dark.
+Pin on top calls `setAlwaysOnTop` and needs the window capability. Coverage:
+`tests/desktop-e2e/shell.spec.ts`, `tests/helpers/desktopTabs.ts` for the jsdom suites.
+
 ## 15. Reader-only syntax-engine admission
 
 The continuous reader parses once with `createMarkdown(null, settings)`. It inspects actual
