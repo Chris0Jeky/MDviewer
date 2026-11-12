@@ -137,7 +137,8 @@ taking focus from launch files; `session_setting(restore?)` reads or changes the
 
 Relative references (`assets.rs`, `commands/links.rs`): `open_relative(token, href)` opens a
 Markdown file a document links to (`other.md`, `../x.md#part`, `@CLAUDE.md`, or an
-extensionless wiki-style name, which gets `.md`), and `read_asset(token, src)` returns the raw
+extensionless wiki-style name, which gets `.md`; a link to any other extension, data and
+text files included, is refused, since a link opens and binds its target with no dialog), and `read_asset(token, src)` returns the raw
 bytes of a local image it shows (PNG, JPEG, GIF, WebP, SVG; 20 MB). Both resolve against the
 folder of that document's own binding, refuse URLs, absolute, rooted, drive-relative, UNC and
 device forms, never climb above the drive root, refuse a path through a symlink or junction
