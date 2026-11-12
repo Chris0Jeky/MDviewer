@@ -7,7 +7,7 @@ Current navigation map for MDviewer. Read the narrow owning seam before editing;
 1. `../ACTION_ITEMS.md`, then `../AGENTS.md` and the applicable `../CLAUDE.md` runtime contract.
 2. `../ORCHESTRATOR.md` and `../docs/Project_Roadmap.md` for current state and priorities.
 3. `../docs/design/IMPLEMENTATION_SPEC.md` for current contracts, especially sections 3, 5, 7, 9, 12 and 14.
-4. [Future work](../docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195), then the owning source/tests below. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs merged in #209; their implementation is not current behavior. Start with [`FILE_LIFECYCLE.md`](../docs/design/FILE_LIFECYCLE.md) and [`RECOVERY.md`](../docs/design/RECOVERY.md); the Windows compare/replace primitive remains an explicit implementation gate.
+4. [Future work](../docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195), then the owning source/tests below. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs merged in #209. Save/Save As is current behavior (S1a #226 conflict-safe replace, S1b #231 owned Save/Save As); recovery is parked. Start with [`FILE_LIFECYCLE.md`](../docs/design/FILE_LIFECYCLE.md) and [`RECOVERY.md`](../docs/design/RECOVERY.md).
 5. The retained `../docs/design/IMPLEMENTATION_FOUNDATION.md` only for unchanged API or editor/no-slice details relevant to the task. Its dated dependency inventory is not current evidence. Current failure records live in `../docs/agentic/failure_ledger.jsonl`.
 
 Do not change a public export, DOM contract or render ordering without updating this index and the canonical specification in the same change. Keep branch work isolated; use merge commits, exact-head CI and latest-head independent review. Never claim an unavailable local, second-engine or live deployment check passed.
@@ -50,6 +50,9 @@ Export click → capture document id/name/text and settings NOW
 | Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
 | Templates: New from template, placeholder form (A4) | `src/desktop/reader/template.ts` (pure), `src/desktop/shell/templates.ts` (picker and form), `document.newFromTemplate` in `src/desktop/main.ts` | `tests/template.test.ts`, `tests/desktop-templates.test.ts` |
 | Readable data: render-text seam for data documents (D3 webview) | `src/app/renderText.ts` (`renderTextOf`, `dataDocumentKind`, `dataLabelOf`), `src/data/` (D1), callers in `src/desktop/main.ts` and `src/app/App.ts` | `tests/render-text.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`, spec §14 |
+| Readable data: pure conversion of JSON, JSON Lines, YAML, TOML, CSV/TSV and plain text to derived Markdown (D1, D2, D4) | `src/data/{index,types,json,lens,conversation,yaml,toml,csv,escape}.ts` | `tests/data{,-conversation,-escaping,-formats}.test.ts`, `tests/fixtures/data/` (`*.readable.md` goldens); `docs/design/READABLE_DATA.md` |
+| Readable data: native open/save boundary for data and text files (D3 native, #272; D4 extensions #284 merged) | `src-tauri/src/file_policy.rs` (`DATA_EXTENSIONS`, `document_extension`), `export_policy.rs` (`ExportKind::Data`), `commands/save.rs` (`save_as_choice`), `assets.rs` (`is_markdown_target`) | Rust unit tests in those modules, `scripts/desktop-smoke.ps1` data step; `src-tauri/README.md` |
+| Actionable Markdown: native line-patch write-back (A2, #244; 1-based fix #268) | `src-tauri/src/linepatch.rs`, `src-tauri/src/commands/patch.rs` (`patch_document`), webview side `src/desktop/reader/writeback.ts` | Rust unit tests in both modules, shared fixtures `tests/fixtures/actionable/` (also read by `tests/actionable.test.ts` and `tests/desktop-e2e/actionable.spec.ts`), native smoke step in `scripts/desktop-smoke.ps1` (#275); `docs/design/ACTIONABLE_MARKDOWN.md` |
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
@@ -211,6 +214,101 @@ See spec §12, `tests/editor-edit-safety.test.ts`,
 `tests/e2e/editor-edit-safety.spec.ts` and
 `docs/design/2026-11-05-editor-edit-ownership.md`.
 
+
+## Readable data (`src/data/`, D1 to D4)
+
+Pure and DOM-free: a data document's raw text becomes derived Markdown that the existing reader,
+Edit preview and PDF workspace render unchanged. Contract: `docs/design/READABLE_DATA.md`.
+The document keeps its raw text; Edit shows it and Save writes it byte for byte.
+
+```typescript
+// src/data/index.ts (re-exports DataKind, Problem, Readable, ReadableOptions from types.ts)
+prepare(kind: DataKind): Promise<void>;                 // loads the lazy YAML reader; await before toReadable(…, "yaml")
+dataKindOf(fileName: string): DataKind | null;          // by extension: json/jsonc, jsonl/ndjson, yaml/yml, toml, csv/tsv, txt/log
+toReadable(text: string, kind: DataKind, options?: ReadableOptions): Readable; // { markdown, problems, truncated, map }
+
+// src/data/json.ts: source-preserving parser, numbers stay lexemes
+parseJson(text: string, comments?: boolean, lineOffset?: number): ParseResult;
+type JsonValue; type ParseResult;                       // the tree every format is normalised to
+
+// src/data/lens.ts: the generic lens (tables, sections, records, hints, budgets)
+class Lens { line(text?, path?); render(value, path?, level?, indent?, key?); count(value); take(n?); finish(); readonly map }
+childPath(path: string, key: string): string;           // JSONPath-style child path
+hint(value: JsonValue, key: string, timeZone: string): string; shape(value: JsonValue): string;
+budget(value: number | undefined, fallback: number): number; count(n: number, noun: string): string;
+
+// src/data/conversation.ts: the conversation lens for chat and agent transcripts (D2)
+isConversation(records): boolean; conversationList(value): ArrayValue | undefined;
+conversationOverview(lens, records): void; conversationRecord(lens, value, path, index, bad?): void;
+renderConversation(lens, root, list): void;
+
+// src/data/{yaml,toml,csv}.ts (D4): parse to JsonValue plus problems
+prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared
+parseToml(text: string): ParseResult;
+parseCsv(text: string, delimiter?: string): CsvResult;               // RFC 4180; TSV passes "\t"
+
+// src/data/escape.ts: keep data from becoming Markdown or HTML
+escapeText(text: string): string; cellText(text: string): string; fence(text: string): string;
+
+// src/app/renderText.ts: the one seam the reader, Edit preview and PDF workspace share
+renderTextOf(name: string, text: string): RenderText;   // { text, data: DataView | null }; Markdown passes through
+dataDocumentKind(fileName: string): DataKind | null;    // null for Markdown and for kinds not yet in OPENABLE
+dataLabelOf(fileName: string): string | null;           // status-line format name
+showMoreOf(name: string): void; showAllOf(name: string): void;       // per-document budget scale, memory only
+```
+
+`OPENABLE` in `renderText.ts` is currently `json`, `jsonl` and `text`: YAML, TOML, CSV and TSV
+convert (D4, #281) but do not open as data until the webview follow-up awaits `prepare(kind)` at
+admission and widens `OPENABLE` and the pickers; the native half is #284 (merged). Relative links
+open Markdown only (#283): `assets.rs` `is_markdown_target`. Native side: `file_policy.rs`
+`DATA_EXTENSIONS` (`json`, `jsonc`, `jsonl`, `ndjson`, `txt`, `log`, `yaml`, `yml`, `toml`, `csv`, `tsv`) and
+`document_extension(name)` are the one list the open checks, the Open dialog filter (`commands/open.rs`),
+Save Copy (`commands/export.rs`) and Save As read;
+`export_policy.rs` `ExportKind::Data` admits those names under the Markdown text rules (UTF-8, no NUL, 128 MiB cap);
+`commands/save.rs` `save_as_choice(name)` keeps a data document's own extension first in Save As
+and falls back to Markdown for anything else. D5 (copy value, path, subtree; agent data files in
+the Library; save the readable view as Markdown) is not started.
+
+## Actionable Markdown (A1 to A3)
+
+Contract: `docs/design/ACTIONABLE_MARKDOWN.md`. The parser is pure; the reader and the native host
+share its 1-based line numbering and the fixtures in `tests/fixtures/actionable/` (`*.md` with
+`*.items.json` and `*.patches.json`).
+
+```typescript
+// src/render/actionable.ts
+parseActionable(text: string, tokens?: readonly Token[]): ActionableDocument; // { controls, cycle, version, problems }
+planChange(text: string, document: ActionableDocument, control: Control, action: ControlAction): LinePatch[];
+applyPatches(text: string, patches: readonly LinePatch[]): string;   // in-memory path (web build, unsaved edits)
+inversePatches(patches: readonly LinePatch[]): LinePatch[];          // Undo
+relocate(text: string, previous: Control, previousLine: string): { document; control } | null; // re-derive after an outside change
+nextMark(state: Mark, cycle: readonly Mark[]): Mark | null; nextOption(value: string, options: readonly string[]): string;
+spanValue(control: Control): string; splitLines(text: string): { bom; lines; eols };
+MARKS, MARK_LABELS, SUPPORTED_VERSION; types Mark, Control, ControlAction, LinePatch, ActionableDocument
+
+// src/render/actionableGlyphs.ts
+actionableGlyphs(md: MarkdownIt): void;                              // static glyphs for marks and choices
+
+// src/desktop/reader/actionable.ts: reader-only rendering of fields and status chips
+markFields(tokens, actionable, TokenCtor): void; chipRow(actionable): HTMLElement | null;
+
+// src/desktop/reader/controls.ts: DOM decoration, click/keyboard/menu gestures
+decorateControls(root: HTMLElement, actionable: ActionableDocument): void;
+setControlHandler(next: ControlHandler | null): void; controlHandler(): ControlHandler | null;
+
+// src/desktop/reader/writeback.ts: A3 write-back and Undo notice
+createWriteback(deps: WritebackDeps): { change(control, action): Promise<void>; checkOverwritten(doc): void; forget(): void; settled(): Promise<void> };
+```
+
+Native: `src-tauri/src/linepatch.rs` (`Patch { line (1-based), id, expect, replace }`,
+`MAX_PATCHES` 256, `MAX_LINE_CHARS` 65,536) splits the raw bytes (UTF-8, UTF-16 LE/BE after a
+BOM) into lines, keeps the BOM, every terminator and the final-terminator state, and changes only
+placed line content. `commands/patch.rs` `patch_document(token, patches)` reads, places and commits
+through the conflict-safe replace and returns `PatchResult` (`saved { generation, text }`,
+`unplaced { index, text }`, `failed { code }`); the webview sends a document token, never a path.
+Line numbers are 1-based on both sides (#266, fixed in #268; native smoke #275 proves toggle and
+Undo against exact CRLF bytes). Templates (A4): the native `library_read_template` (#285) is merged; the picker and command
+(#286) are open, so templates are not yet current behavior in the app; A5 (embeddable element) is later.
 
 ## Desktop foundations (companion push S0)
 
