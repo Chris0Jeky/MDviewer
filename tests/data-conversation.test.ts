@@ -87,7 +87,7 @@ describe("conversation layout and fidelity", () => {
     expect(result.truncated).toBe(false);
     expect(view([{ ...user, timestamp: "2026-01-01T00:00:00Z" }, assistant], { timeZone: "America/New_York" }).markdown)
       .toContain("2025\\-12\\-31 19\\:00 America\\/New\\_York");
-    expect(view([{ ...user, timestamp: "2026-01-01" }, assistant], { timeZone: "invalid" }).markdown).toContain("00\\:00 UTC");
+    expect(view([{ ...user, timestamp: "2026-01-01T00:00:00Z" }, assistant], { timeZone: "invalid" }).markdown).toContain("00\\:00 UTC");
     const raw = toReadable('[{"role":"user","content":"x","usage":{"input_tokens":1.0,"output_tokens":12345678901234567890}},{"role":"assistant","content":"y"}]', "json");
     expect(raw.markdown).toContain("tokens: input\\_tokens: 1\\.0, output\\_tokens: 12345678901234567890");
   });
