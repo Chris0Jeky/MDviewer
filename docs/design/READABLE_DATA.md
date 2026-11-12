@@ -77,7 +77,10 @@ The same generic layout applies inside YAML multi-document and conversation view
   an empty nested object stays `{}`. Columns follow first appearance across all records, with
   blanks for missing members. A collision or more than 32 columns falls back to the unflattened
   test, then sections. Columns containing only non-empty numbers are right-aligned; CSV numbers
-  must match JSON's number grammar. Details follow only for Markdown or JSON embedded in strings.
+  must match JSON's number grammar. A cell's string gets a detail section only when it holds embedded JSON, is clearly Markdown, or
+  sits under a prose key and is a block on its own account (a line break, or longer than 160
+  characters); not where literal strings are forced (generic data inside a conversation). Anything
+  else is already whole in its cell.
 - **JSON Lines records** use the same table when all valid records qualify, even beyond the shown
   range. A right-aligned `line` column gives source line numbers (`#` if `line` collides; sections
   if both collide). Invalid records in the shown range follow the table, with their original record

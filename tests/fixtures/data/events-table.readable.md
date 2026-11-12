@@ -6,10 +6,6 @@ JSON Lines · 54 B · 3 records, 1 not valid JSON
 | 1 | 1 | 2 (0 s) |  |
 | 3 | 2 |  | done |
 
-## line 3\: message
-
-> done
-
 ## Record 2 (line 2)
 
 Line 2, column 1: Expected a JSON value

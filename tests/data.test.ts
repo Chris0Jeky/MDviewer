@@ -120,7 +120,7 @@ describe("generic lens", () => {
   });
 
   it("keeps the flat table and expands block values without charging them twice", () => {
-    const view = toReadable('[{"description":"**Hello**","payload":"{\\"a\\":1}","parts":["[2]"]}]', "json", { maxValues: 11 });
+    const view = toReadable('[{"description":"**Hello**\\nworld","payload":"{\\"a\\":1}","parts":["[2]"]}]', "json", { maxValues: 11 });
     expect(view.markdown).toContain("| description | payload | parts |");
     expect(view.markdown).toContain("> **Hello**");
     expect(view.markdown).toContain("| a | 1 |");
@@ -324,17 +324,27 @@ describe("D6 readability rules", () => {
     expect(plain(readable([{ a: fields, extra: 1 }]).markdown)).toContain("| k31 | 31 |");
   });
 
-  it("G3 only adds details for Markdown or embedded JSON, including flattened and list cells", () => {
+  it("G3 adds details for embedded JSON, clear Markdown, or block prose, including flattened and list cells", () => {
     const result = readable([{ nested: { notes: "first\nsecond", description: "**Bold**", payload: '{"a":1}',
       parts: ['{"b":2}'] }, long: "x".repeat(161) }]);
     expect(result.markdown).toContain("first<br>second");
     expect(result.markdown).not.toContain("## 0\\: nested\\.notes");
     expect(result.markdown).not.toContain("## 0\\: long");
-    expect(result.markdown).toContain("> **Bold**");
+    // A short, single-line prose value is already whole in its cell: no detail.
+    expect(result.markdown).not.toContain("> **Bold**");
+    expect(result.markdown).not.toContain("nested\\.description\n");
     expect(result.markdown).toContain("| a | 1 |");
     expect(result.markdown).toContain("| b | 2 |");
     expect(result.truncated).toBe(false);
     expect([...result.map.values()]).toContain("$[0].nested.payload.a");
+  });
+
+  it("G3 gives block prose a detail, but not a multi-line string under a non-prose key", () => {
+    const result = readable([{ description: "first line\nsecond line", trace: "at a()\nat b()" }]);
+    expect(result.markdown).toContain("> first line");
+    expect(result.markdown).toContain("at a\\(\\)<br>at b\\(\\)");
+    expect(result.markdown).not.toContain("trace\n\n```");
+    expect(result.markdown).not.toMatch(/^## .*trace/m);
   });
 
   it("G3a aligns only columns with non-empty numeric cells", () => {

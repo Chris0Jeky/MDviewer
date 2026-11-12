@@ -361,8 +361,12 @@ export class Lens {
       for (const [name, cell] of cells) {
         const key = cell.keys[cell.keys.length - 1]!;
         const target = cell.keys.reduce(childPath, row.path);
+        // A detail only where the cell cannot show the value well: embedded JSON, clear Markdown, or
+        // a prose key whose text is a block (a line break, or over 160 characters). Anything else is
+        // already whole in its cell (a short "ok", or a stack trace with <br>).
         const detail = (v: JsonValue): boolean => v.kind === "string" && (this.embedded.has(v)
-          || (v.value !== "" && !this.literalStrings && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(v.value))));
+          || (v.value !== "" && !this.literalStrings && (clearlyMarkdown(v.value)
+            || (proseKeys.has(key.toLowerCase()) && (/[\r\n]/.test(v.value) || v.value.length > 160)))));
         // Name the row as the table shows it: its line for JSON Lines, else its position.
         const rowLabel = lineColumn ? `line ${row.line}` : String(index);
         if (detail(cell.value)) details.push({ value: cell.value, key, path: target, label: `${rowLabel}: ${name}` });
