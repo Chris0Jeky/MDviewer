@@ -29,7 +29,7 @@ import {
   stampAtomicBlocks,
 } from "../render/buildSource";
 import { buildStylesheet } from "../paginate/cssBuilder";
-import { paginate, teardownPagination } from "../paginate/paginate";
+import { PaginationIncompleteError, paginate, teardownPagination } from "../paginate/paginate";
 import { registerHandlersOnce, setPaginationProgress } from "../paginate/handler";
 import { measurePageArea } from "../paginate/measure";
 import { exportViaPrint } from "../export/print";
@@ -643,14 +643,19 @@ export class App {
       // UX-12: an empty / whitespace-only document paginates to one blank sheet and would
       // otherwise report plain success. Surface the hint through the banner only — putting
       // it in the paginated output would export it into the PDF.
-      const allWarnings = withEmptyDocWarning(
-        withMermaidWarnings(warnings, mermaidResult.failed),
-        src,
+      const allWarnings = withSplitWarning(
+        withEmptyDocWarning(withMermaidWarnings(warnings, mermaidResult.failed), src),
+        flow.recoveredSplits,
       );
       if (allWarnings.length > 0) this.banner.warn(allWarnings);
       else this.banner.clear();
     } catch (err) {
       if (stale()) return;
+      // An incomplete layout was torn down, so no earlier render is left on screen.
+      if (err instanceof PaginationIncompleteError) {
+        this.hasGoodRender = false;
+        this.canvas.setPageCount(0);
+      }
       // Keep the last good render on screen; surface a fatal banner over it.
       this.banner.fatal(`Render failed: ${errorMessage(err)}`);
       if (!this.hasGoodRender) this.showPane("error");
@@ -827,6 +832,18 @@ export function withEmptyDocWarning(warnings: RenderWarning[], src: string): Ren
     },
     ...warnings,
   ];
+}
+
+/** Name the blocks pagination had to split to recover from a stalled layout. */
+export function withSplitWarning(warnings: RenderWarning[], splits?: string[]): RenderWarning[] {
+  if (!splits) return warnings;
+  const named = splits.slice(0, 3).join(", ");
+  const more = splits.length > 3 ? ` and ${splits.length - 3} more` : "";
+  const message =
+    splits.length > 0
+      ? `Layout was retried so nothing is lost; split across pages: ${named}${more}.`
+      : "Layout was retried with relaxed page breaks so nothing is lost.";
+  return [...warnings, { kind: "content", message }];
 }
 
 function errorMessage(err: unknown): string {

@@ -22,21 +22,23 @@ const CODE = (lines: number, tag: string): string =>
     "\n",
   );
 
-// Three sections, each with a tall keep-whole block: across font metrics at least one
-// pushed block must share its page with the next section's heading (the test fails
-// loudly if the fixture ever stops producing that discriminating shape).
+// Three sections, each with a keep-whole block that fits one page but not the space
+// left under its section's paragraph, so it is pushed whole onto the next page and
+// shares it with the next section's heading (the test fails loudly if the fixture
+// ever stops producing that discriminating shape). The blocks must FIT a page: a block
+// taller than a page now splits in place (Tier 4) instead of being pushed.
 const DOC = [
   "# Alpha",
   "",
   PARA,
   PARA,
-  CODE(70, "alpha"),
+  CODE(35, "alpha"),
   "",
   "# Beta",
   "",
   PARA,
   PARA,
-  CODE(70, "beta"),
+  CODE(35, "beta"),
   "",
   "# Gamma",
   "",

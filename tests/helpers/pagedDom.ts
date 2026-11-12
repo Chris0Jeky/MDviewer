@@ -52,6 +52,11 @@ export interface PagedSnapshot {
   pageCount: number;
   pages: PageRect[];
   blocks: BlockRect[];
+  /**
+   * On-screen preview zoom (rendered px per layout px). Rects are zoomed; recorded source
+   * heights are layout px, so compare `sourceHeight * scale` against rects.
+   */
+  scale: number;
 }
 
 /** Atomic selectors — must match the break-inside:avoid set in print.css. */
@@ -216,7 +221,13 @@ export async function readPagedSnapshot(page: Page): Promise<PagedSnapshot> {
       }
     }
 
-    return { pageCount: pages.length, pages, blocks };
+    const firstContent = pageEls[0]?.querySelector<HTMLElement>(".pagedjs_page_content");
+    const scale =
+      firstContent && firstContent.offsetWidth > 0
+        ? firstContent.getBoundingClientRect().width / firstContent.offsetWidth
+        : 1;
+
+    return { pageCount: pages.length, pages, blocks, scale };
   }, [...ATOMIC_SELECTORS]);
 }
 
@@ -244,16 +255,16 @@ export function blockStraddles(block: BlockRect, page: PageRect, tolerancePx = 2
 
 /**
  * Detect one logical source block appearing on multiple pages. Only genuinely
- * over-tall pre/table blocks may split, and their fragments must occupy
+ * over-tall code/table/quote/callout blocks may split, and their fragments must occupy
  * consecutive pages. A short block split into individually well-fitting clones
  * is the false-positive gap this identity check closes.
  */
 export function splitAtomicOffenders(snapshot: PagedSnapshot, tolerancePx = 2): string[] {
   const offenders: string[] = [];
-  const pageHeight = Math.max(
-    0,
-    ...snapshot.pages.map((page) => page.content.bottom - page.content.top),
-  );
+  // Page rects are zoomed with the preview; source heights are layout px.
+  const pageHeight =
+    Math.max(0, ...snapshot.pages.map((page) => page.content.bottom - page.content.top)) /
+    (snapshot.scale || 1);
   const byId = new Map<string, BlockRect[]>();
 
   for (const block of snapshot.blocks) {
@@ -271,7 +282,13 @@ export function splitAtomicOffenders(snapshot: PagedSnapshot, tolerancePx = 2): 
     if (pages.length <= 1) continue;
 
     const tag = fragments[0]?.tag ?? "atomic";
-    const maySplitWhenOverTall = tag.startsWith("pre") || tag.startsWith("table");
+    // Tier 4 families: code, tables, quotes and callouts may split, but only when the
+    // pristine source height below proves they could not fit one page.
+    const maySplitWhenOverTall =
+      tag.startsWith("pre") ||
+      tag.startsWith("table") ||
+      tag.startsWith("blockquote") ||
+      tag.startsWith("div.callout");
     const sourceHeight = fragments.find((fragment) => fragment.sourceHeight !== null)?.sourceHeight;
     if (!maySplitWhenOverTall) {
       offenders.push(
