@@ -24,10 +24,12 @@
   marks, choices, fields and status chips are clickable in the reader and written back byte-exact with
   Undo (the native smoke #275 proves toggle and Undo on a CRLF file against the real host). The app also
   opens `.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views, with a conversation
-  view for chat and agent transcripts (Readable data D0 to D3, #269/#270/#273/#272/#280). Not yet in the
-  app: YAML, TOML and CSV (parsers merged in #281; native open #284 merged), templates (A4, #285
-  and #286 open). These are automated results on unsigned CI builds; nobody has accepted them on real
-  files yet, which is new item **AI-10**. **AI-6/AI-7/AI-8/AI-9/AI-10 and #169 remain OPEN.** No
+  view for chat and agent transcripts (Readable data D0 to D3, #269/#270/#273/#272/#280). Not yet a
+  readable view: YAML, TOML and CSV (parsers merged in #281; native open #284 merged, so such files
+  open, but as plain Markdown text until the webview follow-up lands), templates (A4: native read
+  #285 merged, picker #286 open). These are automated results on unsigned CI builds; nobody has
+  accepted them on real files yet, which is the new item **AI-10**. **AI-6/AI-7/AI-8/AI-9 and #169
+  remain OPEN, and AI-10 is added.** No
   deployment, signed release or performance result is claimed; the deployed site is unchanged.
 
 ### Earlier snapshots (historical)
@@ -284,8 +286,9 @@
   documents. Automated tests prove this on invented files; only you can judge it on real ones. Work
   on files you can afford to change: first make a backup copy of each one (or use a file in a Git
   folder, where `git diff` shows exactly what changed).
-  1. Get the current Windows build: open docs/WINDOWS_DESKTOP.md, section "Get the app". In short,
-     open the Windows Desktop workflow on GitHub, pick the latest successful run on `main`, download
+  1. Get the current Windows build: open [docs/WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md), section
+     "Get the app". In short, open the Windows Desktop workflow on GitHub, pick the latest successful
+     run on `main` (artifacts expire after 30 days, so pick a recent one), download
      the `mdviewer-windows-x64` artifact (GitHub may ask you to sign in), extract it, and run the
      `*-setup.exe` installer or the portable `mdviewer.exe`. Windows may show an unknown-publisher
      prompt: these builds are unsigned previews.
@@ -294,17 +297,19 @@
      file of its own to write back to. Click one empty box. It should become ticked at once.
   3. Check the file on disk: open it in another program and compare it with your backup (or run
      `git diff`). Exactly that one box should have changed (`[ ]` to `[x]`) and nothing else,
-     including line endings and blank lines at the end. Then click **Undo** in the small notice
-     that appeared; the file on disk should return to exactly what it was.
-  4. Press **Edit** (Ctrl+E), change a line of text, and press Ctrl+S. Check on disk that your
+     including line endings and blank lines at the end.
+  4. Back in MDviewer, tick a second empty box and, **within about 10 seconds**, click **Undo** in the
+     small notice that appears (it closes by itself after about 10 seconds unless the pointer rests
+     on it). Compare the file on disk again: the second box should be empty again, exactly as before.
+  5. Press **Edit** (Ctrl+E), change a line of text, and press Ctrl+S. Check on disk that your
      change was saved and the rest of the file is the same.
-  5. Open one of your own `.json` files. It should appear as a readable document (a title, an overview
+  6. Open one of your own `.json` files. It should appear as a readable document (a title, an overview
      line, tables or sections) rather than raw text. Press **Edit** to see the raw text, which Save
      writes unchanged.
-  6. Open an agent or chat transcript (a `.jsonl` file, for example one a coding agent wrote). It
+  7. Open an agent or chat transcript (a `.jsonl` file, for example one a coding agent wrote). It
      should show a line such as "4 turns: 2 user, 2 assistant" and then one section per turn headed
      User or Assistant. Note anything confusing or missing.
-  7. Reply "AI-10 is done" (or report what looked wrong: which file type, what you did, what you saw).
+  8. Reply "AI-10 is done" (or report what looked wrong: which file type, what you did, what you saw).
 
 - **AI-9 — Harden the `production` environment before the first live automated deploy.**
   `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path

@@ -11,8 +11,8 @@
 > links and session restore are merged (#221, #224–#226, #228, #231–#233, #235, #239, #241, #260, #264, #271).
 > **Actionable Markdown** ([spec](docs/design/ACTIONABLE_MARKDOWN.md)): A1 #252, A2 #244 and A3 #263
 > are merged; #268 fixed the 1-based write-back line (#266) and the native A3 smoke #275 proves toggle and
-> Undo with exact CRLF bytes in the Windows job. A4 templates is in progress: native template read #285 and
-> picker/command #286 are open. A5 (embeddable element) is later.
+> Undo with exact CRLF bytes in the Windows job. A4 templates is in progress: native template read #285 is merged and
+> the picker/command #286 is open. A5 (embeddable element) is later.
 > **Readable data** ([spec](docs/design/READABLE_DATA.md)): D0 #269, D1 #270, D2 #273, D3 native #272 and
 > webview #280, D4 parsers #281 and Markdown-only relative links #283 are merged. The app opens `.json`,
 > `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. D4 native extensions #284

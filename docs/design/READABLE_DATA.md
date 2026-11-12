@@ -1,8 +1,8 @@
 # Readable data, version 1
 
 Status: **specification drafted 2026-11-12 on the owner's request. D0 to D3 (including both halves of
-D3) and the D4 parsers are merged; the D4 native extensions (#284) and the webview follow-up that opens
-YAML, TOML, CSV and TSV are open; D5 is not started.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
+D3), the D4 parsers and the D4 native extensions (#284) are merged; the webview follow-up that opens
+YAML, TOML, CSV and TSV as readable views is open; D5 is in progress.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
 files" and create "structured more human readable versions".
 
 ## The idea

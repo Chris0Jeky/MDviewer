@@ -32,8 +32,8 @@ research #205 remain separate.
 in slices A1–A5. A1 to A3 are merged on main (see P2); A4 templates is in review; A5 is later.
 
 [Readable data v1](design/READABLE_DATA.md) (owner request, 2026-11-12) opens data files as a
-readable view derived on the device. D0 to D3 and the D4 parsers are merged on main; the D4
-native extensions are in review; D5 is next (see P2).
+readable view derived on the device. D0 to D3, the D4 parsers and the D4 native extensions are merged on
+main; the webview follow-up for D4 and D5 are next (see P2).
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
@@ -173,8 +173,8 @@ export paths.
   closed); the native A3 smoke [#275](https://github.com/Chris0Jeky/MDviewer/pull/275) now toggles a
   checkbox in a CRLF file and Undoes it against the real host with exact bytes. Human acceptance on real files
   is AI-10. **In progress:** A4 templates, with the native template read
-  [#285](https://github.com/Chris0Jeky/MDviewer/pull/285) and the picker/command
-  [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) both open. **Later:** A5 embeddable element.
+  [#285](https://github.com/Chris0Jeky/MDviewer/pull/285) merged and the picker/command
+  [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) open. **Later:** A5 embeddable element.
   Open follow-ups: [#254](https://github.com/Chris0Jeky/MDviewer/issues/254).
 - **In progress (2026-11-12): Readable data, D0 to D4 parsers merged** ([contract](design/READABLE_DATA.md)).
   Merged: D0 spec [#269](https://github.com/Chris0Jeky/MDviewer/pull/269); D1 JSON, JSON Lines and
@@ -184,8 +184,8 @@ export paths.
   [#280](https://github.com/Chris0Jeky/MDviewer/pull/280) (Read, Edit, PDF); D4 YAML, TOML, CSV and TSV
   parsers [#281](https://github.com/Chris0Jeky/MDviewer/pull/281); relative links open Markdown only
   [#283](https://github.com/Chris0Jeky/MDviewer/pull/283). Today the Windows app opens `.json`, `.jsonc`,
-  `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. **Open:** D4 native extensions
-  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) (merged); the webview follow-up that awaits
+  `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. D4 native extensions
+  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) are merged. **Open:** the webview follow-up that awaits
   `prepare(kind)` and widens `OPENABLE` and the pickers (not started on main). **Next:** D5 (copy value,
   path and subtree; agent data files in the Library; save the readable view as Markdown). Open
   issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),

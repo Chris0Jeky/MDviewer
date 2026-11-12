@@ -260,7 +260,7 @@ showMoreOf(name: string): void; showAllOf(name: string): void;       // per-docu
 convert (D4, #281) but do not open as data until the webview follow-up awaits `prepare(kind)` at
 admission and widens `OPENABLE` and the pickers; the native half is #284 (merged). Relative links
 open Markdown only (#283): `assets.rs` `is_markdown_target`. Native side: `file_policy.rs`
-`DATA_EXTENSIONS` (currently `json`, `jsonc`, `jsonl`, `ndjson`, `txt`, `log`) and
+`DATA_EXTENSIONS` (`json`, `jsonc`, `jsonl`, `ndjson`, `txt`, `log`, `yaml`, `yml`, `toml`, `csv`, `tsv`) and
 `document_extension(name)` are the one list the open checks, the Open dialog filter (`commands/open.rs`),
 Save Copy (`commands/export.rs`) and Save As read;
 `export_policy.rs` `ExportKind::Data` admits those names under the Markdown text rules (UTF-8, no NUL, 128 MiB cap);
@@ -306,8 +306,8 @@ placed line content. `commands/patch.rs` `patch_document(token, patches)` reads,
 through the conflict-safe replace and returns `PatchResult` (`saved { generation, text }`,
 `unplaced { index, text }`, `failed { code }`); the webview sends a document token, never a path.
 Line numbers are 1-based on both sides (#266, fixed in #268; native smoke #275 proves toggle and
-Undo against exact CRLF bytes). Templates (A4: `library_read_template` #285, picker and command
-#286) are open and not yet current behavior; A5 (embeddable element) is later.
+Undo against exact CRLF bytes). Templates (A4): the native `library_read_template` (#285) is merged; the picker and command
+(#286) are open, so templates are not yet current behavior in the app; A5 (embeddable element) is later.
 
 ## Desktop foundations (companion push S0)
 
