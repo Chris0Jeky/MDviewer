@@ -3,7 +3,87 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **CURRENT CHECKPOINT — 2026-11-12 (companion push; Readable data and Actionable Markdown):**
+> **CURRENT CHECKPOINT — 2026-11-12 (Companion push close-out):**
+> Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
+> listed by area; open ones are marked **open**. Re-read GitHub before starting work.
+>
+> **State of main.** [`6329c7d`](https://github.com/Chris0Jeky/MDviewer/commit/6329c7d31b6d1efd4aaad03636dd3d3d0bbb194b)
+> (merge of #289) when this was written. CI [43270081330](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081330) and
+> Windows Desktop [43270081280](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081280) both completed
+> **success** on it. Re-measure with `gh run list --branch main` before relying on this. The previous main
+> [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
+> (merge of #295) also passed CI [43266504555](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504555) and
+> Windows Desktop [43266504492](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504492). Re-run
+> `gh run list --branch main --limit 3` before relying on this.
+>
+> **What landed (merged), by area**
+> - **Foundations:** native registry and command modules #225 (S0a); one document owner, command and panel
+>   registries #224 (S0b); dropped the project `bypassPermissions` default #219; agentic setup sync #220.
+> - **Reader (S2):** front matter as a Properties card #221 (S2b); source map and copy toolkit #228 (S2a);
+>   text first, then upgrade in place #232 (S2c).
+> - **Shell (S3 to S5):** slim bar, tabs, More menu, palette, panel and status line #260 (S3); Library panel
+>   #264 (S4); Edit surface, the source beside the live reader #271 (S5).
+> - **Live reload and Save:** conflict-safe replace primitive #226 (S1a); owned Save and Save As #231 (S1b,
+>   implements the #196 design; the issue is still open); live reload with a conflict bar #233 (S1c); relative links, `@imports`, local images
+>   and back/forward #239 (S6); Library store and bounded project scan #235 (S4 native); session restore #241 (S7).
+> - **Actionable Markdown** ([spec](docs/design/ACTIONABLE_MARKDOWN.md), spec PR #247): A1 parser and static
+>   controls #252; A2 native line patch #244; A3 interaction with write-back and Undo #263; 1-based line fix
+>   #268 (issue #266); native A3 smoke #275; A4 native template read `library_read_template` #285 (boundary
+>   change); A4 New from template, picker and command #286; A4 wired to the native read #295.
+> - **Readable data** ([spec](docs/design/READABLE_DATA.md)): D0 #269; D1 #270; D2 conversation lens #273;
+>   D3 native #272 and webview #280; D4 parsers #281 (adds `yaml` 2.9.1), D4 native extensions #284, D4 webview
+>   #288 (so YAML, TOML, CSV and TSV open as readable views); relative links open Markdown only #283; D6
+>   readability pass #293; agent data files in the Library, `.claude/worktrees` skipped #290 (boundary change).
+> - **Performance:** S9 part 1, tab switch back in about 50 ms and one sanitizer pass for code blocks #294.
+> - **Pagination, export, CI, docs:** never drop or hide content when a block cannot stay whole #237; raster
+>   PDF draws Tier 3 shrunk blocks as the preview does #261 (#258); keep the restored source scroll in Firefox #267 (#227, #245);
+>   code hyphenation #259; smoke progress sharing #222; Playwright install retry #238; state-docs sync for
+>   Readable data and Actionable Markdown #287 (S8).
+>
+> **Also merged at close-out:** D5 pure copy module #289 (`src/data/copy.ts`: value, path, subtree; no webview
+> yet) and the S9 polish pass #298 (library row actions, narrow drawer, sepia code). Main is 6329c7d, with CI and
+> Windows Desktop green.
+>
+> **Open PRs from this push:** S9 part 2 #297 (native start-up numbers, first frame in the theme colour), left open
+> at wind-down: its Windows build and native smoke job failed twice on head b0e3a23 (run 43266580940: a native
+> UI 'save-dialog' worker operation timeout) while main's smoke was green. Its head is now f8d1d43 (main merged
+> in), with checks running when this was written; the Experience lane owns it.
+> Dependabot #216, #217, #218 are open with all six checks green and were not triaged in this push.
+>
+> **Next queue, in order**
+> 1. D5 webview #299: copy menu (value, path, subtree) and Save readable view as Markdown, on the merged #289.
+> 2. A5 #300: the embeddable reading element and its change event.
+> 3. S9 polish pass #301: data views after D6, horizontal overflow first (the shell side merged in #298).
+> 4. Native window theme background and closable during a slow start: #302, with the Core halves #304 (window
+>    background follows the screen theme) and #305 (a close during webview start-up skips `canClose` and the
+>    session flush). #297 supplies the webview half.
+> 5. Native clippy #306: fix six lints and run clippy in the Windows desktop job.
+> 6. Readable data hints and tests #296 (tera/peta byte keys, bare size, sub-second ms, line-label test); multi-document
+>    YAML conversations map turns to root paths #291; Library Agent files group and batched seen marks #292 (with #265).
+> 6a. Desktop e2e Ctrl+O chooser timeouts under load #303.
+> 7. #197 recovery: parked, design only (see [RECOVERY.md](docs/design/RECOVERY.md)); needs fault, restart and
+>    deletion evidence first.
+> 8. Dependabot #216 to #218: open, green, to triage.
+>
+> **Other open follow-ups from this push:** #248 re-read racing a Save; #249 replace-journal recovery on open;
+> #250 session-restore flush order; #251 library pin and Clear races; #254 A1 review follow-ups; #255 edits typed
+> while a Reload is pending; #256 overlapping native re-reads; #257 re-read across a mode switch; #262 raster PDF
+> nested Tier 3 container; #265 and #292 Library batching (`library_mark_seen`, bound the Agent files group);
+> #276 live reload starving on a fast-appended log; #277 alternate-data-stream name in launch arguments; #278
+> conversation lens accuracy; #282 memory before the display budget and YAML/CSV fidelity; #291 multi-document YAML
+> conversations; #303 desktop e2e Ctrl+O chooser timeouts under load; #229 `replace.rs` hardening; #234 live reload; #236
+> Library scan and store hardening; #240 file-policy device names; #242 pagination follow-ups from #237.
+>
+> **Human items:** AI-6, AI-7, AI-8, AI-9, AI-10 and [#169](https://github.com/Chris0Jeky/MDviewer/issues/169)
+> are all **OPEN**; none was cleared. Nobody has accepted the companion features on real files (AI-10).
+> Documents stay in memory except explicit saves and the Windows Library/session files of paths only. No
+> signing, updater, deployment or performance claim follows. Local Windows builds and native checks:
+> [WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md#local-windows-builds-and-native-checks).
+> Queue: [Future work](docs/FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195).
+
+## Historical checkpoints
+
+> **HISTORICAL CHECKPOINT — 2026-11-12 (companion push; Readable data and Actionable Markdown):**
 > Main [8984b9b](https://github.com/Chris0Jeky/MDviewer/commit/8984b9b7fa29a7d5bafc16f56b96597ef1c454ed)
 > (merge of #281). CI [43221710538](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710538) and
 > Windows Desktop [43221710658](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710658) passed on it.
@@ -26,8 +106,6 @@
 > **New human item AI-10** (try the build on your own files) joins #169 and AI-6/AI-7/AI-8/AI-9, all OPEN.
 > Documents stay in memory except explicit saves and the Windows Library/session files of paths only. No
 > signing, updater, deployment or performance claim follows. Re-read GitHub before starting work.
-
-## Historical checkpoints
 
 > **HISTORICAL CHECKPOINT — 2026-11-05 (Windows editor follow-up qualified):**
 > Application revision [18afeeb8](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),

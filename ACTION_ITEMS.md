@@ -15,6 +15,23 @@
 
 ## Current State (snapshot)
 
+- **2026-11-12 (Companion push close-out)** — main
+  [`6329c7d`](https://github.com/Chris0Jeky/MDviewer/commit/6329c7d31b6d1efd4aaad03636dd3d3d0bbb194b) (merge of
+  #289). Its CI [43270081330](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081330) and Windows Desktop
+  [43270081280](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081280) completed success; so did the
+  previous main [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
+  (merge of #295). New since the entry below: YAML, TOML, CSV and TSV now open as readable views (D4, #281, #284,
+  #288) and the views are easier to read (D6, #293); New from template reads a pinned project's `templates/`
+  folder (A4, #285, #286, #295); the Library lists agent data files (#290); switching tabs is faster (S9 part 1,
+  #294). The copy functions are on main (D5 pure part, #289) but not yet in the app (webview #299); the S9 polish pass
+  merged (#298). Not on main: the embeddable reading element (A5, #300) and S9 part 2 (PR #297 open). These are automated results on
+  unsigned CI builds; nobody has accepted them on real files, which is **AI-10**. **AI-6, AI-7, AI-8, AI-9, AI-10
+  and #169 remain OPEN; none was cleared.** No deployment, signed release or performance claim is made; the
+  deployed site is unchanged. The ordered queue and every PR/issue number are in
+  [ORCHESTRATOR.md](ORCHESTRATOR.md).
+
+### Earlier snapshots (historical)
+
 - **2026-11-12 (companion push: Readable data and Actionable Markdown on main)** — main
   [`8984b9b`](https://github.com/Chris0Jeky/MDviewer/commit/8984b9b7fa29a7d5bafc16f56b96597ef1c454ed)
   (merge of #281); [CI 43221710538](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710538) and
@@ -31,8 +48,6 @@
   accepted them on real files yet, which is the new item **AI-10**. **AI-6/AI-7/AI-8/AI-9 and #169
   remain OPEN, and AI-10 is added.** No
   deployment, signed release or performance result is claimed; the deployed site is unchanged.
-
-### Earlier snapshots (historical)
 
 - **2026-11-05 (editor follow-up qualified)** — application revision
   [`18afeeb8`](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),
