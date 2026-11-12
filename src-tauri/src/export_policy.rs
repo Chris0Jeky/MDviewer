@@ -91,6 +91,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn data_and_text_names_are_their_own_family() {
+        for name in [
+            "a.json",
+            "a.JSONL",
+            "a.ndjson",
+            "a.jsonc",
+            "notes.txt",
+            "run.log",
+        ] {
+            assert_eq!(export_name(name), Ok(ExportKind::Data), "{name}");
+        }
+        assert!(export_name("a.yaml").is_err());
+        let dir = std::env::temp_dir();
+        assert!(export_destination(&dir.join("a.json"), ExportKind::Data).is_ok());
+        assert!(export_destination(&dir.join("a.md"), ExportKind::Data).is_err());
+        assert!(export_destination(&dir.join("a.txt"), ExportKind::Markdown).is_err());
+        assert!(export_data(ExportKind::Data, b"{}").is_ok());
+        assert!(export_data(ExportKind::Data, b"{\0}").is_err());
+    }
+
+    #[test]
     fn accepts_unicode_and_spaces_in_safe_document_names() {
         for name in ["a.md", "a.MARKDOWN", "café 文件.md", "a document.md"] {
             assert_eq!(export_name(name), Ok(ExportKind::Markdown));

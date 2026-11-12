@@ -634,6 +634,21 @@ mod tests {
     }
 
     #[test]
+    fn opens_data_and_text_documents_under_the_same_rules() {
+        let dir = TestDirectory::new();
+        for name in ["a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG"] {
+            let path = dir.write(name, b"{\"k\": 1}\r\n");
+            let document = read_markdown(&path, 25_000_000).unwrap();
+            assert_eq!(document.text, "{\"k\": 1}\r\n", "{name}");
+        }
+        // The same encoding and size rules: NUL bytes are refused, the limit holds.
+        assert!(read_markdown(&dir.write("bin.json", b"{\0}"), 25_000_000).is_err());
+        assert!(read_markdown(&dir.write("big.txt", b"12345"), 4).is_err());
+        assert_eq!(document_extension("x.Json").as_deref(), Some("json"));
+        assert_eq!(document_extension("x.yaml"), None);
+    }
+
+    #[test]
     fn accepts_an_empty_markdown_file() {
         let dir = TestDirectory::new();
         let path = dir.write("empty.markdown", b"");
