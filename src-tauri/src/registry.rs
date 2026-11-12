@@ -14,9 +14,18 @@ use crate::file_policy::{ReadRevision, MAX_BATCH_FILES};
 #[serde(transparent)]
 pub struct Token(String);
 
-// Later save commands consume the captured revision; opens only populate it today.
-#[allow(dead_code)]
-#[derive(Debug)]
+impl Token {
+    /// Accept only the exact shape `register` issues: 32 lowercase hex digits.
+    pub fn parse(value: &str) -> Option<Self> {
+        (value.len() == 32
+            && value
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        .then(|| Self(value.to_owned()))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Binding {
     pub path: PathBuf,
     pub identity: Option<FileIdentity>,
@@ -55,14 +64,14 @@ impl Registry {
         }
     }
 
-    // Save lookup is deliberately not exposed through IPC in this slice.
-    #[allow(dead_code)]
     pub fn get(&self, token: &Token) -> Option<&Binding> {
         self.bindings.get(token)
     }
 
-    // Close/revocation IPC arrives in a later slice.
-    #[allow(dead_code)]
+    pub fn get_mut(&mut self, token: &Token) -> Option<&mut Binding> {
+        self.bindings.get_mut(token)
+    }
+
     pub fn revoke(&mut self, token: &Token) {
         self.bindings.remove(token);
     }

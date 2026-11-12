@@ -62,7 +62,7 @@ each with a random 128-bit token, native path, same-read-handle Windows identity
 SHA-256 of the raw bytes, byte length, encoding, original line-ending style and
 generation. Duplicate opens receive distinct tokens; at capacity (or if secure
 randomness is unavailable), files still open with `token: null` and no existing
-binding is evicted. No save, lookup or revocation IPC is added in this slice.
+binding is evicted. `release_document(token)` revokes a closed document's binding.
 Opened documents stay in memory. UNC and device paths are rejected.
 
 `open_external` accepts only HTTP(S) URLs without embedded credentials or control
@@ -71,7 +71,30 @@ remote top-level navigation/new windows are denied. There are no generic filesys
 The opener plugin's automatic JavaScript link handler is disabled. Native dialogs
 use `rfd` directly so browser `confirm()` retains its synchronous semantics.
 
-`save_export` is the only write operation. It accepts a raw binary body and an
+`save_document` and `save_document_as` are the owned writes (FILE_LIFECYCLE.md,
+#196). Each takes the UTF-8 text as a raw body plus headers: an opaque
+`x-mdviewer-token`, the `x-mdviewer-generation` the frontend last saw, and
+`x-mdviewer-accept-lf` for a mixed-line-ending source. Neither accepts a path.
+`save_document` re-encodes to the binding's encoding and line endings and calls
+`replace::replace_if_unchanged` with the identity and digest the binding read;
+`save_document_as` opens the native dialog, compares an existing destination with
+what it held at selection (or with this binding's read, for its own file), uses
+`create_new` otherwise, registers the new binding and revokes the old token.
+Results are `{outcome: "saved" | "canceled" | "conflict" | "mixed-line-endings" |
+"failed", ...}` with stable codes and no paths. One dialog or write runs at a time;
+each save first reconciles interrupted saves in its folder.
+
+Live reload: `watch.rs` follows the parent folder of each bound file through OS
+change notifications (`notify` 8.2.0, ReadDirectoryChangesW; no polling). It starts
+with the first bound document, watches each folder once and non-recursively, and
+unwatches a folder with its last file. Bursts are coalesced (150 ms quiet) into one
+`mdviewer:files-changed` event whose payload is capability tokens only.
+`read_document(token, adopt)` then reports `unchanged` (the bytes this binding last
+read or saved, so this app's own save never echoes), `missing`, or `changed`; only
+`adopt: true` returns the text and moves the binding to the new bytes, so a dirty
+document's Save still conflicts.
+
+`save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a
 Blob into memory, and the host checks it before copying the request or opening a
@@ -119,6 +142,62 @@ portable executable needs an installed WebView2 Evergreen runtime. The installer
 downloads that runtime only if needed. App operation and bundled features work
 offline after installation. The installer registers Markdown file handling;
 Windows still controls the user's selected default app.
+
+## Conflict-safe replace (experimental)
+
+`src/replace.rs` is an isolated primitive; no production IPC calls it. Eligible
+files are ordinary single-link files on local **fixed NTFS/ReFS volumes**. This
+experiment was run on Windows/NTFS; ReFS has not been qualified. UNC/network
+drives, device/extended input paths, alternate-stream paths, ambiguous DOS names,
+reparse points at the file or any ancestor, multiple hard links, and the reserved
+`.mdv-replace-` filename namespace are refused. Non-Windows implementations return
+`Unsupported`. Input paths must be absolute ordinary drive paths.
+
+`snapshot_read` reads identity and bounded raw bytes through one handle. Saves
+compare the volume, 128-bit file ID (legacy file-index fallback if unsupported),
+length and SHA-256 (the pinned `sha2` crate the registry also uses, checked against
+four known-answer vectors). Read-only originals are refused as `Locked`, the written
+temporary is read back and must match the requested bytes before commit, and
+recovery keeps scanning past a journal it cannot reconcile.
+The original and every ancestor stay open without write/delete sharing through
+verification and commit. Existing writable handles or mapped views cause a
+`Locked` refusal, including a writable view retained after its file handle closes.
+The two no-clobber renames use `NtSetInformationFile` with a leaf name and NULL
+root, relative to the source handle's directory. This avoids reopening a locked
+parent for writes. See Microsoft's [rename-information contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
+and [sharing contract](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+
+A sibling `.journal` records the destination leaf and old/new identities and
+digests; `.tmp` and `.old` names derive from its unique basename. Scratch files
+start with delete-on-close until the flushed journal owns them; the extended
+on-close disposition explicitly cancels that creation flag before renaming.
+The destination can be briefly absent between renames: this is **not an atomic
+namespace exchange**. A process claiming that name wins; its file is never
+overwritten. `create_new` uses the same no-clobber commit without an original.
+`recover_journal` rolls the verified aside back when the name is empty, otherwise
+preserves the existing destination and cleans only verified transaction artifacts.
+Repeated recovery is harmless. Modified artifacts, malformed journals or locked
+files are refused and retained for resolution. An error after commit can leave
+the complete new file in place; callers must reconcile rather than assume failure
+means nothing changed. New files inherit directory defaults; timestamps, custom
+ACLs, alternate streams and other metadata are not preserved by this byte API.
+
+The release tests re-invoke their own executable as a separate OS process. Four
+forced interleavings (before open, after verification, between renames and after
+commit) cover writes, truncation, replacement, delete/recreate, equal-size/time
+edits, mapped writes, parent/ancestor swaps and create-new collisions. On NTFS:
+184 trials, **100 saved / 84 refused**, with no acknowledged external-byte loss;
+28 injected-error/process-exit cases recovered, plus external-claimant and
+tampered-artifact recovery checks. The full 33-test suite ran within the 60-second
+budget. File-symlink creation was unavailable to the sandbox; junction rejection
+was exercised. `cargo fmt --check` passes; strict Clippy is blocked by two existing
+`file_policy.rs` lints, with no new-module warnings. The standalone file-policy
+tests pass, and the non-Windows module compiles for Android.
+
+Successful file flushes are **not a power-loss durability claim**. These tests
+exercise process exit and injected disk/flush/rename failures, not sudden power
+loss or a physically exhausted disk. ReFS, the legacy identity fallback and native
+Save IPC/UI integration remain unverified. The `ReplaceFileW` fallback is not used.
 
 ## Validation limits
 
