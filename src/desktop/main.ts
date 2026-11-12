@@ -274,6 +274,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   // A switch to another document may reuse that document's kept DOM; the one being left is kept.
   // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
   const switching = !patching && !!docs.reader.active && docs.reader.active.id !== renderedReaderId;
+  if (kept && !docs.reader.documents.some(open => open.id === kept!.id)) kept = null; // closed since
   const candidate = switching ? kept : null;
   if (!patching) {
     rememberReaderPosition();
@@ -288,6 +289,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   content.hidden = !doc;
   empty.hidden = !!doc;
   if (!doc) {
+    kept = null; // nothing open: nothing to switch back to
     content.replaceChildren();
     releaseImages();
     status.textContent = "Local files · No uploads";
@@ -351,7 +353,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
       else if (position && scroll.scrollTop === restoredTop) restore();
       content.setAttribute("aria-busy", "false");
-      renderedState = { id: doc.id, name: doc.name, text: renderedText, settings: renderedSettings };
+      renderedState = { id: doc.id, name: doc.name, text: renderedText, settings: renderedSettings, warnings: result.warnings };
       const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk, format: view.data?.label });
       status.textContent = `${parts.where} · ${parts.size}`;
       if (view.data?.readable.truncated) content.append(moreBar(doc.name));
@@ -478,7 +480,7 @@ function buildOutline(): void {
  * documents with local images (their blob URLs are released on every full render).
  * ponytail: one entry; a small LRU if switching among three or more large documents matters.
  */
-type RenderedState = { id: string; name: string; text: string; settings: string };
+type RenderedState = { id: string; name: string; text: string; settings: string; warnings: string[] };
 /** What the reader's DOM was rendered from (set when a render completes): not the current text. */
 let renderedState: RenderedState | null = null;
 let kept: (RenderedState & { nodes: Node[] }) | null = null;
@@ -487,17 +489,19 @@ function keepRendered(): void {
   kept = null;
   renderedState = null;
   if (!state || state.id !== renderedReaderId || content.getAttribute("aria-busy") !== "false" || dataLabelOf(state.name)
-    || content.querySelector("img[data-local-src]")) return;
+    || content.querySelector("img[data-local-src]") || !docs.reader.documents.some(doc => doc.id === state.id)) return;
   kept = { ...state, nodes: [...content.childNodes] };
 }
 function reuseRendered(entry: RenderedState & { nodes: Node[] }, doc: { id: string; name: string; text: string }): boolean {
   if ( entry.id !== doc.id || entry.name !== doc.name || entry.text !== doc.text || entry.settings !== JSON.stringify(settings)) return false;
   content.setAttribute("aria-busy", "true"); // the same busy-then-ready signal as a render
+  releaseImages(); // the document left may have held local images; this one has none
   content.replaceChildren(...entry.nodes);
   content.setAttribute("data-code-theme", settings.codeTheme);
   content.setAttribute("aria-busy", "false");
   performance.mark("mdv:reader-text");
-  renderedState = { id: entry.id, name: entry.name, text: entry.text, settings: entry.settings };
+  renderedState = { id: entry.id, name: entry.name, text: entry.text, settings: entry.settings, warnings: entry.warnings };
+  if (entry.warnings.length) report(entry.warnings.join(" ")); // as its render reported them
   buildOutline();
   const position = docs.reader.positions.get(doc.id)?.reader;
   const behavior = scroll.style.scrollBehavior;

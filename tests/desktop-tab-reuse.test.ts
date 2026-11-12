@@ -64,4 +64,34 @@ describe("tab switch reuse", () => {
     await vi.waitFor(() => expect(shown()).not.toBe(first));
     expect(boundary.render).toHaveBeenCalledTimes(renders);
   });
+
+  it("declines after a settings change, and re-reports the kept document's warnings", async () => {
+    boundary.render.mockImplementation(async (text: string) => {
+      const rendered = document.createElement("div"); rendered.textContent = text;
+      return { document: rendered, warnings: text === "# A" ? ["Code highlighting is unavailable."] : [] };
+    });
+    boundary.open.mockResolvedValueOnce({ documents: [{ name: "a.md", text: "# A", bytes: 3 }, { name: "b.md", text: "# B", bytes: 3 }], errors: [], canceled: false });
+    document.getElementById("reader-open")!.click();
+    await vi.waitFor(() => expect(tabTexts()).toHaveLength(2));
+    tab("a.md").click();
+    await vi.waitFor(() => expect(shown()).toBe("# A"));
+    await vi.waitFor(() => expect(ready()).toBe(true));
+    tab("b.md").click();
+    await vi.waitFor(() => expect(shown()).toBe("# B"));
+    await vi.waitFor(() => expect(ready()).toBe(true));
+    let renders = boundary.render.mock.calls.length;
+    tab("a.md").click(); // reused: no render, but its warning is shown again
+    await vi.waitFor(() => expect(shown()).toBe("# A"));
+    expect(boundary.render).toHaveBeenCalledTimes(renders);
+    expect(document.getElementById("reader-notice")!.textContent).toContain("Code highlighting is unavailable.");
+    tab("b.md").click();
+    await vi.waitFor(() => expect(shown()).toBe("# B"));
+    await vi.waitFor(() => expect(ready()).toBe(true));
+    const { runCommand } = await import("../src/desktop/commands");
+    runCommand("view.theme.dark"); // settings changed while A is kept
+    await vi.waitFor(() => expect(ready()).toBe(true));
+    renders = boundary.render.mock.calls.length;
+    tab("a.md").click();
+    await vi.waitFor(() => expect(boundary.render.mock.calls.length).toBeGreaterThan(renders)); // rendered again
+  });
 });
