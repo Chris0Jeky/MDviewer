@@ -1,6 +1,7 @@
 # Actionable Markdown, version 1
 
-Status: **specification drafted 2026-11-11; nothing here is implemented yet.** Added to the
+Status: **specification drafted 2026-11-11. A1 to A3 are merged; A4 (templates) is in review; A5 is
+later.** Added to the
 companion push by the owner on 11 November 2026 (asked "Add actionable Markdown (clickable
 checkboxes, marks, fields, chips) to this push?", answered "Yes, add it"). MDviewer owns this
 contract. It answers the Lumenfold coordinator's v0 proposal (owner request, 11 November 2026) and
