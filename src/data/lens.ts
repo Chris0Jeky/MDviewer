@@ -299,9 +299,11 @@ export class Lens {
 
   /** Reuse the generic object layout for members of an already charged container. */
   renderMembers(value: Extract<JsonValue, { kind: "object" }>, path: string, level = 3): void {
-    this.prepaid = 1;
+    // Credit for the container only; an enclosing detail keeps whatever credit it has left.
+    const outer = this.prepaid;
+    this.prepaid = outer + 1;
     try { this.renderLiteral(value, path, level); }
-    finally { this.prepaid = 0; }
+    finally { this.prepaid = Math.min(this.prepaid, outer); }
   }
 
   /** A message is prose even when its text happens to parse as JSON. */

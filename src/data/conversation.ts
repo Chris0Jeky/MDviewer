@@ -155,15 +155,17 @@ function part(lens: Lens, value: JsonValue, path: string): void {
     const media = string(member(value, "media_type")) ?? string(member(source, "media_type"));
     // Only the encoded image data is withheld, and the view says how much; every other field
     // (a URL, cache settings) stays visible as metadata.
-    const holder = member(source, "data") ? source : member(value, "data") ? value : undefined;
-    const data = member(holder, "data");
-    const size = data?.kind === "string" ? `, data not shown (${count(data.value.length, "character")})` : data ? ", data not shown" : "";
-    if (data && !lens.take(lens.count(data))) return;
+    // Every `data` entry is withheld (duplicates included), charged and counted in the label.
+    const hidden = [...(source?.kind === "object" ? source.entries : []), ...(value.kind === "object" ? value.entries : [])]
+      .filter(e => e.key === "data").map(e => e.value);
+    const chars = hidden.reduce((n, v) => n + (v.kind === "string" ? v.value.length : 0), 0);
+    const size = hidden.length ? `, data not shown${chars ? ` (${count(chars, "character")})` : ""}` : "";
+    if (hidden.length && !lens.take(hidden.reduce((n, v) => n + lens.count(v), 0))) return;
     lens.line(cellText(`Image${media ? ` (${media})` : ""}`) + cellText(size), path); lens.line();
     if (source?.kind === "object") {
       if (!lens.take()) return; // the source object
-      metadata(lens, source, childPath(path, "source"), holder === source ? ["data"] : []);
-      metadata(lens, value, path, holder === value ? ["type", "source", "data"] : ["type", "source"]);
+      metadata(lens, source, childPath(path, "source"), ["data"]);
+      metadata(lens, value, path, ["type", "source", "data"]);
     } else metadata(lens, value, path, ["type", "data"]);
     return;
   }
