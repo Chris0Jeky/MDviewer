@@ -106,3 +106,23 @@ describe("actionable Markdown rules", () => {
     expect(parseActionable(text).controls.map(control => [control.kind, control.line])).toEqual([["field", 7]]);
   });
 });
+
+describe("actionable glyphs in the shared renderer", () => {
+  it("leave ordinary task lists exactly as GitHub task lists render them", async () => {
+    const { createMarkdown, renderMarkdown } = await import("../src/render/markdown");
+    const { DEFAULT_SETTINGS } = await import("../src/app/settings");
+    const html = renderMarkdown(createMarkdown(null, DEFAULT_SETTINGS), "- [ ] a\n- [x] b\n").html;
+    expect(html).not.toContain("am-");
+    expect(html.match(/task-list-item-checkbox/g)).toHaveLength(2);
+  });
+
+  it("draw the other marks and choices as named glyphs", async () => {
+    const { createMarkdown, renderMarkdown } = await import("../src/render/markdown");
+    const { DEFAULT_SETTINGS } = await import("../src/app/settings");
+    const html = renderMarkdown(createMarkdown(null, DEFAULT_SETTINGS), "- [/] a\n- [-] b\n- (x) c\n\nnot [/] at start\n").html;
+    expect(html).toContain('data-mark="/" role="img" aria-label="In progress"');
+    expect(html).toContain('class="am-dropped task-list-item am-item"');
+    expect(html).toContain('class="am-radio am-checked" role="img" aria-label="Selected"');
+    expect(html).toContain("not [/] at start");
+  });
+});
