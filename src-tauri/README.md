@@ -129,6 +129,13 @@ includes dot-folders such as `.claude`, never follows junctions or symlinks, and
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
 
+`library_read_template(id) -> { name, text }` (A4; boundary change: one read-only command and its
+permission) reads a template to fill a new note. The id must come from `library_scan` and name a
+Markdown file directly inside a pinned project's `templates/` folder; a junction or symlink at the
+folder or the file is refused; the usual local-path and encoding rules apply, with a 1 MB cap
+(`MAX_TEMPLATE_BYTES`). Nothing is bound, watched, recorded as recent or seen, or written to
+`library.json`.
+
 Session (S7): `library.json` also keeps the bound files open when the open set last changed
 (`session`, 32 paths with timestamps) and `restore_off` (reopen on launch is on by default; Clear
 library keeps the preference). `session_record(tokens)` maps tokens to paths natively;
