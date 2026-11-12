@@ -19,6 +19,8 @@ import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
 import { mountSelectionCopy } from "./reader/copy";
+import { setControlHandler } from "./reader/controls";
+import { createWriteback, type Notice } from "./reader/writeback";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels } from "../ui/DocumentNavigation";
@@ -63,6 +65,57 @@ let renderedReaderId: string | null = null;
 const tabs = mountTabs(element("shell-tabs"), { activate: activateDocument, close: closeDocumentById });
 
 mountSelectionCopy(content);
+
+// Actionable Markdown (A3): a short non-modal notice offers Undo after a saved change.
+const actionNotice = document.createElement("div");
+actionNotice.className = "am-notice";
+actionNotice.setAttribute("role", "status");
+actionNotice.hidden = true;
+document.body.append(actionNotice);
+let actionNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+function showActionNotice(notice: Notice | null): void {
+  clearTimeout(actionNoticeTimer);
+  actionNotice.replaceChildren();
+  actionNotice.hidden = !notice;
+  if (!notice) return;
+  const text = document.createElement("span");
+  text.textContent = notice.text;
+  actionNotice.append(text);
+  if (notice.action) {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "am-notice-action";
+    action.textContent = notice.action.label;
+    action.addEventListener("click", () => notice.action!.run());
+    actionNotice.append(action);
+  }
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "am-notice-close";
+  dismiss.setAttribute("aria-label", "Dismiss");
+  dismiss.textContent = "×";
+  dismiss.addEventListener("click", () => { showActionNotice(null); writeback.forget(); });
+  actionNotice.append(dismiss);
+  // Long enough to reach Undo by keyboard; hovering or focusing it keeps it open.
+  const hide = (): void => { if (actionNotice.matches(":hover, :focus-within")) { actionNoticeTimer = setTimeout(hide, 2000); return; }
+    showActionNotice(null); writeback.forget(); };
+  actionNoticeTimer = setTimeout(hide, 10_000);
+}
+const writeback = createWriteback({
+  active: () => (app || changingMode ? undefined : docs.reader.active),
+  native: { available: native.available, patchDocument: (token, patches) => native.patchDocument(token, patches) },
+  // The host wrote the file: adopt its text and binding generation, or the next Save is stale.
+  adopt: (doc, text, generation) => {
+    const target = docs.saveTarget();
+    if (!target || target.id !== doc.id || !doc.binding) return false;
+    return docs.applyReload(target, { outcome: "changed", text, generation, encoding: doc.binding.encoding, eol: doc.binding.eol });
+  },
+  setText: (doc, text) => { doc.text = text; doc.dirty = true; ++generation; syncDocuments(); },
+  rerender: () => { void render(); },
+  notice: showActionNotice,
+  report,
+});
+setControlHandler((control, action) => { void writeback.change(control, action); });
 
 // Screen theme: a fixed choice, or follow Windows (light or dark) when the setting says so.
 const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -647,6 +700,10 @@ async function followChange(token: string): Promise<void> {
     return;
   }
   if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  if (current.owner === "reader") {
+    const doc = docs.reader.documents.find(open => open.id === current.id);
+    if (doc) writeback.checkOverwritten(doc);
+  }
   if (current.owner === "reader" && docs.reader.activeId === current.id) void render();
   syncDocuments();
 }

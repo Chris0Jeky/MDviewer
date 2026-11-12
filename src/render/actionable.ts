@@ -333,3 +333,33 @@ export function applyPatches(text: string, patches: readonly LinePatch[]): strin
   for (const patch of patches) lines[patch.line - 1] = patch.replace;
   return bom + lines.map((line, index) => line + eols[index]).join("");
 }
+
+/** The text of a control's editable span ("x", " ", a field value or a chip scalar). */
+export function spanValue(control: Control): string {
+  return control.kind === "mark" || control.kind === "choice" ? control.state
+    : control.kind === "field" ? control.value : control.value;
+}
+
+/**
+ * After an outside change, find the control a gesture was made on (contract "Placement"):
+ * the same line if it still reads the same; the one control with the same id and kind; the one
+ * line equal to the old line. Returns null when none, or more than one, matches.
+ */
+export function relocate(text: string, previous: Control, previousLine: string): { document: ActionableDocument; control: Control } | null {
+  const document = parseActionable(text);
+  const { lines } = splitLines(text);
+  const same = document.controls.filter(control => control.kind === previous.kind);
+  const atLine = same.find(control => control.line === previous.line && lines[control.line - 1] === previousLine);
+  if (atLine) return { document, control: atLine };
+  if (previous.id) {
+    const byId = same.filter(control => control.id === previous.id);
+    if (byId.length === 1) return { document, control: byId[0]! };
+  }
+  const byText = same.filter(control => lines[control.line - 1] === previousLine);
+  return byText.length === 1 ? { document, control: byText[0]! } : null;
+}
+
+/** The patches that undo `patches` once they have been applied. */
+export function inversePatches(patches: readonly LinePatch[]): LinePatch[] {
+  return patches.map(patch => ({ ...patch, expect: patch.replace, replace: patch.expect }));
+}
