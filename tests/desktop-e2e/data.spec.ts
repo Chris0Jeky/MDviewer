@@ -110,3 +110,17 @@ test("Export PDF paginates the readable view", async ({ page }) => {
   // The workspace edits the raw source.
   await expect(page.locator("#editor-input")).toHaveValue(CONFIG);
 });
+
+test("a transcript-shaped JSON Lines file reads as a conversation", async ({ page }) => {
+  const chat = [
+    JSON.stringify({ role: "user", content: "Please list the files." }),
+    JSON.stringify({ role: "assistant", content: "Here are **two** files." }),
+  ].join("\n");
+  await openFiles(page, [{ name: "chat.jsonl", text: chat }]);
+  await ready(page);
+  await expect(doc(page)).toContainText("2 turns: 1 user, 1 assistant");
+  await expect(doc(page).getByRole("heading", { name: /^User/ })).toBeVisible();
+  await expect(doc(page).getByRole("heading", { name: /^Assistant/ })).toBeVisible();
+  // Message text is rendered as Markdown.
+  await expect(doc(page).locator("strong", { hasText: "two" })).toBeVisible();
+});
