@@ -95,7 +95,7 @@ export function mountLibrary(host: HTMLElement): () => void {
     button.addEventListener("click", () => {
       const settle = (): void => { if (!host.contains(document.activeElement)) heading.focus(); };
       void run().then(
-        done => refresh().then(() => { status.textContent = done; settle(); }),
+        done => refresh().then(listed => { if (listed) status.textContent = done; settle(); }),
         error => refresh().then(() => { fail(error); settle(); }),
       );
     });
@@ -177,10 +177,11 @@ export function mountLibrary(host: HTMLElement): () => void {
     }
   }
 
-  async function refresh(): Promise<void> {
+  /** Re-read the library; false when it could not be listed (the error is shown instead). */
+  async function refresh(): Promise<boolean> {
     let view;
     try { view = await native.library.list(); }
-    catch (error) { fail(error); return; }
+    catch (error) { fail(error); return false; }
     status.textContent = "";
     const pinnedIds = new Set(view.pinned.map(entry => entry.id));
     pinned.list.replaceChildren(...view.pinned.map(entry => {
@@ -225,7 +226,9 @@ export function mountLibrary(host: HTMLElement): () => void {
       }
       return item;
     }));
-    if (showActivity.getAttribute("aria-expanded") === "true") await loadActivity();
+    // Not awaited: an action is announced without waiting for every project to be scanned.
+    if (showActivity.getAttribute("aria-expanded") === "true") void loadActivity();
+    return true;
   }
 
   // The panel stays mounted while hidden (Outline tab, closed sidebar): re-read and scan only while
