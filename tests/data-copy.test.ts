@@ -211,6 +211,7 @@ describe("copy fixture properties (read-only)", () => {
         "broken.json": ["$"], "broken.yaml": ["$"], "broken.toml": ["$"],
         "lines.jsonl": ["$", "$[1]"],
         "agent.jsonl": ["$", "$[4]"],
+        "events-table.jsonl": ["$", "$[1]"],
         "embedded.json": ["$.payload.a", "$.payload.items"],
         "notes.txt": ["$", "line 1"],
       };
