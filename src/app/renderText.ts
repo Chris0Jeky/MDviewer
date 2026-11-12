@@ -1,0 +1,60 @@
+import { dataKindOf, toReadable, type DataKind, type Readable } from "../data";
+
+/**
+ * The one place where a document's text becomes its render text (READABLE_DATA.md, "The seam").
+ * Markdown renders as written. A data document (JSON, JSON Lines, plain text) renders its
+ * readable view; the document keeps its raw text, which Edit shows and Save writes. The reader,
+ * the Edit preview and the PDF workspace all call this, so the three views cannot drift.
+ */
+export interface DataView {
+  kind: DataKind;
+  /** The format's name for the status line. */
+  label: string;
+  readable: Readable;
+}
+export interface RenderText {
+  text: string;
+  data: DataView | null;
+}
+
+/** Version 1 formats (phase 1). YAML, TOML and CSV open once D4 lands. */
+const OPENABLE: ReadonlySet<DataKind> = new Set(["json", "jsonl", "text"]);
+const LABELS: Record<DataKind, string> = {
+  json: "JSON", jsonl: "JSON Lines", yaml: "YAML", toml: "TOML", csv: "CSV", text: "Plain text",
+};
+/** The data kind a file opens as, or null for Markdown (and for formats not yet supported). */
+export function dataDocumentKind(fileName: string): DataKind | null {
+  const kind = dataKindOf(fileName);
+  return kind && OPENABLE.has(kind) ? kind : null;
+}
+
+/** The status line's name for a data document's format, or null for Markdown. */
+export function dataLabelOf(fileName: string): string | null {
+  const kind = dataDocumentKind(fileName);
+  return kind ? LABELS[kind] : null;
+}
+
+// Budgets the spec starts from; "Show more" doubles them, "Show all" lifts them.
+const BUDGET = { maxValues: 20_000, maxRecords: 500, maxLines: 20_000 };
+
+let last: { name: string; text: string; scale: number; result: RenderText } | null = null;
+
+/**
+ * `scale` multiplies the view's budgets (the reader's "Show more"); Infinity shows everything.
+ * The last result is kept: the reader and the workspace ask for the same document in turn.
+ */
+export function renderTextOf(name: string, text: string, scale = 1): RenderText {
+  if (last && last.name === name && last.text === text && last.scale === scale) return last.result;
+  const kind = dataDocumentKind(name);
+  const budget = (value: number): number => (scale === Infinity ? Number.MAX_SAFE_INTEGER : Math.round(value * scale));
+  const result: RenderText = kind
+    ? (() => {
+      const readable = toReadable(text, kind, {
+        fileName: name, maxValues: budget(BUDGET.maxValues), maxRecords: budget(BUDGET.maxRecords), maxLines: budget(BUDGET.maxLines),
+      });
+      return { text: readable.markdown, data: { kind, label: LABELS[kind], readable } };
+    })()
+    : { text, data: null };
+  last = { name, text, scale, result };
+  return result;
+}

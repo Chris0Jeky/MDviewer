@@ -55,6 +55,7 @@ import { loadSettings, migrateSettings, saveSettings } from "./settings";
 import type { Settings } from "./settings";
 import { syncThemeColor } from "./themeColor";
 import { IDS, ATTRS, SPLIT_RATIO_VAR, el } from "./dom";
+import { renderTextOf } from "./renderText";
 import { installInputHandlers, SIZE_HARD_BYTES, SIZE_SOFT_BYTES } from "./input";
 import { installReloadGuard, type ReloadGuard } from "./reloadGuard";
 import { SAMPLE_MARKDOWN } from "./sampleDoc";
@@ -568,7 +569,8 @@ export class App {
 
     try {
       // 0 — raw markdown; leading front matter is document metadata, never printed
-      const src = readFrontMatter(doc.text).body;
+      // A data document paginates its readable view (src/app/renderText.ts, the shared seam).
+      const src = readFrontMatter(renderTextOf(doc.name, doc.text).text).body;
 
       // 1 — highlighter singleton (await once)
       const hl = await getHighlighter();

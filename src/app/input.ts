@@ -12,6 +12,7 @@
 import type { Doc, DocStore } from "./state";
 import { IDS } from "./dom";
 import { pulseDocOpened } from "./pulse";
+import { dataDocumentKind, renderTextOf } from "./renderText";
 
 /** Extensions we accept. Lower-case, dot-prefixed. */
 export const MD_EXTENSIONS: readonly string[] = [".md", ".markdown"];
@@ -54,9 +55,10 @@ function extensionOf(name: string): string {
  * is still treated as markdown, because the extension is the user's stated intent and
  * the content is read as text regardless.
  */
+/** Markdown, or a data document that opens as its readable view (READABLE_DATA.md). */
 export function isMarkdownFile(name: string, mime: string): boolean {
   const ext = extensionOf(name);
-  if (MD_EXTENSIONS.includes(ext)) return true;
+  if (MD_EXTENSIONS.includes(ext) || dataDocumentKind(name)) return true;
   const m = mime.toLowerCase();
   // No usable extension: trust a positively-markdown/plain MIME (text/plain covers
   // the common "extensionless note" case). Otherwise require an explicit markdown MIME.
@@ -154,6 +156,12 @@ async function readFiles(
     } catch {
       unreadable.push(file.name);
       continue;
+    }
+    // A data document's readable view can be larger than its file: the large-document
+    // confirmation also counts the view (READABLE_DATA.md, Boundaries).
+    if (file.size <= SIZE_SOFT_BYTES && dataDocumentKind(file.name)) {
+      const viewBytes = new TextEncoder().encode(renderTextOf(file.name, text).text).length;
+      if (viewBytes > SIZE_SOFT_BYTES && (!(await onLargeFile(viewBytes)) || signal.aborted)) continue;
     }
     opened.push(await openMarkdown(text, file.name));
   }

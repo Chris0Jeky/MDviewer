@@ -6,6 +6,8 @@ export interface StatusInput {
   text: string;
   dirty: boolean;
   disk?: "synced" | "changed" | "missing";
+  /** A data document's format ("JSON", "Plain text"), named before the size. */
+  format?: string | null;
 }
 
 export function wordCount(text: string): number {
@@ -29,7 +31,7 @@ export function statusParts(input: StatusInput): { where: string; size: string; 
   const words = wordCount(input.text);
   return {
     where: input.path ?? input.name,
-    size: `${words.toLocaleString()} ${words === 1 ? "word" : "words"} · ${tokenEstimate(input.text)} tokens`,
+    size: `${input.format ? `${input.format} · ` : ""}${words.toLocaleString()} ${words === 1 ? "word" : "words"} · ${tokenEstimate(input.text)} tokens`,
     state: saveState(input),
   };
 }
