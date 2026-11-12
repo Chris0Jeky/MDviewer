@@ -331,6 +331,14 @@
   box-decoration-break: clone;
 }
 
+/* Fenced code wraps without hyphenation too, for the reason given for inline code above:
+ * a hyphen glyph inside code reads as code, and Download PDF (html2canvas-pro) garbles
+ * hyphen-wrapped lines (#246). */
+.doc pre,
+.doc pre code {
+  hyphens: none;
+}
+
 /* code-figure wraps a captioned/numbered listing around a <pre>. */
 .doc figure.code-figure {
   margin: 0 0 var(--doc-space);
