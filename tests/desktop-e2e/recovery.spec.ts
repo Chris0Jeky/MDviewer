@@ -1,9 +1,9 @@
-import { test, expect, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 test("Undo close cannot exceed 32 documents and a refusal retains the latest offer", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Document ${index}` })));
   await readyReader(page, "Document 0");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Document 0");
   await page.getByRole("button", { name: "Close 0.md", exact: true }).click();
   await readyWorkspace(page, "# Document 1");
@@ -33,7 +33,7 @@ test("Undo checks UTF-8 session bytes before consuming edits and retries after c
   page.on("dialog", dialog => dialog.accept());
   await openFiles(page, [{ name: "draft.md", text: "# Draft" }, { name: "budget.md", text: "# Budget" }]);
   await readyReader(page, "Draft");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Draft");
   const edited = "# Recovered edited draft\n\nPrivate edits λ " + "keep these words. ".repeat(10);
   await page.locator("#editor-input").fill(edited);

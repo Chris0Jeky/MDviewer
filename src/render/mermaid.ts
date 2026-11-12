@@ -30,6 +30,8 @@ function escapeHtml(s: string): string {
  * whether to surface a "N diagrams failed" warning. Idempotent on already-rendered docs
  * (selectors only match unrendered `code.language-mermaid` / `.mermaid` sources).
  */
+let diagramSerial = 0;
+
 export async function renderAllMermaid(
   root: ParentNode,
   theme: MermaidTheme = "default",
@@ -81,7 +83,9 @@ export async function renderAllMermaid(
     const host = block.tagName === "CODE" ? (block.closest("pre") ?? block) : block;
     const code = block.textContent ?? "";
     try {
-      const { svg } = await mermaid.render(`mmd-${i}`, code);
+      // Unique per page, not per run: block patching keeps earlier figures beside new ones, and
+      // shared SVG ids would point their markers and gradients at the wrong diagram.
+      const { svg } = await mermaid.render(`mmd-${++diagramSerial}`, code);
       const figure = document.createElement("figure");
       figure.className = CLASSES.mermaidFigure;
       figure.innerHTML = sanitizeMermaidSvg(svg).html;

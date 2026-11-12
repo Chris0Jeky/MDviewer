@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
+import { placeSource } from "../helpers/sourcePosition";
 import { loadFilesIntoApp, waitForPagination } from "../helpers/pagedDom";
 
 async function position(input: Locator) {
@@ -18,7 +19,7 @@ test("same-name equal-content documents restore independent source positions wit
   const ids = await picker.locator("option").evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
   const input = page.locator("#editor-input");
   await input.focus();
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(100, 120, "backward"); el.scrollTop = 900; });
+  await placeSource(input, 100, 120, "backward", 900);
   const first = await position(input);
   expect(first.top).toBeGreaterThan(0);
   const previous = await input.elementHandle();
@@ -26,7 +27,7 @@ test("same-name equal-content documents restore independent source positions wit
   await expect(picker).toHaveValue(ids[1]!);
   expect(await previous!.evaluate(el => el.isConnected)).toBe(false);
   await expect(input).toBeFocused();
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(400, 430, "forward"); el.scrollTop = 2300; });
+  await placeSource(input, 400, 430, "forward", 2300);
   const second = await position(input);
   for (let iteration = 0; iteration < 3; iteration++) {
     await page.keyboard.press("Alt+Shift+p");
@@ -62,7 +63,7 @@ test("Undo Close restores source position under a new identity and keeps native 
   await input.focus();
   await input.press("ControlOrMeta+End");
   await page.keyboard.insertText("\nAn edit");
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(60, 80, "backward"); el.scrollTop = 700; });
+  await placeSource(input, 60, 80, "backward", 700);
   const saved = await position(input);
   await page.getByRole("button", { name: "Close restore.md", exact: true }).click();
   await expect(input).toHaveValue("# Keep");
@@ -100,7 +101,7 @@ test("preview positions belong to their documents and pane toggles preserve sour
   const input = page.locator("#editor-input");
   const canvas = page.locator("#canvas");
   const picker = page.getByRole("combobox", { name: "Active document" });
-  await input.evaluate((el: HTMLTextAreaElement) => { el.setSelectionRange(500, 530, "backward"); el.scrollTop = 450; });
+  await placeSource(input, 500, 530, "backward", 450);
   const sourcePosition = await position(input);
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   await canvas.evaluate(el => { el.style.scrollBehavior = "auto"; el.scrollTop = 1000; });

@@ -21,7 +21,7 @@ param(
     # Internal out-of-process UIA worker. It uses Windows PowerShell's framework UIA.
     [switch]$Probe,
     [long]$WindowHandle,
-    [ValidateSet('heading', 'button', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
+    [ValidateSet('heading', 'button', 'toggle', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
     [string]$ButtonName,
     [string]$SavePath,
     [string]$DialogTitle = 'Save export',
@@ -57,11 +57,20 @@ if ($Probe) {
     function Find-Button($Parent, [string]$Name) {
         # Workspace entry keeps its controls inert until rendering is ready.
         # Poll actual UIA availability; do not substitute a fixed settling delay.
+        # "#id" addresses an element by its DOM id (WebView2's AutomationId), such as a More
+        # menu item whose name also carries its shortcut; otherwise a button by its name.
+        if ($Name.StartsWith('#')) {
+            $identity = [System.Windows.Automation.PropertyCondition]::new(
+                [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $Name.Substring(1))
+        } else {
+            $identity = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, $Name),
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+        }
         $condition = [System.Windows.Automation.AndCondition]::new(
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::NameProperty, $Name),
-            [System.Windows.Automation.PropertyCondition]::new(
-                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button),
+            $identity,
             [System.Windows.Automation.PropertyCondition]::new(
                 [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true),
             [System.Windows.Automation.PropertyCondition]::new(
@@ -147,14 +156,53 @@ public static class SmokeWindow {
                 }
                 if (-not $current.IsEnabled -or $current.IsOffscreen) { throw 'The requested button is no longer available.' }
                 Write-ProbePhase 'getting-button-pattern'
-                $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                # A menu button (aria-haspopup, such as More) offers ExpandCollapse, not Invoke.
+                $pattern = $null
+                $expand = -not $button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)
+                if ($expand) { $pattern = $button.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern) }
                 $result.found = $true
                 # Invoke can remain blocked while a modal dialog is visible. Publish
                 # the attempt first; the next worker verifies the resulting state.
                 Write-ProbeResult
                 Write-ProbePhase 'invoking-button'
-                $pattern.Invoke()
+                if ($expand) { $pattern.Expand() } else { $pattern.Invoke() }
                 Write-ProbePhase 'button-invoked'
+                exit 0
+            }
+            if ($ProbeAction -eq 'toggle') {
+                Write-ProbePhase 'finding-checkbox'
+                $condition = [System.Windows.Automation.AndCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, $ButtonName),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::CheckBox),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::IsEnabledProperty, $true))
+                $checkbox = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+                if ($null -eq $checkbox) { throw 'The requested checkbox is not visible and enabled yet.' }
+                $result.checkbox = Get-ControlMetadata $checkbox
+                Write-ProbePhase 'getting-toggle-pattern'
+                $pattern = $checkbox.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                $result.found = $true
+                Write-ProbeResult
+                Write-ProbePhase 'toggling-checkbox'
+                $pattern.Toggle()
+                Write-ProbePhase 'checkbox-toggled'
+                # The Undo notice closes after 10 s unless focused; a later cold worker could miss
+                # it. Focus it from this warm worker, which keeps it open for the Undo step.
+                $undoCondition = [System.Windows.Automation.AndCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, 'Undo'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))
+                $undoClock = [System.Diagnostics.Stopwatch]::StartNew()
+                while ($undoClock.Elapsed.TotalSeconds -lt 6) {
+                    $undo = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $undoCondition)
+                    if ($null -ne $undo) { $undo.SetFocus(); $result.undoFocused = $true; break }
+                    Start-Sleep -Milliseconds 100
+                }
+                Write-ProbeResult
+                Write-ProbePhase 'undo-focused'
                 exit 0
             }
             if ($ProbeAction -eq 'save-dialog') {
@@ -687,7 +735,9 @@ try {
     $markdownPath = Join-Path $exportDirectory 'saved-source.md'
     $pdfPath = Join-Path $exportDirectory 'saved-document.pdf'
     $expectedSourceBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($secondText)
-    Invoke-SmokeAction 'button' 'Edit & PDF'
+    # The paginated workspace is More > Export PDF… (S5: the bar keeps one mode button, Edit).
+    Invoke-SmokeAction 'button' 'More'
+    Invoke-SmokeAction 'button' '#reader-workspace'
     Invoke-SmokeAction 'button' 'Save Markdown'
     Invoke-SmokeAction 'save-dialog' -Destination $markdownPath
     $markdownEvidence = Wait-ExportFile $markdownPath {
@@ -725,6 +775,36 @@ try {
     }
     Start-Sleep -Seconds $SettleSeconds
     $metrics.samples += Get-MemorySample 'workspace-after-export'
+    # Actionable write-back (A3): a reader checkbox saves the bound file in place, changing
+    # exactly the mark; Undo restores the original bytes. CRLF endings must survive both.
+    Invoke-SmokeAction 'button' "$([char]0x2190) Reading view"
+    $tasksHeading = 'MDviewer native tasks'
+    $tasksName = 'tasks.md'
+    $tasksPath = Join-Path $fixtureDirectory $tasksName
+    $tasksText = "# $tasksHeading`r`n`r`n- [ ] Ship the smoke`r`n- [x] Keep this one`r`n"
+    $tasksBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText)
+    $toggledBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText.Replace('- [ ] Ship', '- [x] Ship'))
+    [System.IO.File]::WriteAllBytes($tasksPath, $tasksBytes)
+    $third = Start-OwnedProcess $exe @($tasksName) $fixtureDirectory
+    if (-not $third.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
+        throw 'The task-file launch stayed alive instead of forwarding to the existing instance.'
+    }
+    [void](Wait-ForHeading $tasksHeading 'tasks-document.png')
+    Invoke-SmokeAction 'toggle' 'Ship the smoke (To do)'
+    $toggledEvidence = Wait-ExportFile $tasksPath {
+        param([byte[]]$bytes)
+        [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($toggledBytes)
+    }
+    Invoke-SmokeAction 'button' 'Undo'
+    $undoneEvidence = Wait-ExportFile $tasksPath {
+        param([byte[]]$bytes)
+        [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($tasksBytes)
+    }
+    $metrics.actionable = [ordered]@{
+        toggledExactBytes = $true; toggled = $toggledEvidence
+        undoneExactBytes = $true; undone = $undoneEvidence
+        lineEndings = 'crlf'
+    }
     $metrics.status = 'passed'
 } catch {
     $failure = $_.Exception.Message

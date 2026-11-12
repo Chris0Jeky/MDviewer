@@ -148,7 +148,7 @@ mod tests {
         let checked = "- [x] run 01 <!-- id: r1 -->";
         let (_, text, _) = patch_file(
             &path,
-            &[p(1, Some("r1"), "- [ ] run 01 <!-- id: r1 -->", checked)],
+            &[p(2, Some("r1"), "- [ ] run 01 <!-- id: r1 -->", checked)],
         )
         .unwrap();
         assert_eq!(
@@ -177,7 +177,7 @@ mod tests {
             .unwrap();
         assert!(status.success());
         let control = p(
-            0,
+            1,
             Some("a"),
             "- [ ] a <!-- id: a -->",
             "- [x] a <!-- id: a -->",
@@ -194,9 +194,9 @@ mod tests {
             std::fs::read(&path).unwrap(),
             b"## Run 02\r\nnotes\r\n- [ ] a <!-- id: a -->\n"
         );
-        // ...and the parser's re-derived patch (same id, now line 2) lands byte-exact.
+        // ...and the parser's re-derived patch (same id, now line 3) lands byte-exact.
         let rederived = p(
-            2,
+            3,
             Some("a"),
             "- [ ] a <!-- id: a -->",
             "- [x] a <!-- id: a -->",
@@ -209,7 +209,7 @@ mod tests {
         // The control itself changed: nothing is written, the current text comes back.
         std::fs::write(&path, b"- [ ] a renamed <!-- id: a -->\n").unwrap();
         let control = p(
-            0,
+            1,
             Some("a"),
             "- [ ] a <!-- id: a -->",
             "- [x] a <!-- id: a -->",
@@ -235,13 +235,13 @@ mod tests {
         std::fs::write(&path, raw).unwrap();
         let bad = [
             p(
-                0,
+                1,
                 Some("o"),
                 "(x) one <!-- id: o -->",
                 "( ) one <!-- id: o -->",
             ),
             p(
-                1,
+                2,
                 Some("t"),
                 "( ) TWO <!-- id: t -->",
                 "(x) TWO <!-- id: t -->",

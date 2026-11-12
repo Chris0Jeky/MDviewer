@@ -37,7 +37,9 @@ export function mountMenu(button: HTMLButtonElement, menu: HTMLElement, entries:
     element.dataset.command = entry.command;
     if (entry.id) element.id = entry.id;
     element.addEventListener("click", () => {
-      if (element.getAttribute("aria-disabled") === "true") return;
+      // Decide at click time: the attribute is only refreshed when the menu opens.
+      const command = commands().get(entry.command);
+      if (!command || !isEnabled(command) || entry.disabled?.()) return;
       close(true);
       runCommand(entry.command);
     });

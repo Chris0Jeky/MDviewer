@@ -14,7 +14,7 @@
         <button id="shell-panel-toggle" class="shell-icon" type="button" aria-label="Library and outline" aria-expanded="false" aria-controls="shell-panel" aria-keyshortcuts="Control+B" title="Library and outline (Ctrl+B)"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M6 2.5v11"/></svg></button>
         <div id="shell-tabs" class="shell-tabs" role="tablist" aria-label="Open documents" hidden></div>
         <span class="shell-spacer"></span>
-        <button id="reader-workspace" class="shell-edit" type="button" disabled aria-keyshortcuts="Control+E" title="Edit the source and export PDF (Ctrl+E)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z"/></svg>Edit &amp; PDF</button>
+        <button id="reader-edit-toggle" class="shell-edit" type="button" disabled aria-pressed="false" aria-keyshortcuts="Control+E" title="Edit the source beside the document (Ctrl+E)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z"/></svg>Edit</button>
         <button id="shell-more" class="shell-icon" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false" aria-controls="shell-more-menu" title="More"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg></button>
         <div id="shell-more-menu" class="shell-menu" role="menu" aria-label="More" hidden></div>
       </header>
@@ -23,6 +23,8 @@
         <aside id="shell-panel" class="shell-panel" aria-label="Library and outline" hidden>
           <nav id="reader-outline" class="reader-outline" aria-label="Document headings"></nav>
         </aside>
+        <div class="reader-split">
+        <div id="reader-edit" class="reader-edit" hidden></div>
         <div id="reader-scroll" class="reader-scroll">
           <section id="reader-empty" class="reader-empty">
             <h1>Read and write Markdown.</h1>
@@ -36,6 +38,7 @@
             <small>Files stay on this computer. Nothing is uploaded.</small>
           </section>
           <article id="reader-document" class="doc reader-document" aria-label="Markdown document" tabindex="-1" hidden></article>
+        </div>
         </div>
       </div>
       <footer class="reader-footer"><span id="reader-status" aria-live="polite">Local files · No uploads</span><span id="reader-save-state" class="reader-save-state"></span></footer>

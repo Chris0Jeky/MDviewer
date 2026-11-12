@@ -86,7 +86,7 @@
  * #editor-pane — the Markdown source column: a compact header over the
  * scrolling text surface.
  * -------------------------------------------------------------------------- */
-#app > #workspace > #editor-pane {
+:is(#app > #workspace, #reader-edit) > #editor-pane {
   container: source-editor / inline-size;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
@@ -131,7 +131,7 @@
 
 /* Search is an optional row, not a second scroll surface. Explicit row numbers
    preserve the source's remaining-height track when the panel is hidden. */
-#app > #workspace > #editor-pane > #editor-search {
+:is(#app > #workspace, #reader-edit) > #editor-pane > #editor-search {
   grid-row: 2;
   display: grid;
   gap: 6px;
@@ -141,9 +141,9 @@
   min-width: 0;
 }
 
-#app > #workspace > #editor-pane > #editor-search[hidden],
-#app > #workspace > #editor-pane > #editor-search #editor-replace-row[hidden],
-#app > #workspace > #editor-pane > #editor-formatting[hidden] {
+:is(#app > #workspace, #reader-edit) > #editor-pane > #editor-search[hidden],
+:is(#app > #workspace, #reader-edit) > #editor-pane > #editor-search #editor-replace-row[hidden],
+:is(#app > #workspace, #reader-edit) > #editor-pane > #editor-formatting[hidden] {
   display: none;
 }
 
@@ -223,7 +223,7 @@
 
 /* Formatting stays collapsed until requested. Its own bounded row can scroll in
    a short window without taking the remaining source track away. */
-#app > #workspace > #editor-pane > #editor-formatting {
+:is(#app > #workspace, #reader-edit) > #editor-pane > #editor-formatting {
   grid-row: 3;
   display: flex;
   flex-wrap: wrap;
@@ -248,7 +248,7 @@
 
 @container source-editor (max-width: 360px) {
   .editor-head .editor-stat { display: none; }
-  #app > #workspace > #editor-pane > #editor-search { padding-inline: 8px; }
+  :is(#app > #workspace, #reader-edit) > #editor-pane > #editor-search { padding-inline: 8px; }
   .editor-search-field { flex-basis: 100%; }
 }
 
@@ -264,7 +264,7 @@
 
 /* Only the active Find match is painted. This layer never owns text, selection,
    focus, or pointer input; it remains visible while the query field has focus. */
-#app > #workspace > #editor-pane > .editor-scroll > #editor-match-cue {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-match-cue {
   position: absolute;
   z-index: 2;
   overflow: hidden;
@@ -272,7 +272,7 @@
   user-select: none;
 }
 
-#app > #workspace > #editor-pane > .editor-scroll > #editor-match-cue[hidden] { display: none; }
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-match-cue[hidden] { display: none; }
 
 .editor-match-rect {
   position: absolute;
@@ -282,8 +282,8 @@
 }
 
 /* The shared box metrics. Both layers get exactly these values. */
-#app > #workspace > #editor-pane > .editor-scroll > #editor-highlight,
-#app > #workspace > #editor-pane > .editor-scroll > #editor-input {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-highlight,
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -310,7 +310,7 @@
 
 /* The painted backdrop. Never interactive; scrolled programmatically from the
    textarea's scroll event so the two layers cannot drift apart. */
-#app > #workspace > #editor-pane > .editor-scroll > #editor-highlight {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-highlight {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
@@ -340,7 +340,7 @@
 
 /* The real input. Glyphs are transparent so the backdrop shows through; the
    caret and the selection band stay visible. */
-#app > #workspace > #editor-pane > .editor-scroll > #editor-input {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input {
   z-index: 1;
   overflow: auto;
   resize: none;
@@ -350,17 +350,17 @@
   -webkit-text-fill-color: transparent;
 }
 
-#app > #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input::selection {
   background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
-#app > #workspace > #editor-pane > .editor-scroll > #editor-input::placeholder {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input::placeholder {
   color: var(--fg-faint);
   -webkit-text-fill-color: var(--fg-faint);
   opacity: 1;
 }
 
-#app > #workspace > #editor-pane > .editor-scroll > #editor-input:focus-visible {
+:is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -369,11 +369,11 @@
    Editor.HIGHLIGHT_MAX_CHARS, or a tokenizer failure): hide the empty backdrop
    and let the textarea paint its own plain text. The metrics are unchanged, so
    the switch is invisible apart from the colors. */
-#app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-highlight {
+:is(#app > #workspace, #reader-edit) > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-highlight {
   visibility: hidden;
 }
 
-#app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
+:is(#app > #workspace, #reader-edit) > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
   color: var(--fg);
   -webkit-text-fill-color: var(--fg);
 }
@@ -382,17 +382,17 @@
    system text and a real outline so source, caret and Find remain perceivable
    independently of the decorative syntax layer. This is screen chrome only. */
 @media screen and (forced-colors: active) {
-  #app > #workspace > #editor-pane > .editor-scroll > #editor-highlight { visibility: hidden; }
+  :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-highlight { visibility: hidden; }
 
-  #app > #workspace > #editor-pane > .editor-scroll > #editor-input,
-  #app > #workspace > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
+  :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input,
+  :is(#app > #workspace, #reader-edit) > #editor-pane[data-highlight="off"] > .editor-scroll > #editor-input {
     color: CanvasText;
     -webkit-text-fill-color: CanvasText;
     caret-color: CanvasText;
     background: Canvas;
   }
 
-  #app > #workspace > #editor-pane > .editor-scroll > #editor-input::selection {
+  :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input::selection {
     color: HighlightText;
     -webkit-text-fill-color: HighlightText;
     background: Highlight;
@@ -421,11 +421,11 @@
    inline style (Shiki's `defaultColor: "light"`), and an inline declaration beats
    any selector without it. Without this the pane would paint light-theme token
    colors onto a dark surface. */
-:root[data-app-theme="dark"] #app > #workspace > #editor-pane > .editor-scroll > #editor-highlight span {
+:root[data-app-theme="dark"] :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-highlight span {
   color: var(--shiki-dark, inherit) !important;
 }
 
-:root[data-app-theme="dark"] #app > #workspace > #editor-pane {
+:root[data-app-theme="dark"] :is(#app > #workspace, #reader-edit) > #editor-pane {
   background: var(--bg-sunken);
 }
 
@@ -433,7 +433,7 @@
  * #split-handle — the draggable divider. A real role="separator" with keyboard
  * resizing (Splitter.ts), so the split is operable without a pointer.
  * -------------------------------------------------------------------------- */
-#app > #workspace > #split-handle {
+:is(#app > #workspace, .reader-split) > #split-handle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -445,7 +445,7 @@
   user-select: none;
 }
 
-#app > #workspace > #split-handle > .split-handle-grip {
+:is(#app > #workspace, .reader-split) > #split-handle > .split-handle-grip {
   width: 2px;
   height: 30px;
   border-radius: 1px;
@@ -453,13 +453,13 @@
   transition: background-color 120ms ease;
 }
 
-#app > #workspace > #split-handle:hover > .split-handle-grip,
-#app > #workspace > #split-handle.is-dragging > .split-handle-grip,
-#app > #workspace > #split-handle:focus-visible > .split-handle-grip {
+:is(#app > #workspace, .reader-split) > #split-handle:hover > .split-handle-grip,
+:is(#app > #workspace, .reader-split) > #split-handle.is-dragging > .split-handle-grip,
+:is(#app > #workspace, .reader-split) > #split-handle:focus-visible > .split-handle-grip {
   background: var(--accent);
 }
 
-#app > #workspace > #split-handle:focus-visible {
+:is(#app > #workspace, .reader-split) > #split-handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -471,7 +471,7 @@ body.is-splitting {
   user-select: none;
 }
 
-body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-input {
+body.is-splitting :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-scroll > #editor-input {
   pointer-events: none;
 }
 
@@ -491,7 +491,7 @@ body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-in
     display: none;
   }
 
-  #app > #workspace > #editor-pane {
+  :is(#app > #workspace, #reader-edit) > #editor-pane {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -502,20 +502,20 @@ body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-in
    selected view or split setting. The preview stays measurable, as in Markdown
    mode; closing the panels restores the prior split immediately. */
 @media screen and (max-height: 600px) {
-  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) {
+  :is(#app > #workspace, #reader-edit) > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) {
     --editor-pad-y: 8px;
   }
 
-  #app > #workspace > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) > .editor-head {
+  :is(#app > #workspace, #reader-edit) > #editor-pane:has(> :is(#editor-search, #editor-formatting):not([hidden])) > .editor-head {
     display: none;
   }
 
-  #app > #workspace > #editor-pane > #editor-search {
+  :is(#app > #workspace, #reader-edit) > #editor-pane > #editor-search {
     gap: 2px;
     padding-block: 2px;
   }
 
-  #app > #workspace > #editor-pane > #editor-formatting { padding-block: 2px; }
+  :is(#app > #workspace, #reader-edit) > #editor-pane > #editor-formatting { padding-block: 2px; }
 
   #app > #workspace[data-view-mode="split"]:has(> #editor-pane > :is(#editor-search, #editor-formatting):not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
@@ -550,8 +550,8 @@ body.is-splitting #app > #workspace > #editor-pane > .editor-scroll > #editor-in
     overflow: visible !important;
   }
 
-  #app > #workspace > #editor-pane,
-  #app > #workspace > #split-handle {
+  :is(#app > #workspace, #reader-edit) > #editor-pane,
+  :is(#app > #workspace, .reader-split) > #split-handle {
     display: none !important;
   }
 

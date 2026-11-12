@@ -199,7 +199,10 @@ describe("desktop owned Save", () => {
     boundary.saveDocumentAs.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     press({ shiftKey: true, key: "S" });
     expect(boundary.saveDocumentAs).toHaveBeenCalledOnce();
-    expect((document.getElementById("reader-workspace") as HTMLButtonElement).disabled).toBe(true);
+    // Export PDF… (the workspace) cannot take the document while its save is pending.
+    document.getElementById("reader-workspace")!.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(boundary.start).not.toHaveBeenCalled();
     document.getElementById("reader-close")!.click();
     expect(document.getElementById("reader-notice")!.textContent).toContain("Wait for the save to finish");
     expect(option()).toBe("notes.md");

@@ -59,9 +59,15 @@ export function createWriteback(deps: WritebackDeps): {
   checkOverwritten(doc: ReaderDocument): void;
   /** The Undo notice went away: an overwrite is no longer reported. */
   forget(): void;
+  /** Resolves when no host write is in flight (Edit waits for it before showing the text). */
+  settled(): Promise<void>;
 } {
   let last: LastSave | null = null;
   let busy = false;
+  let inFlight: Promise<void> = Promise.resolve();
+  let release = (): void => {};
+  function begin(): void { busy = true; inFlight = new Promise(resolve => { release = resolve; }); }
+  function end(): void { busy = false; release(); }
 
   async function save(doc: ReaderDocument, patches: LinePatch[]): Promise<PatchResult | null> {
     try { return await deps.native.patchDocument(doc.binding!.token, patches); }
@@ -93,7 +99,7 @@ export function createWriteback(deps: WritebackDeps): {
       deps.rerender();
       return;
     }
-    busy = true;
+    begin();
     try {
       let result = await save(doc, patches);
       if (result?.outcome === "unplaced") {
@@ -119,7 +125,7 @@ export function createWriteback(deps: WritebackDeps): {
       last = { docId: doc.id, token: doc.binding!.token, name: doc.name, control, line: patched.replace, before: patched.expect, after: patched.replace, action, undo: inversePatches(patches) };
       const saved = last;
       deps.notice({ text: describe(control, action), action: { label: "Undo", run: () => { void undo(saved); } } });
-    } finally { busy = false; }
+    } finally { end(); }
   }
 
   async function undo(saved: LastSave): Promise<void> {
@@ -130,7 +136,7 @@ export function createWriteback(deps: WritebackDeps): {
       return;
     }
     deps.notice(null);
-    busy = true;
+    begin();
     try {
       const result = await save(doc, saved.undo);
       if (!result) return;
@@ -138,7 +144,7 @@ export function createWriteback(deps: WritebackDeps): {
       if (result.outcome !== "saved") { deps.report("Could not undo: the file changed in another program. Nothing was written."); return; }
       if (deps.adopt(doc, result.text, result.generation)) deps.rerender();
       if (last === saved) last = null;
-    } finally { busy = false; }
+    } finally { end(); }
   }
 
   function checkOverwritten(doc: ReaderDocument): void {
@@ -154,5 +160,5 @@ export function createWriteback(deps: WritebackDeps): {
     deps.notice({ text: "Another program overwrote this change.", action: { label: "Apply again", run: () => { void change(found.control, saved.action, saved); } } });
   }
 
-  return { change, checkOverwritten, forget: () => { last = null; } };
+  return { change, checkOverwritten, forget: () => { last = null; }, settled: () => inFlight };
 }

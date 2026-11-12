@@ -18,6 +18,8 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
+import { patchDocument } from "./reader/patch";
+import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
 import { setControlHandler } from "./reader/controls";
 import { createWriteback, type Notice } from "./reader/writeback";
@@ -42,7 +44,8 @@ const scroll = element("reader-scroll");
 const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
-const workspaceButton = element<HTMLButtonElement>("reader-workspace");
+const editHost = element("reader-edit");
+const editToggle = element<HTMLButtonElement>("reader-edit-toggle");
 const newButtons = [element<HTMLButtonElement>("reader-new-empty")];
 const saveState = element("reader-save-state");
 const panel = element("shell-panel");
@@ -58,6 +61,11 @@ let generation = 0;
 let renderGeneration = 0;
 let noticeGeneration = 0;
 let renderChain: Promise<void> = Promise.resolve();
+// Edit (S5): one source editor beside the reader, kept while hidden so undo survives a toggle.
+let editor: EditorController | null = null;
+let editing = false;
+let editTimer: ReturnType<typeof setTimeout> | undefined;
+let editSplitter: SplitterController | null = null;
 let textSize = 17;
 let nativeSaveBusy = false;
 const queuedBatches: Array<{ batch: OpenBatch; request: number }> = [];
@@ -103,7 +111,9 @@ function showActionNotice(notice: Notice | null): void {
 }
 const writeback = createWriteback({
   active: () => (app || changingMode ? undefined : docs.reader.active),
-  native: { available: native.available, patchDocument: (token, patches) => native.patchDocument(token, patches) },
+  // While Edit is open a control changes the open text, saved with the document: a direct file
+  // write would race the typing (and its adopt would replace what was typed meanwhile).
+  native: { get available() { return native.available && !editing; }, patchDocument: (token, patches) => native.patchDocument(token, patches) },
   // The host wrote the file: adopt its text and binding generation, or the next Save is stale.
   adopt: (doc, text, generation) => {
     const target = docs.saveTarget();
@@ -221,7 +231,12 @@ function syncDocuments(): void {
   saveState.textContent = target
     ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
     : "";
-  workspaceButton.disabled = !active || changingMode || nativeSaveBusy;
+  editToggle.disabled = !!app || changingMode;
+  editToggle.setAttribute("aria-pressed", String(editing));
+  editHost.hidden = !editing;
+  const divider = editHost.nextElementSibling;
+  if (divider?.id === "split-handle") (divider as HTMLElement).hidden = !editing;
+  document.body.classList.toggle("reader-editing", editing);
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
   returnButton.disabled = workspaceBusy;
   for (const button of newButtons) button.disabled = workspaceBusy;
@@ -249,14 +264,21 @@ function rememberReaderPosition(): void {
   }
 }
 
-function render(importErrors: readonly string[] = []): Promise<void> {
-  rememberReaderPosition();
-  renderedReaderId = null;
+/**
+ * Render the active document. `patch` (typing in Edit) keeps the shown document in place and
+ * replaces only changed blocks (S2c); anything else (another document, settings) is a full render.
+ */
+function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
+  const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
+  if (!patching) {
+    rememberReaderPosition();
+    renderedReaderId = null;
+  }
   const current = ++renderGeneration;
   const currentNotice = noticeGeneration;
   const doc = docs.reader.active;
   syncDocuments();
-  outline.replaceChildren();
+  if (!patching) { outline.replaceChildren(); syncEditor(); }
   content.hidden = !doc;
   empty.hidden = !!doc;
   if (!doc) {
@@ -265,19 +287,21 @@ function render(importErrors: readonly string[] = []): Promise<void> {
     status.textContent = "Local files · No uploads";
     return Promise.resolve();
   }
-  content.setAttribute("aria-busy", "true");
-  content.replaceChildren(); // A failed new document must not display the previous file's contents.
-  // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
-  const behavior = scroll.style.scrollBehavior;
-  scroll.style.scrollBehavior = "auto";
-  scroll.scrollTop = 0;
-  scroll.scrollLeft = 0;
-  scroll.style.scrollBehavior = behavior;
-  status.textContent = `Opening ${doc.name}…`;
+  if (!patching) {
+    content.setAttribute("aria-busy", "true");
+    content.replaceChildren(); // A failed new document must not display the previous file's contents.
+    // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
+    const behavior = scroll.style.scrollBehavior;
+    scroll.style.scrollBehavior = "auto";
+    scroll.scrollTop = 0;
+    scroll.scrollLeft = 0;
+    scroll.style.scrollBehavior = behavior;
+    status.textContent = `Opening ${doc.name}…`;
+  }
   // Mermaid's singleton is not re-entrant; serialize and skip obsolete renders.
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
-    const position = docs.reader.positions.get(doc.id)?.reader;
+    const position = patching ? undefined : docs.reader.positions.get(doc.id)?.reader;
     const restore = (): void => {
       const previousBehavior = scroll.style.scrollBehavior;
       scroll.style.scrollBehavior = "auto";
@@ -289,8 +313,12 @@ function render(importErrors: readonly string[] = []): Promise<void> {
     // Text first: the document is readable, navigable and scrollable from this point;
     // code and diagrams upgrade in place afterwards.
     const show = (from: HTMLElement): void => {
-      releaseImages();
-      content.replaceChildren(...from.childNodes);
+      // Patching keeps the loaded images (imageCache); a full render releases them.
+      if (patching) outline.replaceChildren();
+      else releaseImages();
+      // Through the patcher even on a full render (into the emptied reader), so every block gets
+      // its reuse key and the first keystroke in Edit replaces only the block it changed.
+      patchDocument(content, from);
       // Relative images load natively into blob URLs (S6); upgrades later happen in place.
       if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
@@ -322,8 +350,9 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       const parts = statusParts({ name: doc.name, path: doc.binding?.path, text: doc.text, dirty: doc.dirty, disk: doc.binding?.disk });
       status.textContent = `${parts.where} · ${parts.size}`;
       // A new open/action may have reported a newer failure while this render ran.
-      if (result.warnings.length && currentNotice === noticeGeneration) {
-        report([...importErrors, ...result.warnings].join(" "));
+      const warnings = editing ? result.warnings.filter(warning => !warning.startsWith("This document is empty.")) : result.warnings;
+      if (warnings.length && currentNotice === noticeGeneration) {
+        report([...importErrors, ...warnings].join(" "));
       }
     } catch (error) {
       if (current !== renderGeneration) return;
@@ -411,12 +440,116 @@ async function createDocument(): Promise<void> {
   report(errors.join(" "));
   if (errors.length) return;
   ++generation;
-  await enterWorkspace(true);
+  await setEditing(true); // before the render, so an empty note is not reported as a problem
+  await render();
+}
+
+/** Keep the editor on the active document. A same-document, same-text call keeps caret and undo. */
+function syncEditor(): void {
+  if (!editor || !editing) return;
+  const doc = docs.reader.active;
+  if (!doc) { editing = false; syncDocuments(); return; }
+  editor.setDocument({ id: doc.id, name: doc.name, text: doc.text });
+}
+
+/** Show or hide the Edit surface (Ctrl+E). With nothing open it starts a new note. */
+async function setEditing(on: boolean): Promise<void> {
+  if (app || changingMode) return;
+  if (!on) {
+    flushEdit();
+    editing = false;
+    syncDocuments();
+    content.focus({ preventScroll: true });
+    return;
+  }
+  if (!docs.reader.active) { await createDocument(); return; }
+  if (!editor) {
+    try {
+      const { mountEditor, mountSplitter } = await import("./edit");
+      if (!editSplitter) {
+        const layout = editHost.parentElement!;
+        const applyRatio = (ratio: number): void => { layout.style.setProperty("--edit-ratio", String(ratio)); };
+        applyRatio(settings.splitRatio);
+        editSplitter = mountSplitter(layout, {
+          track: layout, initialRatio: settings.splitRatio, onPreview: applyRatio,
+          onCommit: ratio => { applyRatio(ratio); settings.splitRatio = ratio; saveSettings({ ...loadSettings(), splitRatio: ratio }); },
+        });
+        const handle = layout.lastElementChild as HTMLElement;
+        handle.hidden = !editing; // shown by syncDocuments while editing
+        editHost.after(handle); // the handle sits between the source and the reader
+      }
+      editor ??= mountEditor(editHost, {
+        onInput: editInput,
+        codeTheme: settings.codeTheme,
+        placeholder: "Start writing Markdown…",
+        largeInsertBytes: SIZE_SOFT_BYTES,
+        hardLimitBytes: SIZE_HARD_BYTES,
+        confirmLargeInsert: async bytes => bytes <= SIZE_HARD_BYTES && window.confirm(
+          `Inserting this would make the document about ${(bytes / 1_000_000).toFixed(1)} MB. Insert it anyway?`),
+      });
+    } catch (error) { report(`Could not open Edit: ${errorText(error)}`); return; }
+  }
+  // A control write in flight would adopt the host's text after typing began: let it land first.
+  await writeback.settled();
+  if (app || changingMode || !docs.reader.active) return;
+  editing = true;
+  syncDocuments();
+  syncEditor();
+  editor.focus();
+}
+
+/** Typing: the open text changes at once; the reader follows by patching changed blocks. */
+function editInput(text: string): void {
+  const doc = docs.reader.active;
+  if (!doc || !editing || app || doc.text === text) return;
+  doc.text = text;
+  doc.dirty = true;
+  ++generation;
+  if (notice.textContent?.startsWith("This document is empty.")) report("");
+  syncDocuments();
+  clearTimeout(editTimer);
+  // The reader then follows the caret, now that the edited block exists.
+  editTimer = setTimeout(() => { editTimer = undefined; void render([], true).then(followCaret); }, 120);
+}
+
+/** Paint a pending edit now (before hiding Edit, saving or leaving for the workspace). */
+function flushEdit(): void {
+  if (editTimer === undefined) return;
+  clearTimeout(editTimer);
+  editTimer = undefined;
+  void render([], true);
+}
+
+// On the host, once: the editor replaces its textarea when the document changes.
+editHost.addEventListener("keyup", event => { if (event.target === editor?.input) followCaret(); });
+editHost.addEventListener("click", event => { if (event.target === editor?.input) followCaret(); });
+
+/** Scroll follows the caret (S2a's line map): bring the block holding the caret line into view. */
+function followCaret(): void {
+  if (!editor || !editing) return;
+  const input = editor.input;
+  const line = input.value.slice(0, input.selectionStart).split("\n").length;
+  let target: Element | null = null;
+  for (const block of content.querySelectorAll(":scope > [data-src]")) {
+    const [start, end] = block.getAttribute("data-src")!.split("-").map(Number);
+    if (line < start!) break;
+    target = block;
+    if (line <= end!) break;
+  }
+  target?.scrollIntoView({ block: "nearest" });
 }
 
 async function enterWorkspace(revealEditor = false): Promise<void> {
   // A pending save must finish before its document changes owner (FILE_LIFECYCLE).
   if (app || changingMode || nativeSaveBusy || !docs.reader.active) return;
+  flushEdit();
+  revealEditor ||= editing; // from Edit, the workspace opens on its source pane
+  editor?.destroy();
+  editor = null;
+  editSplitter?.destroy(); // the workspace mounts its own divider with the same id
+  editSplitter = null;
+  editing = false;
+  editHost.replaceChildren();
   rememberReaderPosition();
   themeAtEntry = settings.screenTheme;
   changingMode = true; ++generation; ++renderGeneration;
@@ -579,7 +712,7 @@ appRoot.addEventListener("click", event => {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
-workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
+editToggle.addEventListener("click", () => { void setEditing(!editing); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
 function openSample(): void {
   ++generation;
@@ -747,7 +880,9 @@ const reading = (): boolean => !changingMode;
 registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
-registerCommand({ id: "workspace.enter", title: "Edit & PDF", keys: ["Mod+E"], enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
+registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
+  run: () => setEditing(!editing) });
+registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !nativeSaveBusy && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", keys: ["Mod+-"], enabled: () => !app, run: () => resizeText(-1) });
@@ -769,10 +904,12 @@ installShortcuts(window, command => !!app && command.id === "export.pdf");
 const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
 // The menu offers Save only when there is something to save; Ctrl+S still explains why not.
 const somethingToSave = (): boolean => { const target = docs.saveTarget(); return !!target && (target.dirty || !target.binding); };
-registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
+registerCommand({ id: "document.save", title: "Save", keys: native.available ? ["Mod+S"] : [], enabled: saving, run: () => saveDocument(false) });
 registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
-registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
+registerCommand({ id: "document.saveCopy", title: "Save a copy…", keys: native.available ? [] : ["Mod+S"], enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
 installShortcuts(window, command => native.available && !modalOpen() && command.id.startsWith("document.save"), { capture: true });
+// Without the host (web build), Ctrl+S in the reader or Edit downloads the Markdown, as the workspace does.
+installShortcuts(window, command => !native.available && !app && !modalOpen() && command.id === "document.saveCopy");
 
 // ---- Shell (S3): tabs, More menu, panel, palette, print. -------------------------------
 registerCommand({ id: "document.next", title: "Next document", keys: ["Alt+Shift+N"], enabled: () => !app && docs.reader.documents.length > 1, run: () => stepDocument(1) });
@@ -914,6 +1051,7 @@ const moreMenu: MenuEntry[] = [
   { command: "document.save", disabled: () => !somethingToSave() },
   { command: "document.saveAs" },
   { command: "document.saveCopy" },
+  { command: "workspace.enter", id: "reader-workspace" },
   { command: "export.pdf" },
   "separator",
   { command: "view.theme.light", role: "menuitemradio", checked: themeChecked("light") },
@@ -993,31 +1131,36 @@ async function followRelativeLink(href: string): Promise<void> {
 // Local images: the sanitizer keeps a relative src inert as data-local-src; the
 // host reads it (typed, 20 MB cap) relative to this document's own folder.
 const imageUrls: string[] = [];
+/** Loaded local images by source, until the next full render: block patches reuse them. */
+const imageCache = new Map<string, string | null>();
+let imageBytesHeld = 0;
 const IMAGE_TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
 };
 function releaseImages(): void {
+  imageCache.clear();
+  imageBytesHeld = 0;
   for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
 }
 // Bound what one document can make the reader hold: distinct images and bytes.
 const MAX_LOCAL_IMAGES = 100;
 const MAX_LOCAL_IMAGE_BYTES = 200 * 1024 * 1024;
 async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
-  const loaded = new Map<string, string | null>();
-  let bytesHeld = 0;
+  const loaded = imageCache;
   for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
+    if (image.src.startsWith("blob:")) continue; // kept by a block patch, already loaded
     const src = image.dataset.localSrc!;
     const type = IMAGE_TYPES[src.split(/[?#]/, 1)[0]!.split(".").pop()?.toLowerCase() ?? ""];
     if (!type) continue;
     if (!loaded.has(src)) {
-      if (loaded.size >= MAX_LOCAL_IMAGES || bytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
+      if (loaded.size >= MAX_LOCAL_IMAGES || imageBytesHeld >= MAX_LOCAL_IMAGE_BYTES) {
         image.alt ||= `${src} was not loaded: this document shows too many local images`;
         continue;
       }
       try {
         const bytes = await native.readAsset(token, src);
         if (current !== renderGeneration) return; // A newer render owns the DOM now.
-        bytesHeld += bytes.byteLength;
+        imageBytesHeld += bytes.byteLength;
         const url = URL.createObjectURL(new Blob([bytes], { type }));
         imageUrls.push(url);
         loaded.set(src, url);
