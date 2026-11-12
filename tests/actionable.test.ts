@@ -126,3 +126,46 @@ describe("actionable glyphs in the shared renderer", () => {
     expect(html).toContain("not [/] at start");
   });
 });
+
+describe("actionable review fixes", () => {
+  it("an empty chip scalar gains the space that keeps it a YAML pair", () => {
+    const text = "---\nstatus:\nstatus.options: [draft, done]\n---\n";
+    const document = parseActionable(text);
+    const patches = planChange(text, document, document.controls[0]!, { kind: "chip", value: "draft" });
+    const after = applyPatches(text, patches);
+    expect(after).toBe("---\nstatus: draft\nstatus.options: [draft, done]\n---\n");
+    expect(parseActionable(after).controls[0]).toMatchObject({ kind: "chip", value: "draft" });
+  });
+
+  it("lines inside a multi-line code span are not fields", () => {
+    const text = "Run `this\nowner:: Ada <!-- id: a -->\nend` then.\nreal:: yes <!-- id: a -->\n";
+    const document = parseActionable(text);
+    expect(document.controls).toEqual([expect.objectContaining({ kind: "field", key: "real", line: 4, id: "a" })]);
+    expect(document.problems).toEqual([]);
+  });
+});
+
+describe("actionable parser robustness", () => {
+  it("stays fast on deeply nested quote prefixes", () => {
+    const started = performance.now();
+    parseActionable("> ".repeat(60) + "x\n" + "> ".repeat(60) + "- [ ] y\n");
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  it("agrees with the app's own parse for every fixture and for math blocks", async () => {
+    const { createMarkdown } = await import("../src/render/markdown");
+    const { DEFAULT_SETTINGS } = await import("../src/app/settings");
+    const { readFrontMatter } = await import("../src/render/frontmatter");
+    for (const text of [...names.map(name => read(`${name}.md`)), "$$\nkey:: x\n$$\n\nreal:: y\n"]) {
+      const tokens = createMarkdown(null, DEFAULT_SETTINGS).parse(readFrontMatter(text).body, {});
+      expect(parseActionable(text, tokens).controls.map(item)).toEqual(parseActionable(text).controls.map(item));
+    }
+    expect(parseActionable("$$\nkey:: x\n$$\n").controls).toEqual([]);
+  });
+
+  it("quotes a chip value that ends in a colon", () => {
+    const text = "---\nk: a\nk.options: [a, \"b:\"]\n---\n";
+    const document = parseActionable(text);
+    expect(planChange(text, document, document.controls[0]!, { kind: "chip", value: "b:" })[0]!.replace).toBe('k: "b:"');
+  });
+});

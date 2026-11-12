@@ -11,6 +11,7 @@
 import MarkdownItCtor, { type Token } from "markdown-it";
 import container from "markdown-it-container";
 import footnote from "markdown-it-footnote";
+import katexPlugin from "@vscode/markdown-it-katex";
 import { readFrontMatter, type FrontMatterEntry } from "./frontmatter";
 
 export const MARKS = [" ", "x", "/", "-", "!", "?"] as const;
@@ -55,11 +56,14 @@ export type ControlAction =
   | { kind: "chip"; value: string };
 
 // List marker with indentation, optionally inside blockquote prefixes.
-const LIST = String.raw`(?:[ \t]*>[ \t]?)*[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+`;
+// Each blockquote marker owns the spaces before it, so the prefix cannot backtrack exponentially.
+const QUOTES = String.raw`(?:[ \t]*>)*[ \t]*`;
+const MARKER = String.raw`(?:[-*+]|\d{1,9}[.)])[ \t]+`;
+const LIST = QUOTES + MARKER;
 const MARK_LINE = new RegExp(`^(${LIST})\\[([ xX/!?-])\\](?=[ \\t])`);
 const CHOICE_LINE = new RegExp(`^(${LIST})\\(([ x])\\)(?=[ \\t])`);
-const FIELD_LINE = new RegExp(`^((?:${LIST}|(?:[ \\t]*>[ \\t]?)*[ \\t]*))([A-Za-z][A-Za-z0-9_-]{0,39})::(?=[ \\t]|$)`);
-const ID_COMMENT = /[ \t]*<!--[ \t]*id:[ \t]*([A-Za-z0-9][A-Za-z0-9._-]{0,63})[ \t]*-->[ \t]*$/;
+const FIELD_LINE = new RegExp(`^(${QUOTES}(?:${MARKER})?)([A-Za-z][A-Za-z0-9_-]{0,39})::(?=[ \\t]|$)`);
+const ID_COMMENT = /<!--[ \t]*id:[ \t]*([A-Za-z0-9][A-Za-z0-9._-]{0,63})[ \t]*-->[ \t]*$/;
 const FRONT_KEY = /^([A-Za-z0-9_][\w.-]*)[ \t]*:(?:([ \t]+)(.*))?$/;
 
 /** Split into line contents and their terminators, as markdown-it numbers lines. */
@@ -82,8 +86,10 @@ export function splitLines(text: string): { bom: string; lines: string[]; eols: 
 let parser: InstanceType<typeof MarkdownItCtor> | null = null;
 function blockParser(): InstanceType<typeof MarkdownItCtor> {
   if (!parser) {
-    // The block structure of the app's parser: callouts and footnotes hold paragraphs too.
-    parser = new MarkdownItCtor({ html: true }).use(footnote);
+    // The block structure of the app's parser: callouts and footnotes hold paragraphs, and a
+    // `$$` math block holds none (tests/actionable.test.ts compares it with the app's parse).
+    const katex = (katexPlugin as unknown as { default?: typeof katexPlugin }).default ?? katexPlugin;
+    parser = new MarkdownItCtor({ html: true }).use(footnote).use(katex as unknown as (md: InstanceType<typeof MarkdownItCtor>) => void);
     for (const name of ["note", "tip", "warning", "danger"]) {
       parser.use(container as unknown as (md: InstanceType<typeof MarkdownItCtor>, name: string) => void, name);
     }
@@ -91,10 +97,40 @@ function blockParser(): InstanceType<typeof MarkdownItCtor> {
   return parser;
 }
 
+/**
+ * The paragraph lines (0-based within its content) that begin inside a multi-line code span:
+ * a backtick run opens a span closed by the next run of the same length (CommonMark).
+ */
+function linesInCodeSpans(content: string): Set<number> {
+  const inside = new Set<number>();
+  const runs = [...content.matchAll(/`+/g)];
+  let line = 0;
+  let scanned = 0;
+  const lineAt = (offset: number): number => {
+    for (; scanned < offset; scanned++) if (content[scanned] === "\n") line++;
+    return line;
+  };
+  for (let open = 0; open < runs.length; open++) {
+    const opener = runs[open]!;
+    if (content[opener.index - 1] === "\\") continue; // an escaped backtick opens nothing
+    let close = open + 1;
+    while (close < runs.length && runs[close]![0].length !== opener[0].length) close++;
+    if (close === runs.length) continue;
+    const first = lineAt(opener.index);
+    const last = lineAt(runs[close]!.index);
+    for (let at = first + 1; at <= last; at++) inside.add(at);
+    open = close;
+  }
+  return inside;
+}
+
 /** Where a line's id comment starts (or the line's end) and the id it names. */
 function idOf(line: string): { end: number; id?: string } {
   const match = ID_COMMENT.exec(line);
-  return match ? { end: match.index, id: match[1] } : { end: line.length };
+  if (!match) return { end: line.length };
+  let end = match.index;
+  while (end > 0 && /[ \t]/.test(line[end - 1]!)) end--;
+  return { end, id: match[1] };
 }
 
 /**
@@ -117,7 +153,9 @@ export function parseActionable(text: string, tokens?: readonly Token[]): Action
     if (token.type === "bullet_list_close" || token.type === "ordered_list_close") lists.pop();
     if (token.type !== "inline" || tokens[index - 1]?.type !== "paragraph_open" || !token.map) continue;
     const firstOfItem = tokens[index - 2]?.type === "list_item_open";
+    const inCode = linesInCodeSpans(token.content);
     for (let number = token.map[0]; number < token.map[1]; number++) {
+      if (inCode.has(number - token.map[0])) continue;
       const line = lines[number] ?? "";
       if (seen.has(number)) continue;
       seen.add(number);
@@ -184,7 +222,7 @@ export function parseActionable(text: string, tokens?: readonly Token[]): Action
       const key = match[1]!;
       const options = entry(`${key}.options`)?.value;
       if (!Array.isArray(options) || !options.length) continue;
-      const span = scalarSpan(line, match[1]!.length, match[3]);
+      const span = scalarSpan(line, match[3]);
       if (!span) { problems.push(`The value of "${key}" is not a one-line scalar, so its chip is not interactive.`); continue; }
       controls.push({ line: number + 1, id: key, kind: "chip", key, value: unquote(line.slice(...span), line[span[0] - 1]), options, span });
     }
@@ -194,7 +232,7 @@ export function parseActionable(text: string, tokens?: readonly Token[]): Action
 }
 
 /** The editable range of a front matter scalar: inside its quotes, or the plain text before a comment. */
-function scalarSpan(line: string, keyLength: number, rest: string | undefined): [number, number] | null {
+function scalarSpan(line: string, rest: string | undefined): [number, number] | null {
   const valueStart = rest === undefined ? line.length : line.length - rest.length;
   if (rest === undefined || rest === "") return [valueStart, valueStart];
   const quote = rest[0];
@@ -206,7 +244,6 @@ function scalarSpan(line: string, keyLength: number, rest: string | undefined): 
   if (/^[[{|>&*!%@`]/.test(rest)) return null;
   const comment = rest.search(/[ \t]#/);
   const plain = (comment === -1 ? rest : rest.slice(0, comment)).trimEnd();
-  void keyLength;
   return [valueStart, valueStart + plain.length];
 }
 
@@ -274,9 +311,11 @@ export function planChange(text: string, document: ActionableDocument, control: 
     const quote = line[control.span[0] - 1];
     const quoted = quote === '"' || quote === "'" ? quote : undefined;
     // A plain scalar that would change meaning gets double quotes.
-    const unsafe = !quoted && (/^[\s"'[\]{}#&*!|>%@`,?:-]|: |\s#|\s$/.test(action.value) || action.value === "");
+    const unsafe = !quoted && (/^[\s"'[\]{}#&*!|>%@`,?:-]|: |:$|\s#|\s$/.test(action.value) || action.value === "");
     const value = unsafe ? `"${quoteFor(action.value, '"')}"` : quoteFor(action.value, quoted);
-    return [patch(control, value)];
+    // An empty scalar (`key:` at the end of the line) needs the space that makes it a pair.
+    const gap = !quoted && line[control.span[0] - 1] === ":" ? " " : "";
+    return [patch(control, gap + value)];
   }
   throw new Error(`A ${action.kind} action does not apply to a ${control.kind}.`);
 }
