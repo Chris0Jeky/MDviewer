@@ -199,11 +199,11 @@ export paths.
   [#278](https://github.com/Chris0Jeky/MDviewer/issues/278), [#282](https://github.com/Chris0Jeky/MDviewer/issues/282),
   [#291](https://github.com/Chris0Jeky/MDviewer/issues/291), [#292](https://github.com/Chris0Jeky/MDviewer/issues/292)
   and [#296](https://github.com/Chris0Jeky/MDviewer/issues/296).
-- **In progress (2026-11-12): S9 performance and polish.** Part 1 (tab switch back in about 50 ms, one sanitizer
+- **Merged (2026-11-12): S9 performance and polish.** Part 1 (tab switch back in about 50 ms, one sanitizer
   pass for code blocks) [#294](https://github.com/Chris0Jeky/MDviewer/pull/294) is merged. The polish pass
   [#298](https://github.com/Chris0Jeky/MDviewer/pull/298) is merged. Part 2
   [#297](https://github.com/Chris0Jeky/MDviewer/pull/297) (native start-up numbers, first frame in the theme
-  colour) is open: its native smoke failed twice at wind-down and it is rechecking on a refreshed head. Next:
+  colour from a bundled stylesheet, with a guard against inline style in `desktop.html`) is merged. Next:
   [#301](https://github.com/Chris0Jeky/MDviewer/issues/301) (data views after D6),
   [#302](https://github.com/Chris0Jeky/MDviewer/issues/302) (native window background and closable during a
   slow start; Core halves #304 and #305) and [#306](https://github.com/Chris0Jeky/MDviewer/issues/306) (clippy).

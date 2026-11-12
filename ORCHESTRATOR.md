@@ -7,10 +7,9 @@
 > Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
 > listed by area; open ones are marked **open**. Re-read GitHub before starting work.
 >
-> **State of main.** [`6329c7d`](https://github.com/Chris0Jeky/MDviewer/commit/6329c7d31b6d1efd4aaad03636dd3d3d0bbb194b)
-> (merge of #289) when this was written. CI [43270081330](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081330) and
-> Windows Desktop [43270081280](https://github.com/Chris0Jeky/MDviewer/actions/runs/43270081280) both completed
-> **success** on it. Re-measure with `gh run list --branch main` before relying on this. The previous main
+> **State of main.** [`2544bc4`](https://github.com/Chris0Jeky/MDviewer/commit/2544bc4) (merge of #297) when this
+> was written. CI [43314167244](https://github.com/Chris0Jeky/MDviewer/actions/runs/43314167244) and Windows Desktop
+> [43314167050](https://github.com/Chris0Jeky/MDviewer/actions/runs/43314167050) both completed **success** on it. Re-measure with `gh run list --branch main` before relying on this. The previous main
 > [`42426fe`](https://github.com/Chris0Jeky/MDviewer/commit/42426fe92f3c098890b490ac8ecb38a12b223792)
 > (merge of #295) also passed CI [43266504555](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504555) and
 > Windows Desktop [43266504492](https://github.com/Chris0Jeky/MDviewer/actions/runs/43266504492). Re-run
@@ -34,21 +33,21 @@
 >   D3 native #272 and webview #280; D4 parsers #281 (adds `yaml` 2.9.1), D4 native extensions #284, D4 webview
 >   #288 (so YAML, TOML, CSV and TSV open as readable views); relative links open Markdown only #283; D6
 >   readability pass #293; agent data files in the Library, `.claude/worktrees` skipped #290 (boundary change).
-> - **Performance:** S9 part 1, tab switch back in about 50 ms and one sanitizer pass for code blocks #294.
+> - **Performance:** S9 part 1, tab switch back in about 50 ms and one sanitizer pass for code blocks #294;
+>   S9 part 2 #297: native start-up numbers, and the first frame in the theme colour from a bundled stylesheet
+>   (`src/desktop/first-frame.css`), with a unit guard (`tests/desktop-csp.test.ts`) that keeps inline style
+>   blocks out of `desktop.html`: Tauri hashes an inline style into the CSP, which voids `'unsafe-inline'` and
+>   blocked the styles Paged.js injects. Not verified: the dark first frame in a real WebView2 window.
 > - **Pagination, export, CI, docs:** never drop or hide content when a block cannot stay whole #237; raster
 >   PDF draws Tier 3 shrunk blocks as the preview does #261 (#258); keep the restored source scroll in Firefox #267 (#227, #245);
 >   code hyphenation #259; smoke progress sharing #222; Playwright install retry #238; state-docs sync for
 >   Readable data and Actionable Markdown #287 (S8).
 >
 > **Also merged at close-out:** D5 pure copy module #289 (`src/data/copy.ts`: value, path, subtree; no webview
-> yet) and the S9 polish pass #298 (library row actions, narrow drawer, sepia code). Main is 6329c7d, with CI and
-> Windows Desktop green.
+> yet) and the S9 polish pass #298 (library row actions, narrow drawer, sepia code). S9 part 2 #297 merged after it (see
+> Performance above).
 >
-> **Open PRs from this push:** S9 part 2 #297 (native start-up numbers, first frame in the theme colour), left open
-> at wind-down: its Windows build and native smoke job failed twice on head b0e3a23 (run 43266580940: a native
-> UI 'save-dialog' worker operation timeout) while main's smoke was green. Its head is now f8d1d43 (main merged
-> in), with checks running when this was written; the Experience lane owns it.
-> Dependabot #216, #217, #218 are open with all six checks green and were not triaged in this push.
+> **Open PRs from this push:** none. Dependabot #216, #217, #218 are open with all six checks green and were not triaged in this push.
 >
 > **Next queue, in order**
 > 1. D5 webview #299: copy menu (value, path, subtree) and Save readable view as Markdown, on the merged #289.
@@ -56,7 +55,7 @@
 > 3. S9 polish pass #301: data views after D6, horizontal overflow first (the shell side merged in #298).
 > 4. Native window theme background and closable during a slow start: #302, with the Core halves #304 (window
 >    background follows the screen theme) and #305 (a close during webview start-up skips `canClose` and the
->    session flush). #297 supplies the webview half.
+>    session flush). #297 has supplied the webview half (first frame); #304 and #305 remain.
 > 5. Native clippy #306: fix six lints and run clippy in the Windows desktop job.
 > 6. Readable data hints and tests #296 (tera/peta byte keys, bare size, sub-second ms, line-label test); multi-document
 >    YAML conversations map turns to root paths #291; Library Agent files group and batched seen marks #292 (with #265).
