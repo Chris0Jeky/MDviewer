@@ -40,3 +40,14 @@ test("Mermaid, literal fence examples and unknown quoted code do not load Shiki"
   expect(audit.requests.filter(url => grammarAsset.test(url))).toEqual([]);
   await page.screenshot({ path: test.info().outputPath("reader-no-engine.png"), fullPage: true });
 });
+
+test("the first frame is the reader's background in the system theme, before any script runs", async ({ page }) => {
+  for (const [scheme, colour] of [["dark", "rgb(24, 28, 35)"], ["light", "rgb(246, 247, 249)"]] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    // Hold every script back: what shows now is what a slow WebView2 start shows.
+    await page.route(/\.js$/, route => route.abort());
+    await page.goto("/desktop.html");
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe(colour);
+    await page.unroute(/\.js$/);
+  }
+});

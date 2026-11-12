@@ -6,6 +6,10 @@
     <meta name="color-scheme" content="light dark" />
     <title>MDviewer</title>
     <meta name="description" content="A local Markdown reader with editing and page-safe PDF export on demand." />
+    <!-- S9: the first frame, before any script or stylesheet loads, is the reader's own background
+         in the system theme (never a white flash in dark mode). The body's themed background
+         covers it once the app applies the saved theme. -->
+    <style>html { background: #f6f7f9; } @media (prefers-color-scheme: dark) { html { background: #181c23; } }</style>
   </head>
   <body class="desktop-reader">
     <a class="reader-skip" href="#reader-document">Skip to document</a>
