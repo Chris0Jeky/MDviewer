@@ -213,12 +213,48 @@ mod tests {
         out
     }
 
+    /// The webview's published conformance fixtures (tests/fixtures/actionable): the patches
+    /// it plans, applied natively, must write exactly the bytes the fixture lists. Both ends
+    /// run these, so their line numbering cannot drift apart again (#266).
+    #[test]
+    fn applies_the_shared_conformance_fixtures_byte_exact() {
+        #[derive(Deserialize)]
+        struct Change {
+            name: String,
+            patches: Vec<Patch>,
+            after: String,
+        }
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/actionable");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".patches.json")) else {
+                continue;
+            };
+            let source = std::fs::read(dir.join(format!("{name}.md"))).unwrap();
+            let changes: Vec<Change> =
+                serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            for change in changes {
+                let (bytes, _) = apply(&source, &change.patches)
+                    .unwrap_or_else(|error| panic!("{name}: {}: {error:?}", change.name));
+                assert_eq!(
+                    String::from_utf8(bytes).unwrap(),
+                    change.after,
+                    "{name}: {}",
+                    change.name
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked >= 6, "the fixtures were found ({checked} changes)");
+    }
+
     #[test]
     fn only_the_patched_line_changes_in_every_encoding_and_ending_mix() {
         let source = "# Tasks\r\n- [ ] one <!-- id: a -->\n- [ ] two\rtail é";
         let expected = "# Tasks\r\n- [x] one <!-- id: a -->\n- [ ] two\rtail é";
         let p = [patch(
-            1,
+            2,
             Some("a"),
             "- [ ] one <!-- id: a -->",
             "- [x] one <!-- id: a -->",
@@ -236,14 +272,14 @@ mod tests {
             assert_eq!(text, expected);
         }
         // A final terminator is kept exactly as it was.
-        let (bytes, _) = apply(b"- [ ] x\r\n", &[patch(0, None, "- [ ] x", "- [x] x")]).unwrap();
+        let (bytes, _) = apply(b"- [ ] x\r\n", &[patch(1, None, "- [ ] x", "- [x] x")]).unwrap();
         assert_eq!(bytes, b"- [x] x\r\n");
     }
 
     #[test]
     fn only_the_remembered_line_is_placed_natively() {
         let twice = b"- [ ] t\n- [ ] t\n";
-        let (bytes, _) = apply(twice, &[patch(1, None, "- [ ] t", "- [x] t")]).unwrap();
+        let (bytes, _) = apply(twice, &[patch(2, None, "- [ ] t", "- [x] t")]).unwrap();
         assert_eq!(bytes, b"- [ ] t\n- [x] t\n");
         // Moved (lines inserted above), renamed, or a twin left elsewhere: the parser
         // re-derives with syntax knowledge (code blocks, control kinds), never a guess.
@@ -252,7 +288,7 @@ mod tests {
             apply(
                 moved,
                 &[patch(
-                    0,
+                    1,
                     Some("a"),
                     "- [ ] a <!-- id: a -->",
                     "- [x] a <!-- id: a -->"
@@ -264,12 +300,12 @@ mod tests {
         assert_eq!(
             apply(
                 ticked_elsewhere,
-                &[patch(0, None, "- [ ] review", "- [x] review")]
+                &[patch(1, None, "- [ ] review", "- [x] review")]
             ),
             Err(PatchError::Unplaced(0))
         );
         assert_eq!(
-            apply(twice, &[patch(0, None, "- [ ] t", "a\0b")]),
+            apply(twice, &[patch(1, None, "- [ ] t", "a\0b")]),
             Err(PatchError::Invalid(0))
         );
     }
@@ -279,11 +315,11 @@ mod tests {
         let raw = b"- [ ] same\n- [ ] same\n";
         // Remembered line changed, no id, and the text appears twice: ambiguous.
         assert_eq!(
-            apply(raw, &[patch(5, None, "- [ ] same", "- [x] same")]),
+            apply(raw, &[patch(6, None, "- [ ] same", "- [x] same")]),
             Err(PatchError::Unplaced(0))
         );
         assert_eq!(
-            apply(raw, &[patch(0, None, "- [ ] gone", "- [x] gone")]),
+            apply(raw, &[patch(1, None, "- [ ] gone", "- [x] gone")]),
             Err(PatchError::Unplaced(0))
         );
         // Two lines carrying the same id are ignored for placement.
@@ -292,7 +328,7 @@ mod tests {
             apply(
                 dup,
                 &[patch(
-                    9,
+                    10,
                     Some("x"),
                     "- [ ] c <!-- id: x -->",
                     "- [x] c <!-- id: x -->"
@@ -301,15 +337,15 @@ mod tests {
             Err(PatchError::Unplaced(0))
         );
         assert_eq!(
-            apply(raw, &[patch(0, None, "- [ ] same", "line\nbreak")]),
+            apply(raw, &[patch(1, None, "- [ ] same", "line\nbreak")]),
             Err(PatchError::Invalid(0))
         );
         assert_eq!(
-            apply(&[0xff, 0xfe, 0x41], &[patch(0, None, "A", "B")]),
+            apply(&[0xff, 0xfe, 0x41], &[patch(1, None, "A", "B")]),
             Err(PatchError::Encoding)
         );
         assert_eq!(
-            apply(&[0xc3, 0x28], &[patch(0, None, "x", "y")]),
+            apply(&[0xc3, 0x28], &[patch(1, None, "x", "y")]),
             Err(PatchError::Encoding)
         );
     }
@@ -319,13 +355,13 @@ mod tests {
         let raw = b"( ) red <!-- id: r -->\n(x) green <!-- id: g -->\n( ) blue\n";
         let choose = [
             patch(
-                0,
+                1,
                 Some("r"),
                 "( ) red <!-- id: r -->",
                 "(x) red <!-- id: r -->",
             ),
             patch(
-                1,
+                2,
                 Some("g"),
                 "(x) green <!-- id: g -->",
                 "( ) green <!-- id: g -->",
@@ -338,7 +374,7 @@ mod tests {
         );
         let broken = [
             choose[0].clone(),
-            patch(2, None, "( ) purple", "(x) purple"),
+            patch(3, None, "( ) purple", "(x) purple"),
         ];
         assert_eq!(apply(raw, &broken), Err(PatchError::Unplaced(1)));
         // Two patches may not claim the same line.
