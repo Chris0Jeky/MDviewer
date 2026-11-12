@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "mark",
+    "line": 3,
+    "id": "first",
+    "state": " "
+  },
+  {
+    "kind": "mark",
+    "line": 4,
+    "state": "x"
+  },
+  {
+    "kind": "choice",
+    "line": 5,
+    "state": " ",
+    "group": 0
+  },
+  {
+    "kind": "choice",
+    "line": 6,
+    "state": " ",
+    "group": 0
+  }
+]

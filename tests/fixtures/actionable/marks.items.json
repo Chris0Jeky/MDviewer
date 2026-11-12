@@ -1,0 +1,34 @@
+[
+  {
+    "kind": "mark",
+    "line": 9,
+    "id": "draft",
+    "state": " "
+  },
+  {
+    "kind": "mark",
+    "line": 10,
+    "id": "review",
+    "state": "/"
+  },
+  {
+    "kind": "mark",
+    "line": 11,
+    "state": "x"
+  },
+  {
+    "kind": "mark",
+    "line": 12,
+    "state": "-"
+  },
+  {
+    "kind": "mark",
+    "line": 13,
+    "state": "!"
+  },
+  {
+    "kind": "mark",
+    "line": 14,
+    "state": "?"
+  }
+]
