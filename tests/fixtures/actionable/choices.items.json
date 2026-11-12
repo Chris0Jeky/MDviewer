@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "choice",
+    "line": 3,
+    "id": "small",
+    "state": " ",
+    "group": 0
+  },
+  {
+    "kind": "choice",
+    "line": 4,
+    "id": "medium",
+    "state": "x",
+    "group": 0
+  },
+  {
+    "kind": "choice",
+    "line": 5,
+    "id": "large",
+    "state": " ",
+    "group": 0
+  },
+  {
+    "kind": "choice",
+    "line": 9,
+    "state": " ",
+    "group": 1
+  },
+  {
+    "kind": "choice",
+    "line": 10,
+    "state": " ",
+    "group": 1
+  }
+]

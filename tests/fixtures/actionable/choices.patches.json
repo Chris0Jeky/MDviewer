@@ -1,0 +1,61 @@
+[
+  {
+    "name": "select moves the group's x atomically",
+    "target": {
+      "id": "large"
+    },
+    "action": {
+      "kind": "choice"
+    },
+    "patches": [
+      {
+        "line": 4,
+        "id": "medium",
+        "expect": "- (x) Medium <!-- id: medium -->",
+        "replace": "- ( ) Medium <!-- id: medium -->"
+      },
+      {
+        "line": 5,
+        "id": "large",
+        "expect": "- ( ) Large <!-- id: large -->",
+        "replace": "- (x) Large <!-- id: large -->"
+      }
+    ],
+    "after": "# Pick a plan\n\n- ( ) Small <!-- id: small -->\n- ( ) Medium <!-- id: medium -->\n- (x) Large <!-- id: large -->\n\nDelivery:\n\n1. ( ) Ship now\n2. ( ) Ship later\n"
+  },
+  {
+    "name": "selecting the chosen item clears it",
+    "target": {
+      "id": "medium"
+    },
+    "action": {
+      "kind": "choice"
+    },
+    "patches": [
+      {
+        "line": 4,
+        "id": "medium",
+        "expect": "- (x) Medium <!-- id: medium -->",
+        "replace": "- ( ) Medium <!-- id: medium -->"
+      }
+    ],
+    "after": "# Pick a plan\n\n- ( ) Small <!-- id: small -->\n- ( ) Medium <!-- id: medium -->\n- ( ) Large <!-- id: large -->\n\nDelivery:\n\n1. ( ) Ship now\n2. ( ) Ship later\n"
+  },
+  {
+    "name": "groups are per list",
+    "target": {
+      "line": 10
+    },
+    "action": {
+      "kind": "choice"
+    },
+    "patches": [
+      {
+        "line": 10,
+        "expect": "2. ( ) Ship later",
+        "replace": "2. (x) Ship later"
+      }
+    ],
+    "after": "# Pick a plan\n\n- ( ) Small <!-- id: small -->\n- (x) Medium <!-- id: medium -->\n- ( ) Large <!-- id: large -->\n\nDelivery:\n\n1. ( ) Ship now\n2. (x) Ship later\n"
+  }
+]

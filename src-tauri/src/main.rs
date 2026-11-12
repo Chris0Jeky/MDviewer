@@ -5,6 +5,7 @@ mod commands;
 mod export_policy;
 mod file_policy;
 mod library;
+mod linepatch;
 mod registry;
 mod replace;
 mod watch;
@@ -93,6 +94,7 @@ fn main() {
             commands::open::take_pending_files,
             commands::external::open_external,
             commands::export::save_export,
+            commands::patch::patch_document,
             commands::save::save_document,
             commands::save::save_document_as,
             commands::save::release_document,

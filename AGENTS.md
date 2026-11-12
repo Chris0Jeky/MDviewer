@@ -121,5 +121,6 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
   before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
   image data URLs are allowed. A relative image `src` is kept only as an inert `data-local-src`;
-  the Windows reader loads it through the native `read_asset` (the document's own folder, local
+  the Windows reader loads it through the native `read_asset` (resolved relative to the
+  document's folder, may climb with `../` but never to a drive root, UNC or device path; local
   image types, 20 MB) as a blob URL. Mermaid SVG output is sanitized again after rendering.

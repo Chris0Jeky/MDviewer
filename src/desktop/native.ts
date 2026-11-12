@@ -15,6 +15,14 @@ export interface OpenBatch {
   canceled: boolean;
 }
 
+/** One actionable-Markdown line patch (docs/design/ACTIONABLE_MARKDOWN.md, "Write-back"). */
+export interface LinePatch { line: number; id?: string | null; expect: string; replace: string }
+/** A2 result. `unplaced`: nothing written; re-derive patch `index` from `text` and retry once. */
+export type PatchResult =
+  | { outcome: "saved"; generation: number; text: string }
+  | { outcome: "unplaced"; index: number; text: string }
+  | { outcome: "failed"; code: string };
+
 /** A native Save / Save As completion (src-tauri/src/commands/save.rs). */
 export type SaveResult =
   | {
@@ -69,6 +77,9 @@ export const native = {
       headers: { "x-mdviewer-filename": encodeURIComponent(filename) },
     });
   },
+  /** Apply line patches to the bound document `token` as one conflict-checked change. */
+  patchDocument: (token: string, patches: LinePatch[]): Promise<PatchResult> =>
+    invoke("patch_document", { token, patches }),
   /** Save in place through the document's capability; never sends a path. */
   saveDocument: (token: string, generation: number, text: string, acceptLf: boolean): Promise<SaveResult> =>
     invoke("save_document", saveBody(text), { headers: {

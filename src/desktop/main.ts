@@ -12,6 +12,7 @@ import { DesktopDocuments, type SaveTarget } from "./documents";
 import { installShortcuts, registerCommand } from "./commands";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
+import { mountSelectionCopy } from "./reader/copy";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
@@ -55,6 +56,8 @@ let renderedReaderId: string | null = null;
 const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
   shell.querySelector<HTMLElement>(".reader-footer")!);
+
+mountSelectionCopy(content);
 
 const theme = element<HTMLSelectElement>("reader-theme");
 theme.value = settings.screenTheme;
@@ -183,18 +186,33 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   }
   content.setAttribute("aria-busy", "true");
   content.replaceChildren(); // A failed new document must not display the previous file's contents.
+  // Reset while the reader is empty (cheap); the first paint then restores a saved offset only.
+  const behavior = scroll.style.scrollBehavior;
+  scroll.style.scrollBehavior = "auto";
+  scroll.scrollTop = 0;
+  scroll.scrollLeft = 0;
+  scroll.style.scrollBehavior = behavior;
   status.textContent = `Opening ${doc.name}…`;
   // Mermaid's singleton is not re-entrant; serialize and skip obsolete renders.
   renderChain = renderChain.catch(() => undefined).then(async () => {
     if (current !== renderGeneration) return;
-    try {
-      const result = await renderReaderDocument(doc.text, settings);
-      if (current !== renderGeneration) return;
+    const position = docs.reader.positions.get(doc.id)?.reader;
+    const restore = (): void => {
+      const previousBehavior = scroll.style.scrollBehavior;
+      scroll.style.scrollBehavior = "auto";
+      scroll.scrollTop = position?.scrollTop ?? 0;
+      scroll.scrollLeft = position?.scrollLeft ?? 0;
+      scroll.style.scrollBehavior = previousBehavior;
+    };
+    let restoredTop = -1;
+    // Text first: the document is readable, navigable and scrollable from this point;
+    // code and diagrams upgrade in place afterwards.
+    const show = (from: HTMLElement): void => {
       releaseImages();
-      content.replaceChildren(...result.document.childNodes);
+      content.replaceChildren(...from.childNodes);
+      // Relative images load natively into blob URLs (S6); upgrades later happen in place.
       if (native.available && doc.binding) void loadLocalImages(content, doc.binding.token, current);
       content.setAttribute("data-code-theme", settings.codeTheme);
-      content.setAttribute("aria-busy", "false");
       for (const heading of content.querySelectorAll<HTMLElement>("h1[id],h2[id],h3[id]")) {
         const link = document.createElement("a");
         link.href = `#${encodeURIComponent(heading.id)}`;
@@ -204,14 +222,22 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       }
       outline.hidden = outline.childElementCount < 2;
       // The outline changes text wrapping and the maximum scroll offset. Reveal
-      // it first so saved offsets clamp against the final reader geometry.
-      const position = docs.reader.positions.get(doc.id)?.reader;
-      const previousBehavior = scroll.style.scrollBehavior;
-      scroll.style.scrollBehavior = "auto";
-      scroll.scrollTop = position?.scrollTop ?? 0;
-      scroll.scrollLeft = position?.scrollLeft ?? 0;
-      scroll.style.scrollBehavior = previousBehavior;
+      // it first so saved offsets clamp against the reader geometry.
+      // A first open needs no reset (the emptied reader is at 0) and no forced layout.
+      if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
+    };
+    try {
+      const result = await renderReaderDocument(doc.text, settings, doc.name, first => {
+        if (current !== renderGeneration) return null;
+        show(first);
+        return content;
+      });
+      if (current !== renderGeneration) return;
+      if (result.document !== content) show(result.document); // A renderer that did not paint early.
+      // Diagrams change heights: re-clamp a saved offset unless the reader has scrolled since.
+      else if (position && scroll.scrollTop === restoredTop) restore();
+      content.setAttribute("aria-busy", "false");
       status.textContent = `${doc.name} · ${new TextEncoder().encode(doc.text).length.toLocaleString()} bytes · Reading view`;
       // A new open/action may have reported a newer failure while this render ran.
       if (result.warnings.length && currentNotice === noticeGeneration) {

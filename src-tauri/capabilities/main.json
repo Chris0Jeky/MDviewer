@@ -13,6 +13,7 @@
     "allow-take-pending-files",
     "allow-open-external",
     "allow-save-export",
+    "allow-patch-document",
     "allow-save-document",
     "allow-save-document-as",
     "allow-release-document",
