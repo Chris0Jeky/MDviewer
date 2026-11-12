@@ -585,6 +585,23 @@ policy tests and still requires actual rendered headings, single-instance routin
 owned native Save dialogs and exact saved Markdown/PDF bytes. See
 `NATIVE_SMOKE_BOOTSTRAP.md`; these are harness limits, not app performance claims.
 
+Reader text first (`src/desktop/render.ts`). `renderReaderDocument(text, settings,
+fileName?, paint?)` parses and renders synchronously with fences as plain-text
+placeholders (`pre.shiki.reader-pending` holding Shiki's own `span.line` structure, so
+heights match within a pixel), hands that document to `paint` and marks
+`mdv:reader-text`. It then loads the reader highlighter, replaces each placeholder still
+in the live root with its sanitized highlighted fence, runs `renderAllMermaid` on the live
+root and marks `mdv:reader-rich`. All of this stays inside main's serialized
+`renderChain`, so Mermaid is never re-entered and an obsolete render's `paint` returns
+null. A highlighter failure leaves readable plain code and a warning. Without `paint`
+the returned document is complete. `src/desktop/reader/patch.ts` `patchDocument(live,
+next)` is the `paint` step for re-rendering an open document: top-level blocks whose
+source text is unchanged keep their live node (highlighted code, figures) with line
+ranges moved; only the others are replaced and upgraded. Live reload (S1c) and Edit (S5)
+are its callers. Coverage: `tests/desktop-e2e/text-first.spec.ts` (first text under
+100 ms for the sample in the production build; code heights within 1 px),
+`tests/reader-patch.test.ts`.
+
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
 clamped, trailing blank lines dropped) and stamps the rules that print their own tag

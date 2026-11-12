@@ -12,6 +12,15 @@ const sources = new WeakMap<Element, ReaderSource>();
 let toast: HTMLElement | null = null;
 let toastTimer = 0;
 
+/** The source of the document whose blocks are children of `root`. */
+export function sourceOf(root: Element): ReaderSource | undefined {
+  return root.firstElementChild ? sources.get(root.firstElementChild) : undefined;
+}
+
+export function setSource(root: Element, source: ReaderSource): void {
+  if (root.firstElementChild) sources.set(root.firstElementChild, source);
+}
+
 function liveRegion(): HTMLElement {
   if (!toast) {
     toast = document.createElement("div");
@@ -102,15 +111,17 @@ export function decorateCopy(root: HTMLElement, source: ReaderSource, fileName: 
       iconButton("reader-heading-tool", "Copy link to section", "link", () =>
         copy(`${fileName}#${heading.id}`, "Copied link to section")),
       iconButton("reader-heading-tool", "Copy section as Markdown", "copy", async () => {
-        const range = sectionRange(heading, source.lines.length);
+        // A patched document keeps this heading but has a newer source.
+        const current = (heading.parentElement && sourceOf(heading.parentElement)) ?? source;
+        const range = sectionRange(heading, current.lines.length);
         if (!range) return false;
-        const text = sliceSource(source, ...range);
+        const text = sliceSource(current, ...range);
         return copy(text, `Copied section (${lineCount(text)})`);
       }),
     );
     heading.append(tools);
   }
-  if (root.firstElementChild) sources.set(root.firstElementChild, source);
+  setSource(root, source);
 }
 
 /** Ctrl/Cmd+Shift+C copies the Markdown source of every block the selection touches. */
@@ -119,8 +130,7 @@ export function mountSelectionCopy(root: HTMLElement): void {
   window.addEventListener("keydown", event => {
     if (event.defaultPrevented || event.isComposing) return;
     if (event.key.toLowerCase() !== "c" || !event.shiftKey || event.altKey || event.ctrlKey === event.metaKey) return;
-    const first = root.firstElementChild;
-    const source = first ? sources.get(first) : undefined;
+    const source = sourceOf(root);
     const range = source && selectionRange(root, window.getSelection());
     if (!source || !range) return;
     event.preventDefault();
