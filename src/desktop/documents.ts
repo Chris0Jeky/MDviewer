@@ -102,9 +102,11 @@ export class DesktopDocuments {
     if (target.owner === "workspace") {
       const baseline = this.baselines.get(target.id);
       const doc = app?.store.openDocs.find(open => open.id === target.id);
-      if (!app || !doc || !baseline) return this.discard(result.token);
+      // A still-open document without a baseline (Undo Close, typed into an empty
+      // workspace) adopts the saved file like any other.
+      if (!app || !doc) return this.discard(result.token);
       this.baselines.set(doc.id, {
-        name: result.name, text: captured, dirty: false, ...(baseline.key ? { key: baseline.key } : {}), ...(binding ? { binding } : {}),
+        name: result.name, text: captured, dirty: false, key: baseline?.key ?? nextDocumentKey(), ...(binding ? { binding } : {}),
       });
       app.store.rename(doc.id, result.name);
       return doc.text === captured ? "saved" : "saved-newer-edits";

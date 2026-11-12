@@ -109,7 +109,7 @@ jobs:
       # On a cache hit the browser binary is already present, so this only installs OS deps;
       # on a miss it downloads Chromium too. Either way OS libs are ensured via --with-deps.
       - name: Install Playwright Chromium (+ OS deps)
-        run: npx playwright install --with-deps chromium
+        run: bash scripts/ci/install-playwright.sh chromium
       # Build the real artifact, then run e2e against `vite preview` so the no-slice guarantee
       # and both export paths are validated on the shipped rolldown bundle, not just dev mode.
       - name: Build
