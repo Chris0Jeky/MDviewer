@@ -63,13 +63,19 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
     used.add(key);
     return key;
   });
+  const items = rows.map(row => ({
+    kind: "object" as const, line: row[0]!.line, column: row[0]!.column,
+    entries: row.map((value, index): { key: string; value: JsonValue } => ({ key: keys[index]!, value })),
+  }));
+  // A header column no row reaches would vanish from the table. Name it once, as a blank
+  // cell on the first record (not on every row: a ragged file stays linear in its size).
+  const reached = rows.reduce((n, row) => Math.max(n, row.length), 0);
+  if (items[0] && reached < keys.length) {
+    const { line, column } = items[0];
+    for (const key of keys.slice(reached)) items[0].entries.push({ key, value: { line, column, kind: "literal", raw: "" } });
+  }
   return {
-    value: { kind: "array", line: 1, column: 1, items: rows.map(row => ({
-      kind: "object", line: row[0]!.line, column: row[0]!.column,
-      // Every header column appears in every record: a cell a short row lacks is shown blank (not as an empty string),
-      // so a column no row fills still keeps its name.
-      entries: keys.map((key, index) => ({ key, value: row[index] ?? { line: row[0]!.line, column: row[0]!.column, kind: "literal" as const, raw: "" } })),
-    })) },
+    value: { kind: "array", line: 1, column: 1, items },
     columns, keys, problems,
   };
 }

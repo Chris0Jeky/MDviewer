@@ -185,16 +185,18 @@ describe("CSV and TSV fields", () => {
       { key: "note", value: { value: 'Says "hello"' } },
       { key: "column 3", value: { value: "001" } },
       { key: "name (2)", value: { value: "Al" } },
-      // A cell the row lacks is a blank literal, not an empty string.
-      { key: "column 5", value: { kind: "literal", raw: "" } },
     ] });
     expect(parsed.value.items[1]).toMatchObject({ entries: [
       { value: { value: "Bo" } }, { value: { value: "first\nsecond" } },
       { value: { value: "2024-01-02" } }, { value: { value: "B" } }, { key: "column 5", value: { value: "extra" } },
     ] });
-    // Every record carries every column, so a column no row fills keeps its name.
-    const short = parsed.value.items[2]?.kind === "object" ? parsed.value.items[2].entries : [];
-    expect(short.map(e => e.value.kind)).toEqual(["string", "literal", "literal", "literal", "literal"]);
+    // Records stay ragged (one row reaches every column), so nothing is padded.
+    expect(parsed.value.items[2]?.kind === "object" && parsed.value.items[2].entries).toHaveLength(1);
+    // A header column no row reaches is named once, as a blank cell on the first record.
+    const padded = parseCsv("a,b,c\n1\n2,3\n").value.items[0];
+    expect(padded).toMatchObject({ entries: [{ key: "a" }, { key: "c", value: { kind: "literal", raw: "" } }] });
+    const second = parseCsv("a,b,c\n1\n2,3\n").value.items[1];
+    expect(second?.kind === "object" ? second.entries : []).toHaveLength(2);
   });
 
   it.each(["\r\n", "\n", "\r"])("accepts %j row ends and no phantom row after a final terminator", ending => {
@@ -276,4 +278,14 @@ describe("Codex on #281", () => {
     const md = toReadable("a,b\n1\n", "csv").markdown;
     expect(md).toMatch(/^\| a \| b \|$/m);
   });
+});
+
+describe("ragged CSV stays linear (verification of #281)", () => {
+  it("does not pad every row to the widest row", () => {
+    const text = "a\n" + "1\n".repeat(200_000) + ",".repeat(5_000) + "\n";
+    const started = performance.now();
+    const view = toReadable(text, "csv", { maxValues: 50 });
+    expect(view.markdown).toContain("5,001 columns");
+    expect(performance.now() - started).toBeLessThan(15_000);
+  }, 60_000);
 });
