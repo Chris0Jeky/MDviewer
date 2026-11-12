@@ -1,0 +1,2 @@
+/* The first frame, before main.ts applies the saved theme (data-app-theme), follows the system theme. */
+@media (prefers-color-scheme: dark) { :root:not([data-app-theme]) { --reader-bg: #181c23; --reader-fg: #e1e6ee; } }
