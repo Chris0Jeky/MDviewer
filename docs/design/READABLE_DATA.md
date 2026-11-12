@@ -120,6 +120,7 @@ content (the common chat-message shape), or agent transcript records that wrap s
 | Boundary | Change |
 | --- | --- |
 | Native open (`file_policy.rs`) | Accepts the listed extensions; same local-path, size and encoding rules |
+| Relative links (`open_relative`) | Stay Markdown-only, enforced in `open_relative` (not left to the open policy): a link would open and bind its target with no dialog, so it never opens a data or text file |
 | Save and Save As | Write the raw text through the same conflict-safe replace; the destination keeps a data extension |
 | Web build | File picker and drop accept the listed extensions |
 | Large-document confirmation | For a data document, also counts the readable view's size at open |
@@ -140,6 +141,7 @@ One module, `src/data/`, with no DOM and no dependencies in phase 1:
 ```ts
 export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv" | "text";
 export function dataKindOf(fileName: string): DataKind | null;
+export function prepare(kind: DataKind): Promise<void>;
 export function toReadable(text: string, kind: DataKind, options?: ReadableOptions): Readable;
 export interface Readable {
   markdown: string;      // the readable view
@@ -149,6 +151,7 @@ export interface Readable {
 }
 ```
 
+Call `await prepare(kind)` before conversion: YAML is loaded dynamically and cached; other kinds resolve immediately.
 The reader and the workspace each call it at the one point where document text becomes render
 text. The document keeps its raw text; only the render text is derived.
 

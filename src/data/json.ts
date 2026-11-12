@@ -6,7 +6,7 @@ export type JsonValue = Position & (
   | { kind: "array"; items: JsonValue[] }
   | { kind: "string"; value: string }
   | { kind: "number"; raw: string }
-  | { kind: "literal"; raw: "true" | "false" | "null" }
+  | { kind: "literal"; raw: string }
 );
 
 export type ParseResult = { value: JsonValue; problem?: never } | { value?: never; problem: Problem };

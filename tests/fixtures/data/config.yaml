@@ -1,0 +1,22 @@
+enabled: true
+server:
+  host: localhost
+  ports: [8080, 8443]
+defaults: &defaults
+  retries: +12
+  note: "invented | text"
+copy: *defaults
+hex: 0x1F
+separated: 1_000
+decimal: 1.0
+infinity: .inf
+answer: yes
+missing: ~
+null: null
+empty:
+lines: |
+  first line
+  second line
+folded: >-
+  one
+  paragraph
