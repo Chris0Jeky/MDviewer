@@ -319,6 +319,56 @@ pub fn scan(root: &Path) -> Scan {
     scan
 }
 
+/// Templates fill a new note once (A4), so a smaller cap than documents.
+pub const MAX_TEMPLATE_BYTES: u64 = 1_000_000;
+
+/// The pinned project whose `templates/` folder directly holds `path`, if it is a Markdown file.
+fn template_project<'a>(projects: &'a [Stamped], path: &Path) -> Option<&'a Path> {
+    let folder = path.parent()?;
+    let named = folder
+        .file_name()?
+        .to_str()?
+        .eq_ignore_ascii_case("templates");
+    let root = folder.parent()?;
+    (named && is_markdown(path))
+        .then(|| {
+            projects
+                .iter()
+                .map(|p| p.path.as_path())
+                .find(|p| same(p, root))
+        })
+        .flatten()
+}
+
+/// Read a pinned project's template (name, text) with no side effect: no binding, watcher,
+/// Recent entry or seen mark, and nothing written. Only a Markdown file directly inside a
+/// pinned project's `templates/` folder qualifies; neither that folder nor the file may be a
+/// junction, symlink or other reparse point; the usual local-path and encoding rules apply,
+/// with a 1 MB cap (`MAX_TEMPLATE_BYTES`).
+pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, String), String> {
+    template_project(projects, path).ok_or("This is not a template of a pinned project.")?;
+    for part in [path.parent().unwrap_or(path), path] {
+        match fs::symlink_metadata(part) {
+            // The template's own cap, stated as such (the reader's message names 25 MB).
+            Ok(metadata) if metadata.is_file() && metadata.len() > MAX_TEMPLATE_BYTES => {
+                return Err("This template is larger than 1 MB.".into());
+            }
+            Ok(metadata) if !is_reparse(&metadata) => {}
+            Ok(_) => {
+                return Err("This template goes through a folder shortcut and is not read.".into())
+            }
+            Err(_) => return Err("This template could not be read.".into()),
+        }
+    }
+    let document = crate::file_policy::read_markdown(
+        path,
+        MAX_TEMPLATE_BYTES,
+        crate::registry::capture_revision,
+    )
+    .map_err(|error| error.message)?;
+    Ok((document.name, document.text))
+}
+
 /// Opaque, stable-per-process ids for library paths. The webview only ever
 /// sends these back; it never sends a path.
 #[derive(Default)]
@@ -565,5 +615,83 @@ mod tests {
             a,
             "ids are never reused after Clear"
         );
+    }
+
+    fn pinned(root: &Path) -> Vec<Stamped> {
+        vec![Stamped {
+            path: root.to_path_buf(),
+            at: 1,
+        }]
+    }
+
+    #[test]
+    fn reads_a_pinned_projects_template_and_nothing_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir_all(root.join("templates").join("sub")).unwrap();
+        fs::write(
+            root.join("templates").join("Run card.md"),
+            "# {{title}}\r\n- [ ] step\r\n",
+        )
+        .unwrap();
+        let (name, text) =
+            read_template(&pinned(root), &root.join("templates").join("Run card.md")).unwrap();
+        assert_eq!(
+            (name.as_str(), text.as_str()),
+            ("Run card.md", "# {{title}}\r\n- [ ] step\r\n")
+        );
+        // The folder name matches case-insensitively, like Windows.
+        let upper = tempfile::tempdir().unwrap();
+        fs::create_dir_all(upper.path().join("TEMPLATES")).unwrap();
+        fs::write(upper.path().join("TEMPLATES").join("t.MD"), "x").unwrap();
+        assert!(read_template(
+            &pinned(upper.path()),
+            &upper.path().join("TEMPLATES").join("t.MD")
+        )
+        .is_ok());
+        fs::create_dir_all(root.join("other").join("TEMPLATES")).unwrap();
+        // Outside templates/, nested below it, not Markdown, or in an unpinned project: refused.
+        fs::write(root.join("note.md"), "x").unwrap();
+        fs::write(root.join("templates").join("sub").join("deep.md"), "x").unwrap();
+        fs::write(root.join("templates").join("data.json"), "{}").unwrap();
+        fs::write(root.join("other").join("TEMPLATES").join("nested.md"), "x").unwrap();
+        for path in [
+            root.join("note.md"),
+            root.join("templates").join("sub").join("deep.md"),
+            root.join("templates").join("data.json"),
+            root.join("other").join("TEMPLATES").join("nested.md"),
+        ] {
+            assert!(read_template(&pinned(root), &path).is_err(), "{path:?}");
+        }
+        assert!(read_template(&[], &root.join("templates").join("Run card.md")).is_err());
+        // Over the 1 MB cap.
+        fs::write(
+            root.join("templates").join("big.md"),
+            vec![b'a'; MAX_TEMPLATE_BYTES as usize + 1],
+        )
+        .unwrap();
+        assert_eq!(
+            read_template(&pinned(root), &root.join("templates").join("big.md")).unwrap_err(),
+            "This template is larger than 1 MB."
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn never_reads_a_template_through_a_junction() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("secret.md"), "x").unwrap();
+        let link = dir.path().join("templates");
+        let status = std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(&link)
+            .arg(outside.path())
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "{status:?}");
+        let error = read_template(&pinned(dir.path()), &link.join("secret.md")).unwrap_err();
+        assert!(error.contains("folder shortcut"), "{error}");
+        fs::remove_dir(&link).unwrap(); // Removes the junction only.
     }
 }

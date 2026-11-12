@@ -760,6 +760,18 @@ so the web and desktop pickers and drops accept them; the large-document confirm
 counts the readable view. Tests: `tests/render-text.test.ts`, `tests/input.test.ts`,
 `tests/markdown-download.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`.
 
+Templates (A4; `docs/design/ACTIONABLE_MARKDOWN.md` §7). `src/desktop/reader/template.ts` is pure:
+`templateFields` lists each distinct `{{name}}` once (not `date`, `time`, `title`), `fillTemplate`
+fills them in one pass (a typed value is inserted as plain text and is never read as a
+placeholder; a field left empty keeps its `{{name}}` as written). `src/desktop/shell/templates.ts`
+(lazy) `chooseTemplate(source)` lists Markdown files directly inside a pinned project's
+`templates/` folder (`isTemplatePath`, from `library_scan`), reads the chosen one through the
+host's read-only template read, asks the short form, and the entry opens the result as an
+unsaved untitled note in Edit (Save goes through Save As). The command `document.newFromTemplate`
+("New from template…") registers only when `native.library.readTemplate` exists (the Core lane's
+`library_read_template`: no Recent entry, seen mark or binding). Tests: `tests/template.test.ts`,
+`tests/desktop-templates.test.ts`.
+
 Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,
 the bar's Edit toggle with `aria-pressed`) mounts the workspace's own `mountEditor` (Find,
 Format, highlighted backdrop, paste gates; `src/ui/Editor.ts` unchanged) into `#reader-edit`

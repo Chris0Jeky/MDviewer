@@ -127,3 +127,20 @@
 .shell-library-project > .shell-library-item > .shell-library-toggle { flex: 1 1 auto; min-width: 0; }
 .shell-library-item > .shell-library-mini { margin-left: 4px; }
 .shell-library-subtoggle { font-weight: 400; color: var(--reader-muted); font-size: 12px; }
+/* New from template (A4): the palette's frame with a list, then a short form. */
+.shell-template { padding: 16px; gap: 10px; }
+.shell-template-heading { margin: 0; font-size: 15px; font-weight: 600; }
+.shell-template-list { list-style: none; margin: 0; padding: 0; overflow: auto; }
+.desktop-reader .shell-template-pick { display: flex; width: 100%; gap: 10px; align-items: baseline; padding: 6px 10px; border: 0; border-radius: 6px; background: none; text-align: left; color: inherit; }
+.desktop-reader .shell-template-pick:hover, .desktop-reader .shell-template-pick:focus-visible { background: var(--reader-hover); }
+.shell-template-project { color: var(--reader-muted); font-size: 12px; }
+.shell-template-form { display: grid; gap: 10px; }
+.shell-template-field { display: grid; gap: 4px; }
+.shell-template-label { font-size: 12px; font-weight: 600; color: var(--reader-muted); }
+.shell-template-input { padding: 6px 8px; border: 1px solid var(--reader-line); border-radius: 6px; background: var(--reader-paper); color: var(--reader-fg); font: inherit; }
+.shell-template-input:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 0; }
+.shell-template-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.desktop-reader :is(.shell-template-create, .shell-template-cancel) { padding: 5px 14px; border: 1px solid var(--reader-line); border-radius: 6px; background: var(--reader-paper); color: var(--reader-fg); }
+.desktop-reader .shell-template-create { background: var(--reader-accent); border-color: var(--reader-accent); color: var(--reader-paper); }
+.shell-template-note { margin: 0; color: var(--reader-muted); font-size: 13px; }
+.shell-template-note:empty { display: none; }
