@@ -66,7 +66,8 @@ function openMenu(anchor: HTMLElement, title: string, items: Array<{ label: stri
     else if (event.key === "Home") move(0);
     else if (event.key === "End") move(entries.length - 1);
     else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); close(); }
-    else if (/^[1-9]$/.test(event.key) && entries[Number(event.key) - 1]) { event.preventDefault(); entries[Number(event.key) - 1]!.click(); }
+    // Pick with the key press itself: a synthetic click is untrusted and would not write.
+    else if (/^[1-9]$/.test(event.key) && items[Number(event.key) - 1]) { event.preventDefault(); close(); items[Number(event.key) - 1]!.pick(event); }
   });
   const box = anchor.getBoundingClientRect();
   menu.style.left = `${Math.round(box.left + window.scrollX)}px`;
@@ -127,7 +128,8 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
       button.addEventListener("keydown", event => {
         if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) return;
         event.preventDefault();
-        const group = [...root.querySelectorAll<HTMLButtonElement>(`.am-choice[data-group="${control.group}"]`)];
+        // `root` is a staging element whose children move into the page, so query the live document.
+        const group = [...(button.closest("#reader-document") ?? button.ownerDocument).querySelectorAll<HTMLButtonElement>(`.am-choice[data-group="${control.group}"]`)];
         const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
         group[(group.indexOf(button) + step + group.length) % group.length]?.focus();
       });
@@ -205,7 +207,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
     chip.addEventListener("contextmenu", event => { event.preventDefault(); if (event.isTrusted) menu(); });
     chip.addEventListener("keydown", event => {
       if (wantsMenu(event)) { event.preventDefault(); if (event.isTrusted) menu(); }
-      else if ((event.key === "Enter" || event.key === " ") && event.isTrusted) { event.preventDefault(); handler?.(control, { kind: "chip", value: next }); }
+      else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); act(event, control, { kind: "chip", value: next }); }
     });
   }
 }
