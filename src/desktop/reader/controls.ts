@@ -12,6 +12,8 @@ import {
 export type ControlHandler = (control: Control, action: ControlAction) => void;
 let handler: ControlHandler | null = null;
 export function setControlHandler(next: ControlHandler | null): void { handler = next; }
+/** The registered handler (tests drive write-back through it without a real gesture). */
+export function controlHandler(): ControlHandler | null { return handler; }
 
 function act(event: Event, control: Control, action: ControlAction): void {
   if (!event.isTrusted) return; // Only a real click or key press may write.
