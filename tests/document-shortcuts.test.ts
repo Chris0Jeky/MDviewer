@@ -119,3 +119,25 @@ describe("local document shortcuts", () => {
     expect(t.newDocument!.hasAttribute("aria-keyshortcuts")).toBe(false);
   });
 });
+
+describe("host-owned Save", () => {
+  it("leaves Ctrl+S to the host and never labels the copy button with it", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<div class="workspace-actions"><button data-document-command="new">New</button>
+      <button data-document-command="open">Open</button></div>
+      <div class="workspace-session"><span class="workspace-privacy">Memory only</span>
+      <button data-document-command="save" title="Save a copy">Save Markdown</button></div>`;
+    document.body.append(root);
+    const copy = root.querySelector<HTMLButtonElement>('[data-document-command="save"]')!;
+    let copies = 0;
+    copy.addEventListener("click", () => { copies++; });
+    cleanups.push(mountDocumentShortcuts(root, { ownedSave: true }));
+    const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    expect(copies).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+    expect(copy.getAttribute("aria-keyshortcuts")).toBeNull();
+    expect(copy.title).toBe("Save a copy");
+    expect(root.querySelector(".workspace-shortcuts")!.textContent).toContain("Ctrl+S: save · Ctrl+Shift+S: save as");
+  });
+});

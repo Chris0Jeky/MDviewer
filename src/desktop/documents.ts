@@ -10,7 +10,7 @@
  */
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
-import type { OpenBatch } from "./native";
+import type { OpenBatch, ReadResult, SaveResult } from "./native";
 import { ReaderSession, nextDocumentKey, type ReaderDocument } from "./session";
 
 export type FileEncoding = "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
@@ -26,7 +26,22 @@ export interface Binding {
   encoding: FileEncoding;
   eol: LineEnding;
   disk: DiskState;
+  /** The native binding generation this document last saw; fences stale saves. */
+  generation: number;
 }
+
+/** The active document as captured when Save is invoked. */
+export interface SaveTarget {
+  owner: "reader" | "workspace";
+  id: string;
+  name: string;
+  text: string;
+  dirty: boolean;
+  binding?: Binding;
+}
+
+/** How a native save completion was applied. */
+export type SaveCompletion = "saved" | "saved-newer-edits" | "stale";
 
 /** The clean source a workspace document is compared with, plus its identity. */
 export interface WorkspaceBaseline {
@@ -48,7 +63,7 @@ export function bindingOf(doc: IncomingDocument): Binding | undefined {
   if (!doc.token || !doc.path) return undefined;
   return {
     token: doc.token, path: doc.path, dir: doc.dir ?? "",
-    encoding: doc.encoding ?? "utf-8", eol: doc.eol ?? "lf", disk: "synced",
+    encoding: doc.encoding ?? "utf-8", eol: doc.eol ?? "lf", disk: "synced", generation: 0,
   };
 }
 
@@ -56,6 +71,118 @@ export class DesktopDocuments {
   reader = new ReaderSession();
   baselines = new Map<string, WorkspaceBaseline>();
   workspace: App | null = null;
+  /** Called with a closed document's token so the host can revoke it. */
+  onRelease: (token: string) => void = () => {};
+
+  /** The active document, captured for Save. */
+  saveTarget(): SaveTarget | null {
+    const app = this.workspace;
+    if (app) {
+      const doc = app.store.active;
+      if (!doc) return null;
+      const binding = this.baselines.get(doc.id)?.binding;
+      return { owner: "workspace", id: doc.id, name: doc.name, text: doc.text, dirty: this.workspaceDirty(doc), ...(binding ? { binding } : {}) };
+    }
+    const doc = this.reader.active;
+    if (!doc) return null;
+    return { owner: "reader", id: doc.id, name: doc.name, text: doc.text, dirty: doc.dirty, ...(doc.binding ? { binding: doc.binding } : {}) };
+  }
+
+  /**
+   * Apply a successful native save of `captured` to the document that requested
+   * it (FILE_LIFECYCLE completion table). A document that closed or moved to the
+   * other mode meanwhile is stale: nothing changes and no binding is revived.
+   */
+  completeSave(target: SaveTarget, captured: string, result: Extract<SaveResult, { outcome: "saved" }>): SaveCompletion {
+    const binding: Binding | undefined = result.token ? {
+      token: result.token, path: result.path, dir: result.dir, encoding: result.encoding, eol: result.eol,
+      disk: "synced", generation: result.generation,
+    } : undefined;
+    const app = this.workspace;
+    if (target.owner === "workspace") {
+      const baseline = this.baselines.get(target.id);
+      const doc = app?.store.openDocs.find(open => open.id === target.id);
+      // A still-open document without a baseline (Undo Close, typed into an empty
+      // workspace) adopts the saved file like any other.
+      if (!app || !doc) return this.discard(result.token);
+      this.baselines.set(doc.id, {
+        name: result.name, text: captured, dirty: false, key: baseline?.key ?? nextDocumentKey(), ...(binding ? { binding } : {}),
+      });
+      app.store.rename(doc.id, result.name);
+      return doc.text === captured ? "saved" : "saved-newer-edits";
+    }
+    const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);
+    if (!doc) return this.discard(result.token);
+    doc.name = result.name;
+    doc.dirty = doc.text !== captured;
+    if (binding) doc.binding = binding; else delete doc.binding;
+    return doc.dirty ? "saved-newer-edits" : "saved";
+  }
+
+  /** A completion nobody can adopt: release any capability the host just created. */
+  private discard(token: string | null): SaveCompletion {
+    if (token) this.onRelease(token);
+    return "stale";
+  }
+
+  /** The open document bound to `token`, in whichever mode owns it now. */
+  byToken(token: string): SaveTarget | null {
+    const app = this.workspace;
+    if (app) {
+      for (const doc of app.store.openDocs) {
+        const binding = this.baselines.get(doc.id)?.binding;
+        if (binding?.token === token) {
+          return { owner: "workspace", id: doc.id, name: doc.name, text: doc.text, dirty: this.workspaceDirty(doc), binding };
+        }
+      }
+      return null;
+    }
+    const doc = this.reader.documents.find(open => open.binding?.token === token);
+    return doc ? { owner: "reader", id: doc.id, name: doc.name, text: doc.text, dirty: doc.dirty, ...(doc.binding ? { binding: doc.binding } : {}) } : null;
+  }
+
+  /** Record what the watcher found on disk for `token` (shown by the shell). */
+  markDisk(token: string, disk: DiskState): void {
+    const target = this.byToken(token);
+    if (target?.binding) target.binding.disk = disk;
+  }
+
+  /**
+   * Install text the host re-read and adopted: the open text and its saved
+   * baseline both become the file's new content. Callers only do this for a
+   * clean document or after an explicit Reload.
+   */
+  applyReload(target: SaveTarget, result: Extract<ReadResult, { outcome: "changed" }> & { text: string }): boolean {
+    // Never let an older re-read (overtaken by a newer one) install older text.
+    const current = target.owner === "workspace" ? this.baselines.get(target.id)?.binding : this.reader.documents.find(open => open.id === target.id)?.binding;
+    if (current && result.generation < current.generation) return false;
+    const update = (binding: Binding): void => {
+      Object.assign(binding, { generation: result.generation, encoding: result.encoding, eol: result.eol, disk: "synced" });
+    };
+    const app = this.workspace;
+    if (target.owner === "workspace") {
+      const baseline = this.baselines.get(target.id);
+      if (!app || !baseline?.binding || !app.store.openDocs.some(doc => doc.id === target.id)) return false;
+      update(baseline.binding);
+      this.baselines.set(target.id, { ...baseline, text: result.text, dirty: false });
+      // Re-seed the editor too: updateText would leave the textarea on the old text.
+      app.store.replaceText(target.id, result.text);
+      return true;
+    }
+    const doc = app ? undefined : this.reader.documents.find(open => open.id === target.id);
+    if (!doc?.binding) return false;
+    update(doc.binding);
+    doc.text = result.text;
+    doc.dirty = false;
+    return true;
+  }
+
+  /** Close a reader document and release its native capability. */
+  closeReaderDocument(id: string): void {
+    const token = this.reader.documents.find(doc => doc.id === id)?.binding?.token;
+    this.reader.close(id);
+    if (token) this.onRelease(token);
+  }
 
   /** True when a workspace document has no clean baseline or differs from it. */
   workspaceDirty(doc: Doc): boolean {
@@ -96,11 +223,16 @@ export class DesktopDocuments {
   addBatch(documents: OpenBatch["documents"], owns: boolean): string[] {
     const incoming = documents.map(doc => ({ name: doc.name, text: doc.text, binding: bindingOf(doc) }));
     const app = this.workspace;
-    if (!app) return this.reader.append(incoming, owns);
-    const bounded = this.boundedWorkspace(app);
-    const count = bounded.documents.length;
-    const errors = bounded.append(incoming);
-    const accepted = bounded.documents.slice(count);
+    const target = app ? this.boundedWorkspace(app) : this.reader;
+    const count = target.documents.length;
+    const errors = target.append(incoming, owns);
+    const accepted = target.documents.slice(count);
+    // The host registered every opened file; release the ones admission refused.
+    const admitted = new Set(accepted.map(doc => doc.binding?.token));
+    for (const doc of incoming) {
+      if (doc.binding && !admitted.has(doc.binding.token)) this.onRelease(doc.binding.token);
+    }
+    if (!app) return errors;
     const added = app.store.addBatch(accepted, owns || app.store.activeId === null);
     for (const [index, doc] of added.entries()) {
       const { key, binding } = accepted[index]!;
@@ -140,12 +272,20 @@ export class DesktopDocuments {
     this.reader.positions.clear();
   }
 
-  /** Drop baselines for documents the workspace closed. */
-  pruneBaselines(): void {
+  /**
+   * Drop baselines for documents the workspace closed. `release` is false while
+   * a mode transition empties the store: those documents move, they are not closed.
+   */
+  pruneBaselines(release = true): void {
     const app = this.workspace;
     if (!app) return;
     const openIds = new Set(app.store.openDocs.map(doc => doc.id));
-    for (const id of this.baselines.keys()) if (!openIds.has(id)) this.baselines.delete(id);
+    for (const [id, baseline] of this.baselines) {
+      if (openIds.has(id)) continue;
+      this.baselines.delete(id);
+      // Undo Close restores an unbound document; it cannot revive this capability.
+      if (release && baseline.binding) this.onRelease(baseline.binding.token);
+    }
   }
 
   /** Build the reader session that would own the workspace's documents; throws on admission failure. */

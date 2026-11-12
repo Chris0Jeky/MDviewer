@@ -1,17 +1,18 @@
 # Native Save / Save As design
 
-Status: **design reviewed and merged; implementation gated**. Issue
+Status: **implemented on Windows (companion push S1a + S1b, 2026-11-11); some
+acceptance cases open (see the checklist)**. Issue
 [#196](https://github.com/Chris0Jeky/MDviewer/issues/196); companion
 [optional recovery design](RECOVERY.md). Prepared against main `5cb2dbb3` on
-2026-11-05. This document changes no application behavior. The current native
-`save_export` still writes a user-selected copy, and Save Markdown still leaves
-the original dirty baseline intact.
+2026-11-05. Save Markdown (`save_export`) still writes a user-selected copy and
+leaves the dirty baseline intact; owned Save/Save As (`save_document`,
+`save_document_as` over `src-tauri/src/replace.rs`) implement the rules below.
 
 The behavior, capability and recovery boundaries were independently reviewed and
 merged in [#209](https://github.com/Chris0Jeky/MDviewer/pull/209), commit
 `2aec9104c7f35f4ac230705e4ba6775e0ee3e7ec`. This completes the design-review
-slice only. The Windows primitive experiment and every implementation gate below
-remain open; see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
+slice. The primitive experiment and the implementation have since landed (see the
+status line and checklist); see the [current checkpoint](2026-11-05-editor-followup-checkpoint.md).
 
 ## Product decisions
 
@@ -155,19 +156,39 @@ shortcut: Microsoft [recommends alternatives][txf] for new applications.
 This unresolved native gate is explicit engineering work, not a reason to delay
 the safe design or to pretend the current export helper already satisfies #196.
 
+### Primitive experiment results
+
+S1a adds an isolated held-handle primitive in `src-tauri/src/replace.rs`, with no
+IPC integration. Windows/NTFS release tests exercised 184 separate-process race
+trials (100 saves, 84 refusals; no acknowledged external-byte loss), 28 injected
+failure/process-exit recovery cases, and altered-artifact recovery refusals.
+Ancestor handles exclude write/delete sharing; native same-directory leaf-name
+renames avoid reopening those parents. The two-rename namespace gap is journaled,
+and an outside claimant is preserved. The full 33-test suite passed within the
+60-second budget. ReFS, file symlinks (sandbox creation privilege unavailable), the legacy
+file-ID fallback, power-loss durability and production IPC remain unverified.
+Unsupported scope and recovery behavior are documented in the native README's
+“Conflict-safe replace (experimental)” section. Strict Clippy still reports two
+pre-existing `file_policy.rs` lints outside this slice. This evidence does not tick
+the implementation gate or qualify native Save.
+
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).
-- [ ] Native primitive experiment above, with exact Windows run artifacts and clear
-      supported/unsupported cases. Keep current production behavior during the spike.
-- [ ] Pure saved-baseline/revision state and native bounded capability registry tests,
-      including duplicate names, duplicate file identities, stale results and revocation.
-- [ ] Owned Save/Save As UI + actual native-dialog tests: Unicode names/paths/bytes,
-      UTF-8/BOM/UTF-16, endings, cancel/error/conflict, reopen, close, and single-instance
-      routing during delayed saves and reader/workspace handoff.
-- [ ] Update `AGENTS.md`, `CLAUDE.md`, canonical implementation/native contracts,
-      agent index, privacy text and Windows guide in that implementation PR. Keep the
-      web/PWA source-download contract explicit and the reader entry lazy.
+- [x] Native primitive experiment above (#226): race harness and fault injection in
+      `cargo test`; supported scope in `src-tauri/README.md`.
+- [x] Pure saved-baseline/revision state and native bounded capability registry tests,
+      including duplicate names, duplicate file identities, stale results and revocation
+      (#225; `commands/save.rs` tests; `tests/desktop-owned-save.test.ts`).
+- [ ] Owned Save/Save As UI + actual native-dialog tests. Done: Save As through the
+      real dialog with a Unicode path, byte-identical UTF-16LE BOM output (Windows smoke);
+      byte-exact UTF-8/BOM/UTF-16 × LF/CRLF/CR round trips, conflict/missing/locked,
+      stale and revoked completions, cancel, close/release and handoff (unit and Rust
+      tests). Open: an in-place Save after a typed edit driven through the real app,
+      and single-instance routing while a save is pending.
+- [x] Update `AGENTS.md`, `CLAUDE.md`, canonical implementation/native contracts,
+      agent index, privacy text and Windows guide (S1b). The web/PWA source download is
+      unchanged and the reader entry stays lazy.
 - [ ] Exact-head full CI and independent latest-head review before merge. Retain
       ordinary Windows/Narrator/printer/performance acceptance in #169.
 
