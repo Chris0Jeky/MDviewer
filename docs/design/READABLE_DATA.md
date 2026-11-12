@@ -139,6 +139,7 @@ One module, `src/data/`, with no DOM and no dependencies in phase 1:
 ```ts
 export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv" | "text";
 export function dataKindOf(fileName: string): DataKind | null;
+export function prepare(kind: DataKind): Promise<void>;
 export function toReadable(text: string, kind: DataKind, options?: ReadableOptions): Readable;
 export interface Readable {
   markdown: string;      // the readable view
@@ -148,6 +149,7 @@ export interface Readable {
 }
 ```
 
+Call `await prepare(kind)` before conversion: YAML is loaded dynamically and cached; other kinds resolve immediately.
 The reader and the workspace each call it at the one point where document text becomes render
 text. The document keeps its raw text; only the render text is derived.
 

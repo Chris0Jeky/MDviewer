@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { dataKindOf, toReadable, type DataKind } from "../src/data";
+import { dataKindOf, prepare, toReadable } from "../src/data";
 import { parseJson } from "../src/data/json";
 import { escapeText } from "../src/data/escape";
 
@@ -10,10 +10,13 @@ const read = (name: string): string => readFileSync(`${fixtures}/${name}`, "utf8
 
 describe("readable data fixtures", () => {
   for (const name of readdirSync(fixtures).filter(n => !n.endsWith(".md"))) {
-    it(name, () => {
-      const expected = name.replace(/\.[^.]+$/, ".readable.md");
+    it(name, async () => {
+      const qualified = `${name}.readable.md`;
+      const expected = readdirSync(fixtures).includes(qualified) ? qualified : name.replace(/\.[^.]+$/, ".readable.md");
       const options = name === "budget.json" ? { maxValues: 5 } : name === "records-budget.jsonl" ? { maxRecords: 2 } : {};
-      const view = toReadable(read(name), dataKindOf(name)!, { fileName: name, timeZone: "UTC", ...options });
+      const kind = dataKindOf(name)!;
+      await prepare(kind);
+      const view = toReadable(read(name), kind, { fileName: name, timeZone: "UTC", ...options });
       expect(view.markdown).toBe(read(expected));
     });
   }
@@ -175,11 +178,6 @@ describe("generic lens", () => {
     expect(cut.markdown).toContain("- Line 2,");
   });
 
-  it.each(["yaml", "toml", "csv"] as DataKind[])("does not parse %s", kind => {
-    const view = toReadable("{}", kind);
-    expect(view.problems).toEqual([{ message: `${kind.toUpperCase()} is not supported yet.`, line: 1, column: 1 }]);
-    expect(view.markdown).toContain("not supported yet");
-  });
 });
 
 

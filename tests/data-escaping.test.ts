@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toReadable } from "../src/data";
+import { prepare, toReadable } from "../src/data";
 import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 
@@ -37,6 +37,26 @@ function samples(): string[] {
 }
 
 describe("data escaping conformance", () => {
+  it("round-trips generated CSV cells and YAML strings through the real renderer", async () => {
+    await prepare("yaml");
+    for (const s of samples()) {
+      const normal = s.replace(/\r\n|\r/g, "\n");
+      const csv = `k\n"${s.replace(/"/g, '""')}"`;
+      const yaml = `k: ${JSON.stringify(s)}`;
+      const csvRoot = html(toReadable(csv, "csv").markdown);
+      const yamlRoot = html(toReadable(yaml, "yaml").markdown);
+      const cell = csvRoot.querySelector("tbody td");
+      const value = yamlRoot.querySelector("tbody td:nth-child(2)") ?? yamlRoot.querySelector("h2 + p");
+      expect(cell, JSON.stringify(s)).not.toBeNull();
+      expect(value, JSON.stringify(s)).not.toBeNull();
+      expect(text(cell!), JSON.stringify(s)).toBe(normal);
+      expect(text(value!), JSON.stringify(s)).toBe(normal);
+      expect(tags(cell!)).toEqual(/[\r\n]/.test(s) ? ["BR", "TD"] : ["TD"]);
+      expect(csvRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
+      expect(yamlRoot.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
+    }
+  }, 30_000);
+
   it("preserves seeded values and keys through the real renderer without extra elements", () => {
     for (const s of samples()) {
       // Same length and whitespace => same layout decisions; only the data punctuation changes.

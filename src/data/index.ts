@@ -2,8 +2,16 @@ import { cellText, fence } from "./escape";
 import { conversationList, conversationOverview, conversationRecord, isConversation, renderConversation } from "./conversation";
 import { parseJson, type ParseResult } from "./json";
 import { budget, count, Lens, shape } from "./lens";
+import { parseCsv } from "./csv";
+import { parseToml } from "./toml";
+import { parseYaml, prepareYaml } from "./yaml";
 import type { DataKind, Problem, Readable, ReadableOptions } from "./types";
 export type { DataKind, Problem, Readable, ReadableOptions } from "./types";
+
+/** Load optional readers before the synchronous conversion seam is used. */
+export function prepare(kind: DataKind): Promise<void> {
+  return kind === "yaml" ? prepareYaml() : Promise.resolve();
+}
 
 export function dataKindOf(fileName: string): DataKind | null {
   const extension = /\.([^.\\/]+)$/.exec(fileName)?.[1]?.toLowerCase();
@@ -34,10 +42,7 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
   lens.line(`# ${cellText(options.fileName ?? "Data")}`, "$");
   if (kind === "text") return plainText(text, options, lens);
   if (kind !== "json" && kind !== "jsonl") {
-    const message = `${kind.toUpperCase()} is not supported yet.`;
-    problems.push({ message, line: 1, column: 1 });
-    lens.line(`${kind.toUpperCase()} · ${size(text)}`); lens.line(); lens.line(message);
-    return { markdown: lens.finish(), problems, truncated: false, map: lens.map };
+    return structured(text, kind, options, lens);
   }
   let recordsShown = 0;
   let recordsTotal = 0;
@@ -109,6 +114,81 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
     problems.push(...lens.problems);
     lens.line(); lens.line("## Expansion problems", "$"); lens.line();
     for (const p of lens.problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+  }
+  return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
+}
+
+function structured(text: string, kind: "yaml" | "toml" | "csv", options: ReadableOptions, lens: Lens): Readable {
+  let problems: Problem[];
+  const format = kind === "csv" && /\.tsv$/i.test(options.fileName ?? "") ? "TSV" : kind.toUpperCase();
+  let invalid = false;
+  const render = (value: import("./json").JsonValue, path = "$", level = 2): void => {
+    const conversation = conversationList(value);
+    if (conversation) renderConversation(lens, value, conversation);
+    else lens.render(value, path, level);
+  };
+  if (kind === "csv") {
+    const csv = parseCsv(text, format === "TSV" ? "\t" : ",");
+    problems = csv.problems;
+    lens.line(`${format} · ${size(text)} · ${count(csv.value.items.length, "row")}, ${count(csv.columns, "column")}`); lens.line();
+    lens.total = lens.count(csv.value);
+    // Charge whole rows to the values budget, including their containers and cells. No 500-row cap.
+    let cost = 1, shown = 0;
+    const max = budget(options.maxValues, 20000);
+    for (const row of csv.value.items) {
+      cost += lens.count(row);
+      if (cost > max) break;
+      shown++;
+    }
+    render({ ...csv.value, items: csv.value.items.slice(0, shown) });
+    if (shown < csv.value.items.length) {
+      lens.truncated = true;
+      lens.line(`Showing ${shown.toLocaleString("en-US")} of ${csv.value.items.length.toLocaleString("en-US")} rows.`); lens.line();
+    }
+  } else {
+    const result = kind === "yaml" ? parseYaml(text) : (() => {
+      const parsed = parseToml(text);
+      return { values: parsed.value ? [parsed.value] : [], problems: parsed.problem ? [parsed.problem] : [], invalid: !parsed.value };
+    })();
+    problems = result.problems;
+    invalid = result.invalid;
+    const values = result.values;
+    lens.line(`${format} · ${size(text)} · ${invalid ? "invalid document" : values.length > 1 ? count(values.length, "document") : cellText(shape(values[0]!))}`); lens.line();
+    if (invalid) {
+      for (const p of problems) { lens.line(`Line ${p.line}, column ${p.column}: ${cellText(p.message)}`); lens.line(); }
+      lens.line(fence(text));
+    } else {
+      lens.total = values.reduce((n, value) => n + lens.count(value), 0);
+      if (values.length === 1) render(values[0]!);
+      else {
+        const conversation = isConversation(values);
+        if (conversation) conversationOverview(lens, values);
+        let shown = 0;
+        for (const [index, value] of values.entries()) {
+          if (shown >= budget(options.maxRecords, 500) || lens.truncated) break;
+          if (lens.shown >= budget(options.maxValues, 20000)) { lens.truncated = true; break; }
+          shown++;
+          if (conversation) conversationRecord(lens, value, `$[${index}]`, index, { parsed: { value }, source: "", line: value.line });
+          else {
+            lens.line(`## Document ${index + 1} (line ${value.line})`, `$[${index}]`); lens.line();
+            render(value, `$[${index}]`, 3);
+          }
+        }
+        if (shown < values.length) {
+          lens.truncated = true;
+          lens.line(`Showing ${shown.toLocaleString("en-US")} of ${values.length.toLocaleString("en-US")} documents.`); lens.line();
+        }
+      }
+      if (lens.shown < lens.total) {
+        lens.truncated = true;
+        lens.line(`Showing ${lens.shown.toLocaleString("en-US")} of ${lens.total.toLocaleString("en-US")} values.`);
+      }
+    }
+  }
+  if (!invalid && (problems.length || lens.problems.length)) {
+    problems.push(...lens.problems);
+    lens.line(); lens.line("## Problems", "$"); lens.line();
+    for (const p of problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
   }
   return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
 }
