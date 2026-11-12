@@ -500,8 +500,12 @@ not implemented; sessions keep paths only.
 Library (S4 native half): `native.library.*` lists, scans and opens entries by opaque id;
 `src/desktop/library.ts` `openLibraryEntry(id)` is the panel's seam into the entry's normal
 batch/admission/notice path (`openFromLibrary` in `main.ts`). Palette commands:
-`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel UI is
-the shell's (S4 panel half).
+`library.pinDocument`, `library.addProject`, `library.clear` (confirms first). The panel
+(`src/desktop/shell/library-panel.ts`, S4 panel half) shows Pinned (Unpin), Recent (Pin, Remove
+from Recent), Projects (expand to Agent files and "Changed since you looked", Mark all as seen,
+Remove) and Activity, which scans every project only while shown and lists changed files newest
+first (20 at most). Every action sends an opaque id. Proof: `tests/desktop-e2e/library.spec.ts`
+against an in-page fake host.
 
 Live reload: `native.onFilesChanged(tokens)` drives `followChange(token)` in
 `main.ts`. A clean document re-reads with `adopt: true` and `DesktopDocuments.applyReload`
