@@ -604,6 +604,18 @@ export function mountEditor(root: HTMLElement, opts: EditorOptions): EditorContr
     input.scrollTop = clamped.scrollTop;
     input.scrollLeft = clamped.scrollLeft;
     onScroll();
+    // Firefox scrolls a selection set by setSelectionRange into view a frame later, even in
+    // an unfocused textarea, so a restored scroll away from the selection was lost (#227).
+    // Re-apply it once that has landed, unless the document or selection changed since.
+    const target = input;
+    requestAnimationFrame(() => {
+      if (destroyed || target !== input) return;
+      if (target.selectionStart !== clamped.start || target.selectionEnd !== clamped.end) return;
+      if (target.scrollTop === clamped.scrollTop && target.scrollLeft === clamped.scrollLeft) return;
+      target.scrollTop = clamped.scrollTop;
+      target.scrollLeft = clamped.scrollLeft;
+      onScroll();
+    });
   };
 
   return {
