@@ -15,8 +15,8 @@
 > picker/command #286 are open. A5 (embeddable element) is later.
 > **Readable data** ([spec](docs/design/READABLE_DATA.md)): D0 #269, D1 #270, D2 #273, D3 native #272 and
 > webview #280, D4 parsers #281 and Markdown-only relative links #283 are merged. The app opens `.json`,
-> `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. **Open:** D4 native extensions #284
-> (YAML, TOML, CSV, TSV) in review. **Next:** the Experience-lane webview follow-up for D4 (await
+> `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. D4 native extensions #284
+> (YAML, TOML, CSV, TSV) merged. **Next:** the Experience-lane webview follow-up for D4 (await
 > `prepare(kind)` at admission, widen `OPENABLE` in `src/app/renderText.ts`, the pickers), then D5 (copy
 > value/path/subtree, agent data files in the Library, save the readable view as Markdown).
 > Open issues from these slices: #276 (live reload starves on a fast-appended log), #277 (alternate data

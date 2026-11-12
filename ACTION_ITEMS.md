@@ -25,7 +25,7 @@
   Undo (the native smoke #275 proves toggle and Undo on a CRLF file against the real host). The app also
   opens `.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views, with a conversation
   view for chat and agent transcripts (Readable data D0 to D3, #269/#270/#273/#272/#280). Not yet in the
-  app: YAML, TOML and CSV (parsers merged in #281; native open #284 is in review), templates (A4, #285
+  app: YAML, TOML and CSV (parsers merged in #281; native open #284 merged), templates (A4, #285
   and #286 open). These are automated results on unsigned CI builds; nobody has accepted them on real
   files yet, which is new item **AI-10**. **AI-6/AI-7/AI-8/AI-9/AI-10 and #169 remain OPEN.** No
   deployment, signed release or performance result is claimed; the deployed site is unchanged.

@@ -20,8 +20,9 @@ Windows executable/source evidence. This is application qualification; the live
 site retains its separate deployment record.
 
 Use [Future work](FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
-for the next implementation work: prove safe Windows compare/replace for #196,
-then implement the reviewed optional recovery contract #197; design bounded raster
+for the next implementation work. Windows Save/Save As (#196) shipped with the conflict-safe
+replace (S1a #226) and owned Save/Save As (S1b #231); the optional recovery contract #197 stays
+parked; design bounded raster
 cancellation #201 and profile measured authoring bottlenecks #202. Unicode heading
 identity #204, upstream engagement accounting #206 and pagination whitespace
 research #205 remain separate.
@@ -184,16 +185,15 @@ export paths.
   parsers [#281](https://github.com/Chris0Jeky/MDviewer/pull/281); relative links open Markdown only
   [#283](https://github.com/Chris0Jeky/MDviewer/pull/283). Today the Windows app opens `.json`, `.jsonc`,
   `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views. **Open:** D4 native extensions
-  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) (in review); the webview follow-up that awaits
+  [#284](https://github.com/Chris0Jeky/MDviewer/pull/284) (merged); the webview follow-up that awaits
   `prepare(kind)` and widens `OPENABLE` and the pickers (not started on main). **Next:** D5 (copy value,
   path and subtree; agent data files in the Library; save the readable view as Markdown). Open
   issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),
   [#278](https://github.com/Chris0Jeky/MDviewer/issues/278) and [#282](https://github.com/Chris0Jeky/MDviewer/issues/282).
-- **Implementation pending after reviewed designs:** file ownership/Save/Save As
-  [#196](https://github.com/Chris0Jeky/MDviewer/issues/196) requires a bounded Windows
-  conflict-safe replacement proof. Optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
-  requires that identity contract plus fault/restart/deletion and overhead evidence.
-  Existing Save Copy and in-memory Undo Close behavior remain current.
+- **File lifecycle:** Windows Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
+  shipped through the conflict-safe replace (S1a #226) and owned Save/Save As (S1b #231); Save Copy
+  stays the explicit copy. Optional recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
+  is parked: it still requires fault/restart/deletion and overhead evidence.
 - **Human acceptance pending:** typing feel, Narrator and ordinary Windows behavior
   remain in AI-6/#169. The delivered automation supplies regression evidence only.
 
@@ -295,8 +295,8 @@ Explicitly out of scope for now; revisit only after P1–P3 land.
 ## Priorities
 
 1. Preserve the shipped no-slice, sanitization, edit-ownership and export-lifetime contracts.
-2. Prove the Windows compare/replace and conflict behavior in the reviewed file-lifecycle design (#196) before implementing Save changes.
-3. Implement and fault-test the reviewed opt-in recovery design (#197), coordinated with file identity, revocation and storage limits.
+2. Keep the shipped Windows Save/Save As (#196: S1a #226, S1b #231) conflict-safe as new document kinds arrive.
+3. Implement and fault-test the reviewed opt-in recovery design (#197, parked), coordinated with file identity, revocation and storage limits.
 4. Qualify cancellation (#201) and improve measured authoring bottlenecks (#202). Keep representative native acceptance and efficiency evidence in #169.
 5. Resolve the remaining ledger-backed follow-ups in [Future work](FUTURE_WORK.md), including Unicode IDs, the upstream SDK issue and the explicitly deferred pagination trade-off.
 6. Keep P4 options, canonical-host selection and human release/deployment decisions explicit; do not infer their completion from green CI.
