@@ -219,6 +219,36 @@ pub(crate) async fn library_open(
     Ok(batch)
 }
 
+#[derive(Serialize)]
+pub(crate) struct TemplateText {
+    name: String,
+    text: String,
+}
+
+/// The id's path and the pinned projects, read without touching the store.
+fn template_target(library: &Library, id: &str) -> Option<(PathBuf, Vec<library::Stamped>)> {
+    Some((
+        library.ids.path(id)?.to_path_buf(),
+        library.store.projects.clone(),
+    ))
+}
+
+/// Read a pinned project's template to fill a new note (A4). Read-only: the id must name a
+/// Markdown file directly inside a pinned project's `templates/` folder (from `library_scan`);
+/// nothing is bound, watched, recorded as recent or seen, or written to `library.json`.
+#[tauri::command]
+pub(crate) async fn library_read_template(
+    app: AppHandle,
+    id: String,
+) -> Result<TemplateText, String> {
+    let (path, projects) = with_library(&app, |library| template_target(library, &id))
+        .ok_or("This template is no longer available.")?;
+    tauri::async_runtime::spawn_blocking(move || library::read_template(&projects, &path))
+        .await
+        .map_err(|_| "The template could not be read.".to_string())?
+        .map(|(name, text)| TemplateText { name, text })
+}
+
 fn mutate(app: &AppHandle, act: impl FnOnce(&mut Store, u64) -> bool) -> bool {
     let at = library::now_ms();
     with_library(app, |library| {
@@ -443,4 +473,38 @@ pub(crate) fn session_setting(app: AppHandle, restore: Option<bool>) -> SessionS
             persisted,
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reading_a_template_leaves_the_library_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("project");
+        fs_write(&project.join("templates").join("t.md"), "# T\n");
+        let file = dir.path().join("library.json");
+        let mut store = Store::default();
+        store.pin_project(&project, 1);
+        library::save(&file, &store).unwrap();
+        let before = std::fs::read(&file).unwrap();
+        let mut library = Library::load(Some(file.clone()));
+        let id = library.ids.id(&project.join("templates").join("t.md"));
+        let (path, projects) = template_target(&library, &id).unwrap();
+        let (name, text) = library::read_template(&projects, &path).unwrap();
+        assert_eq!((name.as_str(), text.as_str()), ("t.md", "# T\n"));
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            before,
+            "library.json is byte-identical"
+        );
+        assert!(library.store.recent.is_empty() && library.store.seen.is_empty());
+        assert_eq!(template_target(&library, "l999"), None);
+    }
+
+    fn fs_write(path: &Path, text: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
 }
