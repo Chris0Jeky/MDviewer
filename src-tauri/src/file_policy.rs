@@ -329,6 +329,59 @@ fn read_bounded(reader: impl Read, limit: u64) -> Result<Vec<u8>, &'static str> 
     Ok(bytes)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EncodeError {
+    /// The source mixed line endings; they cannot be rebuilt after editing.
+    MixedLineEndings,
+    TooLarge,
+}
+
+/// Encode editor text back to a file's original conventions, byte for byte.
+///
+/// Any CRLF/CR/LF in `text` is first normalised to LF (a textarea always yields
+/// LF), then rewritten with the file's uniform ending. A trailing newline is
+/// kept or omitted exactly as `text` has it. Mixed sources need explicit consent
+/// (`accept_lf`), after which they are written as LF.
+pub fn encode_markdown(
+    text: &str,
+    encoding: Encoding,
+    eol: Eol,
+    accept_lf: bool,
+) -> Result<Vec<u8>, EncodeError> {
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    let ending = match eol {
+        Eol::Crlf => "\r\n",
+        Eol::Cr => "\r",
+        Eol::Lf | Eol::None => "\n",
+        Eol::Mixed if accept_lf => "\n",
+        Eol::Mixed => return Err(EncodeError::MixedLineEndings),
+    };
+    let body = if ending == "\n" {
+        normalized
+    } else {
+        normalized.replace('\n', ending)
+    };
+    let mut bytes = match encoding {
+        Encoding::Utf8 => Vec::with_capacity(body.len()),
+        Encoding::Utf8Bom => vec![0xef, 0xbb, 0xbf],
+        Encoding::Utf16Le => vec![0xff, 0xfe],
+        Encoding::Utf16Be => vec![0xfe, 0xff],
+    };
+    match encoding {
+        Encoding::Utf8 | Encoding::Utf8Bom => bytes.extend_from_slice(body.as_bytes()),
+        Encoding::Utf16Le => body
+            .encode_utf16()
+            .for_each(|unit| bytes.extend_from_slice(&unit.to_le_bytes())),
+        Encoding::Utf16Be => body
+            .encode_utf16()
+            .for_each(|unit| bytes.extend_from_slice(&unit.to_be_bytes())),
+    }
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        return Err(EncodeError::TooLarge);
+    }
+    Ok(bytes)
+}
+
 fn decode_markdown(bytes: Vec<u8>) -> Result<String, &'static str> {
     const ENCODING_ERROR: &str =
         "This file is not valid UTF-8 or UTF-16 text. Save it as UTF-8 and try again.";
@@ -413,6 +466,66 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn owned_saves_round_trip_every_encoding_and_uniform_line_ending_byte_for_byte() {
+        let dir = TestDirectory::new();
+        for encoding in [
+            Encoding::Utf8,
+            Encoding::Utf8Bom,
+            Encoding::Utf16Le,
+            Encoding::Utf16Be,
+        ] {
+            for text in [
+                "",
+                "caf\u{e9} \u{1f4c4}",
+                "a\nb\n",
+                "a\r\nb\r\n",
+                "a\rb\r",
+                "a\nb",
+                "a\r\nb",
+                "\r\n",
+            ] {
+                // Write the source in its real convention first, then read it back.
+                let source = encode_markdown(text, encoding, Eol::detect(text), false).unwrap();
+                let path = dir.write("round-trip.md", &source);
+                let doc = read_markdown(&path, MAX_FILE_BYTES).unwrap();
+                assert_eq!((doc.encoding, doc.eol), (encoding, Eol::detect(text)));
+                // A textarea edit yields LF; saving restores the original bytes.
+                let edited = doc.text.replace("\r\n", "\n").replace('\r', "\n");
+                assert_eq!(
+                    encode_markdown(&edited, doc.encoding, doc.eol, false).unwrap(),
+                    source,
+                    "{encoding:?} {text:?}"
+                );
+                assert_eq!(
+                    encode_markdown(&doc.text, doc.encoding, doc.eol, false).unwrap(),
+                    source
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_line_endings_need_consent_and_then_become_lf() {
+        assert_eq!(
+            encode_markdown("a\r\nb\n", Encoding::Utf8, Eol::Mixed, false),
+            Err(EncodeError::MixedLineEndings)
+        );
+        assert_eq!(
+            encode_markdown("a\r\nb\nc\r", Encoding::Utf8Bom, Eol::Mixed, true).unwrap(),
+            b"\xef\xbb\xbfa\nb\nc\n"
+        );
+        assert_eq!(
+            encode_markdown(
+                &"x".repeat(MAX_FILE_BYTES as usize + 1),
+                Encoding::Utf8,
+                Eol::None,
+                false
+            ),
+            Err(EncodeError::TooLarge)
+        );
     }
 
     #[test]

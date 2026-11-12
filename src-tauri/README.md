@@ -62,7 +62,7 @@ each with a random 128-bit token, native path, same-read-handle Windows identity
 SHA-256 of the raw bytes, byte length, encoding, original line-ending style and
 generation. Duplicate opens receive distinct tokens; at capacity (or if secure
 randomness is unavailable), files still open with `token: null` and no existing
-binding is evicted. No save, lookup or revocation IPC is added in this slice.
+binding is evicted. `release_document(token)` revokes a closed document's binding.
 Opened documents stay in memory. UNC and device paths are rejected.
 
 `open_external` accepts only HTTP(S) URLs without embedded credentials or control
@@ -84,7 +84,30 @@ refused; patches are all-or-nothing. The commit goes through `replace_if_unchang
 the bytes just read, with one re-read and retry on conflict; the binding then moves to the new
 bytes, so the watcher sees no outside change.
 
-`save_export` writes explicit copies. It accepts a raw binary body and an
+`save_document` and `save_document_as` are the owned writes (FILE_LIFECYCLE.md,
+#196). Each takes the UTF-8 text as a raw body plus headers: an opaque
+`x-mdviewer-token`, the `x-mdviewer-generation` the frontend last saw, and
+`x-mdviewer-accept-lf` for a mixed-line-ending source. Neither accepts a path.
+`save_document` re-encodes to the binding's encoding and line endings and calls
+`replace::replace_if_unchanged` with the identity and digest the binding read;
+`save_document_as` opens the native dialog, compares an existing destination with
+what it held at selection (or with this binding's read, for its own file), uses
+`create_new` otherwise, registers the new binding and revokes the old token.
+Results are `{outcome: "saved" | "canceled" | "conflict" | "mixed-line-endings" |
+"failed", ...}` with stable codes and no paths. One dialog or write runs at a time;
+each save first reconciles interrupted saves in its folder.
+
+Live reload: `watch.rs` follows the parent folder of each bound file through OS
+change notifications (`notify` 8.2.0, ReadDirectoryChangesW; no polling). It starts
+with the first bound document, watches each folder once and non-recursively, and
+unwatches a folder with its last file. Bursts are coalesced (150 ms quiet) into one
+`mdviewer:files-changed` event whose payload is capability tokens only.
+`read_document(token, adopt)` then reports `unchanged` (the bytes this binding last
+read or saved, so this app's own save never echoes), `missing`, or `changed`; only
+`adopt: true` returns the text and moves the binding to the new bytes, so a dirty
+document's Save still conflicts.
+
+`save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
 encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a
 Blob into memory, and the host checks it before copying the request or opening a

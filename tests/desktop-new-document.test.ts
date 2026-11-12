@@ -22,7 +22,7 @@ vi.mock("../src/desktop/session", async importOriginal => {
 });
 vi.mock("../src/desktop/native", () => ({ native: {
   available: true, open: boundary.open, takePending: boundary.pending, save: boundary.save,
-  onPending: vi.fn(async () => () => {}), onClose: vi.fn(async () => () => {}),
+  onPending: vi.fn(async () => () => {}), onFilesChanged: vi.fn(async () => () => {}), onClose: vi.fn(async () => () => {}),
 } }));
 vi.mock("../src/desktop/workspace", () => ({ startWorkspace: boundary.start }));
 vi.mock("../src/desktop/render", () => ({ renderReaderDocument: boundary.render }));

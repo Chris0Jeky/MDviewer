@@ -25,9 +25,7 @@ impl Token {
     }
 }
 
-// Later save commands consume the captured revision; opens only populate it today.
-#[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Binding {
     pub path: PathBuf,
     pub identity: Option<FileIdentity>,
@@ -66,8 +64,6 @@ impl Registry {
         }
     }
 
-    // Save lookup is deliberately not exposed through IPC in this slice.
-    #[allow(dead_code)]
     pub fn get(&self, token: &Token) -> Option<&Binding> {
         self.bindings.get(token)
     }
@@ -76,8 +72,6 @@ impl Registry {
         self.bindings.get_mut(token)
     }
 
-    // Close/revocation IPC arrives in a later slice.
-    #[allow(dead_code)]
     pub fn revoke(&mut self, token: &Token) {
         self.bindings.remove(token);
     }
