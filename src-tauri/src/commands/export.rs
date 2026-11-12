@@ -6,6 +6,7 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Manager, State};
 
 use crate::export_policy::{export_data, export_destination, export_name, export_size, ExportKind};
+use crate::file_policy::{DATA_EXTENSIONS, MARKDOWN_EXTENSIONS};
 use crate::DesktopState;
 
 #[derive(Debug, Serialize)]
@@ -80,7 +81,8 @@ pub(crate) async fn save_export(
             .set_file_name(&name);
         picker = match kind {
             ExportKind::Pdf => picker.add_filter("PDF document", &["pdf"]),
-            ExportKind::Markdown => picker.add_filter("Markdown document", &["md", "markdown"]),
+            ExportKind::Markdown => picker.add_filter("Markdown document", MARKDOWN_EXTENSIONS),
+            ExportKind::Data => picker.add_filter("Data or text document", DATA_EXTENSIONS),
         };
         if let Some(window) = app.get_webview_window("main") {
             picker = picker.set_parent(&window);

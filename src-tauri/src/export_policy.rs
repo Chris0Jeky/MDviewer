@@ -1,4 +1,5 @@
 //! Validation for explicit native exports. No caller-supplied destination path is accepted.
+use crate::file_policy::{DATA_EXTENSIONS, MARKDOWN_EXTENSIONS};
 use std::path::Path;
 
 pub const MAX_EXPORT_BYTES: usize = 128 * 1024 * 1024;
@@ -6,6 +7,8 @@ pub const MAX_EXPORT_BYTES: usize = 128 * 1024 * 1024;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ExportKind {
     Markdown,
+    /// A data or plain-text document (JSON, JSON Lines, text), written as raw UTF-8 text.
+    Data,
     Pdf,
 }
 
@@ -17,7 +20,7 @@ pub fn export_name(name: &str) -> Result<ExportKind, &'static str> {
             .chars()
             .any(|value| value.is_control() || "<>:\"/\\|?*".contains(value))
     {
-        return Err("Use a valid Markdown or PDF filename without a directory path.");
+        return Err("Use a valid filename without a directory path.");
     }
     let stem = name
         .split('.')
@@ -39,9 +42,10 @@ pub fn export_name(name: &str) -> Result<ExportKind, &'static str> {
         .to_ascii_lowercase()
         .as_str()
     {
-        "md" | "markdown" => Ok(ExportKind::Markdown),
         "pdf" => Ok(ExportKind::Pdf),
-        _ => Err("Only Markdown and PDF exports are supported."),
+        extension if MARKDOWN_EXTENSIONS.contains(&extension) => Ok(ExportKind::Markdown),
+        extension if DATA_EXTENSIONS.contains(&extension) => Ok(ExportKind::Data),
+        _ => Err("Only Markdown, data, text and PDF files are supported."),
     }
 }
 
@@ -56,9 +60,9 @@ pub fn export_size(bytes: usize) -> Result<(), &'static str> {
 pub fn export_data(kind: ExportKind, bytes: &[u8]) -> Result<(), &'static str> {
     export_size(bytes.len())?;
     match kind {
-        ExportKind::Markdown => {
+        ExportKind::Markdown | ExportKind::Data => {
             if bytes.contains(&0) || std::str::from_utf8(bytes).is_err() {
-                Err("Markdown exports must contain UTF-8 text.")
+                Err("Text exports must contain UTF-8 text.")
             } else {
                 Ok(())
             }
@@ -77,7 +81,7 @@ pub fn export_destination(path: &Path, kind: ExportKind) -> Result<(), &'static 
         .and_then(|value| value.to_str())
         .ok_or("Choose a valid destination filename.")?;
     if export_name(name)? != kind {
-        return Err("Keep the selected export's Markdown or PDF file extension.");
+        return Err("Keep the selected file's kind of extension (Markdown, data or text, PDF).");
     }
     Ok(())
 }
