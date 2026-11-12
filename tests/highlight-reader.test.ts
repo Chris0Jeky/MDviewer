@@ -142,7 +142,11 @@ describe("reader grammar preparation and workspace handoff", () => {
     const { renderReaderDocument } = await import("../src/desktop/render");
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(boundary.instances).toHaveLength(2);
-    expect(result.document.querySelector("pre")?.outerHTML).toBe(reference.querySelector("pre")?.outerHTML);
+    // The reader adds only its source-map stamp to the shared highlighted markup.
+    const pre = result.document.querySelector("pre")!;
+    expect(pre.getAttribute("data-src")).toMatch(/^1-\d+$/);
+    pre.removeAttribute("data-src");
+    expect(pre.outerHTML).toBe(reference.querySelector("pre")?.outerHTML);
     expect(result.warnings).toEqual([]);
   }, 30_000);
 

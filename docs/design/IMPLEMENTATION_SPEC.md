@@ -585,6 +585,21 @@ policy tests and still requires actual rendered headings, single-instance routin
 owned native Save dialogs and exact saved Markdown/PDF bytes. See
 `NATIVE_SMOKE_BOOTSTRAP.md`; these are harness limits, not app performance claims.
 
+Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
+the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
+clamped, trailing blank lines dropped) and stamps the rules that print their own tag
+(fences, display math, callouts). The paginated pipeline never installs it, so its
+output is unchanged. Fence bodies are captured before rendering because Shiki's notation
+transformers rewrite token content. Each fenced code block gets a Copy button (shown on
+hover and focus) that copies the fence body exactly; top-level headings get Copy link
+(`name.md#id`) and Copy section as Markdown (to the next heading of the same or higher
+level). Ctrl/Cmd+Shift+C copies the source lines of every block the selection touches;
+Ctrl+C stays the browser default. Heading buttons hold no text so heading text and the
+outline are unchanged. Copy path and Copy reference wait for display paths (S0) and the
+command palette (S3). Coverage: `tests/reader-sourcemap.test.ts`,
+`tests/desktop-e2e/copy.spec.ts` (asserts the text the app writes; the OS clipboard is
+shared machine state on Windows hosts).
+
 ## 15. Reader-only syntax-engine admission
 
 The continuous reader parses once with `createMarkdown(null, settings)`. It inspects actual
