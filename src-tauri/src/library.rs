@@ -18,6 +18,37 @@ pub const MAX_SEEN: usize = 5_000;
 pub const SCAN_DEPTH: usize = 8;
 pub const SCAN_FILES: usize = 5_000;
 const SKIPPED: [&str; 6] = ["node_modules", ".git", "target", "dist", "build", ".venv"];
+/// Folders whose data files the Library lists as agent data (D5).
+const AGENT_FOLDERS: [&str; 3] = [".claude", ".codex", ".agent-harness"];
+
+/// A data file the Library lists (Readable data D5): one with a data extension inside an agent
+/// folder anywhere in the project, or the project's root `.mcp.json`. Other data files stay out.
+pub fn is_agent_data(relative: &Path) -> bool {
+    let data = relative
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| {
+            crate::file_policy::DATA_EXTENSIONS
+                .iter()
+                .any(|d| e.eq_ignore_ascii_case(d))
+        });
+    let folder = relative.parent().is_some_and(|parent| {
+        parent.components().any(|c| {
+            let name = c.as_os_str().to_string_lossy();
+            AGENT_FOLDERS.iter().any(|f| name.eq_ignore_ascii_case(f))
+        })
+    });
+    data && (folder || relative.to_string_lossy().eq_ignore_ascii_case(".mcp.json"))
+}
+
+/// `.claude/worktrees/` holds whole repository checkouts; the scan never walks into them.
+fn is_nested_checkouts(dir: &Path) -> bool {
+    let named = |p: &Path, n: &str| {
+        p.file_name()
+            .is_some_and(|f| f.to_string_lossy().eq_ignore_ascii_case(n))
+    };
+    named(dir, "worktrees") && dir.parent().is_some_and(|parent| named(parent, ".claude"))
+}
 const STORE_VERSION: u32 = 1;
 
 pub fn now_ms() -> u64 {
@@ -266,9 +297,9 @@ fn is_markdown(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
 }
 
-/// Bounded walk of a project folder for Markdown files. Never follows a
-/// junction, symlink or other reparse point; skips build/dependency folders;
-/// includes dot-folders such as `.claude`.
+/// Bounded walk of a project folder for Markdown files and agent data files (`is_agent_data`).
+/// Never follows a junction, symlink or other reparse point; skips build/dependency folders and
+/// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
     let mut scan = Scan::default();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
@@ -286,7 +317,7 @@ pub fn scan(root: &Path) -> Scan {
             }
             if metadata.is_dir() {
                 let name = entry.file_name().to_string_lossy().to_lowercase();
-                if SKIPPED.contains(&name.as_str()) {
+                if SKIPPED.contains(&name.as_str()) || is_nested_checkouts(&path) {
                     continue;
                 }
                 if depth + 1 >= SCAN_DEPTH {
@@ -294,7 +325,9 @@ pub fn scan(root: &Path) -> Scan {
                     continue;
                 }
                 stack.push((path, depth + 1));
-            } else if metadata.is_file() && is_markdown(&path) {
+            } else if metadata.is_file()
+                && (is_markdown(&path) || is_agent_data(path.strip_prefix(root).unwrap_or(&path)))
+            {
                 if scan.files.len() >= SCAN_FILES {
                     scan.truncated = true;
                     stack.clear();
@@ -302,7 +335,7 @@ pub fn scan(root: &Path) -> Scan {
                 }
                 let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
                 scan.files.push(ScannedFile {
-                    agent: is_agent_file(&relative),
+                    agent: is_agent_file(&relative) || is_agent_data(&relative),
                     relative: relative.to_string_lossy().into_owned(),
                     modified: metadata
                         .modified()
@@ -693,5 +726,47 @@ mod tests {
         let error = read_template(&pinned(dir.path()), &link.join("secret.md")).unwrap_err();
         assert!(error.contains("folder shortcut"), "{error}");
         fs::remove_dir(&link).unwrap(); // Removes the junction only.
+    }
+
+    #[test]
+    fn scan_lists_agent_data_files_and_never_walks_nested_worktrees() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for (path, text) in [
+            ("notes.md", "x"),
+            (".claude/settings.json", "{}"),
+            (".claude/projects/run.jsonl", "{}"),
+            (".codex/config.toml", "a = 1"),
+            (".agent-harness/tier.json", "{}"),
+            (".mcp.json", "{}"),
+            ("data/config.json", "{}"),
+            ("src/.mcp.json", "{}"),
+            (".claude/worktrees/copy/README.md", "x"),
+            (".claude/worktrees/copy/.claude/settings.json", "{}"),
+            (".git/config.json", "{}"),
+            ("node_modules/pkg/.claude/x.json", "{}"),
+        ] {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        let scan = scan(root);
+        let mut files: Vec<(String, bool)> = scan
+            .files
+            .into_iter()
+            .map(|f| (f.relative.replace('\\', "/"), f.agent))
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            [
+                (".agent-harness/tier.json".to_string(), true),
+                (".claude/projects/run.jsonl".to_string(), true),
+                (".claude/settings.json".to_string(), true),
+                (".codex/config.toml".to_string(), true),
+                (".mcp.json".to_string(), true),
+                ("notes.md".to_string(), false),
+            ]
+        );
     }
 }
