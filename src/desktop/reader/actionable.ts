@@ -16,17 +16,20 @@ export function markFields(tokens: Token[], actionable: ActionableDocument, Toke
     if (token.type !== "inline" || !token.map || !token.children) continue;
     let line = token.map[0];
     let atLineStart = true;
+    let open = false;
     const children: Token[] = [];
+    const html = (content: string): Token => Object.assign(new TokenCtor("html_inline", "", 0), { content });
     for (const child of token.children) {
       const key = atLineStart ? fields.get(line) : undefined;
       if (key !== undefined && child.type === "text" && child.content.startsWith(`${key}::`)) {
-        const label = new TokenCtor("html_inline", "", 0);
-        label.content = `<span class="am-field-key">${key}</span>`;
-        children.push(label);
+        // The value is wrapped so the reader can edit it in place (A3).
+        children.push(html(`<span class="am-field" data-am-line="${line + 1}"><span class="am-field-key">${key}</span><span class="am-field-value">`));
+        open = true;
         child.content = child.content.slice(key.length + 2).replace(/^[ \t]/, "");
       }
       atLineStart = false;
       if (child.type === "softbreak" || child.type === "hardbreak") {
+        if (open) { children.push(html("</span></span>")); open = false; }
         // A field line keeps its own line, before and after.
         if (child.type === "softbreak" && (fields.has(line) || fields.has(line + 1))) {
           const hard = new TokenCtor("hardbreak", "br", 0);
@@ -38,6 +41,7 @@ export function markFields(tokens: Token[], actionable: ActionableDocument, Toke
       }
       children.push(child);
     }
+    if (open) children.push(html("</span></span>"));
     token.children = children;
   }
 }

@@ -11,6 +11,7 @@ import { collectFences, installSourceMap, sourceLines, stampSourceMap } from "./
 import { decorateCopy } from "./reader/copy";
 import { parseActionable } from "../render/actionable";
 import { chipRow, markFields } from "./reader/actionable";
+import { decorateControls } from "./reader/controls";
 
 /**
  * Continuous reading keeps natural endnotes and never invokes Paged.js.
@@ -60,6 +61,7 @@ export async function renderReaderDocument(
   if (chips) document.prepend(chips);
   // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
   decorateCopy(document, source, fileName);
+  decorateControls(document, actionable);
   const warnings = result.warnings.map(warning => warning.message);
   if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");
 

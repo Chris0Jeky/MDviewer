@@ -47,7 +47,8 @@ Export click → capture document id/name/text and settings NOW
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
-| Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1, static) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
 | Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |

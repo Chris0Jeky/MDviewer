@@ -29,41 +29,108 @@ owner:: Ada
 reviewer::
 `;
 
-test("actionable controls render statically in the reader", async ({ page }) => {
+test("actionable controls render as named controls in the reader", async ({ page }) => {
   await openFiles(page, [{ name: "board.md", text: DOC }]);
   await readyReader(page, "Board");
   const doc = page.locator("#reader-document");
 
-  // Marks: the task-list boxes plus glyphs for the four new marks, each with a name.
-  await expect(doc.locator(".task-list-item-checkbox")).toHaveCount(2);
-  await expect(doc.getByRole("img", { name: "In progress" })).toHaveCount(1);
-  await expect(doc.getByRole("img", { name: "Dropped" })).toHaveCount(1);
-  await expect(doc.getByRole("img", { name: "Blocked" })).toHaveCount(1);
-  await expect(doc.getByRole("img", { name: "Question" })).toHaveCount(1);
+  // Marks are checkboxes named by their item and mark; "/" is mixed.
+  await expect(doc.getByRole("checkbox")).toHaveCount(6);
+  await expect(doc.getByRole("checkbox", { name: "To do (To do)" })).toHaveAttribute("aria-checked", "false");
+  await expect(doc.getByRole("checkbox", { name: "Done (Done)" })).toHaveAttribute("aria-checked", "true");
+  await expect(doc.getByRole("checkbox", { name: "In progress (In progress)" })).toHaveAttribute("aria-checked", "mixed");
+  await expect(doc.getByRole("checkbox", { name: /Blocked \(Blocked\)/ })).toBeVisible();
   await expect(doc.locator("li.am-dropped")).toHaveCSS("text-decoration-line", "line-through");
   await expect(doc.locator("li", { hasText: "Blocked" })).not.toContainText("id:"); // the id comment is invisible
 
-  // Choices.
-  await expect(doc.getByRole("img", { name: "Selected", exact: true })).toHaveCount(1);
-  await expect(doc.getByRole("img", { name: "Not selected", exact: true })).toHaveCount(1);
+  // Choices are one radio group.
+  await expect(doc.getByRole("radiogroup")).toHaveCount(1);
+  await expect(doc.getByRole("radio", { name: "Large" })).toHaveAttribute("aria-checked", "true");
+  await expect(doc.getByRole("radio", { name: "Small" })).toHaveAttribute("aria-checked", "false");
   await expect(doc.locator("li", { hasText: "Large" })).not.toContainText("(x)");
 
-  // Fields: the key is a label, the value stays.
+  // Fields: the key is a label, the value an editable button.
   await expect(doc.locator(".am-field-key")).toHaveText(["owner", "reviewer"]);
-  await expect(doc.locator("p", { has: page.locator(".am-field-key") })).not.toContainText("::");
+  await expect(doc.getByRole("button", { name: "Edit owner: Ada" })).toBeVisible();
+  await expect(doc.getByRole("button", { name: "Edit reviewer: empty" })).toBeVisible();
 
   // Chips above the document; a value outside its options is marked.
   await expect(doc.locator(".am-chip")).toHaveCount(2);
-  await expect(doc.locator(".am-chip").first()).toContainText("status");
+  await expect(doc.getByRole("button", { name: /^status: draft\. Click for review/ })).toBeVisible();
   await expect(doc.locator(".am-chip.am-off")).toContainText("urgent");
 
   // Problems are reported on the Properties card.
   await expect(doc.locator(".reader-properties-problems")).toContainText('"twin" is used 2 times');
+  // Authored HTML inputs stay inert: none is enabled.
+  await expect(doc.locator("input:not([disabled]):not(.am-input)")).toHaveCount(0);
+});
 
-  // A1 is static: nothing to click changes the document.
-  await expect(doc.locator("input:not([disabled])")).toHaveCount(0);
-  await doc.getByRole("img", { name: "In progress" }).click();
-  await expect(doc.getByRole("img", { name: "In progress" })).toHaveCount(1);
+test("in memory (web build), gestures change exactly the span, by pointer and keyboard", async ({ page }) => {
+  await openFiles(page, [{ name: "board.md", text: DOC }]);
+  await readyReader(page, "Board");
+  const doc = page.locator("#reader-document");
+  // Click steps the declared cycle " " -> "/" -> "x"; the tab shows unsaved changes.
+  await doc.getByRole("checkbox", { name: "To do (To do)" }).click();
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("checkbox", { name: "To do (In progress)" })).toHaveAttribute("aria-checked", "mixed");
+  await expect(page.locator('#shell-tabs [role="tab"]')).toHaveText(["board.md, unsaved changes"]);
+
+  // Focus stays on the control a write re-rendered; Space steps again.
+  await expect(doc.getByRole("checkbox", { name: "To do (In progress)" })).toBeFocused();
+  await page.keyboard.press("Space");
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("checkbox", { name: "To do (Done)" })).toHaveAttribute("aria-checked", "true");
+
+  // The context-menu key opens all six marks; digits pick.
+  await doc.getByRole("checkbox", { name: "Done (Done)" }).focus();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: "Mark Done" });
+  await expect(menu.getByRole("menuitemradio")).toHaveCount(6);
+  await expect(menu.getByRole("menuitemradio", { name: /Done/ })).toBeFocused();
+  await page.keyboard.press("5");
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("checkbox", { name: "Done (Blocked)" })).toBeFocused();
+
+  // A click on a mark outside the cycle opens the menu instead of guessing.
+  await doc.getByRole("checkbox", { name: /Question \(Question\)/ }).click();
+  await expect(page.getByRole("menu", { name: /Mark Question/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(doc.getByRole("checkbox", { name: /Question \(Question\)/ })).toBeFocused();
+
+  // Choices: arrows move focus, Space selects (one atomic change for the group).
+  await doc.getByRole("radio", { name: "Large" }).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(doc.getByRole("radio", { name: "Small" })).toBeFocused();
+  await page.keyboard.press("Space");
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("radio", { name: "Small" })).toHaveAttribute("aria-checked", "true");
+  await expect(doc.getByRole("radio", { name: "Large" })).toHaveAttribute("aria-checked", "false");
+  await expect(doc.getByRole("radio", { name: "Small" })).toBeFocused();
+
+  // Fields: Enter commits, Escape cancels.
+  await doc.getByRole("button", { name: "Edit reviewer: empty" }).click();
+  await page.keyboard.type("Lin");
+  await page.keyboard.press("Escape");
+  await expect(doc.getByRole("button", { name: "Edit reviewer: empty" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Lin");
+  await page.keyboard.press("Enter");
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("button", { name: "Edit reviewer: Lin" })).toBeFocused();
+
+  // Chips: a click moves to the next option.
+  await doc.getByRole("button", { name: /^status: draft/ }).click();
+  await readyReader(page, "Board");
+  await expect(doc.getByRole("button", { name: /^status: review/ })).toBeVisible();
+
+  // The edited source reaches the editing workspace byte for byte.
+  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await expect(page.locator("#editor-input")).toHaveValue(DOC
+    .replace("status: draft", "status: review")
+    .replace("- [ ] To do", "- [x] To do")
+    .replace("- [x] Done", "- [!] Done")
+    .replace("- ( ) Small", "- (x) Small").replace("- (x) Large", "- ( ) Large")
+    .replace("reviewer::", "reviewer:: Lin"));
 });
 
 test("the paginated output shows marks and choices as glyphs, fields as text and no chips", async ({ page }) => {

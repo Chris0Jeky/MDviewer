@@ -14,7 +14,7 @@
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas-pro";
 import type { Settings } from "../app/settings";
-import { IDS, PAGEDJS } from "../app/dom";
+import { ATTRS, IDS, PAGEDJS } from "../app/dom";
 import { getDownloadDestination } from "./destination";
 import { paintFootnoteMarkers } from "./footnoteMarkers";
 import { captureLifecycleError, createOfflineCapture, offlineCaptureController } from "./offlineCapture";
@@ -204,6 +204,47 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement, sourceS
   }
 }
 
+/**
+ * #258: html2canvas-pro 2.6 models CSS `zoom` itself and misplaces what is inside a zoomed
+ * element: it unzooms each text run against its own parent's box, not the zoomed element's,
+ * then scales again, so wrapped rows drift and child boxes are scaled twice. Pagination needs
+ * `zoom` on Tier 3 blocks (a transformed block still fragments), but a captured sheet is a
+ * fixed box, so the clone draws each one as the equivalent scale transform, which html2canvas
+ * measures untransformed and scales correctly.
+ *
+ * The transformed block's layout box is its unscaled height. Paged.js lays a page out in a
+ * multi-column box, so that taller box would fragment into an unseen second column; the
+ * page's column grows by the difference first (a negative margin keeps any footnote area in
+ * place). Nothing below the block is on the page: Tier 3 shrinks it to fill the page.
+ */
+function unzoomShrunkBlocks(sheet: HTMLElement): void {
+  for (const block of sheet.querySelectorAll<HTMLElement>(`[${ATTRS.shrunk}]`)) {
+    const zoom = Number(block.style.zoom);
+    if (!(zoom > 0) || zoom === 1) continue;
+    const zoomed = block.getBoundingClientRect();
+    const column = block.closest<HTMLElement>(`.${PAGEDJS.pageContentClass}`);
+    if (column) {
+      const grow = Math.ceil(zoomed.height / zoom - zoomed.height) + 2;
+      const height = column.getBoundingClientRect().height + grow;
+      const margin = parseFloat(column.ownerDocument.defaultView?.getComputedStyle(column).marginBottom ?? "") || 0;
+      column.style.setProperty("height", `${height}px`, "important");
+      column.style.setProperty("margin-bottom", `${margin - grow}px`, "important");
+    }
+    block.style.removeProperty("zoom");
+    // Same content width as the zoomed block, so every line wraps where it did.
+    block.style.setProperty("box-sizing", "border-box", "important");
+    block.style.setProperty("width", `${zoomed.width / zoom}px`, "important");
+    block.style.setProperty("max-width", "none", "important");
+    block.style.setProperty("transform-origin", "0 0", "important");
+    block.style.setProperty("transform", `scale(${zoom})`, "important");
+    // Unzoomed margins can move the block; put its top-left corner back.
+    const scaled = block.getBoundingClientRect();
+    const dx = zoomed.left - scaled.left;
+    const dy = zoomed.top - scaled.top;
+    block.style.setProperty("transform", `translate(${dx}px, ${dy}px) scale(${zoom})`, "important");
+  }
+}
+
 async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvasElement> {
   const container = page.ownerDocument.createElement("div");
   container.setAttribute("data-html2canvas-ignore", "true");
@@ -239,6 +280,8 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
         // wait. Resolve layout first, then start a fresh font deadline.
         sheet.getBoundingClientRect();
         await waitForClonedFonts(cloneDocument, Date.now() + 10_000);
+        // Measures settled geometry, so it runs once the fonts have loaded.
+        unzoomShrunkBlocks(sheet);
         offline?.validate();
         paintFootnoteMarkers(sheet, page);
         prepared = true;

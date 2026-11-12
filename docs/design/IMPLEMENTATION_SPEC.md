@@ -645,9 +645,25 @@ newline kept). `src/render/actionableGlyphs.ts`, in `createMarkdown`, draws `[/]
 and `( ) (x)` as named static glyphs in both pipelines; `[ ]`/`[x]` stay with task lists, so
 ordinary documents render unchanged. The reader (`src/desktop/reader/actionable.ts`) labels field
 keys, shows chips above the document and reports actionable problems on the Properties card; the
-paginated output keeps fields as text and omits chips with the front matter. Nothing is
-interactive yet (A3). Conformance: `tests/fixtures/actionable/*` (byte-exact, `-text` in
-`.gitattributes`), `tests/actionable.test.ts`, `tests/desktop-e2e/actionable.spec.ts`.
+paginated output keeps fields as text and omits chips with the front matter. Conformance:
+`tests/fixtures/actionable/*` (byte-exact, `-text` in `.gitattributes`), `tests/actionable.test.ts`,
+`tests/desktop-e2e/actionable.spec.ts`.
+
+Actionable Markdown, A3 (interaction). `src/desktop/reader/controls.ts` `decorateControls(root,
+actionable)` runs after `decorateCopy` and turns the parsed controls (never authored HTML) into
+controls: marks are `role="checkbox"` buttons (click steps the `marks:` cycle; right click, the
+context-menu key or Shift+F10 opens all six, digits pick), choices are radios in a `radiogroup`
+(one tab stop; arrows move; click or Space selects), field values edit inline (Enter commits,
+Escape or blur cancels) and chips step their options. Only a trusted gesture writes.
+`src/desktop/reader/writeback.ts` `createWriteback(deps)` owns the write: a bound, clean document
+on the Windows host saves at once through `patch_document`, adopts the returned text and binding
+generation (so the next Save is not stale) and offers Undo (inverse patches) in a 10 s
+`role="status"` notice; an unplaced patch is re-derived once from the file's current text
+(`relocate`, the span must still hold the value the reader saw) or refused with nothing written;
+a reload that puts the old span back shows "Another program overwrote this change." with Apply
+again. Unbound, dirty or web-build documents change in memory and become dirty. Tests:
+`tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`,
+`tests/desktop-e2e/actionable.spec.ts`.
 
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
