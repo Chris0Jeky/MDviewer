@@ -138,6 +138,11 @@ export class Lens {
     return true;
   }
 
+  /** No more can be shown: no credit was prepaid for this value and the budget is spent. */
+  private exhausted(): boolean {
+    return this.prepaid === 0 && (this.stopped || this.shown >= this.maxValues);
+  }
+
   private block(value: JsonValue, key: string): boolean {
     return value.kind === "string" && (this.embedded.has(value) || proseKeys.has(key.toLowerCase())
       || (!this.literalStrings && clearlyMarkdown(value.value)) || value.value.length > 160 || /[\r\n]/.test(value.value));
@@ -191,7 +196,7 @@ export class Lens {
     if (value.kind === "object") {
       let table = false;
       for (const entry of value.entries) {
-        if (this.stopped) break;
+        if (this.exhausted()) break;
         const target = childPath(path, entry.key);
         if (scalar(entry.value) && !this.block(entry.value, entry.key)) {
           if (!this.take()) break;
@@ -202,7 +207,7 @@ export class Lens {
         } else {
           if (table) { this.line(); table = false; }
           // Do not emit a heading for a value the budget cannot show.
-          if (this.shown >= this.maxValues) { this.take(); break; }
+          if (this.exhausted()) { this.take(); break; }
           const next = this.heading(entry.key, target, level, indent);
           this.render(entry.value, target, level + 1, next, entry.key);
         }
@@ -262,13 +267,13 @@ export class Lens {
       return;
     }
     for (const [index, item] of value.items.entries()) {
-      if (this.stopped) break;
+      if (this.exhausted()) break;
       const target = `${path}[${index}]`;
       if (scalar(item) && !this.block(item, key)) {
         if (!this.take()) break;
         this.line(`${indent}- ${this.inline(item, key)}`, target);
       } else {
-        if (this.shown >= this.maxValues) { this.take(); break; }
+        if (this.exhausted()) { this.take(); break; }
         let label = String(index);
         if (item.kind === "object") {
           for (const name of labels) {

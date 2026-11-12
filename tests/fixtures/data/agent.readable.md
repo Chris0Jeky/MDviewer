@@ -1,9 +1,9 @@
 # agent\.jsonl
 JSON Lines · 996 B · 6 records
 
-4 turns: 2 user, 2 assistant
-tool calls: Read 1
-time span: 2026\-04\-03 10\:00 UTC – 2026\-04\-03 10\:03 UTC
+4 turns: 2 user, 2 assistant<br>
+tool calls: Read 1<br>
+time span: 2026\-04\-03 10\:00 UTC – 2026\-04\-03 10\:03 UTC<br>
 tokens: input\_tokens: 125, output\_tokens: 32
 
 ## User · 2026\-04\-03 10\:00 UTC
@@ -118,7 +118,15 @@ Line 5, column 11: Expected a JSON value
 
 > Keep the **mint** in its pot.
 
-Image \(image\/png\)
+Image \(image\/png\)\, data not shown \(22 characters\)
+
+<details><summary>Metadata</summary>
+
+| Key | Value |
+| --- | --- |
+| media\_type | image\/png |
+
+</details>
 
 <details><summary>Metadata</summary>
 
