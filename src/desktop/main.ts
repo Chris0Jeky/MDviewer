@@ -18,7 +18,7 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
-import { dataDocumentKind, dataLabelOf, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
+import { dataDocumentKind, dataLabelOf, prepareRenderText, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
@@ -337,9 +337,12 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
     };
-    // A data document renders its readable view; its raw text stays the document (renderText.ts).
-    const view = renderTextOf(doc.name, doc.text);
     try {
+      // A data document renders its readable view; its raw text stays the document (renderText.ts).
+      // Its kind's parser loads first (D4: YAML on demand); a failed load is this render's error.
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (current !== renderGeneration) return; }
+      const view = renderTextOf(doc.name, doc.text);
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
         show(first);
@@ -395,15 +398,17 @@ async function readFiles(files: File[]): Promise<void> {
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, JSON, JSON Lines and plain text files are supported.");
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (bytes.length > SIZE_HARD_BYTES || total + bytes.length > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       total += bytes.length;
       const text = decodeMarkdown(bytes);
-      // A data document's readable view can outgrow its file: confirm on the view too.
-      if (bytes.length <= SIZE_SOFT_BYTES && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
+      // A data document's readable view can outgrow its file: confirm on the view too. (If its
+      // parser cannot load, the document opens and its render shows the error.)
+      if (bytes.length <= SIZE_SOFT_BYTES && dataDocumentKind(file.name) && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
+        && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
         && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
       batch.documents.push({ name: file.name, text, bytes: bytes.length });
     } catch (error) {
@@ -817,10 +822,12 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
-      const kindBefore = dataDocumentKind(target.name);
+      // The view depends on the extension, not only the kind (a CSV and a TSV split differently).
+      const viewBefore = dataDocumentKind(target.name) && target.name.split(".").pop()!.toLowerCase();
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
-      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
+      const viewAfter = dataDocumentKind(result.name) && result.name.split(".").pop()!.toLowerCase();
+      if (!app && viewAfter !== viewBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;

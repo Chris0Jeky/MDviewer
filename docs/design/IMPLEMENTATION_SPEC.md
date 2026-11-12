@@ -748,14 +748,17 @@ unrelated common grammar assets unloaded until Export PDF… prepares the worksp
 
 Readable data, D3 webview half (`docs/design/READABLE_DATA.md`). `src/app/renderText.ts`
 `renderTextOf(name, text, scale?)` is the one seam from document text to render text: Markdown
-renders as written; a data document (`dataDocumentKind`: JSON, JSON Lines, plain text in version
-1) renders `toReadable(...).markdown` from `src/data/`, with budgets scaled by the reader's
+renders as written; a data document (`dataDocumentKind`: JSON, JSON Lines, YAML, TOML, CSV/TSV, plain
+text) renders `toReadable(...).markdown` from `src/data/`, with budgets scaled by the reader's
 "Show more" (doubles) and lifted by "Show all". The reader and the Edit preview (`main.ts`
 `render`) and the PDF workspace (`App.ts`, before front matter) all call it; the document keeps
 its raw text, which the editors show and Save writes (`markdownFilename` keeps a data
 extension). `renderReaderDocument(…, { data: true })` turns actionable controls and the front
 matter card off; caret follow is off (raw lines do not map to the derived view). The status
-line names the format (`dataLabelOf`). `isMarkdownFile` admits the version 1 data extensions,
+line names the format (`dataLabelOf`). D4: every render path (reader, Edit preview, workspace)
+first awaits `prepareRenderText(name)` (`prepare(kind)`: the YAML parser loads on demand), so a
+YAML file never reaches `toReadable` unprepared and a failed load is that render's error state
+(`tests/desktop-data-prepare.test.ts`); admission's size check prepares too. `isMarkdownFile` admits the data extensions,
 so the web and desktop pickers and drops accept them; the large-document confirmation also
 counts the readable view. Tests: `tests/render-text.test.ts`, `tests/input.test.ts`,
 `tests/markdown-download.test.ts`, `tests/desktop-e2e/data.spec.ts`, `tests/e2e/data.spec.ts`.

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace, selectDocument } from "./helpers";
 
 /** Readable data (D3; docs/design/READABLE_DATA.md). Every fixture here is invented. */
 const CONFIG = JSON.stringify({
@@ -123,4 +123,25 @@ test("a transcript-shaped JSON Lines file reads as a conversation", async ({ pag
   await expect(doc(page).getByRole("heading", { name: /^Assistant/ })).toBeVisible();
   // Message text is rendered as Markdown.
   await expect(doc(page).locator("strong", { hasText: "two" })).toBeVisible();
+});
+
+test("YAML, TOML and CSV open as readable views (D4)", async ({ page }) => {
+  await openFiles(page, [
+    { name: "config.yaml", text: "name: demo-service\nport: 8080\nowners:\n  - Ada\n  - Lin\n" },
+    { name: "app.toml", text: 'title = "demo"\n[server]\nport = 9090\n' },
+    { name: "people.csv", text: "name,role\nAda,lead\nLin,ops\n" },
+  ]);
+  await ready(page);
+  await expect(doc(page).locator("h1")).toHaveText("config.yaml");
+  await expect(doc(page)).toContainText("demo-service");
+  await expect(page.locator("#reader-status")).toContainText("YAML ·");
+  await selectDocument(page, "app.toml");
+  await ready(page);
+  await expect(doc(page)).toContainText("9090");
+  await expect(page.locator("#reader-status")).toContainText("TOML ·");
+  await selectDocument(page, "people.csv");
+  await ready(page);
+  await expect(doc(page).locator("table").first()).toContainText("Ada");
+  await expect(doc(page).locator("table").first()).toContainText("ops");
+  await expect(page.locator("#reader-status")).toContainText("CSV ·");
 });
