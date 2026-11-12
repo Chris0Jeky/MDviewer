@@ -15,6 +15,23 @@
 
 ## Current State (snapshot)
 
+- **2026-11-12 (companion push: Readable data and Actionable Markdown on main)** — main
+  [`8984b9b`](https://github.com/Chris0Jeky/MDviewer/commit/8984b9b7fa29a7d5bafc16f56b96597ef1c454ed)
+  (merge of #281); [CI 43221710538](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710538) and
+  [Windows Desktop 43221710658](https://github.com/Chris0Jeky/MDviewer/actions/runs/43221710658) passed on it.
+  The Windows app now saves in place (Save/Save As), follows file changes, keeps a Library and opens
+  linked Markdown files. Actionable Markdown A1 to A3 (#252, #244, #263) are merged: task checkboxes and
+  marks, choices, fields and status chips are clickable in the reader and written back byte-exact with
+  Undo (the native smoke #275 proves toggle and Undo on a CRLF file against the real host). The app also
+  opens `.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt` and `.log` as readable views, with a conversation
+  view for chat and agent transcripts (Readable data D0 to D3, #269/#270/#273/#272/#280). Not yet in the
+  app: YAML, TOML and CSV (parsers merged in #281; native open #284 is in review), templates (A4, #285
+  and #286 open). These are automated results on unsigned CI builds; nobody has accepted them on real
+  files yet, which is new item **AI-10**. **AI-6/AI-7/AI-8/AI-9/AI-10 and #169 remain OPEN.** No
+  deployment, signed release or performance result is claimed; the deployed site is unchanged.
+
+### Earlier snapshots (historical)
+
 - **2026-11-05 (editor follow-up qualified)** — application revision
   [`18afeeb8`](https://github.com/Chris0Jeky/MDviewer/commit/18afeeb8df7f7448d5241de50ff00db1d56f9697),
   tree `2ede86cc07caf53a8afb3106716ece69c49d8a41`, includes merged #209/#210/#208/#213/#212/#211/#214.
@@ -30,8 +47,6 @@
   **AI-6/AI-7/AI-8/AI-9 and #169 remain OPEN.** Current saves are explicit copies;
   documents remain in memory. This does not establish deployment, a signed release,
   an automatic updater or comparative RAM/startup performance.
-
-### Earlier snapshots (historical)
 
 - **2026-11-05 (combined application verified; future work indexed)** —
   [main `203c0979`](https://github.com/Chris0Jeky/MDviewer/commit/203c09798b01061ceb0c00f0937c22beeafb1a55),
@@ -263,6 +278,33 @@
 ---
 
 ## OPEN items
+
+- **AI-10 — Try the Windows build on your own files (manual acceptance).** The reader can now
+  change your Markdown (tick a task box, edit a line, save) and show JSON and transcripts as readable
+  documents. Automated tests prove this on invented files; only you can judge it on real ones. Work
+  on files you can afford to change: first make a backup copy of each one (or use a file in a Git
+  folder, where `git diff` shows exactly what changed).
+  1. Get the current Windows build: open docs/WINDOWS_DESKTOP.md, section "Get the app". In short,
+     open the Windows Desktop workflow on GitHub, pick the latest successful run on `main`, download
+     the `mdviewer-windows-x64` artifact (GitHub may ask you to sign in), extract it, and run the
+     `*-setup.exe` installer or the portable `mdviewer.exe`. Windows may show an unknown-publisher
+     prompt: these builds are unsigned previews.
+  2. Open one of your own Markdown files that has a task list (lines like `- [ ] something`) with
+     **Open** (Ctrl+O) or from Explorer. Do not drag it onto the window: a dropped file has no
+     file of its own to write back to. Click one empty box. It should become ticked at once.
+  3. Check the file on disk: open it in another program and compare it with your backup (or run
+     `git diff`). Exactly that one box should have changed (`[ ]` to `[x]`) and nothing else,
+     including line endings and blank lines at the end. Then click **Undo** in the small notice
+     that appeared; the file on disk should return to exactly what it was.
+  4. Press **Edit** (Ctrl+E), change a line of text, and press Ctrl+S. Check on disk that your
+     change was saved and the rest of the file is the same.
+  5. Open one of your own `.json` files. It should appear as a readable document (a title, an overview
+     line, tables or sections) rather than raw text. Press **Edit** to see the raw text, which Save
+     writes unchanged.
+  6. Open an agent or chat transcript (a `.jsonl` file, for example one a coding agent wrote). It
+     should show a line such as "4 turns: 2 user, 2 assistant" and then one section per turn headed
+     User or Assistant. Note anything confusing or missing.
+  7. Reply "AI-10 is done" (or report what looked wrong: which file type, what you did, what you saw).
 
 - **AI-9 — Harden the `production` environment before the first live automated deploy.**
   `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path
