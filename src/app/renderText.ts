@@ -1,4 +1,4 @@
-import { dataKindOf, toReadable, type DataKind, type Readable } from "../data";
+import { dataKindOf, prepare, toReadable, type DataKind, type Readable } from "../data";
 
 /**
  * The one place where a document's text becomes its render text (READABLE_DATA.md, "The seam").
@@ -17,8 +17,8 @@ export interface RenderText {
   data: DataView | null;
 }
 
-/** Version 1 formats (phase 1). YAML, TOML and CSV open once D4 lands. */
-const OPENABLE: ReadonlySet<DataKind> = new Set(["json", "jsonl", "text"]);
+/** Every format `src/data/` reads (D1, D4). */
+const OPENABLE: ReadonlySet<DataKind> = new Set(["json", "jsonl", "text", "yaml", "toml", "csv"]);
 const LABELS: Record<DataKind, string> = {
   json: "JSON", jsonl: "JSON Lines", yaml: "YAML", toml: "TOML", csv: "CSV", text: "Plain text",
 };
@@ -26,6 +26,19 @@ const LABELS: Record<DataKind, string> = {
 export function dataDocumentKind(fileName: string): DataKind | null {
   const kind = dataKindOf(fileName);
   return kind && OPENABLE.has(kind) ? kind : null;
+}
+
+/**
+ * Load what a document's kind needs before its view is derived (D4: the YAML parser loads on
+ * demand). Every render path awaits this first, so a YAML file never reaches `toReadable`
+ * unprepared; a failed load rejects into the caller's error state. Markdown resolves at once.
+ */
+const prepared = new Set<DataKind>();
+export async function prepareRenderText(name: string): Promise<void> {
+  const kind = dataDocumentKind(name);
+  if (!kind || prepared.has(kind)) return;
+  await prepare(kind);
+  prepared.add(kind);
 }
 
 /** The status line's name for a data document's format, or null for Markdown. */

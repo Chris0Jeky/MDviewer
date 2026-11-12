@@ -12,7 +12,7 @@
 import type { Doc, DocStore } from "./state";
 import { IDS } from "./dom";
 import { pulseDocOpened } from "./pulse";
-import { dataDocumentKind, renderTextOf } from "./renderText";
+import { dataDocumentKind, prepareRenderText, renderTextOf } from "./renderText";
 
 /** Extensions we accept. Lower-case, dot-prefixed. */
 export const MD_EXTENSIONS: readonly string[] = [".md", ".markdown"];
@@ -159,7 +159,8 @@ async function readFiles(
     }
     // A data document's readable view can be larger than its file: the large-document
     // confirmation also counts the view (READABLE_DATA.md, Boundaries).
-    if (file.size <= SIZE_SOFT_BYTES && dataDocumentKind(file.name)) {
+    if (file.size <= SIZE_SOFT_BYTES && dataDocumentKind(file.name)
+      && await prepareRenderText(file.name).then(() => true, () => false)) { // else its render shows the error
       const viewBytes = new TextEncoder().encode(renderTextOf(file.name, text).text).length;
       if (viewBytes > SIZE_SOFT_BYTES && (!(await onLargeFile(viewBytes)) || signal.aborted)) continue;
     }
