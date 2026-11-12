@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, selectDocument } from "./helpers";
 
 const grammarAsset = /\/assets\/(?:wasm|github-light|github-dark|typescript|csharp)-[^/]+\.js$/;
 const commonGrammarAsset = /\/assets\/(?:typescript|javascript|python|bash|shellscript|json|markdown|html|css|rust|go|java|c|cpp|sql|yaml|diff)-[^/]+\.js$/;
@@ -12,7 +12,7 @@ test("reader loads only its grammar before the editing workspace prepares the re
 
   const source = "# Quoted code\n\n> ```cs\n> public record Person(string Name);\n> ```";
   await openFiles(page, [{ name: "code.md", text: source }]);
-  await page.getByRole("combobox", { name: "Open documents" }).selectOption({ label: "code.md" });
+  await selectDocument(page, "code.md");
   await readyReader(page, "Quoted code");
   const code = page.locator("#reader-document blockquote pre.shiki code");
   await expect(code).toContainText("public record Person(string Name);");

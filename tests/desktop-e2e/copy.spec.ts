@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader } from "./helpers";
+import { test, expect, openFiles, readyReader, showOutline } from "./helpers";
 
 const DOC = `# Copy notes
 
@@ -58,6 +58,7 @@ test("reader copies code bodies, sections, links and selected Markdown source", 
 
   const second = doc.locator("h2", { hasText: "Second" });
   await expect(second).toHaveText("Second");
+  await showOutline(page);
   await expect(page.getByRole("navigation", { name: "Document headings" }).getByRole("link", { name: "Second", exact: true })).toBeVisible();
   await second.getByRole("button", { name: "Copy section as Markdown" }).click();
   expect(await clipboard(page)).toBe(DOC.slice(DOC.indexOf("## Second"), DOC.indexOf("\n\n## Third")));

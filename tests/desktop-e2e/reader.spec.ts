@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { test, expect, RICH_MARKDOWN, openFiles, dropFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, RICH_MARKDOWN, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline } from "./helpers";
 import { pdfRegionInk, type PdfRegion } from "./pdfPixels";
 
 test("production reader renders rich Markdown without loading the editing workspace", async ({ page, audit }) => {
@@ -30,6 +30,7 @@ test("production reader renders rich Markdown without loading the editing worksp
   expect(target).toMatch(/^#/);
   await footnote.click();
   expect(new URL(page.url()).hash).toBe(target);
+  await showOutline(page);
   await expect(page.getByRole("navigation", { name: "Document headings" }).getByRole("link", { name: "Code and mathematics" })).toBeVisible();
 
   await expect(page.locator("#editor-input, #paged-output, .pagedjs_page")).toHaveCount(0);
@@ -40,9 +41,9 @@ test("production reader renders rich Markdown without loading the editing worksp
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("private-field-notes");
 
   const before = await doc.evaluate(el => getComputedStyle(el).fontSize);
-  await page.getByRole("button", { name: "Larger text" }).click();
+  await moreMenu(page, "Larger text");
   expect(parseFloat(await doc.evaluate(el => getComputedStyle(el).fontSize))).toBeGreaterThan(parseFloat(before));
-  await page.getByRole("combobox", { name: "Screen theme" }).selectOption("dark");
+  await moreMenu(page, "Dark theme");
   await expect(page.locator("html")).toHaveAttribute("data-app-theme", "dark");
   await page.locator("#reader-scroll").evaluate(el => el.scrollTo({ top: 0, behavior: "instant" }));
   await page.screenshot({ path: test.info().outputPath("reader-rich-dark.png"), fullPage: true });
@@ -89,19 +90,18 @@ test("hostile HTML cannot execute, navigate or load document resources", async (
 test("multiple picker files and dropped files keep the selected document distinct", async ({ page }) => {
   await openFiles(page, [{ name: "alpha.md", text: "# Alpha\n\nFirst document." }, { name: "beta.md", text: "# Beta\n\nSecond document." }]);
   await readyReader(page, "Alpha");
-  const picker = page.getByRole("combobox", { name: "Open documents" });
-  await expect(picker.locator("option")).toHaveText(["alpha.md", "beta.md"]);
-  await picker.selectOption({ label: "beta.md" });
+  await expect(documentTabs(page)).toHaveText(["alpha.md", "beta.md"]);
+  await selectDocument(page, "beta.md");
   await readyReader(page, "Beta");
   await dropFiles(page, [{ name: "gamma.markdown", text: "# Gamma\n\nDropped document." }]);
   await readyReader(page, "Gamma");
-  await expect(picker.locator("option")).toHaveText(["alpha.md", "beta.md", "gamma.markdown"]);
-  await picker.selectOption({ label: "alpha.md" });
+  await expect(documentTabs(page)).toHaveText(["alpha.md", "beta.md", "gamma.markdown"]);
+  await selectDocument(page, "alpha.md");
   await readyReader(page, "Alpha");
   await expect(page.locator("#reader-document")).not.toContainText("Dropped document");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await moreMenu(page, "Close document");
   await readyReader(page, "Beta");
-  await expect(picker.locator("option")).toHaveText(["beta.md", "gamma.markdown"]);
+  await expect(documentTabs(page)).toHaveText(["beta.md", "gamma.markdown"]);
 });
 
 test("repeated edit and reading transitions flush pending edits without stale documents", async ({ page }) => {
@@ -118,18 +118,17 @@ test("repeated edit and reading transitions flush pending edits without stale do
     await page.getByRole("button", { name: "← Reading view", exact: true }).click();
     await readyReader(page, `Alpha revision ${turn}`);
     await expect(page.locator("#editor-input, #paged-output, .pagedjs_page")).toHaveCount(0);
-    const picker = page.getByRole("combobox", { name: "Open documents" });
-    await expect(picker.locator("option")).toHaveText(["• alpha.md", "beta.md"]);
-    await picker.selectOption({ label: "beta.md" });
+    await expect(documentTabs(page)).toHaveText(["alpha.md, unsaved changes", "beta.md"]);
+    await selectDocument(page, "beta.md");
     await readyReader(page, "Beta");
-    await picker.selectOption({ label: "• alpha.md" });
+    await selectDocument(page, "• alpha.md");
     await readyReader(page, `Alpha revision ${turn}`);
   }
   page.once("dialog", dialog => dialog.dismiss());
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await moreMenu(page, "Close document");
   await readyReader(page, "Alpha revision 3");
   page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await moreMenu(page, "Close document");
   await readyReader(page, "Beta");
   await page.screenshot({ path: test.info().outputPath("reader-after-roundtrips.png"), fullPage: true });
 });
@@ -237,17 +236,16 @@ test("failed capture styles save no PDF, release their iframe and permit a retry
 test("the reader enforces the 32-document session limit across batches", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Document ${index}` })));
   await readyReader(page, "Document 0");
-  const picker = page.getByRole("combobox", { name: "Open documents" });
-  await expect(picker.locator("option")).toHaveCount(32);
+  await expect(documentTabs(page)).toHaveCount(32);
   await dropFiles(page, [{ name: "overflow.md", text: "# Should not be opened" }]);
   await expect(page.locator("#reader-notice")).toContainText("at most 32 documents");
-  await expect(picker.locator("option")).toHaveCount(32);
+  await expect(documentTabs(page)).toHaveCount(32);
   await readyReader(page, "Document 0");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await moreMenu(page, "Close document");
   await readyReader(page, "Document 1");
   await dropFiles(page, [{ name: "replacement.md", text: "# Replacement" }]);
   await readyReader(page, "Replacement");
-  await expect(picker.locator("option")).toHaveCount(32);
+  await expect(documentTabs(page)).toHaveCount(32);
 });
 
 test("both reader and workspace bound total session bytes across separate file picks", async ({ page }) => {
@@ -257,10 +255,10 @@ test("both reader and workspace bound total session bytes across separate file p
   const large = `<!--${"x".repeat(12_600_000)}-->`;
   await openFiles(page, [{ name: "small.md", text: "# Small active document" }, { name: "large-a.md", text: large }]);
   await readyReader(page, "Small active document");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveCount(2);
+  await expect(documentTabs(page)).toHaveCount(2);
   await openFiles(page, [{ name: "large-b.md", text: large }]);
   await expect(page.locator("#reader-notice")).toContainText("memory limit");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveText(["small.md", "large-a.md"]);
+  await expect(documentTabs(page)).toHaveText(["small.md", "large-a.md"]);
   await readyReader(page, "Small active document");
   await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
   await readyWorkspace(page, "# Small active document");
@@ -293,7 +291,7 @@ test("closing an edited workspace tab requires explicit discard", async ({ page 
   await readyWorkspace(page, "# Beta");
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "Beta");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveText(["beta.md"]);
+  await expect(documentTabs(page)).toHaveText(["beta.md"]);
 });
 
 test("opening files in the workspace cannot exceed the desktop session limit", async ({ page }) => {
@@ -306,7 +304,7 @@ test("opening files in the workspace cannot exceed the desktop session limit", a
   await expect(page.getByRole("combobox", { name: "Active document" }).locator("option")).toHaveCount(32);
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "Document 0");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveCount(32);
+  await expect(documentTabs(page)).toHaveCount(32);
 });
 
 test("workspace teardown releases global listeners and later input fires once", async ({ page, context }) => {

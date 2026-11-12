@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader } from "./helpers";
+import { test, expect, documentTabs, openFiles, readyReader } from "./helpers";
 
 test("empty-document warnings retain rejected-file errors and clear on the next document", async ({ page }) => {
   await page.locator("#reader-file-input").setInputFiles([
@@ -10,7 +10,7 @@ test("empty-document warnings retain rejected-file errors and clear on the next 
   await expect(notice).toBeVisible();
   await expect(notice).toContainText("invalid.md:");
   await expect(notice).toContainText("This document is empty.");
-  await expect(page.locator("#reader-documents option")).toHaveText(["empty.md"]);
+  await expect(documentTabs(page)).toHaveText(["empty.md"]);
   expect(await page.locator("#workspace-notice").textContent()).toBe(await notice.textContent());
   await openFiles(page, [{ name: "next.md", text: "# Next document" }]);
   await readyReader(page, "Next document");

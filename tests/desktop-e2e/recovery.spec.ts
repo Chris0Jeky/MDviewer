@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace, dropFiles } from "./helpers";
+import { test, expect, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace } from "./helpers";
 
 test("Undo close cannot exceed 32 documents and a refusal retains the latest offer", async ({ page }) => {
   await openFiles(page, Array.from({ length: 32 }, (_, index) => ({ name: `${index}.md`, text: `# Document ${index}` })));
@@ -59,11 +59,11 @@ test("Undo checks UTF-8 session bytes before consuming edits and retries after c
   await expect(page).toHaveTitle("draft.md — MDviewer");
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
   await readyReader(page, "Recovered edited draft");
-  await expect(page.getByRole("combobox", { name: "Open documents" }).locator("option")).toHaveText(["• budget.md", "• draft.md"]);
+  await expect(documentTabs(page)).toHaveText(["budget.md, unsaved changes", "draft.md, unsaved changes"]);
   page.removeAllListeners("dialog");
   let prompted = false;
   page.on("dialog", async dialog => { prompted = true; await dialog.dismiss(); });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await moreMenu(page, "Close document");
   expect(prompted, "restored edits retain discard protection after returning to reading").toBe(true);
   await readyReader(page, "Recovered edited draft");
 });
