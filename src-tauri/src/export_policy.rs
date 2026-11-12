@@ -103,6 +103,9 @@ mod tests {
             assert_eq!(export_name(name), Ok(ExportKind::Data), "{name}");
         }
         assert!(export_name("a.yaml").is_err());
+        for reserved in ["CON.json", "aux.log", "com1.TXT", "a:b.json", "a.json "] {
+            assert!(export_name(reserved).is_err(), "accepted {reserved:?}");
+        }
         let dir = std::env::temp_dir();
         assert!(export_destination(&dir.join("a.json"), ExportKind::Data).is_ok());
         assert!(export_destination(&dir.join("a.md"), ExportKind::Data).is_err());

@@ -83,7 +83,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Narrow diffs; preserve behavior unless asked.
 - Local-first: no document network calls or automatic/app-managed document or session persistence.
-  Explicit user-selected Markdown copies and PDF saves/exports are supported. Persisted app-managed
+  Explicit user-selected Markdown, data or text copies and PDF saves/exports are supported. Persisted app-managed
   user state is limited to `Settings` and the approved SDK keys below. The content-free Pulseboard SDK is reached
   only through `src/app/pulse.ts` (closed enums, size buckets, counts; never document content or names;
   `tests/pulse.test.ts`). No other telemetry.
@@ -111,7 +111,7 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 
 - Document content never leaves the device. Open documents and latest-close recovery stay in
   memory; there is no automatic/app-managed document or session storage. Explicit user-selected
-  Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
+  Markdown, data or text copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Only the small `Settings` object and
   SDK keys below persist as app-managed user state. The Windows app also keeps `library.json` in its local data folder: recent files, pinned files and project folders, and last-looked-at stamps — absolute paths and timestamps only, never content, capped (500 recents, 64 pins), cleared by Clear library. Bundle Shiki themes/langs, KaTeX fonts, and
   Mermaid locally so the tool works offline.
 - The one runtime-network exception is the owner-approved Pulseboard SDK

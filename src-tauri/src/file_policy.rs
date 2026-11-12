@@ -280,7 +280,7 @@ pub fn read_markdown(
     if !metadata.is_file() {
         return Err(error_for(
             path,
-            "Choose a regular Markdown file, not a folder or device.",
+            "Choose a regular file, not a folder or device.",
         ));
     }
     if metadata.len() > limit {
@@ -302,7 +302,7 @@ pub fn read_markdown(
     if !opened.is_file() {
         return Err(error_for(
             path,
-            "Choose a regular Markdown file, not a folder or device.",
+            "Choose a regular file, not a folder or device.",
         ));
     }
     if opened.len() > limit {
