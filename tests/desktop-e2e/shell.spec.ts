@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN, openPdf } from "./helpers";
 
 const DOCS = [
   { name: "alpha.md", text: "# Alpha\n\nFirst document.\n\n## Second section\n\nMore." },
@@ -38,7 +38,7 @@ test("every former reader control is a command in the palette", async ({ page })
   await openFiles(page, DOCS);
   await readyReader(page, "Alpha");
   const titles = ["New document", "Open files…", "Close document", "Next document", "Previous document", "Light theme", "Dark theme",
-    "Sepia theme", "Follow Windows theme", "Smaller text", "Larger text", "Edit & PDF", "Print or export PDF…", "Save a copy…",
+    "Sepia theme", "Follow Windows theme", "Smaller text", "Larger text", "Edit the source beside the document", "Export PDF…", "Print or export PDF…", "Save a copy…",
     "Show or hide the library and outline", "Show the outline", "Copy reference (path and selected lines)"];
   await page.keyboard.press("Control+k");
   const input = page.getByRole("combobox", { name: "Search commands and files" });
@@ -69,8 +69,7 @@ test("a keyboard-only walk reaches the bar, tabs, menu, panel and palette and re
   await readyReader(page, "Alpha");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Edit & PDF", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Edit & PDF" })).toHaveCount(0); // one mode button in the bar
   await page.keyboard.press("Tab");
   const more = page.getByRole("button", { name: "More", exact: true });
   await expect(more).toBeFocused();
@@ -168,7 +167,7 @@ test("review fixes: modal palette, workspace Ctrl+P, narrow drawer and focus aft
   await page.keyboard.press("Escape");
 
   // Ctrl+P inside the workspace prints the paginated document too.
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, DOCS[0]!.text);
   await page.keyboard.press("Control+p");
   await expect.poll(() => page.evaluate(() => window.__desktopEvidence.prints.length)).toBe(1);

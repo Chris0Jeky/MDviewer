@@ -4,3 +4,4 @@
  */
 import "../styles/editor.css";
 export { mountEditor, type EditorController } from "../ui/Editor";
+export { mountSplitter, type SplitterController } from "../ui/Splitter";

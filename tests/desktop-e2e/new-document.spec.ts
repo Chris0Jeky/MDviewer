@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 test("New starts a local note in Edit beside the live reader and saves exact Markdown", async ({ page, audit }) => {
   await expect(page.locator("#editor-input, #paged-output")).toHaveCount(0);
@@ -25,7 +25,7 @@ test("New starts a local note in Edit beside the live reader and saves exact Mar
   expect(await readFile((await saved.path())!, "utf8")).toBe(source);
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("A new local note");
   // The same text continues into the paginated workspace.
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   await expect(page.locator("#paged-output h1")).toHaveText("A new local note");
   await page.getByRole("button", { name: "← Reading view", exact: true }).click();
@@ -42,7 +42,7 @@ test("New retains existing files, uses distinct names and reveals a Preview-only
   await expect(page.locator("#reader-edit #editor-input")).toBeFocused({ timeout: 30_000 });
   await expect(documentTabs(page)).toHaveText(["UNTITLED.MD", "Untitled 2.md", "Untitled 3.md"]);
   await page.locator("#reader-edit #editor-input").fill("# Keep the new source too");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   const editor = page.locator("#editor-input");
   const picker = page.getByRole("combobox", { name: "Active document" });
   await expect(editor).toBeFocused({ timeout: 30_000 });
@@ -81,7 +81,7 @@ test("reader and workspace New shortcuts keep blank documents distinct and closa
   await expect(documentTabs(page)).toHaveText(["Untitled.md", "Untitled 2.md"]);
   expect(dialogs, "pristine blank documents contain no edits to discard").toEqual([]);
   // The workspace's own New keeps its documents distinct too.
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   const editor = page.locator("#editor-input");
   const picker = page.getByRole("combobox", { name: "Active document" });
   await expect(editor).toBeFocused({ timeout: 30_000 });
@@ -100,7 +100,7 @@ test("New refuses a full desktop session without replacing the selected file", a
   await expect(documentTabs(page)).toHaveCount(32);
   await expect(page.locator("#reader-document h1")).toHaveText("Retained document 0");
   await expect(page.locator("#editor-input")).toHaveCount(0);
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, "# Retained document 0");
   await page.getByRole("button", { name: "New", exact: true }).click();
   await expect(page.locator("#workspace-notice")).toContainText("at most 32 documents");

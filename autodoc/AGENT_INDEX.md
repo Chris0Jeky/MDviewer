@@ -245,7 +245,7 @@ open-name collision avoidance. Desktop admits the empty source through current
 count/UTF-8 limits, records a clean baseline, preserves existing sources and late
 open selection ownership, then reveals/focuses the source. Mode transitions,
 export and native save block creation. Reader startup stays lazy until New or
-Edit & PDF. `App.init` forwards optional `createDocument?: () => void` through
+Export PDF…. `App.init` forwards optional `createDocument?: () => void` through
 Toolbar; web defaults remain compatible. See spec §14,
 `tests/desktop-new-document.test.ts`, `tests/desktop-e2e/new-document.spec.ts` and
 `docs/design/DESKTOP_AUTHORING_PLAN.md`.

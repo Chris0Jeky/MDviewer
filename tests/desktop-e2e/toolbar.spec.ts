@@ -1,4 +1,4 @@
-import { test, expect, newInWorkspace, openFiles, readyReader, readyWorkspace } from "./helpers";
+import { test, expect, newInWorkspace, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
 
 const source = "# Room to write\n\nKeep the source and the finished pages unchanged while opening document controls.\n\n## Next thought\n\nWriting comes first; page settings are available when needed.\n";
 
@@ -6,7 +6,7 @@ test("desktop starts with a calm toolbar and expands layout without changing sou
   await page.setViewportSize({ width: 1280, height: 720 });
   await openFiles(page, [{ name: "writing.md", text: source }]);
   await readyReader(page, "Room to write");
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await readyWorkspace(page, source);
   const layout = page.locator(".workspace-formatting");
   const summary = layout.locator("summary");

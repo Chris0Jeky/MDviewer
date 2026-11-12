@@ -433,7 +433,7 @@
  * #split-handle — the draggable divider. A real role="separator" with keyboard
  * resizing (Splitter.ts), so the split is operable without a pointer.
  * -------------------------------------------------------------------------- */
-#app > #workspace > #split-handle {
+:is(#app > #workspace, .reader-split) > #split-handle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -445,7 +445,7 @@
   user-select: none;
 }
 
-#app > #workspace > #split-handle > .split-handle-grip {
+:is(#app > #workspace, .reader-split) > #split-handle > .split-handle-grip {
   width: 2px;
   height: 30px;
   border-radius: 1px;
@@ -453,13 +453,13 @@
   transition: background-color 120ms ease;
 }
 
-#app > #workspace > #split-handle:hover > .split-handle-grip,
-#app > #workspace > #split-handle.is-dragging > .split-handle-grip,
-#app > #workspace > #split-handle:focus-visible > .split-handle-grip {
+:is(#app > #workspace, .reader-split) > #split-handle:hover > .split-handle-grip,
+:is(#app > #workspace, .reader-split) > #split-handle.is-dragging > .split-handle-grip,
+:is(#app > #workspace, .reader-split) > #split-handle:focus-visible > .split-handle-grip {
   background: var(--accent);
 }
 
-#app > #workspace > #split-handle:focus-visible {
+:is(#app > #workspace, .reader-split) > #split-handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
@@ -551,7 +551,7 @@ body.is-splitting :is(#app > #workspace, #reader-edit) > #editor-pane > .editor-
   }
 
   :is(#app > #workspace, #reader-edit) > #editor-pane,
-  #app > #workspace > #split-handle {
+  :is(#app > #workspace, .reader-split) > #split-handle {
     display: none !important;
   }
 

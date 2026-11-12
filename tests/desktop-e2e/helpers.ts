@@ -83,12 +83,12 @@ export async function openFiles(page: Page, files: Array<{ name: string; text: s
   await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
 }
 
-/** A new blank document in the PDF workspace: New opens Edit (S5), then Edit & PDF. */
+/** A new blank document in the PDF workspace: New opens Edit (S5), then Export PDF…. */
 export async function newInWorkspace(page: Page, via: "keyboard" | "button" = "keyboard"): Promise<void> {
   if (via === "keyboard") await page.keyboard.press("Control+n");
   else await page.getByRole("button", { name: "New document", exact: true }).click();
   await expect(page.locator("#reader-edit #editor-input")).toBeFocused({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   await expect(page.locator("#app #editor-input")).toBeFocused({ timeout: 30_000 });
 }
 
@@ -129,6 +129,11 @@ export async function selectDocument(page: Page, label: string): Promise<void> {
 export async function moreMenu(page: Page, title: string): Promise<void> {
   await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByRole("menu", { name: "More" }).getByText(title, { exact: true }).click();
+}
+
+/** The paginated workspace: More → Export PDF… (also Ctrl+Shift+E and the palette). */
+export async function openPdf(page: Page): Promise<void> {
+  await moreMenu(page, "Export PDF…");
 }
 
 /** Open the left panel on its Outline tab. */

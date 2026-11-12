@@ -19,6 +19,8 @@ body > #reader-shell *::after { box-sizing: border-box; }
 body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .desktop-reader .reader-primary { background: #3156a6; color: #fff; border-color: #3156a6; }
 .reader-layout { flex: 1; min-height: 0; display: flex; }
+/* Edit (S5) and the reader share this track; the panel stays outside it. */
+.reader-split { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .reader-outline { width: 190px; flex: none; overflow: auto; padding: 30px 14px; border-right: 1px solid var(--reader-line); }
 .reader-outline a { display: block; color: var(--reader-muted); font-size: 12px; text-decoration: none; padding: 6px 8px; border-radius: 5px; overflow-wrap: anywhere; }
 .reader-outline a:hover { color: var(--reader-accent); background: var(--reader-paper); }
@@ -111,7 +113,9 @@ body > #desktop-workspace > #app { min-height: 0; flex: 1; width: 100%; }
 .desktop-reader .am-notice .am-notice-action { color: #a7c3ff; }
 :root[data-app-theme="dark"] .desktop-reader .am-notice .am-notice-action { color: #3156a6; }
 :root[data-app-theme="sepia"] .desktop-reader .am-notice .am-notice-action { color: #f0c98a; }
-@media (forced-colors: active) { .reader-document :is(.am-mark, .am-choice):focus-visible { outline: 2px solid Highlight; } .am-notice { border: 1px solid CanvasText; } }
+@media (forced-colors: active) { .reader-document :is(.am-mark, .am-choice):focus-visible { outline: 2px solid Highlight; } .am-notice { border: 1px solid CanvasText; }
+  /* The mark glyphs are icons: keep their own fill, or a done box loses its white check. */
+  .reader-document :is(.am-box, .am-radio) { forced-color-adjust: none; } }
 
 /* Edit (S5): the workspace's source editor beside the reader, in the reader's palette. */
 #reader-edit {
@@ -119,14 +123,24 @@ body > #desktop-workspace > #app { min-height: 0; flex: 1; width: 100%; }
   --fg-strong: var(--reader-fg); --fg: var(--reader-fg); --fg-muted: var(--reader-muted); --fg-faint: var(--reader-muted);
   --border: var(--reader-line); --border-strong: var(--reader-muted); --accent: var(--reader-accent); --focus-ring: var(--reader-accent);
   --ctl-h: 32px; --gap: 8px;
-  flex: 1 1 0; min-width: 0; min-height: 0; display: flex;
+  flex: 0 0 calc(var(--edit-ratio, 0.5) * 100%); min-width: 0; min-height: 0; display: flex;
 }
 #reader-edit > #editor-pane { flex: 1; }
 @media (max-width: 760px) {
-  .reader-editing .reader-layout { flex-direction: column; }
+  .reader-editing .reader-split { flex-direction: column; }
+  .reader-split > #split-handle { display: none; }
   .reader-editing #reader-edit { flex: 0 0 50%; }
   #reader-edit > #editor-pane { border-right: 0; border-bottom: 1px solid var(--border); }
 }
 /* The status line already counts words (rendered text); a second, different count would confuse. */
 #reader-edit .editor-stat { display: none; }
 .reader-editing #reader-document:empty::before { content: "The preview appears here as you write."; color: var(--reader-muted); }
+/* Focus in Edit (one id above editor.css, which loads later): the caret shows where you are, so the source gets a quiet accent line on the
+   header's edge instead of a frame; forced colours keep the full outline. */
+#reader-edit#reader-edit#reader-edit > #editor-pane > .editor-scroll > #editor-input:focus-visible { outline: none; }
+#reader-edit > #editor-pane:focus-within > .editor-head { box-shadow: inset 0 -2px 0 var(--accent); }
+@media (forced-colors: active) {
+  #reader-edit#reader-edit#reader-edit > #editor-pane > .editor-scroll > #editor-input:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+/* The tab already names the document. */
+#reader-edit .editor-head .editor-name { visibility: hidden; }

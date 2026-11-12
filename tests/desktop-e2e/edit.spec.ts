@@ -101,3 +101,113 @@ test("patched diagrams keep distinct SVG ids", async ({ page }) => {
   expect(ids).toHaveLength(2);
   expect(new Set(ids).size).toBe(2);
 });
+
+test.describe("notepad behaviours in Edit", () => {
+  test("Find includes Replace, and both change only the source", async ({ page }) => {
+    await page.keyboard.press("Control+n");
+    await expect(edit(page)).toBeFocused();
+    await page.keyboard.insertText("# Plan\n\nOld word, old word.\n");
+    await page.keyboard.press("Control+h");
+    await page.getByRole("searchbox", { name: "Find in Markdown" }).fill("old word");
+    await page.getByRole("textbox", { name: "Replace with", exact: true }).fill("new word");
+    await page.getByRole("button", { name: "Replace all", exact: true }).click();
+    await expect(edit(page)).toHaveValue("# Plan\n\nnew word, new word.\n");
+    await expect(page.locator("#reader-document p")).toHaveText("new word, new word.");
+  });
+
+  test("closing a tab or the window with unsaved text asks first", async ({ page }) => {
+    await page.keyboard.press("Control+n");
+    await expect(edit(page)).toBeFocused();
+    await page.keyboard.insertText("Keep me");
+    await expect(documentTabs(page)).toHaveText(["Untitled.md, unsaved changes"]);
+    const asked: string[] = [];
+    page.once("dialog", dialog => { asked.push(dialog.message()); void dialog.dismiss(); });
+    await page.keyboard.press("Control+w");
+    await expect.poll(() => asked).toEqual(["Discard unsaved edits to Untitled.md?"]);
+    await expect(documentTabs(page)).toHaveText(["Untitled.md, unsaved changes"]);
+    await expect(edit(page)).toHaveValue("Keep me");
+    // The window: the page refuses to unload while text is unsaved.
+    const unload = new Promise<string>(resolve => page.once("dialog", dialog => { resolve(dialog.type()); void dialog.dismiss(); }));
+    await page.close({ runBeforeUnload: true });
+    expect(await unload).toBe("beforeunload");
+  });
+
+  test("the divider drags, by pointer and keyboard, and keeps the ratio", async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 700 });
+    await openFiles(page, [{ name: "notes.md", text: NOTES }]);
+    await readyReader(page, "Notes");
+    await page.keyboard.press("Control+e");
+    const divider = page.getByRole("separator", { name: "Resize the source and preview panes" });
+    await expect(divider).toBeVisible();
+    const before = (await page.locator("#reader-edit").boundingBox())!.width;
+    const grip = (await divider.boundingBox())!;
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2 + 200, grip.y + grip.height / 2, { steps: 5 });
+    await page.mouse.up();
+    const dragged = (await page.locator("#reader-edit").boundingBox())!.width;
+    expect(dragged).toBeGreaterThan(before + 150);
+    await divider.focus();
+    await page.keyboard.press("ArrowLeft");
+    expect((await page.locator("#reader-edit").boundingBox())!.width).toBeLessThan(dragged);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mdviewer.settings.v1")!).splitRatio)).toBeGreaterThan(0.5);
+    await page.keyboard.press("Control+e");
+    await expect(divider).toBeHidden();
+  });
+
+  test("a checkbox clicked in the preview while editing changes the source in memory", async ({ page }) => {
+    await openFiles(page, [{ name: "tasks.md", text: "# Tasks\n\n- [ ] Write the plan\n" }]);
+    await readyReader(page, "Tasks");
+    await page.keyboard.press("Control+e");
+    await expect(edit(page)).toBeFocused();
+    await page.locator("#reader-document").getByRole("checkbox", { name: /Write the plan/ }).click();
+    await expect(edit(page)).toHaveValue("# Tasks\n\n- [x] Write the plan\n");
+    await expect(documentTabs(page)).toHaveText(["tasks.md, unsaved changes"]);
+  });
+
+  test("the reader follows the caret when it moves by click or keyboard", async ({ page }) => {
+    const long = ["# Top", "", ...Array.from({ length: 80 }, (_, index) => `Paragraph ${index + 1}.\n`), "## Bottom", ""].join("\n");
+    await openFiles(page, [{ name: "long.md", text: long }]);
+    await readyReader(page, "Top");
+    await page.keyboard.press("Control+e");
+    await expect(edit(page)).toBeFocused();
+    await expect(page.locator("#reader-document h2")).not.toBeInViewport();
+    await page.keyboard.press("Control+End");
+    await expect(page.locator("#reader-document h2")).toBeInViewport();
+    await page.keyboard.press("Control+Home");
+    await expect(page.locator("#reader-document h1")).toBeInViewport();
+  });
+});
+
+test("Ctrl+S on an untitled note in the Windows app opens Save As and binds the file", async ({ page }) => {
+  // A faked host (in-page, no IPC): Save As answers as the native dialog would.
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    Object.assign(window, {
+      __saveCalls: calls,
+      isTauri: true,
+      __TAURI_INTERNALS__: {
+        metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
+        transformCallback: () => 1,
+        convertFileSrc: (path: string) => path,
+        invoke: async (cmd: string) => {
+          calls.push(cmd);
+          if (cmd === "take_pending_files" || cmd === "session_restore") return { documents: [], errors: [], canceled: false };
+          if (cmd === "library_list") return { recent: [], pinned: [], projects: [] };
+          if (cmd === "save_document_as") {
+            return { outcome: "saved", token: "s".repeat(32), generation: 1, name: "plan.md", path: "C:/notes/plan.md", dir: "C:/notes", encoding: "utf-8", eol: "lf" };
+          }
+          return null;
+        },
+      },
+    });
+  });
+  await page.goto("/desktop.html");
+  await page.keyboard.press("Control+n");
+  await expect(edit(page)).toBeFocused();
+  await page.keyboard.insertText("# Plan\n");
+  await page.keyboard.press("Control+s");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __saveCalls: string[] }).__saveCalls.filter(cmd => cmd.startsWith("save_document")))).toEqual(["save_document_as"]);
+  await expect(documentTabs(page)).toHaveText(["plan.md"]);
+  await expect(page.locator("#reader-status")).toContainText("C:/notes/plan.md");
+});

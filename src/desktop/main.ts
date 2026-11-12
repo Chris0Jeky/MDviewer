@@ -19,7 +19,7 @@ import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
 import { patchDocument } from "./reader/patch";
-import type { EditorController } from "./edit";
+import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
 import { setControlHandler } from "./reader/controls";
 import { createWriteback, type Notice } from "./reader/writeback";
@@ -44,7 +44,6 @@ const scroll = element("reader-scroll");
 const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
-const workspaceButton = element<HTMLButtonElement>("reader-workspace");
 const editHost = element("reader-edit");
 const editToggle = element<HTMLButtonElement>("reader-edit-toggle");
 const newButtons = [element<HTMLButtonElement>("reader-new-empty")];
@@ -66,6 +65,7 @@ let renderChain: Promise<void> = Promise.resolve();
 let editor: EditorController | null = null;
 let editing = false;
 let editTimer: ReturnType<typeof setTimeout> | undefined;
+let editSplitter: SplitterController | null = null;
 let textSize = 17;
 let nativeSaveBusy = false;
 const queuedBatches: Array<{ batch: OpenBatch; request: number }> = [];
@@ -111,7 +111,9 @@ function showActionNotice(notice: Notice | null): void {
 }
 const writeback = createWriteback({
   active: () => (app || changingMode ? undefined : docs.reader.active),
-  native: { available: native.available, patchDocument: (token, patches) => native.patchDocument(token, patches) },
+  // While Edit is open a control changes the open text, saved with the document: a direct file
+  // write would race the typing (and its adopt would replace what was typed meanwhile).
+  native: { get available() { return native.available && !editing; }, patchDocument: (token, patches) => native.patchDocument(token, patches) },
   // The host wrote the file: adopt its text and binding generation, or the next Save is stale.
   adopt: (doc, text, generation) => {
     const target = docs.saveTarget();
@@ -229,10 +231,11 @@ function syncDocuments(): void {
   saveState.textContent = target
     ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
     : "";
-  workspaceButton.disabled = !active || changingMode || nativeSaveBusy;
   editToggle.disabled = !!app || changingMode;
   editToggle.setAttribute("aria-pressed", String(editing));
   editHost.hidden = !editing;
+  const divider = editHost.nextElementSibling;
+  if (divider?.id === "split-handle") (divider as HTMLElement).hidden = !editing;
   document.body.classList.toggle("reader-editing", editing);
   const workspaceBusy = changingMode || nativeSaveBusy || !!app?.exportState.busy;
   returnButton.disabled = workspaceBusy;
@@ -310,7 +313,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
     // Text first: the document is readable, navigable and scrollable from this point;
     // code and diagrams upgrade in place afterwards.
     const show = (from: HTMLElement): void => {
-      // ponytail: when patching, replaced blocks' image URLs stay held until the next full render.
+      // Patching keeps the loaded images (imageCache); a full render releases them.
       if (patching) outline.replaceChildren();
       else releaseImages();
       // Through the patcher even on a full render (into the emptied reader), so every block gets
@@ -462,7 +465,17 @@ async function setEditing(on: boolean): Promise<void> {
   if (!docs.reader.active) { await createDocument(); return; }
   if (!editor) {
     try {
-      const { mountEditor } = await import("./edit");
+      const { mountEditor, mountSplitter } = await import("./edit");
+      if (!editSplitter) {
+        const layout = editHost.parentElement!;
+        const applyRatio = (ratio: number): void => { layout.style.setProperty("--edit-ratio", String(ratio)); };
+        applyRatio(settings.splitRatio);
+        editSplitter = mountSplitter(layout, {
+          track: layout, initialRatio: settings.splitRatio, onPreview: applyRatio,
+          onCommit: ratio => { applyRatio(ratio); settings.splitRatio = ratio; saveSettings({ ...loadSettings(), splitRatio: ratio }); },
+        });
+        editHost.after(layout.lastElementChild!); // the handle sits between the source and the reader
+      }
       editor ??= mountEditor(editHost, {
         onInput: editInput,
         codeTheme: settings.codeTheme,
@@ -472,8 +485,9 @@ async function setEditing(on: boolean): Promise<void> {
         confirmLargeInsert: async bytes => bytes <= SIZE_HARD_BYTES && window.confirm(
           `Inserting this would make the document about ${(bytes / 1_000_000).toFixed(1)} MB. Insert it anyway?`),
       });
-      editor.input.addEventListener("keyup", followCaret);
-      editor.input.addEventListener("click", followCaret);
+      // On the host: the editor replaces its textarea when the document changes.
+      editHost.addEventListener("keyup", event => { if (event.target === editor?.input) followCaret(); });
+      editHost.addEventListener("click", event => { if (event.target === editor?.input) followCaret(); });
     } catch (error) { report(`Could not open Edit: ${errorText(error)}`); return; }
   }
   if (app || changingMode || !docs.reader.active) return;
@@ -527,6 +541,8 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
   revealEditor ||= editing; // from Edit, the workspace opens on its source pane
   editor?.destroy();
   editor = null;
+  editSplitter?.destroy(); // the workspace mounts its own divider with the same id
+  editSplitter = null;
   editing = false;
   editHost.replaceChildren();
   rememberReaderPosition();
@@ -691,7 +707,6 @@ appRoot.addEventListener("click", event => {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
-workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 editToggle.addEventListener("click", () => { void setEditing(!editing); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
 function openSample(): void {
@@ -862,7 +877,7 @@ registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], 
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
 registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
   run: () => setEditing(!editing) });
-registerCommand({ id: "workspace.enter", title: "Edit & PDF (paginated preview and export)", enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
+registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
 registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
 registerCommand({ id: "view.textSmaller", title: "Smaller text", keys: ["Mod+-"], enabled: () => !app, run: () => resizeText(-1) });
@@ -1031,6 +1046,7 @@ const moreMenu: MenuEntry[] = [
   { command: "document.save", disabled: () => !somethingToSave() },
   { command: "document.saveAs" },
   { command: "document.saveCopy" },
+  { command: "workspace.enter", id: "reader-workspace" },
   { command: "export.pdf" },
   "separator",
   { command: "view.theme.light", role: "menuitemradio", checked: themeChecked("light") },
@@ -1110,17 +1126,20 @@ async function followRelativeLink(href: string): Promise<void> {
 // Local images: the sanitizer keeps a relative src inert as data-local-src; the
 // host reads it (typed, 20 MB cap) relative to this document's own folder.
 const imageUrls: string[] = [];
+/** Loaded local images by source, until the next full render: block patches reuse them. */
+const imageCache = new Map<string, string | null>();
 const IMAGE_TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
 };
 function releaseImages(): void {
+  imageCache.clear();
   for (const url of imageUrls.splice(0)) URL.revokeObjectURL(url);
 }
 // Bound what one document can make the reader hold: distinct images and bytes.
 const MAX_LOCAL_IMAGES = 100;
 const MAX_LOCAL_IMAGE_BYTES = 200 * 1024 * 1024;
 async function loadLocalImages(root: HTMLElement, token: string, current: number): Promise<void> {
-  const loaded = new Map<string, string | null>();
+  const loaded = imageCache;
   let bytesHeld = 0;
   for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-src]")) {
     if (image.src.startsWith("blob:")) continue; // kept by a block patch, already loaded

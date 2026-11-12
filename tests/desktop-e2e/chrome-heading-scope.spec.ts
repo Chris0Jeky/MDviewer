@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader } from "./helpers";
+import { test, expect, openFiles, readyReader, openPdf } from "./helpers";
 import { chromeHeadingMarkdown, chromeHeadings } from "../helpers/chromeHeadings";
 
 test.beforeEach(async ({ browser, browserName }, info) => {
@@ -13,7 +13,7 @@ test("desktop shell IDs remain ordinary headings in reading, workspace and print
     await expect.soft(heading).toHaveCSS("display", "block", { timeout: 1_000 });
   }
 
-  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await openPdf(page);
   const app = page.locator("body > #desktop-workspace > #app");
   const workspace = app.locator(":scope > #workspace");
   const canvas = workspace.locator(":scope > #canvas");
