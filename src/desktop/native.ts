@@ -15,9 +15,9 @@ export interface OpenBatch {
   canceled: boolean;
 }
 
-/** One actionable-Markdown line patch (docs/design/ACTIONABLE_MARKDOWN.md, "Write-back"); `line` is 1-based. */
+/** One actionable-Markdown line patch (docs/design/ACTIONABLE_MARKDOWN.md, "Write-back"). */
 export interface LinePatch { line: number; id?: string | null; expect: string; replace: string }
-/** A2 result. `unplaced`: nothing written; `index` is the 0-based position of the unplaced patch in the change. */
+/** A2 result. `unplaced`: nothing written; re-derive patch `index` from `text` and retry once. */
 export type PatchResult =
   | { outcome: "saved"; generation: number; text: string }
   | { outcome: "unplaced"; index: number; text: string }

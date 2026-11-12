@@ -103,9 +103,8 @@ A `templates/` folder inside a pinned folder offers "New from template". `{{name
 
 ## Write-back
 
-- A change is a list of line patches, `{ line, id?, expect, replace }`: the 1-based line the
-  reader saw the control on (as the parser numbers lines), the full old text of the line and its
-  full new text. A change with several patches (a choice group) is applied as one.
+- A change is a list of line patches, `{ id?, expect, replace }`: the full old text of the line
+  and its full new text. A change with several patches (a choice group) is applied as one.
 - **Byte exact.** Only the editable span changes. Every other byte stays: the byte order mark, each
   line terminator (mixed endings included) and whether the file ends with one.
 - **Atomic.** MDviewer writes through its conflict-safe replace and never truncates in place.
