@@ -83,6 +83,15 @@ export async function openFiles(page: Page, files: Array<{ name: string; text: s
   await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
 }
 
+/** A new blank document in the PDF workspace: New opens Edit (S5), then Edit & PDF. */
+export async function newInWorkspace(page: Page, via: "keyboard" | "button" = "keyboard"): Promise<void> {
+  if (via === "keyboard") await page.keyboard.press("Control+n");
+  else await page.getByRole("button", { name: "New document", exact: true }).click();
+  await expect(page.locator("#reader-edit #editor-input")).toBeFocused({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit & PDF", exact: true }).click();
+  await expect(page.locator("#app #editor-input")).toBeFocused({ timeout: 30_000 });
+}
+
 export async function readyReader(page: Page, heading: string): Promise<void> {
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-document h1")).toHaveText(heading);

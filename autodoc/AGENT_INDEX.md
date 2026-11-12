@@ -48,6 +48,7 @@ Export click → capture document id/name/text and settings NOW
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
 | Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
@@ -238,7 +239,7 @@ coverage: `tests/desktop-foundations.test.ts`.
 ## Desktop New document
 
 `src/desktop/main.ts` owns creation from reader/empty/workspace controls and
-Ctrl/Cmd+N. `src/desktop/session.ts` exports
+Ctrl/Cmd+N; from the reader, New opens the note in Edit (S5). `src/desktop/session.ts` exports
 `nextUntitledName(docs: readonly { name: string }[]): string` for case-insensitive
 open-name collision avoidance. Desktop admits the empty source through current
 count/UTF-8 limits, records a clean baseline, preserves existing sources and late

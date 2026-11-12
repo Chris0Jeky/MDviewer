@@ -73,6 +73,6 @@ describe("reader block patching", () => {
     const live = document.createElement("div");
     live.innerHTML = "<p>Fresh.</p>";
     expect(await patch(live, "Fresh.")).toBe(1);
-    expect(live.textContent).toBe("Fresh.");
+    expect(live.textContent?.trim()).toBe("Fresh.");
   });
 });

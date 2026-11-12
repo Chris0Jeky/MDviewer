@@ -1,8 +1,9 @@
 # MDviewer for Windows
 
 The experimental Windows app opens Markdown directly in a continuous reading view.
-It uses Windows' WebView2 runtime in its own window. The source editor and paginated
-PDF workspace load when you choose **New** or **Edit & PDF**.
+It uses Windows' WebView2 runtime in its own window. The source editor loads when you
+choose **Edit** (`Ctrl+E`) or **New**; the paginated PDF workspace when you choose
+**Edit & PDF** or print.
 
 ## Get the app
 
@@ -36,12 +37,16 @@ The reader includes a heading outline, text-size
 controls, and light, dark and sepia screen themes. Code highlighting, math,
 diagrams, tables and footnotes use the same rendering modules as the web app.
 
-Choose **New document** from the empty reader, or **New** from either toolbar, to
-start writing a blank note. Existing files stay open. New notes use the first
+Choose **Edit** (`Ctrl+E`) to write in the source beside the document: the preview
+updates as you type, changing only the blocks you edit, and follows your cursor. Ctrl+E
+again (or **Edit**) hides the source and keeps its undo history.
+
+Choose **New document** from the empty reader, or **New** from the More menu, to
+start writing a blank note in Edit. Existing files stay open. New notes use the first
 available name (`Untitled.md`, `Untitled 2.md`, and so on), and the source pane is
 shown and focused. An untouched blank note can close without a discard prompt.
 
-Choose **Edit & PDF** to edit an opened file and use the existing page-safe preview.
+Choose **Edit & PDF** to edit with the existing page-safe preview and export.
 Use **Format** beside Find for Bold, Italic, code spans/blocks, headings, links,
 bullets, numbered lists and tasks. Ctrl/Cmd+B, I and K apply Bold, Italic and Link
 while writing in the source. Each command is one Undo step; selected placeholder
@@ -110,12 +115,13 @@ keeps every layout setting and your Markdown unchanged.
 
 | Shortcut | Action | Available in |
 | --- | --- | --- |
-| `Ctrl+N` | Start a new document, preserving open files | Reader and editing workspace |
+| `Ctrl+E` | Show or hide Edit (the source beside the document) | Reader |
+| `Ctrl+N` | Start a new document in Edit, preserving open files | Reader and editing workspace |
 | `Ctrl+O` | Open Markdown files | Reader and editing workspace |
 | `Ctrl+S` | Save the document to its own file (Save As if it has none) | Reading view and editing workspace |
 | `Ctrl+Shift+S` | Save As: choose a new file and keep editing it there | Reading view and editing workspace |
-| `Ctrl+F` | Find source text | Workspace with the source pane visible; reader and Preview-only keep WebView Find |
-| `Ctrl+H` | Open source replacement controls | Workspace with the source pane visible |
+| `Ctrl+F` | Find source text | Edit, and the workspace with the source pane visible; reader and Preview-only keep WebView Find |
+| `Ctrl+H` | Open source replacement controls | Edit, and the workspace with the source pane visible |
 | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | Bold / Italic / Link | Source textarea |
 | `Alt+Shift+P` / `Alt+Shift+N` | Previous / next document | Reader and editing workspace |
 | `Alt+Shift+D` | Focus the document picker | Reader and editing workspace |

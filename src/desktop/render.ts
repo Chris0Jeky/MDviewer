@@ -66,7 +66,7 @@ export async function renderReaderDocument(
   decorateCopy(document, source, fileName);
   decorateControls(document, actionable);
   const warnings = result.warnings.map(warning => warning.message);
-  if (!text.trim()) warnings.push("This document is empty. Use Edit & PDF to add Markdown.");
+  if (!text.trim()) warnings.push("This document is empty. Press Ctrl+E to write in it.");
 
   const root = paint ? paint(document) : document;
   if (!root) return { document, warnings };

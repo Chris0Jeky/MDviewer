@@ -68,6 +68,8 @@ test("a keyboard-only walk reaches the bar, tabs, menu, panel and palette and re
   await page.keyboard.press("Home");
   await readyReader(page, "Alpha");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Edit & PDF", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   const more = page.getByRole("button", { name: "More", exact: true });

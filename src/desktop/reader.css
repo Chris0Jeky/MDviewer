@@ -112,3 +112,21 @@ body > #desktop-workspace > #app { min-height: 0; flex: 1; width: 100%; }
 :root[data-app-theme="dark"] .desktop-reader .am-notice .am-notice-action { color: #3156a6; }
 :root[data-app-theme="sepia"] .desktop-reader .am-notice .am-notice-action { color: #f0c98a; }
 @media (forced-colors: active) { .reader-document :is(.am-mark, .am-choice):focus-visible { outline: 2px solid Highlight; } .am-notice { border: 1px solid CanvasText; } }
+
+/* Edit (S5): the workspace's source editor beside the reader, in the reader's palette. */
+#reader-edit {
+  --bg-surface: var(--reader-paper); --bg-toolbar: var(--reader-paper); --bg-sunken: var(--reader-bg); --bg-app: var(--reader-bg);
+  --fg-strong: var(--reader-fg); --fg: var(--reader-fg); --fg-muted: var(--reader-muted); --fg-faint: var(--reader-muted);
+  --border: var(--reader-line); --border-strong: var(--reader-muted); --accent: var(--reader-accent); --focus-ring: var(--reader-accent);
+  --ctl-h: 32px; --gap: 8px;
+  flex: 1 1 0; min-width: 0; min-height: 0; display: flex;
+}
+#reader-edit > #editor-pane { flex: 1; }
+@media (max-width: 760px) {
+  .reader-editing .reader-layout { flex-direction: column; }
+  .reader-editing #reader-edit { flex: 0 0 50%; }
+  #reader-edit > #editor-pane { border-right: 0; border-bottom: 1px solid var(--border); }
+}
+/* The status line already counts words (rendered text); a second, different count would confuse. */
+#reader-edit .editor-stat { display: none; }
+.reader-editing #reader-document:empty::before { content: "The preview appears here as you write."; color: var(--reader-muted); }

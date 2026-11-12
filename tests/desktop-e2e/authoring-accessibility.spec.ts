@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, readyWorkspace } from "./helpers";
+import { test, expect, newInWorkspace, readyWorkspace } from "./helpers";
 
 test("keyboard New, layout, Find and Save expose usable names, states and focus", async ({ page, browser, browserName }, info) => {
   await info.attach("browser-runtime", { body: JSON.stringify({ engine: browserName, version: browser.version() }), contentType: "application/json" });
   await page.setViewportSize({ width: 640, height: 480 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.keyboard.press("Control+n");
+  await newInWorkspace(page);
   const input = page.getByRole("textbox", { name: "Markdown source", exact: true });
   await expect(input).toBeFocused({ timeout: 30_000 });
   const text = "# Keyboard-only note\n\nUnicode: café → 日本語.\n";
@@ -62,7 +62,7 @@ test("an invalid Open announces a recoverable error and keyboard retry opens the
 
 test("desktop Find and Format retain usable source space together at 560×420", async ({ page }, info) => {
   await page.setViewportSize({ width: 560, height: 420 });
-  await page.keyboard.press("Control+n");
+  await newInWorkspace(page);
   const input = page.getByRole("textbox", { name: "Markdown source", exact: true });
   await expect(input).toBeFocused({ timeout: 30_000 });
   const text = "# Both panels\n\nSource remains available.";
