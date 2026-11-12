@@ -1,0 +1,11 @@
+{
+  "messages": [
+    { "role": "developer", "content": "Answer in one sentence." },
+    { "role": "user", "content": "Invent a name for our moon garden." },
+    { "role": "assistant", "content": "Try **Silver Sprout**." }
+  ],
+  "model": "invented-garden-model",
+  "temperature": 0.5,
+  "max_tokens": 120,
+  "stream": false
+}

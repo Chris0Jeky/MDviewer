@@ -1,0 +1,5 @@
+[
+  { "role": "system", "content": "You help a fictional garden club." },
+  { "role": "user", "content": "What should we plant?" },
+  { "role": "assistant", "content": "## A small plan\n\nPlant **mint** in a pot.\n\n- Water lightly.\n- Keep it near a window." }
+]
