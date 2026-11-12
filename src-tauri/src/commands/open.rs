@@ -3,7 +3,9 @@ use std::sync::atomic::Ordering;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use crate::file_policy::{read_batch, skipped_files_error, ReadBatch};
+use crate::file_policy::{
+    read_batch, skipped_files_error, ReadBatch, DATA_EXTENSIONS, MARKDOWN_EXTENSIONS,
+};
 use crate::registry::{capture_revision, Binding, Registry, Token};
 use crate::DesktopState;
 
@@ -119,9 +121,16 @@ pub(crate) async fn open_files(
     }
     let dialog_app = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let every: Vec<&str> = MARKDOWN_EXTENSIONS
+            .iter()
+            .chain(DATA_EXTENSIONS)
+            .copied()
+            .collect();
         let mut picker = rfd::FileDialog::new()
-            .set_title("Open Markdown")
-            .add_filter("Markdown documents", &["md", "markdown"]);
+            .set_title("Open")
+            .add_filter("Markdown, data and text", &every)
+            .add_filter("Markdown documents", MARKDOWN_EXTENSIONS)
+            .add_filter("Data and text (JSON, JSON Lines, text)", DATA_EXTENSIONS);
         if let Some(window) = dialog_app.get_webview_window("main") {
             picker = picker.set_parent(&window);
         }

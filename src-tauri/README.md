@@ -47,7 +47,10 @@ argument, resolves relative paths against the launching process's working
 directory, and never splits a path on spaces. Native drag/drop is disabled so the
 reader's regular browser `File` drop handling can be used.
 
-The native reader accepts `.md` and `.markdown` (case-insensitive), UTF-8 with or
+The native reader accepts Markdown (`.md`, `.markdown`) and, for Readable data
+(docs/design/READABLE_DATA.md; owner-requested boundary change 2026-11-12), data and
+plain text (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt`, `.log`), all case-insensitive
+and read as raw text under the same rules (`file_policy::DATA_EXTENSIONS`): UTF-8 with or
 without a BOM, and UTF-16 LE/BE with a BOM. Invalid encodings are rejected rather
 than silently replaced. Metadata and the actual read are both bounded. Each file
 and each batch is limited to 25,000,000 disk/decoded bytes, and one batch/launch
@@ -96,7 +99,9 @@ bytes, so the watcher sees no outside change.
 `replace::replace_if_unchanged` with the identity and digest the binding read;
 `save_document_as` opens the native dialog, compares an existing destination with
 what it held at selection (or with this binding's read, for its own file), uses
-`create_new` otherwise, registers the new binding and revokes the old token.
+`create_new` otherwise, registers the new binding and revokes the old token. A data or
+text document's Save As offers and requires a data or text extension (its own first); any
+other document saves as Markdown.
 Results are `{outcome: "saved" | "canceled" | "conflict" | "mixed-line-endings" |
 "failed", ...}` with stable codes and no paths. One dialog or write runs at a time;
 each save first reconciles interrupted saves in its folder.
@@ -140,8 +145,8 @@ the document's own folder path does not already contain (one could point at a ne
 share and start an SMB connection unasked), and re-apply the local-file policy (opens go
 through `read_batch`). The webview sends only the token and the reference as written.
 
-`save_export` writes explicit copies (Save Markdown, PDF). It accepts a raw binary body and an
-encoded safe basename, never a destination path. Markdown must be UTF-8; PDFs
+`save_export` writes explicit copies (Save Markdown, PDF, and a data or text copy). It accepts a raw binary body and an
+encoded safe basename, never a destination path. Markdown, data and text must be UTF-8; PDFs
 must have a PDF signature. The frontend checks the 128 MiB cap before reading a
 Blob into memory, and the host checks it before copying the request or opening a
 dialog. A native Save dialog runs on a background thread. Only its chosen path

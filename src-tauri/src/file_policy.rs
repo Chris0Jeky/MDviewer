@@ -7,6 +7,22 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const MAX_FILE_BYTES: u64 = 25_000_000;
+
+/// Markdown documents. With [`DATA_EXTENSIONS`], every extension MDviewer opens and saves.
+pub const MARKDOWN_EXTENSIONS: &[&str] = &["md", "markdown"];
+/// Data and plain-text documents (docs/design/READABLE_DATA.md, phase 1): read and saved as
+/// raw text under the same path, size and encoding rules; the webview derives their view.
+pub const DATA_EXTENSIONS: &[&str] = &["json", "jsonc", "jsonl", "ndjson", "txt", "log"];
+
+/// The lower-case extension of `name` when it is one MDviewer opens, else None.
+pub fn document_extension(name: &str) -> Option<String> {
+    let extension = name.rsplit_once('.')?.1.to_ascii_lowercase();
+    MARKDOWN_EXTENSIONS
+        .iter()
+        .chain(DATA_EXTENSIONS)
+        .any(|known| *known == extension)
+        .then_some(extension)
+}
 pub const MAX_BATCH_FILES: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,17 +257,18 @@ pub fn read_markdown(
     if !is_local_file_path(path) {
         return Err(error_for(
             path,
-            "Choose a local Markdown file with an absolute path.",
+            "Choose a local file with an absolute path.",
         ));
     }
     let supported = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"));
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(document_extension)
+        .is_some();
     if !supported {
         return Err(error_for(
             path,
-            "Only .md and .markdown files are supported.",
+            "Only Markdown (.md, .markdown), JSON (.json, .jsonc, .jsonl, .ndjson) and plain text (.txt, .log) files are supported.",
         ));
     }
     let metadata = fs::metadata(path).map_err(|_| {
@@ -263,7 +280,7 @@ pub fn read_markdown(
     if !metadata.is_file() {
         return Err(error_for(
             path,
-            "Choose a regular Markdown file, not a folder or device.",
+            "Choose a regular file, not a folder or device.",
         ));
     }
     if metadata.len() > limit {
@@ -285,7 +302,7 @@ pub fn read_markdown(
     if !opened.is_file() {
         return Err(error_for(
             path,
-            "Choose a regular Markdown file, not a folder or device.",
+            "Choose a regular file, not a folder or device.",
         ));
     }
     if opened.len() > limit {
@@ -617,6 +634,21 @@ mod tests {
     }
 
     #[test]
+    fn opens_data_and_text_documents_under_the_same_rules() {
+        let dir = TestDirectory::new();
+        for name in ["a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG"] {
+            let path = dir.write(name, b"{\"k\": 1}\r\n");
+            let document = read_markdown(&path, 25_000_000).unwrap();
+            assert_eq!(document.text, "{\"k\": 1}\r\n", "{name}");
+        }
+        // The same encoding and size rules: NUL bytes are refused, the limit holds.
+        assert!(read_markdown(&dir.write("bin.json", b"{\0}"), 25_000_000).is_err());
+        assert!(read_markdown(&dir.write("big.txt", b"12345"), 4).is_err());
+        assert_eq!(document_extension("x.Json").as_deref(), Some("json"));
+        assert_eq!(document_extension("x.yaml"), None);
+    }
+
+    #[test]
     fn accepts_an_empty_markdown_file() {
         let dir = TestDirectory::new();
         let path = dir.write("empty.markdown", b"");
@@ -672,7 +704,7 @@ mod tests {
     #[test]
     fn rejects_non_markdown_files_and_directories() {
         let dir = TestDirectory::new();
-        for name in ["notes.txt", "notes.md.exe", "notes"] {
+        for name in ["notes.yaml", "notes.md.exe", "notes.json.bak", "notes"] {
             let path = dir.write(name, b"# Valid text");
             assert!(read_markdown(&path, 25_000_000).is_err());
         }

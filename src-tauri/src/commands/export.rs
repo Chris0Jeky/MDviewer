@@ -6,6 +6,7 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Manager, State};
 
 use crate::export_policy::{export_data, export_destination, export_name, export_size, ExportKind};
+use crate::file_policy::{DATA_EXTENSIONS, MARKDOWN_EXTENSIONS};
 use crate::DesktopState;
 
 #[derive(Debug, Serialize)]
@@ -80,7 +81,8 @@ pub(crate) async fn save_export(
             .set_file_name(&name);
         picker = match kind {
             ExportKind::Pdf => picker.add_filter("PDF document", &["pdf"]),
-            ExportKind::Markdown => picker.add_filter("Markdown document", &["md", "markdown"]),
+            ExportKind::Markdown => picker.add_filter("Markdown document", MARKDOWN_EXTENSIONS),
+            ExportKind::Data => picker.add_filter("Data or text document", DATA_EXTENSIONS),
         };
         if let Some(window) = app.get_webview_window("main") {
             picker = picker.set_parent(&window);
@@ -126,5 +128,33 @@ mod tests {
         assert!(persist_export(Some(occupied.clone()), ExportKind::Markdown, b"new").is_err());
         assert_eq!(std::fs::read(occupied.join("keep")).unwrap(), b"untouched");
         assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn a_data_copy_keeps_its_data_extension() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("copy.json");
+        assert!(
+            !persist_export(
+                Some(destination.clone()),
+                ExportKind::Data,
+                b"{\"k\": 1}
+"
+            )
+            .unwrap()
+            .canceled
+        );
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"{\"k\": 1}
+"
+        );
+        assert!(persist_export(
+            Some(directory.path().join("copy.md")),
+            ExportKind::Data,
+            b"{}"
+        )
+        .is_err());
+        assert!(!directory.path().join("copy.md").exists());
     }
 }

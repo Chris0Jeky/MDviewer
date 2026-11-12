@@ -11,7 +11,10 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Manager, State};
 
 use crate::export_policy::{export_destination, export_name, ExportKind};
-use crate::file_policy::{encode_markdown, EncodeError, Encoding, Eol, MAX_FILE_BYTES};
+use crate::file_policy::{
+    encode_markdown, EncodeError, Encoding, Eol, DATA_EXTENSIONS, MARKDOWN_EXTENSIONS,
+    MAX_FILE_BYTES,
+};
 use crate::registry::{Binding, FileIdentity, Registry, Token};
 use crate::replace::{self, ConflictKind, ReplaceError, ReplaceOutcome, Snapshot};
 use crate::DesktopState;
@@ -236,8 +239,9 @@ pub(crate) fn save_to_path(
     destination: &Path,
     text: &str,
     accept_lf: bool,
+    kind: ExportKind,
 ) -> SaveResult {
-    if export_destination(destination, ExportKind::Markdown).is_err() {
+    if export_destination(destination, kind).is_err() {
         return failed("invalid-destination");
     }
     let own = previous.and_then(|token| {
@@ -451,18 +455,25 @@ pub(crate) async fn save_document_as(
     let Some(_busy) = Busy::claim(&state.picker_open) else {
         return Ok(failed("busy"));
     };
-    let name = if export_name(&body.name) == Ok(ExportKind::Markdown) {
-        body.name
-    } else {
-        "Untitled.md".into()
-    };
+    let (kind, name, extensions) = save_as_choice(body.name);
     let (token, text, accept_lf) = (body.token, body.text.to_owned(), body.accept_lf);
     let dialog_app = app.clone();
     let chosen: Option<PathBuf> = tauri::async_runtime::spawn_blocking(move || {
         let mut picker = rfd::FileDialog::new()
-            .set_title("Save Markdown")
+            .set_title(if kind == ExportKind::Data {
+                "Save"
+            } else {
+                "Save Markdown"
+            })
             .set_file_name(&name)
-            .add_filter("Markdown document", &["md", "markdown"]);
+            .add_filter(
+                if kind == ExportKind::Data {
+                    "Data or text document"
+                } else {
+                    "Markdown document"
+                },
+                &extensions,
+            );
         if let Some(window) = dialog_app.get_webview_window("main") {
             picker = picker.set_parent(&window);
         }
@@ -476,7 +487,14 @@ pub(crate) async fn save_document_as(
     let registry = state.registry.clone();
     let previous = token.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        save_to_path(&registry, token.as_ref(), &destination, &text, accept_lf)
+        save_to_path(
+            &registry,
+            token.as_ref(),
+            &destination,
+            &text,
+            accept_lf,
+            kind,
+        )
     })
     .await
     .map_err(|_| "The save could not complete. Your text is still open.".to_string())?;
@@ -493,6 +511,29 @@ pub(crate) async fn save_document_as(
         crate::commands::library::remember(&app, [std::path::PathBuf::from(path)]);
     }
     Ok(result)
+}
+
+/// The Save As dialog's kind, suggested name and extensions for a document name: a data or
+/// text document keeps a data or text extension, its own first (so a name typed without one
+/// keeps its kind); anything else saves as Markdown.
+fn save_as_choice(name: String) -> (ExportKind, String, Vec<&'static str>) {
+    let (kind, name) = match export_name(&name) {
+        Ok(kind @ (ExportKind::Markdown | ExportKind::Data)) => (kind, name),
+        _ => (ExportKind::Markdown, "Untitled.md".to_owned()),
+    };
+    let own = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    let family = if kind == ExportKind::Data {
+        DATA_EXTENSIONS
+    } else {
+        MARKDOWN_EXTENSIONS
+    };
+    let mut extensions: Vec<&'static str> =
+        family.iter().copied().filter(|ext| *ext == own).collect();
+    extensions.extend(family.iter().copied().filter(|ext| *ext != own));
+    (kind, name, extensions)
 }
 
 /// Release a closed document's capability. Unknown tokens are ignored.
@@ -630,7 +671,14 @@ mod tests {
         let registry = Mutex::new(Registry::default());
         let (token, _) = open(&registry, &original);
         let copy = dir.path().join("b.md");
-        let result = save_to_path(&registry, Some(&token), &copy, "a\nz\n", false);
+        let result = save_to_path(
+            &registry,
+            Some(&token),
+            &copy,
+            "a\nz\n",
+            false,
+            ExportKind::Markdown,
+        );
         let SaveResult::Saved {
             token: Some(new),
             name,
@@ -666,7 +714,14 @@ mod tests {
         // Save As onto its own file after an outside change is a conflict, not an overwrite.
         std::fs::write(&copy, b"outside").unwrap();
         assert_eq!(
-            save_to_path(&registry, Some(&new), &copy, "mine\n", false),
+            save_to_path(
+                &registry,
+                Some(&new),
+                &copy,
+                "mine\n",
+                false,
+                ExportKind::Markdown
+            ),
             SaveResult::Conflict { reason: "changed" }
         );
         assert_eq!(std::fs::read(&copy).unwrap(), b"outside");
@@ -674,7 +729,14 @@ mod tests {
         let other = dir.path().join("other.md");
         std::fs::write(&other, b"old").unwrap();
         assert!(matches!(
-            save_to_path(&registry, None, &other, "new\n", false),
+            save_to_path(
+                &registry,
+                None,
+                &other,
+                "new\n",
+                false,
+                ExportKind::Markdown
+            ),
             SaveResult::Saved {
                 encoding: "utf-8",
                 eol: "lf",
@@ -683,7 +745,43 @@ mod tests {
         ));
         assert_eq!(std::fs::read(&other).unwrap(), b"new\n");
         assert_eq!(
-            save_to_path(&registry, None, &dir.path().join("x.txt"), "t", false),
+            save_to_path(
+                &registry,
+                None,
+                &dir.path().join("x.txt"),
+                "t",
+                false,
+                ExportKind::Markdown
+            ),
+            failed("invalid-destination")
+        );
+        // A data or text document saves under a data or text extension, never as Markdown.
+        assert!(matches!(
+            save_to_path(
+                &registry,
+                None,
+                &dir.path().join("x.json"),
+                "{}
+",
+                false,
+                ExportKind::Data
+            ),
+            SaveResult::Saved { .. }
+        ));
+        assert_eq!(
+            std::fs::read(dir.path().join("x.json")).unwrap(),
+            b"{}
+"
+        );
+        assert_eq!(
+            save_to_path(
+                &registry,
+                None,
+                &dir.path().join("y.md"),
+                "{}",
+                false,
+                ExportKind::Data
+            ),
             failed("invalid-destination")
         );
     }
@@ -729,7 +827,8 @@ mod tests {
                 &picked,
                 "edited
 ",
-                false
+                false,
+                ExportKind::Markdown
             ),
             SaveResult::Conflict { .. }
         ));
@@ -746,7 +845,8 @@ mod tests {
                 &picked,
                 "edited
 ",
-                false
+                false,
+                ExportKind::Markdown
             ),
             SaveResult::Conflict { reason: "missing" }
         );
@@ -762,7 +862,8 @@ mod tests {
                 &dir.path().join("copy.md"),
                 "edited
 ",
-                false
+                false,
+                ExportKind::Markdown
             ),
             SaveResult::Saved { .. }
         ));
@@ -800,5 +901,35 @@ mod tests {
             body(SaveResult::MixedLineEndings),
             map(&[("outcome", "mixed-line-endings")])
         );
+    }
+
+    #[cfg(test)]
+    mod save_as_choice_tests {
+        use super::*;
+
+        #[test]
+        fn a_data_or_text_document_keeps_its_own_extension_first() {
+            let (kind, name, extensions) = save_as_choice("notes.JSON".into());
+            assert_eq!(kind, ExportKind::Data);
+            assert_eq!(name, "notes.JSON");
+            assert_eq!(extensions[0], "json");
+            assert_eq!(extensions.len(), DATA_EXTENSIONS.len());
+            let (kind, _, extensions) = save_as_choice("run.log".into());
+            assert_eq!((kind, extensions[0]), (ExportKind::Data, "log"));
+            let (kind, name, extensions) = save_as_choice("plan.md".into());
+            assert_eq!(
+                (kind, name.as_str(), extensions[0]),
+                (ExportKind::Markdown, "plan.md", "md")
+            );
+            // Anything unrecognised (or unsafe) saves as Markdown under a fresh name.
+            for odd in ["data.yaml", "a/b.json", "CON.json", ""] {
+                let (kind, name, _) = save_as_choice(odd.into());
+                assert_eq!(
+                    (kind, name.as_str()),
+                    (ExportKind::Markdown, "Untitled.md"),
+                    "{odd:?}"
+                );
+            }
+        }
     }
 }
