@@ -47,7 +47,7 @@ describe("renderTextOf, the one seam from document text to render text", () => {
 
 describe("prepareRenderText (D4: parsers that load on demand)", () => {
   it("prepares YAML before its view is derived; Markdown needs nothing", async () => {
-    await expect(prepareRenderText("notes.md")).resolves.toBeUndefined();
+    expect(prepareRenderText("notes.md")).toBeUndefined(); // nothing to load: no await on the Markdown path
     await prepareRenderText("config.yaml");
     const view = renderTextOf("config.yaml", "name: demo\nport: 8080\n");
     expect(view.data?.label).toBe("YAML");

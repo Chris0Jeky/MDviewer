@@ -571,8 +571,8 @@ export class App {
       // 0 — raw markdown; leading front matter is document metadata, never printed
       // A data document paginates its readable view (src/app/renderText.ts, the shared seam);
       // its kind's parser loads first (D4), and a failed load is this render's error.
-      await prepareRenderText(doc.name);
-      if (stale()) return;
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (stale()) return; }
       const view = renderTextOf(doc.name, doc.text);
       const src = readFrontMatter(view.text).body;
 

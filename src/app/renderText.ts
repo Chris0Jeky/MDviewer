@@ -34,11 +34,11 @@ export function dataDocumentKind(fileName: string): DataKind | null {
  * unprepared; a failed load rejects into the caller's error state. Markdown resolves at once.
  */
 const prepared = new Set<DataKind>();
-export async function prepareRenderText(name: string): Promise<void> {
+/** Undefined when nothing needs loading, so Markdown and prepared kinds keep their synchronous path. */
+export function prepareRenderText(name: string): Promise<void> | undefined {
   const kind = dataDocumentKind(name);
-  if (!kind || prepared.has(kind)) return;
-  await prepare(kind);
-  prepared.add(kind);
+  if (!kind || prepared.has(kind)) return undefined;
+  return prepare(kind).then(() => { prepared.add(kind); });
 }
 
 /** The status line's name for a data document's format, or null for Markdown. */

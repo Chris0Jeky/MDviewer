@@ -340,8 +340,8 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
     try {
       // A data document renders its readable view; its raw text stays the document (renderText.ts).
       // Its kind's parser loads first (D4: YAML on demand); a failed load is this render's error.
-      await prepareRenderText(doc.name);
-      if (current !== renderGeneration) return;
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (current !== renderGeneration) return; }
       const view = renderTextOf(doc.name, doc.text);
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
@@ -407,7 +407,7 @@ async function readFiles(files: File[]): Promise<void> {
       const text = decodeMarkdown(bytes);
       // A data document's readable view can outgrow its file: confirm on the view too. (If its
       // parser cannot load, the document opens and its render shows the error.)
-      if (bytes.length <= SIZE_SOFT_BYTES && await prepareRenderText(file.name).then(() => true, () => false)
+      if (bytes.length <= SIZE_SOFT_BYTES && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
         && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
         && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
       batch.documents.push({ name: file.name, text, bytes: bytes.length });

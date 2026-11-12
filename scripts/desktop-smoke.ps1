@@ -828,7 +828,26 @@ try {
         param([byte[]]$bytes)
         [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($dataBytes)
     }
+    # D4: a forwarded CSV renders its readable view, and Save As writes its raw bytes as .csv.
+    $csvName = 'people.csv'
+    $csvPath = Join-Path $fixtureDirectory $csvName
+    $csvBytes = [System.Text.UTF8Encoding]::new($false).GetBytes("name,role`r`nAda,lead`r`nLin,ops`r`n")
+    [System.IO.File]::WriteAllBytes($csvPath, $csvBytes)
+    $fifth = Start-OwnedProcess $exe @($csvName) $fixtureDirectory
+    if (-not $fifth.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
+        throw 'The CSV launch stayed alive instead of forwarding to the existing instance.'
+    }
+    [void](Wait-ForHeading $csvName 'csv-document.png')
+    $csvSaveAsPath = Join-Path $exportDirectory 'saved-people.csv'
+    Invoke-SmokeAction 'button' 'More'
+    Invoke-SmokeAction 'button' '#reader-save-as'
+    Invoke-SmokeAction 'save-dialog' -Destination $csvSaveAsPath -Title 'Save'
+    $csvSaveAsEvidence = Wait-ExportFile $csvSaveAsPath {
+        param([byte[]]$bytes)
+        [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($csvBytes)
+    }
     $metrics.data = [ordered]@{
+        csvHeadingVerified = $true; csvSaveAsExactRawBytes = $true; csvSaveAs = $csvSaveAsEvidence
         readableHeadingVerified = $true
         saveAsExactRawBytes = $true; saveAs = $dataSaveAsEvidence
         saveCopyExactRawBytes = $true; saveCopy = $dataCopyEvidence
