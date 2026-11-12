@@ -772,6 +772,16 @@ unsaved untitled note in Edit (Save goes through Save As). The command `document
 `library_read_template`: no Recent entry, seen mark or binding). Tests: `tests/template.test.ts`,
 `tests/desktop-templates.test.ts`.
 
+Reader performance (S9). Switching to another document keeps the DOM of the one being left
+(`keepRendered`, one entry, recorded from the text and settings the render actually used); switching
+back to it swaps those nodes in (`reuseRendered`) when its id, name, text and settings still match,
+with the same busy-then-ready signal and `mdv:reader-text` mark as a render. Re-rendering the shown
+document never reuses; data documents (budgeted views) and documents with local images (blob URLs
+are released on every full render) are not kept. `upgradeCode` sanitizes every upgraded code block
+in one DOMPurify pass (each block in its own indexed wrapper; one that does not survive intact is
+sanitized alone). `content-visibility` was measured and rejected: estimated block heights break
+near-end position restore. Test: `tests/desktop-tab-reuse.test.ts`.
+
 Edit surface (S5; `src/desktop/edit.ts`, wiring in `main.ts`). Ctrl+E (command `edit.toggle`,
 the bar's Edit toggle with `aria-pressed`) mounts the workspace's own `mountEditor` (Find,
 Format, highlighted backdrop, paste gates; `src/ui/Editor.ts` unchanged) into `#reader-edit`
