@@ -226,3 +226,24 @@ describe("bounds and hints (review of #270)", () => {
     expect(toReadable("{}\n\u00a0\n{}", "jsonl").problems).toHaveLength(1);
   });
 });
+
+describe("prepaid details (Codex on #270)", () => {
+  it("shows the expanded detail a flat-table row already paid for, even when that spent the budget", () => {
+    const view = toReadable(JSON.stringify([{ payload: JSON.stringify({ a: { b: 1 } }) }]), "json", { maxValues: 6 });
+    expect(view.markdown).toContain("\\(JSON in a string\\)");
+    expect(view.markdown).toMatch(/\| b \| 1 \|/);
+    expect(view.truncated).toBe(false);
+  });
+});
+
+describe("nested prepaid details (verification of #270)", () => {
+  it("never reports a complete view while a value is missing, at every budget", () => {
+    const payload = JSON.stringify({ items: [{ t: "a\nb" }], after: 1 });
+    const text = JSON.stringify([{ payload }]);
+    for (let maxValues = 1; maxValues <= 40; maxValues++) {
+      const view = toReadable(text, "json", { maxValues });
+      // Either the view says it was cut, or every value is in it.
+      if (!view.truncated) expect(view.markdown, `maxValues ${maxValues}`).toMatch(/\| after \| 1 \|/);
+    }
+  });
+});
