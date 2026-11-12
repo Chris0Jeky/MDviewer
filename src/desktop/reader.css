@@ -35,7 +35,7 @@ body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .reader-document tbody tr:nth-child(even) { background: transparent; }
 :root[data-app-theme="dark"] .reader-document { --doc-code-bg: #2c3441; --doc-quote-fg: #c1cbd8; --doc-quote-bar: #59677b; }
 :root[data-app-theme="dark"] .reader-document :not(pre) > code { color: #ffb1cb; }
-:root[data-app-theme="sepia"] .reader-document .shiki { background-color: var(--reader-paper) !important; } /* paper, as light shows white on white */
+:root[data-app-theme="sepia"] .reader-document:not([data-code-theme="nord"]) .shiki { background-color: var(--reader-paper) !important; } /* paper, as light shows white on white; Nord stays dark in both variants */
 :root[data-app-theme="dark"] .reader-document .shiki, :root[data-app-theme="dark"] .reader-document .shiki span { color: var(--shiki-dark) !important; background-color: var(--shiki-dark-bg) !important; }
 .reader-properties { margin: 0 0 1.4em; border: 1px solid var(--reader-line); border-radius: 6px; font-size: 13px; color: var(--reader-muted); }
 .reader-properties-summary { cursor: pointer; padding: 6px 10px; display: flex; gap: 10px; align-items: baseline; font-weight: 600; }
