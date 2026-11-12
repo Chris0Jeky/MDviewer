@@ -49,6 +49,14 @@ async function reader(info: string, source: string) {
   return result;
 }
 
+/** A failed preparation keeps the text readable and reports why; it never fails the render. */
+async function readerWithoutHighlighting(message: string): Promise<void> {
+  const { renderReaderDocument } = await import("../src/desktop/render");
+  const result = await renderReaderDocument(["```cs", "public record Person(string Name);", "```"].join("\n"), DEFAULT_SETTINGS);
+  expect(result.warnings).toEqual([`Code highlighting is unavailable: ${message}`]);
+  expect(result.document.querySelector("pre.reader-pending code")?.textContent).toBe("public record Person(string Name);");
+}
+
 describe("reader grammar preparation and workspace handoff", () => {
   it("loads the requested grammar without unrelated common grammars", async () => {
     await reader("ts", "const answer: number = 42;");
@@ -142,7 +150,11 @@ describe("reader grammar preparation and workspace handoff", () => {
     const { renderReaderDocument } = await import("../src/desktop/render");
     const result = await renderReaderDocument(source, DEFAULT_SETTINGS);
     expect(boundary.instances).toHaveLength(2);
-    expect(result.document.querySelector("pre")?.outerHTML).toBe(reference.querySelector("pre")?.outerHTML);
+    // The reader adds only its source-map stamp to the shared highlighted markup.
+    const pre = result.document.querySelector("pre")!;
+    expect(pre.getAttribute("data-src")).toMatch(/^1-\d+$/);
+    pre.removeAttribute("data-src");
+    expect(pre.outerHTML).toBe(reference.querySelector("pre")?.outerHTML);
     expect(result.warnings).toEqual([]);
   }, 30_000);
 
@@ -155,7 +167,7 @@ describe("reader grammar preparation and workspace handoff", () => {
 
   it("retries reader engine creation after a transient failure", async () => {
     boundary.failCreates = 1;
-    await expect(reader("cs", "public record Person(string Name);")).rejects.toThrow("Engine temporarily unavailable");
+    await readerWithoutHighlighting("Engine temporarily unavailable");
     await reader("cs", "public record Person(string Name);");
     expect(boundary.creates).toBe(2);
     expect(boundary.instances).toHaveLength(1);
@@ -163,7 +175,7 @@ describe("reader grammar preparation and workspace handoff", () => {
 
   it("retries reader grammar registration on the same engine", async () => {
     boundary.failRegistrations = 1;
-    await expect(reader("cs", "public record Person(string Name);")).rejects.toThrow("Grammar temporarily unavailable");
+    await readerWithoutHighlighting("Grammar temporarily unavailable");
     await reader("cs", "public record Person(string Name);");
     expect(boundary.creates).toBe(1);
     expect(boundary.registrations).toBe(2);

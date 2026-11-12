@@ -22,6 +22,7 @@ import { ensureLang, getHighlighter } from "../render/highlight";
 import { createMarkdown, installMarkdownHighlighter, parsedFenceLanguages, renderMarkdownTokens } from "../render/markdown";
 import type { RenderWarning } from "../render/markdown";
 import { renderAllMermaid } from "../render/mermaid";
+import { readFrontMatter } from "../render/frontmatter";
 import {
   buildPaginationSource,
   awaitFontsAndImages,
@@ -566,8 +567,8 @@ export class App {
     this.canvas.setPaginating(true);
 
     try {
-      // 0 — raw markdown
-      const src = doc.text;
+      // 0 — raw markdown; leading front matter is document metadata, never printed
+      const src = readFrontMatter(doc.text).body;
 
       // 1 — highlighter singleton (await once)
       const hl = await getHighlighter();
@@ -631,7 +632,7 @@ export class App {
 
       // Success: swap to loaded pane, report page count + warnings.
       this.hasGoodRender = true;
-      this.renderedSnapshot = { id: doc.id, text: src, name, settings };
+      this.renderedSnapshot = { id: doc.id, text: doc.text, name, settings };
       this.visiblePreviewId = doc.id;
       this.showPane("loaded");
       this.canvas.setPageCount(flow.total);

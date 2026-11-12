@@ -1,0 +1,58 @@
+[
+  {
+    "name": "cycle: to do to in progress",
+    "target": {
+      "id": "draft"
+    },
+    "action": {
+      "kind": "mark",
+      "to": "/"
+    },
+    "patches": [
+      {
+        "line": 9,
+        "id": "draft",
+        "expect": "- [ ] Draft <!-- id: draft -->",
+        "replace": "- [/] Draft <!-- id: draft -->"
+      }
+    ],
+    "after": "---\ntitle: Sprint\nactionable: 1\nmarks: [\" \", \"/\", \"x\"]\n---\n\n# Sprint board\n\n- [/] Draft <!-- id: draft -->\n- [/] Review <!-- id: review -->\n- [x] Merge\n- [-] Dropped idea\n- [!] Blocked on legal <!-- id: twin -->\n- [?] Open question <!-- id: twin -->\n"
+  },
+  {
+    "name": "cycle: in progress to done",
+    "target": {
+      "id": "review"
+    },
+    "action": {
+      "kind": "mark",
+      "to": "x"
+    },
+    "patches": [
+      {
+        "line": 10,
+        "id": "review",
+        "expect": "- [/] Review <!-- id: review -->",
+        "replace": "- [x] Review <!-- id: review -->"
+      }
+    ],
+    "after": "---\ntitle: Sprint\nactionable: 1\nmarks: [\" \", \"/\", \"x\"]\n---\n\n# Sprint board\n\n- [ ] Draft <!-- id: draft -->\n- [x] Review <!-- id: review -->\n- [x] Merge\n- [-] Dropped idea\n- [!] Blocked on legal <!-- id: twin -->\n- [?] Open question <!-- id: twin -->\n"
+  },
+  {
+    "name": "menu: blocked to done",
+    "target": {
+      "line": 13
+    },
+    "action": {
+      "kind": "mark",
+      "to": "x"
+    },
+    "patches": [
+      {
+        "line": 13,
+        "expect": "- [!] Blocked on legal <!-- id: twin -->",
+        "replace": "- [x] Blocked on legal <!-- id: twin -->"
+      }
+    ],
+    "after": "---\ntitle: Sprint\nactionable: 1\nmarks: [\" \", \"/\", \"x\"]\n---\n\n# Sprint board\n\n- [ ] Draft <!-- id: draft -->\n- [/] Review <!-- id: review -->\n- [x] Merge\n- [-] Dropped idea\n- [x] Blocked on legal <!-- id: twin -->\n- [?] Open question <!-- id: twin -->\n"
+  }
+]

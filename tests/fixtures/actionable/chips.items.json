@@ -1,0 +1,37 @@
+[
+  {
+    "kind": "chip",
+    "line": 3,
+    "id": "status",
+    "key": "status",
+    "value": "draft",
+    "options": [
+      "draft",
+      "review",
+      "done"
+    ]
+  },
+  {
+    "kind": "chip",
+    "line": 5,
+    "id": "stage",
+    "key": "stage",
+    "value": "build",
+    "options": [
+      "build",
+      "test",
+      "ship"
+    ]
+  },
+  {
+    "kind": "chip",
+    "line": 7,
+    "id": "priority",
+    "key": "priority",
+    "value": "urgent",
+    "options": [
+      "low",
+      "high"
+    ]
+  }
+]

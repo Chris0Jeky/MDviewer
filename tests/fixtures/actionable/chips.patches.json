@@ -1,0 +1,59 @@
+[
+  {
+    "name": "next option",
+    "target": {
+      "id": "status"
+    },
+    "action": {
+      "kind": "chip",
+      "value": "review"
+    },
+    "patches": [
+      {
+        "line": 3,
+        "id": "status",
+        "expect": "status: draft",
+        "replace": "status: review"
+      }
+    ],
+    "after": "---\ntitle: Pipeline\nstatus: review\nstatus.options: [draft, review, done]\nstage: \"build\"  # current stage\nstage.options: [\"build\", \"test\", \"ship\"]\npriority: urgent\npriority.options: [low, high]\nowner: ada\n---\n\n# Pipeline\n"
+  },
+  {
+    "name": "quotes and comment kept",
+    "target": {
+      "id": "stage"
+    },
+    "action": {
+      "kind": "chip",
+      "value": "test"
+    },
+    "patches": [
+      {
+        "line": 5,
+        "id": "stage",
+        "expect": "stage: \"build\"  # current stage",
+        "replace": "stage: \"test\"  # current stage"
+      }
+    ],
+    "after": "---\ntitle: Pipeline\nstatus: draft\nstatus.options: [draft, review, done]\nstage: \"test\"  # current stage\nstage.options: [\"build\", \"test\", \"ship\"]\npriority: urgent\npriority.options: [low, high]\nowner: ada\n---\n\n# Pipeline\n"
+  },
+  {
+    "name": "a value outside the options moves to the first",
+    "target": {
+      "id": "priority"
+    },
+    "action": {
+      "kind": "chip",
+      "value": "low"
+    },
+    "patches": [
+      {
+        "line": 7,
+        "id": "priority",
+        "expect": "priority: urgent",
+        "replace": "priority: low"
+      }
+    ],
+    "after": "---\ntitle: Pipeline\nstatus: draft\nstatus.options: [draft, review, done]\nstage: \"build\"  # current stage\nstage.options: [\"build\", \"test\", \"ship\"]\npriority: low\npriority.options: [low, high]\nowner: ada\n---\n\n# Pipeline\n"
+  }
+]

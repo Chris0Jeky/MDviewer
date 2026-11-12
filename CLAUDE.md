@@ -3,48 +3,22 @@
 Compact session contract for Claude Code in `MDviewer/`. Keep it short. Put repeatable
 procedures in `.claude/skills/*/SKILL.md` and deep detail in `docs/*`.
 
-## What this project is
+@AGENTS.md
 
-A local Markdown reader and editor for the web and an experimental Windows desktop app.
-The desktop starts in continuous reading and loads the editing/PDF workspace on demand.
-Its defining export contract keeps code blocks, figures, tables and callouts whole when
-they fit on a page, with canonical shrink/split tiers for oversized content. Documents
-are never uploaded or sent; the approved external runtime-network exception is the
-owner's first-party, content-free Pulseboard collector — README "Privacy and usage data". Vanilla TypeScript + Vite,
-with a bounded Tauri/Rust host. Full design: [`docs/design/IMPLEMENTATION_SPEC.md`](docs/design/IMPLEMENTATION_SPEC.md).
+`AGENTS.md` (imported above) holds the project summary, authority order, structure, commands,
+render order and privacy guardrails shared with Codex. This file adds only what is
+Claude-specific. Estate laws (`~/.claude/rules/laws.md`) govern where this repository is silent.
 
-## Authority Order
+## Session start
 
-1. User prompt for the current turn.
-2. `AGENTS.md` — repo-wide operating rules (Claude + Codex share intent).
-3. `ORCHESTRATOR.md` — resumable live state, queue, evidence, and next work.
-4. `docs/Project_Roadmap.md` — active phase, priorities, gates.
-5. `docs/design/IMPLEMENTATION_SPEC.md` — the canonical build contract (signatures, render order, CSS names).
-6. `autodoc/AGENT_INDEX.md` — fast code-seam orientation.
-7. Relevant skill under `.claude/skills/*/SKILL.md`.
-8. Deeper docs and generated artifacts only when the task needs them.
-
-When sources conflict, follow the higher source and report the conflict.
-
-## First 5 Minutes
-
-1. Read `ACTION_ITEMS.md` (human-owned tasks + current-state snapshot).
-2. Read `AGENTS.md`.
-3. Read `ORCHESTRATOR.md` (resumable live state and next work).
-4. Read `docs/Project_Roadmap.md`.
-5. Read `docs/design/IMPLEMENTATION_SPEC.md` and `autodoc/AGENT_INDEX.md`.
-6. Pick one primary skill and at most one support skill.
-7. Identify the smallest safe, reviewable change.
-8. State blockers, assumptions, the verification target, and the docs-sync target before editing.
-
-Do not bulk-read `node_modules`, `dist`, build output, or generated artifacts unless the task requires it.
+Read `ACTION_ITEMS.md` and the top of `ORCHESTRATOR.md`; the rest of the canon loads or is
+linked from `AGENTS.md`. Pick one primary skill and at most one support skill, then the
+smallest safe, reviewable change.
 
 Use [Future work](docs/FUTURE_WORK.md) and [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 for the issue-backed queue. Native Save/Save As [#196](https://github.com/Chris0Jeky/MDviewer/issues/196)
-and recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197) have reviewed designs
-merged in #209; native proof, measurement and implementation gates remain open.
-Current Save Copy, memory-only sessions and privacy contracts remain in force until their
-reviewed implementation updates those contracts together.
+is implemented on Windows (companion push S1b); recovery [#197](https://github.com/Chris0Jeky/MDviewer/issues/197)
+remains design-only and sessions stay memory-only.
 
 ## Human Action Items
 
@@ -59,20 +33,21 @@ browser testing, product go/no-go — plus a verified current-state snapshot. Ru
 
 ## Git Workflow
 
-Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). The
-`pre_tool_use.py` hook enforces the safety rules.
+Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). These rules are
+agent-held: `scripts/agent_hooks/pre_tool_use.py` exists but is not wired as a `PreToolUse`
+hook (this machine is declared floorless), so nothing blocks a command for you.
 
-- **Protected branches** (`main`, `master`, `develop`, `release`): no rebase, force-push, hard/soft/mixed reset, `commit --amend`, `checkout -- <path>`, `restore`, `pull --rebase`. Hook-blocked.
-- **Always blocked**: `rm -rf`, `sudo`, `chmod -R 777`, bare force-push, `git clean -f`, `curl|sh`, `npm publish`.
+- **Protected branches** (`main`, `master`, `develop`, `release`): no rebase, force-push, hard/soft/mixed reset, `commit --amend`, `checkout -- <path>`, `restore`, `pull --rebase`.
+- **Never run**: `rm -rf`, `sudo`, `chmod -R 777`, bare force-push, `git clean -f`, `curl|sh`, `npm publish`.
 - **Update branch:** `git merge main` (not rebase). **Diverged remote:** `git merge origin/<branch>`.
 - **Never `git commit --amend` after pushing.** New commit instead.
-- **Commits have no `Co-Authored-By` trailer** (`includeCoAuthoredBy: false`).
+- **Commits and PRs carry no attribution trailers** (`attribution` is empty in `.claude/settings.json`).
 - Before any history-rewriting/discarding command: explain it in plain language, state the risk and reversibility, and let the user run it.
 
 ## Default Work Style
 
 - Prefer narrow diffs over rewrites; preserve existing behavior unless the task asks for a change.
-- Keep the app **local-first**: no document network calls or automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports write the requested output; Save Copy does not adopt an original-file binding or clear its dirty baseline. Persisted app-managed user state remains limited to `Settings` and the approved Pulseboard keys in `AGENTS.md`. The SDK (`public/pulseboard.js`) is reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
+- Keep the app **local-first**: no document network calls or automatic/app-managed document or session persistence. Explicit user-selected Markdown copies and PDF saves/exports write the requested output. On Windows, Save (Ctrl+S) writes the open document back to its own file in place and Save As (Ctrl+Shift+S) writes it to a file the user chooses and binds it there (docs/design/FILE_LIFECYCLE.md, #196); Save Markdown stays the explicit copy and does not adopt a binding or clear the dirty baseline. Persisted app-managed user state remains limited to `Settings` and the approved Pulseboard keys in `AGENTS.md`. The SDK (`public/pulseboard.js`) is reached only through `src/app/pulse.ts` with closed enums, size buckets and counts — never document text, file names, headings, URLs or export contents (`tests/pulse.test.ts`). No other telemetry.
 - The **render order is load-bearing** (parse → Shiki → KaTeX → Mermaid await → fonts → paginate). Never paginate before async content settles — that defeats the no-slice guarantee.
 - Do not mix render-pipeline, pagination, export, and UI concerns in one slice unless the seam requires it.
 - Do not silently ignore failures. Classify as blocker, non-blocking risk, pre-existing noise, or invalid signal.
@@ -107,16 +82,16 @@ it. Batch blocker questions into one message. See `docs/agentic/QUESTION_PROTOCO
 ## Failure Protocol
 
 Every failed command, missing dependency, tool denial, flaky test, or workaround must appear
-in the final handoff if unresolved. No finding may be skipped because it is "non-blocking."
-Fix it now or seed a concrete follow-up (roadmap entry or `docs/agentic/failure_ledger.jsonl`).
-Tech-debt accrual from skipped findings is not acceptable. Recurring lessons get promoted via
-`docs/agentic/GUIDE_UPDATE_PROTOCOL.md`.
+in the final handoff if unresolved. Fix it now or seed a concrete follow-up (tracked issue,
+roadmap entry or `docs/agentic/failure_ledger.jsonl`); never drop one silently. Recurring
+lessons get promoted via `docs/agentic/GUIDE_UPDATE_PROTOCOL.md`.
 
 ## Review & Merge Gates
 
-When reviewing a change: read existing comments first, post structured findings, and act on
-every finding regardless of tier. "Non-blocking" means "fix it now, not later." Before a
-change is considered done:
+Estate law 2 governs review: read existing comments first, post findings on the PR, triage every
+comment once. Fix confirmed CRITICAL and HIGH findings (correctness, security, data loss) before
+merge; everything else becomes a tracked issue or a one-line decline, never a fix-commit cascade.
+Two rounds at most, then ship or park. Before a change is considered done:
 
 - **Correctness**: the no-slice guarantee still holds (run the no-cutoff test for any
   render/pagination/export change). Render order intact.
@@ -124,7 +99,8 @@ change is considered done:
   green for render/pagination/export/UI changes. New code has tests.
 - **Manual (Gate, human)**: drag-drop → preview → Print/Save-as-PDF and Download-PDF verified in
   a real browser for UI/pagination/export changes (tracked as an AI-N item when it needs Chris).
-- **Zero tech debt**: no TODO without a tracked follow-up; no skipped required tests; no silent workarounds. Report the existing opt-in performance-ladder skips separately; they do not replace required verification.
+- **No silent debt**: no TODO without a tracked follow-up; no skipped required tests; no silent
+  workarounds. Report the existing opt-in performance-ladder skips separately.
 - **Docs sync**: roadmap, `IMPLEMENTATION_SPEC.md`, and `AGENT_INDEX.md` updated if their truth changed.
 
 ## Verification Protocol
@@ -151,7 +127,8 @@ in the current environment.
 
 ## Local Settings
 
-Committed `.claude/settings.json` holds shared guardrails (`bypassPermissions` + the safety
-hooks in `scripts/agent_hooks/*`). Use `.claude/settings.local.json` only for machine-specific
+Committed `.claude/settings.json` holds shared guardrails (allow/deny rules and the
+`scripts/agent_hooks/*` hooks). It sets no `defaultMode`: the permission mode comes from the
+user's own settings or launch flag, because a committed project mode outranks the user's. Use `.claude/settings.local.json` only for machine-specific
 overrides (gitignored). MCP defaults live in `.mcp.json` (credential-free: context7, playwright,
 ripgrep) — verify a server is live via `/mcp` before relying on it.

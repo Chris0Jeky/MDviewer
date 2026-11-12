@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "desktop-reader-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "desktop:dev:web"],
+      "port": 5182
+    },
+    {
+      "name": "web-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5180
+    }
+  ]
+}

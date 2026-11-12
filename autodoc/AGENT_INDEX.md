@@ -16,7 +16,7 @@ Current qualification: [editor follow-up checkpoint](../docs/design/2026-11-05-e
 
 ## Product and flow
 
-Local-first Markdown reader/editor and paginated PDF workspace for the web and experimental Windows app. The desktop continuous reader loads the shared workspace on demand. Open documents and latest-close recovery stay in memory; no automatic/app-managed document or session persistence is added. Settings and approved Pulseboard keys are the exceptions for persisted app-managed user state. The content-free SDK is reached only through `src/app/pulse.ts`; document content is never uploaded. Vector print is primary; raster PDF is the fallback. Save Markdown writes an explicit copy through the browser or native destination without adopting an original-file binding or clearing the dirty baseline.
+Local-first Markdown reader/editor and paginated PDF workspace for the web and experimental Windows app. The desktop continuous reader loads the shared workspace on demand. Open documents and latest-close recovery stay in memory; no automatic/app-managed document or session persistence is added. Settings and approved Pulseboard keys are the exceptions for persisted app-managed user state. The content-free SDK is reached only through `src/app/pulse.ts`; document content is never uploaded. Vector print is primary; raster PDF is the fallback. Save Markdown writes an explicit copy through the browser or native destination without adopting an original-file binding or clearing the dirty baseline. On Windows, owned Save/Save As (`src/desktop/main.ts` `saveDocument`, `documents.ts` `saveTarget`/`completeSave`, `src-tauri/src/commands/save.rs`, `replace.rs`) write in place per `docs/design/FILE_LIFECYCLE.md`.
 
 ```text
 input / textarea → DocStore → serialized scheduler → App.runPipeline
@@ -33,7 +33,7 @@ Export click → capture document id/name/text and settings NOW
 
 | Concern | Owning seam | Tests / contract |
 | --- | --- | --- |
-| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
+| Windows continuous reader and lazy workspace handoff | `src/desktop/{main,documents,commands,panels,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime,foundations}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
 | Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, parsed-fence grammar preparation, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-fence-languages.test.ts`, `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
@@ -46,6 +46,10 @@ Export click → capture document id/name/text and settings NOW
 | Native beforeunload and explicitly accepted reload | `src/app/reloadGuard.ts` | `tests/reload-guard.test.ts` |
 | Recoverable activation/readiness/reload prompt | `src/ui/UpdatePrompt.ts`, `src/main.ts` | `tests/update-prompt.test.ts`; live AI-7 remains open |
 | Markdown, sanitization, warnings, anchors | `src/render/markdown.ts`, `src/render/sanitize.ts` | Markdown and sanitizer tests |
+| Actionable Markdown: parser, patches, glyphs, reader fields/chips (A1, static) | `src/render/{actionable,actionableGlyphs}.ts`, `src/desktop/reader/actionable.ts` | `tests/actionable.test.ts`, `tests/fixtures/actionable/`, `tests/desktop-e2e/actionable.spec.ts`, spec §14 |
+| Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
+| Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
+| Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
 | Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
 | Mermaid preparation and graceful failure | `src/render/mermaid.ts` | `tests/mermaid.test.ts` |
 | TOC placement, unique float identity, source preparation | `src/render/buildSource.ts` | `tests/buildSource.test.ts`, `tests/footnote-targets.test.ts` |
@@ -202,6 +206,28 @@ See spec §12, `tests/editor-edit-safety.test.ts`,
 `tests/e2e/editor-edit-safety.spec.ts` and
 `docs/design/2026-11-05-editor-edit-ownership.md`.
 
+
+## Desktop foundations (companion push S0)
+
+`src/desktop/documents.ts` `DesktopDocuments` is the one ownership map for open
+documents across reading and the PDF workspace: `reader` (the bounded
+`ReaderSession`), `baselines` (DocStore id → `WorkspaceBaseline` with the clean
+source, stable `key` and optional `binding`) and `workspace` (the mounted App).
+Every handoff goes through `adoptReaderInto`, `releaseReader`, `readerSnapshot`
+and `returnToReader`; admission and dirty checks through `admitToWorkspace`,
+`addBatch`, `workspaceDirty`, `hasUnsavedWork` and `list()`. Each reader
+document carries a `key` (from `session.ts` `nextDocumentKey`) and, for
+host-opened files with a token, a display-only `Binding {token, path, dir,
+encoding, eol, disk, generation}`. Save reads it (`saveTarget`, `completeSave`);
+closing releases it through `onRelease` (never during a mode transition). Live reload:
+`src-tauri/src/watch.rs` + `commands/reload.rs` (`read_document`), frontend
+`byToken`/`markDisk`/`applyReload` and `main.ts` `followChange`; tests
+`tests/desktop-live-reload.test.ts`. `src/desktop/commands.ts` `registerCommand({id, title, keys?, enabled?, run})`
+is the single action registry: `installShortcuts(window, active)` dispatches `Mod+…`
+keys (exact modifiers; a match is always claimed, even repeated or disabled),
+`listCommands`/`runCommand` serve a palette or menu. `src/desktop/panels.ts`
+`registerPanel({id, title, mount})` lists side panels for the shell. Unit
+coverage: `tests/desktop-foundations.test.ts`.
 
 ## Desktop New document
 

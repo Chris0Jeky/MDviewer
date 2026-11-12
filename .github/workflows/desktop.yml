@@ -41,7 +41,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --engine-strict
-      - run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium (+ OS deps)
+        run: bash scripts/ci/install-playwright.sh chromium
       - run: npm run desktop:build:web
       - run: npm run desktop:test
       - name: Upload reader browser evidence
