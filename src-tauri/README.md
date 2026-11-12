@@ -49,7 +49,8 @@ reader's regular browser `File` drop handling can be used.
 
 The native reader accepts Markdown (`.md`, `.markdown`) and, for Readable data
 (docs/design/READABLE_DATA.md; owner-requested boundary change 2026-11-12), data and
-plain text (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt`, `.log`), all case-insensitive
+plain text (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`,
+`.txt`, `.log`; `.yaml` to `.tsv` were added for D4, a further boundary change), all case-insensitive
 and read as raw text under the same rules (`file_policy::DATA_EXTENSIONS`): UTF-8 with or
 without a BOM, and UTF-16 LE/BE with a BOM. Invalid encodings are rejected rather
 than silently replaced. Metadata and the actual read are both bounded. Each file
@@ -128,6 +129,13 @@ webview never supplies a path. `library_scan` walks a pinned project for `.md`/`
 includes dot-folders such as `.claude`, never follows junctions or symlinks, and marks agent
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,
 `HUMAN_TODO.md`, `ACTION_ITEMS.md`, `ORCHESTRATOR.md`) and files changed since last seen.
+
+`library_read_template(id) -> { name, text }` (A4; boundary change: one read-only command and its
+permission) reads a template to fill a new note. It takes an opaque library id (as `library_scan`
+hands out) whose path is a Markdown file directly inside a pinned project's `templates/` folder; a junction or symlink at the
+folder or the file is refused; the usual local-path and encoding rules apply, with a 1 MB cap
+(`MAX_TEMPLATE_BYTES`). Nothing is bound, watched, recorded as recent or seen, or written to
+`library.json`.
 
 Session (S7): `library.json` also keeps the bound files open when the open set last changed
 (`session`, 32 paths with timestamps) and `restore_off` (reopen on launch is on by default; Clear

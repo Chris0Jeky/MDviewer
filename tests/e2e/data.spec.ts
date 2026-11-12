@@ -51,3 +51,16 @@ test("a cut-short data view offers the rest in the workspace, and plain text sta
   await waitForPagination(page, 60_000); // partial pages show the text before the run finishes
   await expect(offer).toBeHidden({ timeout: 30_000 });
 });
+
+test("a dropped YAML file loads its parser and shows its readable view", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["name: demo-service\nport: 8080\n"], "config.yaml", { type: "" }));
+    window.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true }));
+  });
+  await waitForPagination(page);
+  await expect(page.locator("#paged-output h1")).toHaveText("config.yaml");
+  await expect(page.locator("#paged-output")).toContainText("demo-service");
+  await expect(page.locator("#warning-banner")).toBeHidden();
+});

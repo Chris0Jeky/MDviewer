@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dataDocumentKind, renderTextOf, showAllOf, showMoreOf } from "../src/app/renderText";
+import { dataDocumentKind, prepareRenderText, renderTextOf, showAllOf, showMoreOf } from "../src/app/renderText";
 import { isMarkdownFile } from "../src/app/input";
 
 describe("renderTextOf, the one seam from document text to render text", () => {
@@ -34,11 +34,26 @@ describe("renderTextOf, the one seam from document text to render text", () => {
     expect(renderTextOf("big.jsonl", more).data?.readable.truncated).toBe(false);
   });
 
-  it("opens only the version 1 formats", () => {
+  it("opens every format src/data reads", () => {
     expect(["a.json", "a.jsonc", "a.jsonl", "a.ndjson", "a.txt", "a.log"].map(dataDocumentKind)).toEqual(["json", "json", "jsonl", "jsonl", "text", "text"]);
-    expect(["a.yaml", "a.toml", "a.csv", "a.md", "a"].map(dataDocumentKind)).toEqual([null, null, null, null, null]);
+    expect(["a.yaml", "a.yml", "a.toml", "a.csv", "a.tsv"].map(dataDocumentKind)).toEqual(["yaml", "yaml", "toml", "csv", "csv"]);
+    expect(["a.md", "a.xml", "a"].map(dataDocumentKind)).toEqual([null, null, null]);
     expect(isMarkdownFile("data.json", "application/json")).toBe(true);
     expect(isMarkdownFile("notes.txt", "text/plain")).toBe(true);
-    expect(isMarkdownFile("sheet.csv", "text/csv")).toBe(false);
+    expect(isMarkdownFile("sheet.csv", "text/csv")).toBe(true);
+    expect(isMarkdownFile("feed.xml", "application/xml")).toBe(false);
+  });
+});
+
+describe("prepareRenderText (D4: parsers that load on demand)", () => {
+  it("prepares YAML before its view is derived; Markdown needs nothing", async () => {
+    expect(prepareRenderText("notes.md")).toBeUndefined(); // nothing to load: no await on the Markdown path
+    await prepareRenderText("config.yaml");
+    const view = renderTextOf("config.yaml", "name: demo\nport: 8080\n");
+    expect(view.data?.label).toBe("YAML");
+    expect(view.text).toContain("demo");
+    expect(view.text).toContain("8080");
+    expect(renderTextOf("sheet.csv", "name,port\ndemo,8080\n").text).toContain("demo");
+    expect(renderTextOf("config.toml", 'name = "demo"\n').text).toContain("demo");
   });
 });

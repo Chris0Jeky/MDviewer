@@ -101,6 +101,7 @@ fn main() {
             commands::reload::read_document,
             commands::library::library_list,
             commands::library::library_scan,
+            commands::library::library_read_template,
             commands::library::library_open,
             commands::library::library_pin,
             commands::library::library_unpin,

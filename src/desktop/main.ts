@@ -18,7 +18,7 @@ import { statusParts } from "./shell/status";
 import { selectionRange } from "./reader/sourcemap";
 import { setLibraryOpener } from "./library";
 import { renderReaderDocument } from "./render";
-import { dataDocumentKind, dataLabelOf, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
+import { dataDocumentKind, dataLabelOf, prepareRenderText, renderTextOf, showAllOf, showMoreOf } from "../app/renderText";
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
@@ -337,9 +337,12 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
       if (position) { restore(); restoredTop = scroll.scrollTop; }
       renderedReaderId = doc.id;
     };
-    // A data document renders its readable view; its raw text stays the document (renderText.ts).
-    const view = renderTextOf(doc.name, doc.text);
     try {
+      // A data document renders its readable view; its raw text stays the document (renderText.ts).
+      // Its kind's parser loads first (D4: YAML on demand); a failed load is this render's error.
+      const preparing = prepareRenderText(doc.name);
+      if (preparing) { await preparing; if (current !== renderGeneration) return; }
+      const view = renderTextOf(doc.name, doc.text);
       const result = await renderReaderDocument(view.text, settings, doc.name, first => {
         if (current !== renderGeneration) return null;
         show(first);
@@ -395,15 +398,17 @@ async function readFiles(files: File[]): Promise<void> {
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, JSON, JSON Lines and plain text files are supported.");
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (bytes.length > SIZE_HARD_BYTES || total + bytes.length > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       total += bytes.length;
       const text = decodeMarkdown(bytes);
-      // A data document's readable view can outgrow its file: confirm on the view too.
-      if (bytes.length <= SIZE_SOFT_BYTES && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
+      // A data document's readable view can outgrow its file: confirm on the view too. (If its
+      // parser cannot load, the document opens and its render shows the error.)
+      if (bytes.length <= SIZE_SOFT_BYTES && dataDocumentKind(file.name) && await (prepareRenderText(file.name) ?? Promise.resolve()).then(() => true, () => false)
+        && new TextEncoder().encode(renderTextOf(file.name, text).text).length > SIZE_SOFT_BYTES
         && !window.confirm(`Open ${file.name}? Its readable view is large and can take longer to render.`)) continue;
       batch.documents.push({ name: file.name, text, bytes: bytes.length });
     } catch (error) {
@@ -432,9 +437,13 @@ async function openFromLibrary(id: string): Promise<void> {
   catch (error) { report(`Could not open this file: ${errorText(error)}`); }
 }
 
-async function createDocument(): Promise<void> {
-  if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
-  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text: "" };
+/** New: an untitled note in Edit. `text` (from a template) starts it with content, unsaved. */
+async function createDocument(text = ""): Promise<void> {
+  if (changingMode || nativeSaveBusy || app?.exportState.busy) {
+    if (text) report("Wait for the current action to finish, then choose the template again.");
+    return;
+  }
+  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text };
   if (app) {
     if (!canRestoreDocument(doc)) return;
     ++generation;
@@ -448,6 +457,8 @@ async function createDocument(): Promise<void> {
   report(errors.join(" "));
   if (errors.length) return;
   ++generation;
+  // Text from a template is unsaved work: closing asks, and Save goes through Save As.
+  if (text && docs.reader.active) docs.reader.active.dirty = true;
   await setEditing(true); // before the render, so an empty note is not reported as a problem
   await render();
 }
@@ -593,7 +604,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     // App's canonical IDs must not collide with authored IDs in the reading DOM.
     content.replaceChildren();
     renderedReaderId = null;
-    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument,
+    const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, () => createDocument(),
       native.available ? { save: () => { void saveDocument(false); }, saveAs: () => { void saveDocument(true); } } : undefined);
     app = mounted.app;
     docs.adoptReaderInto(app);
@@ -811,10 +822,12 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
-      const kindBefore = dataDocumentKind(target.name);
+      // The view depends on the extension, not only the kind (a CSV and a TSV split differently).
+      const viewBefore = dataDocumentKind(target.name) && target.name.split(".").pop()!.toLowerCase();
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
-      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
+      const viewAfter = dataDocumentKind(result.name) && result.name.split(".").pop()!.toLowerCase();
+      if (!app && viewAfter !== viewBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;
@@ -905,7 +918,34 @@ for (const { bar } of conflictBars) {
 
 // Reading-mode actions; the workspace keeps its own shortcuts while mounted.
 const reading = (): boolean => !changingMode;
-registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
+registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: () => createDocument() });
+// Templates (A4) need the host's read-only template read; until it exists the entry stays hidden.
+const readTemplate = (native.library as { readTemplate?: (id: string) => Promise<{ name: string; text: string }> } | undefined)?.readTemplate;
+if (native.available && readTemplate) {
+  registerCommand({ id: "document.newFromTemplate", title: "New from template…", enabled: () => !app && !changingMode && !nativeSaveBusy,
+    run: async () => {
+      let shell: typeof import("./shell/templates");
+      try { shell = await import("./shell/templates"); } catch (error) { report(`Could not open templates: ${errorText(error)}`); return; }
+      const result = await shell.chooseTemplate({
+        list: async () => {
+          const entries: Array<{ id: string; name: string; project: string }> = [];
+          let incomplete = false;
+          for (const project of (await native.library.list()).projects) {
+            try {
+              const scan = await native.library.scan(project.id);
+              incomplete ||= scan.truncated;
+              for (const file of scan.files) {
+                if (shell.isTemplatePath(file.relative)) entries.push({ id: file.id, name: file.name, project: project.name });
+              }
+            } catch { incomplete = true; } // an unreadable project: the picker says some may be missing
+          }
+          return { entries, incomplete };
+        },
+        read: id => readTemplate(id),
+      });
+      if (result) await createDocument(result.text);
+    } });
+}
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
 registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
