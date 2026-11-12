@@ -7,6 +7,7 @@ import { parseToml } from "./toml";
 import { parseYaml, prepareYaml } from "./yaml";
 import type { DataKind, Problem, Readable, ReadableOptions } from "./types";
 export type { DataKind, Problem, Readable, ReadableOptions } from "./types";
+export { valueAt, copyValue, subtreeJson, pathForms } from "./copy";
 
 /** Load optional readers before the synchronous conversion seam is used. */
 export function prepare(kind: DataKind): Promise<void> {
