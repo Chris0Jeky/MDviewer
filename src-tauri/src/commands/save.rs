@@ -914,6 +914,8 @@ mod tests {
             assert_eq!(name, "notes.JSON");
             assert_eq!(extensions[0], "json");
             assert_eq!(extensions.len(), DATA_EXTENSIONS.len());
+            let (kind, _, extensions) = save_as_choice("metrics.TSV".into());
+            assert_eq!((kind, extensions[0]), (ExportKind::Data, "tsv"));
             let (kind, _, extensions) = save_as_choice("run.log".into());
             assert_eq!((kind, extensions[0]), (ExportKind::Data, "log"));
             let (kind, name, extensions) = save_as_choice("plan.md".into());

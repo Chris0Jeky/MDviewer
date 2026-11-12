@@ -7,7 +7,7 @@ pub const MAX_EXPORT_BYTES: usize = 128 * 1024 * 1024;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ExportKind {
     Markdown,
-    /// A data or plain-text document (JSON, JSON Lines, text), written as raw UTF-8 text.
+    /// A data or plain-text document (JSON, JSON Lines, YAML, TOML, CSV, TSV, text), written as raw UTF-8 text.
     Data,
     Pdf,
 }

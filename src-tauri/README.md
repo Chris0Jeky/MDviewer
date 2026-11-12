@@ -50,7 +50,7 @@ reader's regular browser `File` drop handling can be used.
 The native reader accepts Markdown (`.md`, `.markdown`) and, for Readable data
 (docs/design/READABLE_DATA.md; owner-requested boundary change 2026-11-12), data and
 plain text (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`,
-`.txt`, `.log`; the second five added for D4, a further boundary change), all case-insensitive
+`.txt`, `.log`; `.yaml` to `.tsv` were added for D4, a further boundary change), all case-insensitive
 and read as raw text under the same rules (`file_policy::DATA_EXTENSIONS`): UTF-8 with or
 without a BOM, and UTF-16 LE/BE with a BOM. Invalid encodings are rejected rather
 than silently replaced. Metadata and the actual read are both bounded. Each file
