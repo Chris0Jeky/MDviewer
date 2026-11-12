@@ -1,0 +1,3 @@
+metric	value	note
+requests	001	"tab	inside"
+latency	1.0	"two ""quotes"""

@@ -1,0 +1,43 @@
+# All data in this file is invented.
+basic = "hello\tworld"
+literal = 'C:\invented\path'
+multibasic = """
+one \
+  two
+three
+"""
+multiliteral = '''
+one
+\two
+'''
+decimal = 1_000
+hex = 0x1F
+octal = 0o755
+binary = 0b1010
+signed = +12
+negative = -42
+float = 1.0
+exponent = -1_2.5_0e+2
+infinite = inf
+nan = -nan
+enabled = true
+offset = 1979-05-27T07:32:00-07:00
+local = 1979-05-27 07:32:00.123
+date = 1979-05-27
+time = 07:32:00
+owner.name = "Invented Reader"
+"key.with.dots" = "verbatim"
+ports = [8080, 8443,]
+point = { x = 1, y = 2, label = 'origin' }
+
+[server]
+host = "localhost"
+tls = false
+
+[[products]]
+name = "Pencil"
+price = 1.25
+
+[[products]]
+name = "Paper"
+price = 2.0
