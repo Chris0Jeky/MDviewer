@@ -133,9 +133,10 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
     lens.line(`Showing ${lens.shown.toLocaleString("en-US")} of ${lens.total.toLocaleString("en-US")} values.`);
   }
   if (lens.problems.length) {
-    problems.push(...lens.problems);
+    // A loop, not a spread: a hostile file can carry more problems than a call has arguments.
+    for (const p of lens.problems) problems.push(p);
     lens.line(); lens.line("## Expansion problems", "$"); lens.line();
-    for (const p of lens.problems) lens.line(`- Line ${p.line}, column ${p.column}: ${cellText(p.message)}`, "$");
+    for (const line of problemLines(lens.problems)) lens.line(`- ${line}`, "$");
   }
   return { markdown: lens.finish(), problems, truncated: lens.truncated, map: lens.map };
 }
@@ -218,7 +219,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
     }
   }
   if (!invalid && (problems.length || lens.problems.length)) {
-    problems.push(...lens.problems);
+    for (const p of lens.problems) problems.push(p);
     lens.line(); lens.line("## Problems", "$"); lens.line();
     for (const line of problemLines(problems)) lens.line(`- ${line}`, "$");
   }

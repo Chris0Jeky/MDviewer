@@ -418,3 +418,20 @@ describe("D6 readability rules", () => {
     expect(readable({ runtime: 1700000000 }).markdown).not.toContain("UTC");
   });
 });
+
+describe("review of #293", () => {
+  it("lists at most 100 expansion problems and keeps them all in problems[]", () => {
+    const text = "[".repeat(512) + Array.from({ length: 150 }, () => '"{}"').join(",") + "]".repeat(512);
+    const view = toReadable(text, "json");
+    expect(view.problems.length).toBeGreaterThanOrEqual(150);
+    expect(view.markdown.match(/^- Line \d+, column \d+: JSON in a string/gm)?.length).toBe(100);
+    expect(view.markdown).toMatch(/- And \d+ more problems?\./);
+  });
+
+  it("adds a byte hint only when the key names bytes", () => {
+    const md = toReadable('{"max_megabytes":512,"total_bytes":2048,"sizeBytes":1024}', "json").markdown;
+    expect(md).toContain("| max\\_megabytes | 512 |");
+    expect(md).toContain("2048 (2 KiB)");
+    expect(md).toContain("1024 (1 KiB)");
+  });
+});

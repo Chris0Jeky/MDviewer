@@ -55,7 +55,8 @@ export function hint(value: JsonValue, key: string, timeZone: string): string {
   const n = Number(text);
   if (!Number.isFinite(n)) return "";
   const human = (amount: number): string => String(Number(amount.toFixed(2)));
-  if (/bytes|^size$/i.test(key) && n >= 0) {
+  // Only when the key names bytes (`bytes`, `total_bytes`, `sizeBytes`, `size`), not `max_megabytes`.
+  if (/(^|_)bytes$|[a-z]Bytes$|^size$/i.test(key) && !/(kilo|mega|giga)bytes$/i.test(key) && n >= 0) {
     if (n >= 1024 ** 3) return `${human(n / 1024 ** 3)} GiB`;
     if (n >= 1024 ** 2) return `${human(n / 1024 ** 2)} MiB`;
     if (n >= 1024) return `${human(n / 1024)} KiB`;
@@ -362,9 +363,11 @@ export class Lens {
         const target = cell.keys.reduce(childPath, row.path);
         const detail = (v: JsonValue): boolean => v.kind === "string" && (this.embedded.has(v)
           || (v.value !== "" && !this.literalStrings && (proseKeys.has(key.toLowerCase()) || clearlyMarkdown(v.value))));
-        if (detail(cell.value)) details.push({ value: cell.value, key, path: target, label: `${index}: ${name}` });
+        // Name the row as the table shows it: its line for JSON Lines, else its position.
+        const rowLabel = lineColumn ? `line ${row.line}` : String(index);
+        if (detail(cell.value)) details.push({ value: cell.value, key, path: target, label: `${rowLabel}: ${name}` });
         else if (cell.value.kind === "array") for (const [i, v] of cell.value.items.entries()) {
-          if (detail(v)) details.push({ value: v, key, path: `${target}[${i}]`, label: `${index}: ${name}[${i}]` });
+          if (detail(v)) details.push({ value: v, key, path: `${target}[${i}]`, label: `${rowLabel}: ${name}[${i}]` });
         }
       }
     }
