@@ -7,7 +7,9 @@
 ## Direction: a dependable desktop Markdown editor
 
 MDviewer is a local Markdown reader/editor for everyday notes and technical writing,
-with a page-accurate PDF workspace. The Windows app should make opening, creating,
+with a page-accurate PDF workspace. Structured data that is hard to read (JSON, JSON Lines,
+plain text logs) opens as a readable, derived document on the device; the file itself is
+never changed by viewing it ([Readable data](design/READABLE_DATA.md)). The Windows app should make opening, creating,
 writing, finding and saving direct and predictable. Reader startup stays light;
 advanced layout tools appear when useful. The web/PWA build shares the rendering
 and editing contracts and remains supported.

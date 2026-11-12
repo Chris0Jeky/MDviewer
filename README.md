@@ -42,7 +42,7 @@ copies and keeps open documents in memory.
 
 ## What it is
 
-MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
+MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. JSON, JSON Lines and plain text files (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.txt`, `.log`) open as a **readable view**: tables, sections and an overview derived on the device, while Edit and Save keep the raw text ([Readable data](docs/design/READABLE_DATA.md)). The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
 
 The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. Apart from explicit user-requested Markdown/PDF saves, app-managed user state consists of a small settings object in `localStorage` (`mdviewer.settings.v1`) and the public-site SDK keys described below. The PWA separately caches application assets for offline use. There is no conversion API, no automatic document storage, and no account.
 
@@ -113,6 +113,7 @@ the tab closes), and the per-tab session record in `sessionStorage`. Details of 
 
 Only what the code actually does:
 
+- **Readable data.** A JSON, JSON Lines or plain text file renders as a readable document (title, overview, key/value tables, one section per object or record; plain text as one literal block). An invalid file names the problem with line and column, then shows the raw text; a long view offers Show more and Show all. Edit shows the raw text beside the live view; Save writes it byte for byte; Export PDF paginates the view. Nothing is uploaded or guessed by a model.
 - **No-slice pagination.** Code blocks, figures, tables and callouts stay on one page when they fit. Oversize blocks shrink slightly (≤ 1.15×) or split cleanly; tables repeat their header. List items fragment like paragraphs so a long checklist does not leave half-blank sheets.
 - **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
 - **New documents on Windows.** **New** (`Ctrl+N`) opens a blank note in **Edit**, beside its live preview, with an available `Untitled.md` name, and keeps existing documents open. **Export PDF…** loads the paginated workspace on demand; **Reading view** returns with your open documents and edits preserved.

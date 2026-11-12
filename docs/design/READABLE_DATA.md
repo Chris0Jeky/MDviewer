@@ -1,7 +1,8 @@
 # Readable data, version 1
 
-Status: **specification drafted 2026-11-12 on the owner's request; nothing here is implemented
-yet.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
+Status: **specification drafted 2026-11-12 on the owner's request. D1 (`src/data/`) and the
+webview half of D3 (opening, Read, Edit, PDF, Save, errors) are implemented; the native half of
+D3 lands with the Core lane.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
 files" and create "structured more human readable versions".
 
 ## The idea
