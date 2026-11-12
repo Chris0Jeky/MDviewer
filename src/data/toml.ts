@@ -131,7 +131,15 @@ export function parseToml(text: string): ParseResult {
     if (child.kind === "array" && tableArrays.has(child)) child = child.items[child.items.length - 1]!;
     if (child.kind !== "object") fail(`Key '${key}' is already a value`);
     if (tables.get(child)!.sealed) fail("Cannot extend an inline table");
-    if (dotted && !tables.get(child)!.dotted) fail(`Redefined table '${key}'`);
+    const meta = tables.get(child)!;
+    if (dotted) {
+      // Only a table defined by its own [header] is closed to dotted keys; a supertable a
+      // header created implicitly ([a.b.c] creates a.b) may still be extended, and is then
+      // defined by those dotted keys, so a later [a.b] header is a redefinition.
+      if (meta.defined && !meta.dotted) fail(`Redefined table '${key}'`);
+      meta.dotted = true;
+      meta.defined = true;
+    }
     return child;
   }
   function assign(parent: Table, keys: string[], value: JsonValue, location: { line: number; column: number }): void {

@@ -185,12 +185,16 @@ describe("CSV and TSV fields", () => {
       { key: "note", value: { value: 'Says "hello"' } },
       { key: "column 3", value: { value: "001" } },
       { key: "name (2)", value: { value: "Al" } },
+      // A cell the row lacks is a blank literal, not an empty string.
+      { key: "column 5", value: { kind: "literal", raw: "" } },
     ] });
     expect(parsed.value.items[1]).toMatchObject({ entries: [
       { value: { value: "Bo" } }, { value: { value: "first\nsecond" } },
       { value: { value: "2024-01-02" } }, { value: { value: "B" } }, { key: "column 5", value: { value: "extra" } },
     ] });
-    expect(parsed.value.items[2]?.kind === "object" && parsed.value.items[2].entries).toHaveLength(1);
+    // Every record carries every column, so a column no row fills keeps its name.
+    const short = parsed.value.items[2]?.kind === "object" ? parsed.value.items[2].entries : [];
+    expect(short.map(e => e.value.kind)).toEqual(["string", "literal", "literal", "literal", "literal"]);
   });
 
   it.each(["\r\n", "\n", "\r"])("accepts %j row ends and no phantom row after a final terminator", ending => {
@@ -258,5 +262,18 @@ describe("hostile sizes (review of #281)", () => {
 
   it("names the columns of a header-only CSV", () => {
     expect(toReadable("name,age\n", "csv").markdown).toContain("Columns: name, age");
+  });
+});
+
+describe("Codex on #281", () => {
+  it("lets dotted keys extend a supertable a header created implicitly, and closes it after", () => {
+    expect(toReadable("[a.b.c]\nx = 1\n[a]\nb.y = 2\n", "toml").problems).toEqual([]);
+    expect(toReadable("[a.b.c]\nx = 1\n[a]\nb.y = 2\n[a.b]\nz = 3\n", "toml").problems[0]?.message).toContain("Redefined table");
+    expect(toReadable("[a.b]\nx = 1\n[a]\nb.y = 2\n", "toml").problems[0]?.message).toContain("Redefined table");
+  });
+
+  it("keeps a header column that no row fills", () => {
+    const md = toReadable("a,b\n1\n", "csv").markdown;
+    expect(md).toMatch(/^\| a \| b \|$/m);
   });
 });

@@ -66,7 +66,9 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
   return {
     value: { kind: "array", line: 1, column: 1, items: rows.map(row => ({
       kind: "object", line: row[0]!.line, column: row[0]!.column,
-      entries: row.map((value, index) => ({ key: keys[index]!, value })),
+      // Every header column appears in every record: a cell a short row lacks is shown blank (not as an empty string),
+      // so a column no row fills still keeps its name.
+      entries: keys.map((key, index) => ({ key, value: row[index] ?? { line: row[0]!.line, column: row[0]!.column, kind: "literal" as const, raw: "" } })),
     })) },
     columns, keys, problems,
   };
