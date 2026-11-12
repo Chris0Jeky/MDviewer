@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocStore } from "../src/app/state";
 import type { ReaderSession } from "../src/desktop/session";
 import type { OpenBatch } from "../src/desktop/native";
+import { activeTab, activeTabId, selectTab, tabCount, tabTexts } from "./helpers/desktopTabs";
 
 // Exercise the actual entry's ownership and event wiring. Rendering and the
 // native/mount boundaries are stubbed: this is source lifetime, not layout proof.
@@ -158,17 +159,15 @@ describe("desktop source ownership", () => {
     let finish!: (result: OpenBatch) => void;
     boundary.open.mockImplementationOnce(() => new Promise<OpenBatch>(resolve => { finish = resolve; }));
     click("reader-open");
-    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
-    picker.value = before.session.documents[1]!.id;
-    picker.dispatchEvent(new Event("change"));
+    selectTab(before.session.documents[1]!.id);
     await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe(before.documents[1]!.text));
     const renders = boundary.render.mock.calls.length;
     document.getElementById("reader-scroll")!.scrollTop = 220;
     finish(batch([{ name: "retention-late.md", text: "# Late" }]));
-    await vi.waitFor(() => expect(picker.options).toHaveLength(3));
+    await vi.waitFor(() => expect(tabCount()).toBe(3));
     expect(document.getElementById("reader-scroll")!.scrollTop).toBe(220);
     expect(boundary.render).toHaveBeenCalledTimes(renders);
-    expect(picker.value).toBe(before.session.documents[1]!.id);
+    expect(activeTabId()).toBe(before.session.documents[1]!.id);
   });
 
   it("releases the reader sources after transfer and follows current workspace identity", async () => {
@@ -184,7 +183,7 @@ describe("desktop source ownership", () => {
     expect(document.title).toBe("retention-beta.md — MDviewer");
     app.store.setActive(app.store.openDocs[0]!.id);
     expect(document.title).toBe("retention-alpha.md — MDviewer");
-    expect((document.getElementById("reader-documents") as HTMLSelectElement).selectedOptions[0]!.text).toBe("retention-alpha.md");
+    expect(activeTab()).toBe("retention-alpha.md");
   });
 
   it("prunes a closed baseline, keeps restored edits dirty and releases baselines on return", async () => {
@@ -306,8 +305,7 @@ describe("desktop source ownership", () => {
     expect(before.session.documents).toEqual([]);
     expect(app.store.openDocs).toHaveLength(3);
     expect(document.title).toBe("retention-alpha.md — MDviewer");
-    const picker = document.getElementById("reader-documents") as HTMLSelectElement;
-    expect([...picker.options].map(option => option.text)).toEqual([
+    expect(tabTexts()).toEqual([
       "retention-alpha.md", "retention-beta.md", "retention-queued.md",
     ]);
     app.store.setActive(app.store.openDocs[2]!.id);

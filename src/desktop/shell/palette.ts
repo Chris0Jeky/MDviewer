@@ -123,7 +123,7 @@ export async function openPalette(source: PaletteSource): Promise<void> {
     const current = list.querySelector<HTMLElement>(`#shell-palette-option-${selected}`);
     if (current) {
       input.setAttribute("aria-activedescendant", current.id);
-      current.scrollIntoView({ block: "nearest" });
+      current.scrollIntoView?.({ block: "nearest" });
     } else input.removeAttribute("aria-activedescendant");
   }
 

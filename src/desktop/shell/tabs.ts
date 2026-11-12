@@ -23,7 +23,7 @@ export function mountTabs(host: HTMLElement, actions: {
   let disabled = false;
 
   const tabOf = (id: string): HTMLElement | null =>
-    host.querySelector<HTMLElement>(`[role="tab"][data-doc-id="${CSS.escape(id)}"]`);
+    [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(tab => tab.dataset.docId === id) ?? null;
 
   function render(next: readonly TabItem[], activeId: string | null, isDisabled: boolean): void {
     items = next;
@@ -73,7 +73,7 @@ export function mountTabs(host: HTMLElement, actions: {
     }));
     host.hidden = !next.length;
     const active = activeId ? tabOf(activeId) : null;
-    active?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     if (hadFocus) active?.focus();
   }
 

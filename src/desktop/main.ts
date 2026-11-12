@@ -677,9 +677,9 @@ installShortcuts(window, command => !app && !command.id.startsWith("document.sav
 // Save works in every mode and must claim Ctrl+S before the workspace's own
 // Save Markdown (copy) shortcut, so it listens in the capture phase.
 const saving = (): boolean => native.available && !changingMode && !nativeSaveBusy && !app?.exportState.busy;
-// Save is offered only when there is something to save: unsaved edits, or a document with no file yet.
+// The menu offers Save only when there is something to save; Ctrl+S still explains why not.
 const somethingToSave = (): boolean => { const target = docs.saveTarget(); return !!target && (target.dirty || !target.binding); };
-registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: () => saving() && somethingToSave(), run: () => saveDocument(false) });
+registerCommand({ id: "document.save", title: "Save", keys: ["Mod+S"], enabled: saving, run: () => saveDocument(false) });
 registerCommand({ id: "document.saveAs", title: "Save As…", keys: ["Mod+Shift+S"], enabled: saving, run: () => saveDocument(true) });
 registerCommand({ id: "document.saveCopy", title: "Save a copy…", enabled: () => !changingMode && !nativeSaveBusy, run: saveCopy });
 installShortcuts(window, command => native.available && command.id.startsWith("document.save"), { capture: true });
@@ -803,7 +803,7 @@ const moreMenu: MenuEntry[] = [
   { command: "document.new", id: "reader-new" },
   { command: "document.open", id: "reader-open" },
   "separator",
-  { command: "document.save" },
+  { command: "document.save", disabled: () => !somethingToSave() },
   { command: "document.saveAs" },
   { command: "document.saveCopy" },
   { command: "export.pdf" },

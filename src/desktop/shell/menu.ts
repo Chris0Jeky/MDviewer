@@ -6,7 +6,7 @@ import { isEnabled, listCommands, runCommand, type Command } from "../commands";
  * for automation) and their enabled and checked states are refreshed whenever it opens.
  */
 export type MenuEntry =
-  | { command: string; id?: string; role?: "menuitemradio" | "menuitemcheckbox"; checked?: () => boolean }
+  | { command: string; id?: string; role?: "menuitemradio" | "menuitemcheckbox"; checked?: () => boolean; disabled?: () => boolean }
   | "separator";
 
 const KEY_LABELS: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→" };
@@ -72,7 +72,7 @@ export function mountMenu(button: HTMLButtonElement, menu: HTMLElement, entries:
         element.append(hint);
         element.setAttribute("aria-keyshortcuts", keys.replace("Mod", "Control"));
       }
-      element.setAttribute("aria-disabled", String(!isEnabled(command)));
+      element.setAttribute("aria-disabled", String(!isEnabled(command) || !!entry.disabled?.()));
     }
   }
 

@@ -118,3 +118,4 @@
   .shell-palette-option[aria-selected="true"] { outline: 2px solid Highlight; }
 }
 @media print { .shell-bar, .shell-panel, .shell-menu { display: none !important; } }
+.desktop-reader .shell-palette-input:focus-visible { outline: none; } /* the accent underline is the focus indicator */

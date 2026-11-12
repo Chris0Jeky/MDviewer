@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocStore } from "../src/app/state";
 import type { OpenBatch, ReadResult } from "../src/desktop/native";
+import { activeTab } from "./helpers/desktopTabs";
 
 // The real desktop entry and document owner; the host watcher, native reads and
 // the layout-dependent workspace/render boundaries are stubbed.
@@ -32,7 +33,7 @@ function changed(text: string | null, generation = 1): ReadResult {
   return { outcome: "changed", text, generation, encoding: "utf-8", eol: "lf" };
 }
 const shown = () => document.getElementById("reader-document")!.textContent;
-const option = () => (document.getElementById("reader-documents") as HTMLSelectElement).selectedOptions[0]!.text;
+const option = (): string => activeTab();
 const bars = () => [...document.querySelectorAll<HTMLElement>(".file-conflict")];
 const visibleBar = () => bars().find(bar => !bar.hidden);
 

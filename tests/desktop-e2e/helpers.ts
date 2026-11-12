@@ -78,14 +78,15 @@ flowchart LR
 
 export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  // Ctrl+O works from the empty state, the tabs and the document alike (S3 has no Open button in the bar).
+  await page.keyboard.press("Control+O");
   await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
 }
 
 export async function readyReader(page: Page, heading: string): Promise<void> {
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-document h1")).toHaveText(heading);
-  await expect(page.locator("#reader-shell > footer #reader-status")).toContainText("Reading view");
+  await expect(page.locator("#reader-shell > footer #reader-status")).toContainText(" words · ");
 }
 
 export async function readyWorkspace(page: Page, text: string): Promise<void> {
