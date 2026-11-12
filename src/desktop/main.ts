@@ -7,7 +7,9 @@ import { SAMPLE_MARKDOWN } from "../app/sampleDoc";
 import type { App } from "../app/App";
 import type { Doc } from "../app/state";
 import { native, type OpenBatch } from "./native";
-import { ReaderSession, decodeMarkdown, drainSerially, nextUntitledName } from "./session";
+import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
+import { DesktopDocuments } from "./documents";
+import { installShortcuts, registerCommand } from "./commands";
 import { renderReaderDocument } from "./render";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
 import { documentLabels, mountDocumentNavigation } from "../ui/DocumentNavigation";
@@ -35,7 +37,8 @@ const newButtons = [element<HTMLButtonElement>("reader-new"), element<HTMLButton
 const closeButton = element<HTMLButtonElement>("reader-close");
 const returnButton = element<HTMLButtonElement>("reader-return");
 const settings = loadSettings();
-let session = new ReaderSession();
+// The single owner of open documents across reading and the PDF workspace.
+const docs = new DesktopDocuments();
 let app: App | null = null;
 let detachWorkspace: (() => void) | null = null;
 let changingMode = false;
@@ -46,7 +49,6 @@ let renderChain: Promise<void> = Promise.resolve();
 let textSize = 17;
 let nativeSaveBusy = false;
 const queuedBatches: Array<{ batch: OpenBatch; request: number }> = [];
-let workspaceOriginals = new Map<string, { name: string; text: string; dirty: boolean }>();
 let renderedReaderId: string | null = null;
 const readerNavigation = mountDocumentNavigation(shell, select,
   element<HTMLButtonElement>("reader-previous"), element<HTMLButtonElement>("reader-next"),
@@ -68,22 +70,16 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function workspaceDirty(doc: Doc): boolean {
-  const original = workspaceOriginals.get(doc.id);
-  return !original || original.dirty || original.text !== doc.text || original.name !== doc.name;
-}
-
 function syncDocuments(): void {
-  const docs = app ? app.store.openDocs.map(doc => ({ ...doc, dirty: workspaceDirty(doc) })) : session.documents;
-  const active = app ? app.store.active : session.active;
-  const labels = documentLabels(docs);
-  select.replaceChildren(...docs.map(doc => {
+  const { docs: open, active } = docs.list();
+  const labels = documentLabels(open);
+  select.replaceChildren(...open.map(doc => {
     const option = new Option(`${doc.dirty ? "• " : ""}${labels.get(doc.id)!}`, doc.id);
     option.selected = doc.id === active?.id;
     return option;
   }));
-  if (!docs.length) select.append(new Option("No document open", ""));
-  select.disabled = !docs.length || changingMode;
+  if (!open.length) select.append(new Option("No document open", ""));
+  select.disabled = !open.length || changingMode;
   readerNavigation.sync();
   closeButton.disabled = !active;
   workspaceButton.disabled = !active || changingMode;
@@ -96,8 +92,8 @@ function syncDocuments(): void {
 }
 
 function rememberReaderPosition(): void {
-  if (renderedReaderId && session.documents.some(doc => doc.id === renderedReaderId)) {
-    session.positions.set(renderedReaderId, { reader: { scrollTop: scroll.scrollTop, scrollLeft: scroll.scrollLeft } });
+  if (renderedReaderId && docs.reader.documents.some(doc => doc.id === renderedReaderId)) {
+    docs.reader.positions.set(renderedReaderId, { reader: { scrollTop: scroll.scrollTop, scrollLeft: scroll.scrollLeft } });
   }
 }
 
@@ -106,7 +102,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
   renderedReaderId = null;
   const current = ++renderGeneration;
   const currentNotice = noticeGeneration;
-  const doc = session.active;
+  const doc = docs.reader.active;
   syncDocuments();
   outline.replaceChildren();
   outline.hidden = true;
@@ -139,7 +135,7 @@ function render(importErrors: readonly string[] = []): Promise<void> {
       outline.hidden = outline.childElementCount < 2;
       // The outline changes text wrapping and the maximum scroll offset. Reveal
       // it first so saved offsets clamp against the final reader geometry.
-      const position = session.positions.get(doc.id)?.reader;
+      const position = docs.reader.positions.get(doc.id)?.reader;
       const previousBehavior = scroll.style.scrollBehavior;
       scroll.style.scrollBehavior = "auto";
       scroll.scrollTop = position?.scrollTop ?? 0;
@@ -166,30 +162,17 @@ function render(importErrors: readonly string[] = []): Promise<void> {
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
-  const previousActiveId = session.activeId;
-  if (app) {
-    const bounded = new ReaderSession();
-    // Seed the gate without dropping existing edits that have grown since opening.
-    bounded.documents.push(...app.store.openDocs.map(doc => ({ ...doc, dirty: false })));
-    const count = bounded.documents.length;
-    errors.push(...bounded.append(batch.documents));
-    const added = app.store.addBatch(bounded.documents.slice(count), request === generation || app.store.activeId === null);
-    for (const doc of added) workspaceOriginals.set(doc.id, { ...doc, dirty: false });
-    syncDocuments(); // addBatch emits before the imported clean baselines are recorded.
-  } else {
-    errors.push(...session.append(batch.documents, request === generation));
-    syncDocuments();
-  }
+  const previousActiveId = docs.reader.activeId;
+  errors.push(...docs.addBatch(batch.documents, request === generation));
+  syncDocuments(); // The workspace's addBatch emits before the imported clean baselines are recorded.
   if (errors.length) report(errors.join(" "));
   // Capture the notices for this batch only, after publishing its immediate errors.
-  if (!app && batch.documents.length && session.activeId !== previousActiveId) void render(errors);
+  if (!app && batch.documents.length && docs.reader.activeId !== previousActiveId) void render(errors);
 }
 
 function canRestoreDocument(doc: Readonly<Pick<Doc, "name" | "text">>): boolean {
   if (!app || changingMode) return false;
-  const bounded = new ReaderSession();
-  bounded.documents.push(...app.store.openDocs.map(openDoc => ({ ...openDoc, dirty: false })));
-  const errors = bounded.append([doc]);
+  const errors = docs.admitToWorkspace([doc]);
   report(errors.join(" "));
   return errors.length === 0;
 }
@@ -227,18 +210,17 @@ async function open(): Promise<void> {
 
 async function createDocument(): Promise<void> {
   if (changingMode || nativeSaveBusy || app?.exportState.busy) return;
-  const doc = { name: nextUntitledName(app ? app.store.openDocs : session.documents), text: "" };
+  const doc = { name: nextUntitledName(app ? app.store.openDocs : docs.reader.documents), text: "" };
   if (app) {
     if (!canRestoreDocument(doc)) return;
     ++generation;
-    const added = app.store.add(doc.name, doc.text);
-    workspaceOriginals.set(added.id, { ...doc, dirty: false });
+    docs.addNewToWorkspace(app, doc);
     if (app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
     syncDocuments(); // add emits before the explicit clean baseline is recorded.
     app.focusEditor();
     return;
   }
-  const errors = session.append([doc]);
+  const errors = docs.reader.append([doc]);
   report(errors.join(" "));
   if (errors.length) return;
   ++generation;
@@ -246,7 +228,7 @@ async function createDocument(): Promise<void> {
 }
 
 async function enterWorkspace(revealEditor = false): Promise<void> {
-  if (app || changingMode || !session.active) return;
+  if (app || changingMode || !docs.reader.active) return;
   rememberReaderPosition();
   changingMode = true; ++generation; ++renderGeneration;
   // Layout needs a visible workspace, but its controls must not accept input
@@ -265,24 +247,13 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     renderedReaderId = null;
     const mounted = startWorkspace(appRoot, () => { void open(); }, canRestoreDocument, createDocument);
     app = mounted.app;
-    const selected = session.documents.findIndex(doc => doc.id === session.activeId);
-    const added = app.store.addBatch(session.documents);
-    for (const [index, doc] of added.entries()) {
-      const position = session.positions.get(session.documents[index]!.id);
-      if (position) app.store.positions.set(doc.id, position);
-    }
-    // addBatch initially activates the first document. Restore it before changing
-    // selection so beforechange cannot replace its transferred coordinates with 0.
-    app.restoreDocumentPosition();
-    workspaceOriginals = new Map(added.map((doc, index) => [doc.id, session.documents[index]!]));
-    if (added[selected]) app.store.setActive(added[selected]!.id);
+    docs.adoptReaderInto(app);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
     const offText = app.store.on("text", () => { generation += 1; });
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
       if (!app) return;
-      const openIds = new Set(app.store.openDocs.map(doc => doc.id));
-      for (const id of workspaceOriginals.keys()) if (!openIds.has(id)) workspaceOriginals.delete(id);
+      docs.pruneBaselines();
       if (app.store.activeId !== activeId) { activeId = app.store.activeId; generation += 1; }
       syncDocuments();
     });
@@ -290,9 +261,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     detachWorkspace = () => { mounted.detachShortcuts(); offText(); offChange(); offExport(); };
     // The App, selection and dirty baselines now own every transferred source.
     // Keep the old session intact until that handoff succeeds, then release it.
-    session.documents.length = 0;
-    session.activeId = null;
-    session.positions.clear();
+    docs.releaseReader();
     content.replaceChildren(); // Release the reader DOM while the PDF workspace owns the document.
     await app.flushRender();
     focusWhenReady = true;
@@ -317,21 +286,10 @@ async function returnToReader(): Promise<void> {
   try {
     await app.flushRender();
     app.captureDocumentPosition();
-    const next = new ReaderSession();
-    const errors = next.append(app.store.openDocs.map(doc => ({
-      name: doc.name, text: doc.text,
-      dirty: workspaceDirty(doc),
-    })));
-    if (errors.length) throw new Error(errors.join(" "));
-    for (const [index, doc] of app.store.openDocs.entries()) {
-      const position = app.store.positions.get(doc.id);
-      if (position) next.positions.set(next.documents[index]!.id, position);
-    }
-    const index = app.store.openDocs.findIndex(doc => doc.id === app!.store.activeId);
-    next.activeId = next.documents[index]?.id ?? next.activeId;
+    const next = docs.readerSnapshot(app);
     const previousDocs = [...app.store.openDocs];
     const previousActive = app.store.activeId;
-    const previousOriginals = new Map(workspaceOriginals);
+    const previousOriginals = new Map(docs.baselines);
     try {
       for (const doc of previousDocs) app.store.remove(doc.id);
       await app.flushRender(); // Tear down Paged.js while its canvas still exists.
@@ -340,7 +298,7 @@ async function returnToReader(): Promise<void> {
       // This snapshot is local to the transition and is released after success.
       const previousIds = new Set(previousDocs.map(doc => doc.id));
       app.store.openDocs = [...previousDocs, ...app.store.openDocs.filter(doc => !previousIds.has(doc.id))];
-      for (const [id, original] of previousOriginals) workspaceOriginals.set(id, original);
+      for (const [id, original] of previousOriginals) docs.baselines.set(id, original);
       for (const [index, doc] of previousDocs.entries()) {
         const position = next.positions.get(next.documents[index]!.id);
         if (position) app.store.positions.set(doc.id, position);
@@ -351,14 +309,13 @@ async function returnToReader(): Promise<void> {
     }
     detachWorkspace?.(); detachWorkspace = null;
     app.destroy(); app = null;
-    workspaceOriginals.clear();
+    docs.returnToReader(next);
     appRoot.replaceChildren();
     workspace.hidden = true; shell.hidden = false;
     document.body.classList.remove("desktop-editing");
     Object.assign(settings, loadSettings());
     theme.value = settings.screenTheme;
     document.documentElement.dataset.appTheme = settings.screenTheme;
-    session = next;
     report("");
     await render();
     content.focus({ preventScroll: true });
@@ -373,11 +330,11 @@ function finishMode(): void {
 }
 
 function closeDocument(): void {
-  const doc = session.active;
+  const doc = docs.reader.active;
   if (!doc || changingMode) return;
   if (doc.dirty && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) return;
   ++generation;
-  session.close(doc.id);
+  docs.reader.close(doc.id);
   report("");
   void render();
 }
@@ -397,34 +354,36 @@ appRoot.addEventListener("click", event => {
   const button = (event.target as Element | null)?.closest("button.doc-close");
   const doc = app?.store.active;
   if (!button || !doc) return;
-  if (workspaceDirty(doc) && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
+  if (docs.workspaceDirty(doc) && !window.confirm(`Discard unsaved edits to ${doc.name}?`)) {
     event.preventDefault(); event.stopImmediatePropagation();
   }
 }, true);
 select.addEventListener("change", () => {
-  if (changingMode || session.activeId === select.value) return;
-  ++generation; session.activeId = select.value; report(""); void render();
+  if (changingMode || docs.reader.activeId === select.value) return;
+  ++generation; docs.reader.activeId = select.value; report(""); void render();
 });
 closeButton.addEventListener("click", closeDocument);
 workspaceButton.addEventListener("click", () => { void enterWorkspace(); });
 returnButton.addEventListener("click", () => { void returnToReader(); });
-element("reader-sample").addEventListener("click", () => {
+function openSample(): void {
   ++generation;
-  const errors = session.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]);
+  const errors = docs.reader.append([{ name: "Sample.md", text: SAMPLE_MARKDOWN }]);
   report(errors.join(" "));
   void render(errors);
-});
+}
+element("reader-sample").addEventListener("click", openSample);
 theme.addEventListener("change", () => {
   if (!["light", "dark", "sepia"].includes(theme.value)) return;
   settings.screenTheme = theme.value as typeof settings.screenTheme;
   document.documentElement.dataset.appTheme = settings.screenTheme;
   saveSettings({ ...loadSettings(), screenTheme: settings.screenTheme });
 });
+function resizeText(delta: number): void {
+  textSize = Math.min(26, Math.max(13, textSize + delta));
+  content.style.setProperty("--reader-text-size", `${textSize}px`);
+}
 for (const [id, delta] of [["reader-smaller", -1], ["reader-larger", 1]] as const) {
-  element(id).addEventListener("click", () => {
-    textSize = Math.min(26, Math.max(13, textSize + delta));
-    content.style.setProperty("--reader-text-size", `${textSize}px`);
-  });
+  element(id).addEventListener("click", () => resizeText(delta));
 }
 window.addEventListener("dragover", event => {
   if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
@@ -434,16 +393,17 @@ window.addEventListener("drop", event => {
   event.preventDefault();
   void readFiles(Array.from(event.dataTransfer.files));
 });
-window.addEventListener("keydown", event => {
-  if (app || event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return;
-  const key = event.key.toLowerCase();
-  if (key !== "n" && key !== "o" && key !== "w") return;
-  event.preventDefault();
-  if (event.repeat || changingMode) return;
-  if (key === "n") void createDocument();
-  if (key === "o") void open();
-  if (key === "w") closeDocument();
-});
+// Reading-mode actions; the workspace keeps its own shortcuts while mounted.
+const reading = (): boolean => !changingMode;
+registerCommand({ id: "document.new", title: "New document", keys: ["Mod+N"], enabled: reading, run: createDocument });
+registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
+registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
+registerCommand({ id: "workspace.enter", title: "Edit & PDF", enabled: () => !app && !changingMode && !!docs.reader.active, run: () => enterWorkspace() });
+registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
+registerCommand({ id: "document.sample", title: "Open sample document", enabled: () => !app && !changingMode, run: openSample });
+registerCommand({ id: "view.textSmaller", title: "Smaller text", enabled: () => !app, run: () => resizeText(-1) });
+registerCommand({ id: "view.textLarger", title: "Larger text", enabled: () => !app, run: () => resizeText(1) });
+installShortcuts(window, () => !app);
 document.addEventListener("click", event => {
   const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
   if (!anchor || !anchor.closest(".doc, #reader-outline")) return;
@@ -459,8 +419,7 @@ document.addEventListener("click", event => {
 });
 
 function hasUnsavedWork(): boolean {
-  if (!app) return session.documents.some(doc => doc.dirty);
-  return app.store.openDocs.some(workspaceDirty);
+  return docs.hasUnsavedWork();
 }
 window.addEventListener("beforeunload", event => {
   if (!changingMode && !nativeSaveBusy && !app?.exportState.busy && !hasUnsavedWork()) return;

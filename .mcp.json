@@ -3,17 +3,17 @@
     "context7": {
       "type": "stdio",
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "@upstash/context7-mcp"]
+      "args": ["/c", "npx", "-y", "@upstash/context7-mcp@4.4.4"]
     },
     "playwright": {
       "type": "stdio",
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "@executeautomation/playwright-mcp-server"]
+      "args": ["/c", "npx", "-y", "@executeautomation/playwright-mcp-server@1.0.12"]
     },
     "ripgrep": {
       "type": "stdio",
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "mcp-ripgrep@latest"]
+      "args": ["/c", "npx", "-y", "mcp-ripgrep@0.4.0"]
     }
   }
 }
