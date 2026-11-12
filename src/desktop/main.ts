@@ -816,10 +816,12 @@ async function saveDocument(as: boolean): Promise<void> {
   }
   switch (result.outcome) {
     case "saved": {
-      const kindBefore = dataDocumentKind(target.name);
+      // The view depends on the extension, not only the kind (a CSV and a TSV split differently).
+      const viewBefore = dataDocumentKind(target.name) && target.name.split(".").pop()!.toLowerCase();
       const applied = docs.completeSave(target, captured, result);
       syncDocuments();
-      if (!app && dataDocumentKind(result.name) !== kindBefore && docs.reader.active?.name === result.name) void render();
+      const viewAfter = dataDocumentKind(result.name) && result.name.split(".").pop()!.toLowerCase();
+      if (!app && viewAfter !== viewBefore && docs.reader.active?.name === result.name) void render();
       if (applied === "saved") report(`Saved ${result.name}.`);
       else if (applied === "saved-newer-edits") report(`Saved ${result.name}; newer edits remain unsaved.`);
       return;
