@@ -602,6 +602,19 @@ are its callers. Coverage: `tests/desktop-e2e/text-first.spec.ts` (first text un
 100 ms for the sample in the production build; code heights within 1 px),
 `tests/reader-patch.test.ts`.
 
+Actionable Markdown, A1 (static; `docs/design/ACTIONABLE_MARKDOWN.md`).
+`src/render/actionable.ts` is DOM-free: `parseActionable(text, tokens?)` finds marks, choices
+(grouped per list), fields, front matter chips and ids from the CommonMark block parse (never in
+code or HTML blocks), the `marks:` cycle and the `actionable:` version; `planChange` and
+`applyPatches` produce and apply byte-exact line patches (BOM, every terminator and the final
+newline kept). `src/render/actionableGlyphs.ts`, in `createMarkdown`, draws `[/] [-] [!] [?]`
+and `( ) (x)` as named static glyphs in both pipelines; `[ ]`/`[x]` stay with task lists, so
+ordinary documents render unchanged. The reader (`src/desktop/reader/actionable.ts`) labels field
+keys, shows chips above the document and reports actionable problems on the Properties card; the
+paginated output keeps fields as text and omits chips with the front matter. Nothing is
+interactive yet (A3). Conformance: `tests/fixtures/actionable/*` (byte-exact, `-text` in
+`.gitattributes`), `tests/actionable.test.ts`, `tests/desktop-e2e/actionable.spec.ts`.
+
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
 clamped, trailing blank lines dropped) and stamps the rules that print their own tag

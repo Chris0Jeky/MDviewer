@@ -9,6 +9,8 @@ import { readFrontMatter } from "../render/frontmatter";
 import { frontMatterCard } from "./reader/frontmatter";
 import { collectFences, installSourceMap, sourceLines, stampSourceMap } from "./reader/sourcemap";
 import { decorateCopy } from "./reader/copy";
+import { parseActionable } from "../render/actionable";
+import { chipRow, markFields } from "./reader/actionable";
 
 /**
  * Continuous reading keeps natural endnotes and never invokes Paged.js.
@@ -33,6 +35,9 @@ export async function renderReaderDocument(
   stampSourceMap(tokens, lines);
   // Before rendering: Shiki's notation transformers rewrite fence content in place.
   const source = { lines, fences: collectFences(tokens) };
+  // Actionable Markdown (static in A1): reuse this parse; fields get labels before rendering.
+  const actionable = parseActionable(text, tokens);
+  if (tokens[0]) markFields(tokens, actionable, tokens[0].constructor as Parameters<typeof markFields>[2]);
   const languages = parsedFenceLanguages(md, tokens).filter(language =>
     !["text", "plaintext", "txt", "mermaid"].includes(language) && isSupportedLanguage(language));
   // Explicit line numbers, notation directives and metadata highlighting still
@@ -50,7 +55,9 @@ export async function renderReaderDocument(
   document.className = CLASSES.doc;
   document.setAttribute(ATTRS.codeTheme, settings.codeTheme);
   document.innerHTML = result.html;
-  if (frontMatter) document.prepend(frontMatterCard(frontMatter, fileName));
+  if (frontMatter || actionable.problems.length) document.prepend(frontMatterCard(frontMatter, fileName, actionable.problems));
+  const chips = chipRow(actionable);
+  if (chips) document.prepend(chips);
   // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
   decorateCopy(document, source, fileName);
   const warnings = result.warnings.map(warning => warning.message);
