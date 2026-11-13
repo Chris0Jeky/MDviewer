@@ -338,3 +338,31 @@ describe("browser host: re-read and line patches", () => {
     expect(await host.saveDocument(doc.token!, 0, "x", false)).toEqual({ outcome: "failed", code: "revoked" });
   });
 });
+
+describe("browser host: PDFs (PDF_WORKBENCH.md, P1b)", () => {
+  const pdf = utf8("%PDF-1.7\n1 0 obj\n<< >>\nendobj\n%%EOF\n");
+
+  it("opens a PDF as kind pdf without decoding it, reads its bytes by token, and forgets it on release", async () => {
+    const handle = new FakeHandle("report.PDF", pdf);
+    pick = [handle];
+    const batch = await host.open();
+    expect(batch.errors).toEqual([]);
+    const doc = batch.documents[0]!;
+    expect(doc).toMatchObject({ name: "report.PDF", text: "", kind: "pdf", bytes: pdf.length });
+    expect(Array.from(await host.readPdf(doc.token!))).toEqual(Array.from(pdf));
+    // A PDF token is not a text binding: Save refuses it.
+    expect(await host.saveDocument(doc.token!, 0, "text", true)).toMatchObject({ outcome: "failed" });
+    await host.releasePdf(doc.token!);
+    await expect(host.readPdf(doc.token!)).rejects.toThrow("revoked");
+  });
+
+  it("refuses a file named .pdf that is not a PDF, and a PDF changed after it was opened", async () => {
+    const fake = new FakeHandle("fake.pdf", utf8("# not a pdf"));
+    const real = new FakeHandle("real.pdf", pdf);
+    pick = [fake, real];
+    const batch = await host.open();
+    expect(batch.errors).toEqual([{ name: "fake.pdf", message: "This file is not a PDF." }]);
+    real.outside(utf8("%PDF-1.7\nchanged\n"));
+    await expect(host.readPdf(batch.documents[0]!.token!)).rejects.toThrow("changed");
+  });
+});
