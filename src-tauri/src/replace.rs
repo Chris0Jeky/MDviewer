@@ -182,18 +182,11 @@ mod win {
             };
             let units: Vec<_> = name.encode_wide().collect();
             let text = name.to_string_lossy();
-            let stem = text.split('.').next().unwrap_or("").to_ascii_uppercase();
             if units
                 .iter()
                 .any(|&c| c < 32 || b"<>:\"|?*".contains(&(c as u8)) && c < 128)
                 || text.ends_with(['.', ' '])
-                || matches!(
-                    stem.as_str(),
-                    "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-                )
-                || (stem.len() == 4
-                    && (stem.starts_with("COM") || stem.starts_with("LPT"))
-                    && matches!(stem.as_bytes()[3], b'1'..=b'9'))
+                || crate::file_policy::is_device_name(&text)
             {
                 return Err(ReplaceError::Unsupported("path alias or device"));
             }
