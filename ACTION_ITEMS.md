@@ -354,7 +354,7 @@ and the "Reply ... is done" and "only you can close this item" lines no longer a
 says when a delegated item closes.
 
 - **AI-10 — Try the Windows build on realistic (invented) files.** Delegated 2026-11-13.
-  - **Status:** defect filed: the owner ran steps 1 to 4 on the CI portable build from `722cbbd` (run 43342508614) and found [#334](https://github.com/Chris0Jeky/MDviewer/issues/334) (a tick scrolls the reader) and [#335](https://github.com/Chris0Jeky/MDviewer/issues/335) (write-back Undo hard to find). Agent session: not run.
+  - **Status:** defect filed: the owner ran steps 1 to 4 on the CI portable build from `722cbbd` (run 43342508614) and found [#334](https://github.com/Chris0Jeky/MDviewer/issues/334) (a tick scrolls the reader) and [#335](https://github.com/Chris0Jeky/MDviewer/issues/335) (write-back Undo hard to find). Agent session run on `df946bc`: #334 reproduced (failing test attached), new #341, #342, #343; results in `docs/qa/ACCEPTANCE.md`.
   - **Not verifiable by an agent:** the owner's own documents stay private, so agents use an invented corpus modelled on agent-written Markdown; "confusing or missing" is judged by the agent, not the owner.
   - **Former owner steps** (charter source; no owner reply is expected any more):
 
@@ -389,7 +389,7 @@ says when a delegated item closes.
   8. Reply "AI-10 is done" (or report what looked wrong: which file type, what you did, what you saw).
 
 - **AI-8 — Pulseboard Beta bar on the live site.** Delegated 2026-11-13.
-  - **Status:** not run.
+  - **Status:** agent session run on the live site 2026-11-13: steps 1, 2, 3 (payloads) and 5 (GPC) pass; step 4 passes on print CSS only (no print preview inspected). Delegated, not accepted: Pulseboard storage is not verified. Details in `docs/qa/ACCEPTANCE.md`.
   - **Not verifiable by an agent:** whether Pulseboard stores the events (a Pulseboard-side change); the SDK is inert under automation, so this needs a real browser session on the live site.
   - **Former owner steps** (charter source; no owner reply is expected any more):
 
@@ -413,7 +413,7 @@ says when a delegated item closes.
   6. Reply "AI-8 is done" (or report what looked wrong).
 
 - **AI-7 — QA-sweep fixes on the live site.** Delegated 2026-11-13.
-  - **Status:** not run (steps 1 to 3 were done for deployment `bf04155f` on 2026-10-02).
+  - **Status:** partly run 2026-11-13 (steps 1 to 3 done for `bf04155f` on 2026-10-02): PWA installability and offline precache pass on the live site; most step-4 checks run in CI on the bundle; the install dialog, a network-off reload, print output and the update toast (waits on AI-9) are not run. Details in `docs/qa/ACCEPTANCE.md`.
   - **Not verifiable by an agent:** the stable-origin update toast (step 5) needs a second live deployment, which waits on AI-9.
   - **Former owner steps** (charter source; no owner reply is expected any more):
 
@@ -515,7 +515,7 @@ says when a delegated item closes.
   account, never on the owner's account: the installer registers file associations and can replace
   the owner's installed copy and its app data. Where no such place is available they stay not run.
   - **Status:** not run. The native Windows smoke in hosted CI covers launch, Unicode paths, second-instance forwarding and saves ([WINDOWS_SMOKE.md](docs/design/WINDOWS_SMOKE.md)).
-  - **Not verifiable by an agent:** a physical printer; the quality of real speech output; first-run behaviour on a separate ordinary Windows account (agents run on the owner's account and must not change the owner's file associations).
+  - **Not verifiable by an agent:** a physical printer; the quality of real speech output; first-run behaviour on the owner's own ordinary account (agents never install there; they use Sandbox, a VM or a separate account).
   - The #169 performance boxes were never owner steps: they are agent measurement work tracked in #169 and #202.
 
 - **AI-11, AI-12, AI-13 — web shell, PDF editing, new readable kinds.** Planned by the

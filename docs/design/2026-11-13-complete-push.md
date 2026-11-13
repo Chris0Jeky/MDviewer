@@ -242,7 +242,8 @@ first and announces it; until then the other lanes touch `src/desktop/{main,nati
 wire-up lines. Merge `origin/main` into a slice branch before opening its PR. Sync the spec,
 `AGENT_INDEX.md` and the roadmap in the PR that changes their truth; keep `ORCHESTRATOR.md` entries
 to ten lines. Never deploy (AI-9); never self-clear an `ACTION_ITEMS.md` item. Distinct `E2E_PORT`
-and `DESKTOP_E2E_PORT` per worktree. The owner's real files are private: read locally only, never
+and `DESKTOP_E2E_PORT` per worktree. The owner's real files are private: read locally only (the QA lane never reads them; it uses
+invented files), never
 copied into the repository, a fixture, a PR or an issue. After each merge, five lines to the
 coordinator: what merged, proof, what is not verified, next slice, any decision needed.
 
