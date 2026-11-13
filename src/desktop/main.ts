@@ -1385,7 +1385,8 @@ function step(stack: string[], other: string[]): void {
 async function followRelativeLink(href: string): Promise<void> {
   const source = docs.saveTarget();
   if (!native.available || !source?.binding) {
-    report("Local links open in the Windows app for documents opened from a file.");
+    report(native.available ? "Local links open for documents opened from their file (Open, or drop the file)."
+      : "Local links open in the Windows app for documents opened from a file.");
     return;
   }
   if (changingMode) return;
@@ -1395,7 +1396,23 @@ async function followRelativeLink(href: string): Promise<void> {
   try {
     commitBatch(await native.openRelative(source.binding.token, href), request);
     if (!app && docs.reader.activeId) visit(docs.reader.activeId, from);
-  } catch (error) { report(errorText(error)); }
+  } catch (error) {
+    // The browser host resolves links only inside a folder the user granted: offer it once, in place.
+    const token = source.binding.token;
+    if (error instanceof Error && error.name === "NeedsFolder" && !folderOffered.has(token)) {
+      folderOffered.add(token);
+      showActionNotice({ text: errorText(error), action: { label: "Choose folder…", run: () => { void grantAndFollow(href); } } });
+    } else report(errorText(error));
+  }
+}
+const folderOffered = new Set<string>();
+async function grantAndFollow(href: string): Promise<void> {
+  showActionNotice(null);
+  try { if (!await native.library.addProject()) return; }
+  catch (error) { report(errorText(error)); return; }
+  window.dispatchEvent(new Event("mdviewer:library-changed"));
+  if (!app) void render(); // local images in the document can load now
+  await followRelativeLink(href);
 }
 
 // Local images: the sanitizer keeps a relative src inert as data-local-src; the

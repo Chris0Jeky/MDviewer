@@ -62,7 +62,7 @@ export { expect };
 export const onBrowserHost = (): boolean => ["webhost-desktop", "webhost-chromium"].includes(test.info().project.name);
 
 declare global {
-  interface Window { __pick: string[]; __saveAs: string | null }
+  interface Window { __pick: string[]; __saveAs: string | null; __folder?: string }
 }
 
 export async function installPickers(page: Page): Promise<void> {
@@ -86,6 +86,13 @@ export async function installPickers(page: Page): Promise<void> {
       showSaveFilePicker: async () => {
         if (!window.__saveAs) throw abort();
         return (await navigator.storage.getDirectory()).getFileHandle(window.__saveAs, { create: true });
+      },
+      // `window.__folder` names the folder the directory picker returns (W4); abort when unset.
+      showDirectoryPicker: async () => {
+        if (!window.__folder) throw abort();
+        let dir = await navigator.storage.getDirectory();
+        for (const part of window.__folder.split("/")) dir = await dir.getDirectoryHandle(part);
+        return dir;
       },
     });
   });

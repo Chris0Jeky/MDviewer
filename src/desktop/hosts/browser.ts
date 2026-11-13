@@ -1,5 +1,6 @@
 import type { Host, OpenBatch, PatchResult, ReadResult, SaveResult } from "../native";
 import { applyPatches, type LinePatch } from "../../render/actionable";
+import { createFolders, type DirHandle } from "./folders";
 import { MAX_FILE_BYTES, decodeText, detectEol, digestOf, documentExtension, encodeRaw, encodeText, type Encoding, type Eol } from "./codec";
 
 /**
@@ -22,6 +23,7 @@ interface PickerType { description: string; accept: Record<string, string[]> }
 interface PickerWindow {
   showOpenFilePicker?(options: { multiple?: boolean; types?: PickerType[]; excludeAcceptAllOption?: boolean }): Promise<Handle[]>;
   showSaveFilePicker?(options: { suggestedName?: string; types?: PickerType[]; excludeAcceptAllOption?: boolean }): Promise<Handle>;
+  showDirectoryPicker?(options: { id?: string; mode?: "read" | "readwrite" }): Promise<DirHandle>;
   launchQueue?: { setConsumer(consumer: (params: { files: readonly Handle[] }) => void): void };
 }
 const picker = (): PickerWindow => window as unknown as PickerWindow;
@@ -164,7 +166,12 @@ function encodeFor(binding: Pick<Binding, "encoding" | "eol">, text: string, acc
   return { refused: encoded.error === "mixed-line-endings" ? { outcome: "mixed-line-endings" } : { outcome: "failed", code: "too-large" } };
 }
 
-const unavailable = (what: string) => async (): Promise<never> => { throw new Error(`${what} is not available in this browser yet.`); };
+// Granted folders (W4): relative links, imports, local images, templates and the project scan.
+const folders = createFolders({
+  open: handles => readHandles(handles as Handle[]),
+  handleOf: token => bindings.get(token)?.handle,
+  pick: () => picker().showDirectoryPicker!({ id: "mdviewer-project", mode: "read" }),
+});
 
 export const browserHost: Host = {
   available: typeof picker().showOpenFilePicker === "function" && typeof picker().showSaveFilePicker === "function",
@@ -335,20 +342,24 @@ export const browserHost: Host = {
   },
 
   library: {
-    list: async () => ({ recent: [], pinned: [], projects: [] }),
-    scan: unavailable("The library"),
-    open: unavailable("The library"),
+    list: async () => ({ recent: [], pinned: [], projects: folders.list() }),
+    scan: id => folders.scan(id),
+    open: async id => {
+      const batch = await folders.open(id);
+      if (!batch) throw new Error("This library entry is no longer available.");
+      return batch;
+    },
     pinDocument: async () => false,
     pinEntry: async () => false,
-    unpin: async () => undefined,
+    unpin: async id => { folders.remove(id); },
     forget: async () => undefined,
     markSeen: async () => undefined,
-    addProject: async () => null,
-    clear: async () => undefined,
-    readTemplate: unavailable("Templates"),
+    addProject: () => folders.add(),
+    clear: async () => { folders.clear(); },
+    readTemplate: id => folders.readTemplate(id),
   },
-  openRelative: unavailable("Opening linked files"),
-  readAsset: unavailable("Local images"),
+  openRelative: (token, href) => folders.openRelative(token, href),
+  readAsset: (token, src) => folders.readAsset(token, src),
   session: {
     record: async () => undefined,
     restore: async () => ({ documents: [], errors: [], canceled: false }),
