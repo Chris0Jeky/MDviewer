@@ -1,3 +1,4 @@
+import { installFakeHost, fakeCalls } from "./fakeHost";
 import { test, expect, documentTabs, openFiles, readyReader, selectDocument } from "./helpers";
 
 /** Edit (S5): the source editor beside the live reader, patched block by block as you type. */
@@ -186,34 +187,14 @@ test.describe("notepad behaviours in Edit", () => {
 });
 
 test("Ctrl+S on an untitled note in the Windows app opens Save As and binds the file", async ({ page }) => {
-  // A faked host (in-page, no IPC): Save As answers as the native dialog would.
-  await page.addInitScript(() => {
-    const calls: string[] = [];
-    Object.assign(window, {
-      __saveCalls: calls,
-      isTauri: true,
-      __TAURI_INTERNALS__: {
-        metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
-        transformCallback: () => 1,
-        convertFileSrc: (path: string) => path,
-        invoke: async (cmd: string) => {
-          calls.push(cmd);
-          if (cmd === "take_pending_files" || cmd === "session_restore") return { documents: [], errors: [], canceled: false };
-          if (cmd === "library_list") return { recent: [], pinned: [], projects: [] };
-          if (cmd === "save_document_as") {
-            return { outcome: "saved", token: "s".repeat(32), generation: 1, name: "plan.md", path: "C:/notes/plan.md", dir: "C:/notes", encoding: "utf-8", eol: "lf" };
-          }
-          return null;
-        },
-      },
-    });
-  });
+  // The shared faked host (fakeHost.ts): Save As answers as the native dialog would.
+  await installFakeHost(page, { saveAs: { name: "plan.md", dir: "C:/notes" } });
   await page.goto("/desktop.html");
   await page.keyboard.press("Control+n");
   await expect(edit(page)).toBeFocused();
   await page.keyboard.insertText("# Plan\n");
   await page.keyboard.press("Control+s");
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __saveCalls: string[] }).__saveCalls.filter(cmd => cmd.startsWith("save_document")))).toEqual(["save_document_as"]);
+  await expect.poll(async () => (await fakeCalls(page)).filter(cmd => cmd.startsWith("save_document"))).toEqual(["save_document_as"]);
   await expect(documentTabs(page)).toHaveText(["plan.md"]);
   await expect(page.locator("#reader-status")).toContainText("C:/notes/plan.md");
 });
