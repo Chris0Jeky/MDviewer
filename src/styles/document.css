@@ -367,6 +367,11 @@
   margin-bottom: 0;
 }
 
+/* A table inside a quote (a conversation message) reads as a table, not as italic quote text. */
+.doc blockquote table {
+  font-style: normal;
+}
+
 /* -----------------------------------------------------------------------------
  * Tables.
  * -------------------------------------------------------------------------- */

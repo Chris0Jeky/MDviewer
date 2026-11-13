@@ -46,6 +46,8 @@ body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .reader-table > table { margin: 0; }
 .reader-table > table:has(> thead > tr > :nth-child(6)) { width: max-content; min-width: 100%; max-width: none; }
 .reader-table > table:has(> thead > tr > :nth-child(6)) :is(th, td) { max-width: 22em; }
+:root[data-app-theme="sepia"] .reader-document { --doc-code-bg: #f0e8d6; --doc-quote-bar: #cbbd9f; }
+.reader-document th { overflow-wrap: normal; word-break: normal; } /* a header is never broken inside a word; the box scrolls instead */
 :root[data-app-theme="dark"] .reader-document { --doc-code-bg: #2c3441; --doc-quote-fg: #c1cbd8; --doc-quote-bar: #59677b; }
 :root[data-app-theme="dark"] .reader-document :not(pre) > code { color: #ffb1cb; }
 :root[data-app-theme="sepia"] .reader-document:not([data-code-theme="nord"]) .shiki { background-color: var(--reader-paper) !important; } /* paper, as light shows white on white; Nord stays dark in both variants */
