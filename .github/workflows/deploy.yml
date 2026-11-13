@@ -59,8 +59,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - name: Install Playwright Chromium (+ OS deps)
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium (+ OS deps, mirror fallback)
+        run: bash scripts/ci/install-playwright.sh chromium
       - name: Build
         run: npm run build
       - name: Record artifact hashes and source identity before E2E
