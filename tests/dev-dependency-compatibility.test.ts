@@ -140,7 +140,8 @@ it("stops Workbox's installed glob from starting more directory reads after canc
   await withFixture(async root => {
     write(root, "a/deep/first.js");
     write(root, "b/deep/second.js");
-    expect((await glob("**/*.js", { cwd: root })).sort())
+    // glob returns platform separators; compare in POSIX form so Windows agrees (#223).
+    expect((await glob("**/*.js", { cwd: root })).map(path => path.split(sep).join("/")).sort())
       .toEqual(["a/deep/first.js", "b/deep/second.js"]);
     const controller = new AbortController();
     const reason = new Error("bounded traversal canceled");
