@@ -163,6 +163,15 @@ describe("browser host: open and save", () => {
     expect(new TextDecoder().decode(handle.bytes)).toBe("# Mine\n");
   });
 
+  it("past the picker, a file that cannot be read is still written rather than refused", async () => {
+    saveTo = new FakeHandle("new.md", new Uint8Array());
+    const write = saveTo.getFile.bind(saveTo);
+    let calls = 0;
+    saveTo.getFile = async () => { if (calls++ === 0) throw new DOMException("busy", "NoModificationAllowedError"); return write(); };
+    expect(await host.saveDocumentAs(null, "new.md", "# A\n", false)).toMatchObject({ outcome: "saved", name: "new.md" });
+    expect(new TextDecoder().decode(saveTo.bytes)).toBe("# A\n");
+  });
+
   it("Save As of a new document writes UTF-8 with LF; a canceled picker writes nothing", async () => {
     saveTo = new FakeHandle("plan.md", new Uint8Array());
     expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toMatchObject({ outcome: "saved", name: "plan.md", encoding: "utf-8", eol: "lf" });
@@ -282,6 +291,9 @@ describe("browser host: re-read and line patches", () => {
     expect(await host.patchDocument(doc.token!, Array.from({ length: 257 }, () => one))).toEqual({ outcome: "failed", code: "invalid" });
     expect(await host.patchDocument(doc.token!, [{ ...one, replace: "- [x] O\0ne" }])).toEqual({ outcome: "failed", code: "invalid" });
     expect(await host.patchDocument(doc.token!, [one, { ...one, replace: "- [-] One" }])).toMatchObject({ outcome: "unplaced", index: 1 });
+    expect(await host.patchDocument(doc.token!, [{ ...one, expect: "- [ ] One\r" }])).toEqual({ outcome: "failed", code: "invalid" });
+    // A lone surrogate cannot be written exactly: a result, never a thrown error.
+    expect(await host.patchDocument(doc.token!, [{ ...one, replace: "- [x] \ud800" }])).toEqual({ outcome: "failed", code: "encoding" });
     expect(handle.writes).toBe(0);
   });
 

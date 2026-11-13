@@ -5,8 +5,8 @@ import { MAX_FILE_BYTES, decodeText, detectEol, digestOf, documentExtension, enc
 /**
  * The browser host (web parity W1): the `Host` contract over the File System Access API.
  * A document is bound only to a handle the user picked, dropped or launched the app with.
- * Save re-reads the file and compares size, last-modified time and SHA-256 with what this
- * document last read or wrote before writing: it checks for outside changes before writing,
+ * Save re-reads the file and compares its bytes (size, then SHA-256) with what this document
+ * last read or wrote before writing: it checks for outside changes before writing,
  * but a write by another program between that check and the commit is not excluded (the
  * native host holds the file open across that window; a browser cannot). Nothing here is
  * persisted: tokens and handles live in page memory until W5 adds the handle store.
@@ -103,7 +103,8 @@ async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size"
   let current: File | null = null;
   try { current = await binding.handle.getFile(); }
   catch (error) {
-    if (!isMissing(error)) return { ok: false, result: { outcome: "conflict", reason: "locked" } };
+    // With nothing expected (Save As, past the picker) there is nothing to compare: try the write.
+    if (expected && !isMissing(error)) return { ok: false, result: { outcome: "conflict", reason: "locked" } };
     if (expected) return { ok: false, result: { outcome: "conflict", reason: "missing" } };
   }
   // The bytes decide, as natively: size first (cheap), then the digest, which catches an
@@ -201,7 +202,7 @@ export const browserHost: Host = {
     if (!binding) return { outcome: "failed", code: "revoked" };
     // The native shape rules (`linepatch.rs`): 1 to 256 patches, distinct lines, no NUL.
     if (!patches.length || patches.length > 256
-      || patches.some(patch => !Number.isInteger(patch.line) || patch.line < 1 || /\0/.test(patch.expect + patch.replace))) {
+      || patches.some(patch => !Number.isInteger(patch.line) || patch.line < 1 || /[\0\r\n]/.test(patch.expect) || /\0/.test(patch.replace))) {
       return { outcome: "failed", code: "invalid" };
     }
     const repeated = patches.findIndex((patch, index) => patches.findIndex(other => other.line === patch.line) !== index);
@@ -219,7 +220,8 @@ export const browserHost: Host = {
         return { outcome: "unplaced", index, text: decoded.text };
       }
       const text = applyPatches(decoded.text, patches);
-      const bytes = encodeRaw(text, decoded.encoding);
+      let bytes: Uint8Array;
+      try { bytes = encodeRaw(text, decoded.encoding); } catch { return { outcome: "failed", code: "encoding" }; } // a lone surrogate
       if (bytes.length > MAX_FILE_BYTES) return { outcome: "failed", code: "too-large" };
       const written = await writeIfUnchanged(binding, read, bytes);
       if (!written.ok) {
