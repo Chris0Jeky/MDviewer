@@ -878,11 +878,41 @@ try {
     foreach ($offset in $pdfOffsets) { $pdfSource += ("{0:D10} 00000 n `n" -f $offset) }
     $pdfSource += "trailer`n<< /Size $($pdfObjects.Count + 1) /Root 1 0 R >>`nstartxref`n$pdfXref`n%%EOF`n"
     [System.IO.File]::WriteAllBytes($pdfPath, [System.Text.Encoding]::ASCII.GetBytes($pdfSource))
+    # Weight rows (PDF_WORKBENCH.md, "Weight"): before any PDF, after the first (engine load), after
+    # a second, and after closing both; each sampled after the same settle time.
+    $pdfSettleMs = 12000
+    Start-Sleep -Milliseconds $pdfSettleMs
+    $metrics.samples += Get-MemorySample 'pdf-before'
     $sixth = Start-OwnedProcess $exe @($pdfName) $fixtureDirectory
     if (-not $sixth.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
         throw 'The PDF launch stayed alive instead of forwarding to the existing instance.'
     }
     [void](Wait-ForHeading 'pdf:Page 1' 'pdf-document.png')
+    Start-Sleep -Milliseconds $pdfSettleMs
+    $metrics.samples += Get-MemorySample 'pdf-first'
+    $secondPdfName = 'smoke-2.pdf'
+    [System.IO.File]::WriteAllBytes((Join-Path $fixtureDirectory $secondPdfName), [System.Text.Encoding]::ASCII.GetBytes($pdfSource))
+    $seventh = Start-OwnedProcess $exe @($secondPdfName) $fixtureDirectory
+    if (-not $seventh.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
+        throw 'The second PDF launch stayed alive instead of forwarding to the existing instance.'
+    }
+    Start-Sleep -Milliseconds $pdfSettleMs
+    $metrics.samples += Get-MemorySample 'pdf-second'
+    Invoke-SmokeAction 'button' "Close $secondPdfName"
+    Invoke-SmokeAction 'button' "Close $pdfName"
+    Start-Sleep -Milliseconds $pdfSettleMs
+    $metrics.samples += Get-MemorySample 'pdf-closed'
+    $pdfRows = @{}
+    foreach ($sample in $metrics.samples) { if ($sample.stage -like 'pdf-*') { $pdfRows[$sample.stage] = $sample } }
+    $metrics.pdfWeight = [ordered]@{}
+    foreach ($stage in 'pdf-before', 'pdf-first', 'pdf-second', 'pdf-closed') {
+        $row = $pdfRows[$stage]
+        $metrics.pdfWeight[$stage] = [ordered]@{
+            processCount = $row.processCount; privateBytes = $row.privateBytes
+            workingSetBytes = $row.workingSetBytes; privateWorkingSetBytes = $row.privateWorkingSetBytes
+        }
+        Write-Host ("PDF weight {0}: processes {1}, private {2:N1} MB, working set {3:N1} MB" -f $stage, $row.processCount, ($row.privateBytes / 1MB), ($row.workingSetBytes / 1MB))
+    }
     $metrics.pdf = [ordered]@{ forwardedPdfPageRegionVerified = $true }
     $metrics.data = [ordered]@{
         csvHeadingVerified = $true; csvSaveAsExactRawBytes = $true; csvSaveAs = $csvSaveAsEvidence

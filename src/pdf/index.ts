@@ -6,3 +6,4 @@
 import "./pdf.css";
 
 export { mountPdf, type PdfView, type PdfViewOptions } from "./view";
+export { unloadEngine } from "./engine";
