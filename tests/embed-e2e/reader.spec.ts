@@ -102,6 +102,30 @@ test("document HTML cannot cover the host page: fixed positioning stays inside t
   expect(await page.evaluate(() => document.elementFromPoint(5, 5)?.id ?? "")).not.toBe("b");
 });
 
+test("markdown set by the host before the module loads still renders (Codex on #318)", async ({ page }) => {
+  const early = `<!doctype html><meta charset="utf-8"><title>Early host</title>
+<script type="module" src="/mdviewer-reader.js"></script>
+<mdviewer-reader id="early"></mdviewer-reader>
+<script>document.getElementById("early").markdown = "# Set early";</script>`;
+  await page.route("**/early.html", route => route.fulfill({ contentType: "text/html", body: early }));
+  await page.goto("/early.html");
+  await expect(page.locator("#early h1")).toHaveText("Set early");
+  await page.evaluate(() => { (document.getElementById("early") as HTMLElement & { markdown: string }).markdown = "# Then later"; });
+  await expect(page.locator("#early h1")).toHaveText("Then later");
+});
+
+test("data-app-theme on the element selects the dark and sepia palettes (Codex on #318)", async ({ page }) => {
+  await load(page);
+  const article = page.locator("#a article");
+  await expect(article.locator("h1")).toHaveText("Plan");
+  const paper = (): Promise<string> => article.evaluate(node => getComputedStyle(node).backgroundColor);
+  expect(await paper()).toBe("rgb(255, 255, 255)");
+  await page.evaluate(() => document.getElementById("a")!.setAttribute("data-app-theme", "dark"));
+  expect(await paper()).toBe("rgb(32, 38, 48)");
+  await page.evaluate(() => document.getElementById("a")!.setAttribute("data-app-theme", "sepia"));
+  expect(await paper()).toBe("rgb(250, 245, 233)");
+});
+
 test("a script cannot write: an untrusted click gives no event", async ({ page }) => {
   await load(page);
   const mark = page.locator("#a").getByRole("checkbox").first();

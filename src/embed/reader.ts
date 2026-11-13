@@ -20,7 +20,7 @@ export interface MdviewerChangeDetail { patches: LinePatch[] }
 
 // The reader's stylesheets were written for the page: in a shadow root `:root` is the host.
 const STYLES = [katexCss, readerCss, documentCss, shikiCss].join("\n")
-  .replace(/:root\[([^\]]+)\]/g, ":host($1)")
+  .replace(/:root\[([^\]]+)\]/g, ":host([$1])")
   .replace(/:root\b/g, ":host")
   + `\n:host { display: block; contain: paint; } /* document HTML (position: fixed) never paints over the host page */
 .desktop-reader { position: relative; font: 14px/1.5 system-ui, "Segoe UI", sans-serif; color: var(--reader-fg); }
@@ -67,6 +67,13 @@ export class MdviewerReader extends HTMLElement {
       try { id = decodeURIComponent(id); } catch { /* an id with a stray % is looked up as written */ }
       shadow.getElementById(id)?.scrollIntoView();
     });
+    // A host script can set `markdown` before this module defines the element: that own property
+    // would shadow the setter for good. Take its value and replay it through the setter.
+    if (Object.prototype.hasOwnProperty.call(this, "markdown")) {
+      const early = (this as { markdown?: unknown }).markdown;
+      delete (this as { markdown?: unknown }).markdown;
+      this.markdown = String(early ?? "");
+    }
   }
 
   get markdown(): string { return this.#text; }
