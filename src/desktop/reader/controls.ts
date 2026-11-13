@@ -14,11 +14,8 @@ let handler: ControlHandler | null = null;
 export function setControlHandler(next: ControlHandler | null): void { handler = next; }
 /** The registered handler (tests drive write-back through it without a real gesture). */
 export function controlHandler(): ControlHandler | null { return handler; }
-
-function act(event: Event, control: Control, action: ControlAction): void {
-  if (!event.isTrusted) return; // Only a real click or key press may write.
-  handler?.(control, action);
-}
+/** What the desktop reader passes to `decorateControls`: its one module-level handler, read at gesture time. */
+export const desktopControlHandler: ControlHandler = (control, action) => handler?.(control, action);
 
 const MARK_CHECKED: Record<Mark, "true" | "false" | "mixed"> = { " ": "false", x: "true", "/": "mixed", "-": "false", "!": "false", "?": "false" };
 
@@ -28,15 +25,22 @@ function itemLabel(li: HTMLElement): string {
   return (copy.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || "Item";
 }
 
+/** Where a menu is appended: the page's body (desktop) or one element's shadow root (the embed). */
+export type MenuHost = HTMLElement | ShadowRoot;
+
 /** A small menu of choices under `anchor`; digits pick, Escape returns focus. */
-function openMenu(anchor: HTMLElement, title: string, items: Array<{ label: string; current: boolean; pick(event: Event): void }>): void {
-  document.querySelector(".am-menu")?.remove();
+function openMenu(
+  host: MenuHost, anchor: HTMLElement, title: string, items: Array<{ label: string; current: boolean; pick(event: Event): void }>,
+): void {
+  const scope = host.getRootNode() as Document | ShadowRoot; // `document` for the body, the shadow root itself otherwise
+  host.querySelector(".am-menu")?.remove();
   const menu = document.createElement("div");
   menu.className = "am-menu";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", title);
   const close = (refocus = true): void => { menu.remove(); document.removeEventListener("pointerdown", outside, true); if (refocus) anchor.focus(); };
-  const outside = (event: Event): void => { if (!menu.contains(event.target as Node)) close(false); };
+  // The path, not the target: a press inside a shadow root is retargeted to its host at `document`.
+  const outside = (event: Event): void => { if (!event.composedPath().includes(menu)) close(false); };
   items.forEach((item, index) => {
     const entry = document.createElement("button");
     entry.type = "button";
@@ -59,7 +63,7 @@ function openMenu(anchor: HTMLElement, title: string, items: Array<{ label: stri
   });
   menu.addEventListener("keydown", event => {
     const entries = [...menu.querySelectorAll<HTMLButtonElement>(".am-menu-item")];
-    const at = entries.indexOf(document.activeElement as HTMLButtonElement);
+    const at = entries.indexOf(scope.activeElement as HTMLButtonElement);
     const move = (to: number): void => { event.preventDefault(); entries[(to + entries.length) % entries.length]?.focus(); };
     if (event.key === "ArrowDown") move(at + 1);
     else if (event.key === "ArrowUp") move(at - 1);
@@ -69,10 +73,14 @@ function openMenu(anchor: HTMLElement, title: string, items: Array<{ label: stri
     // Pick with the key press itself: a synthetic click is untrusted and would not write.
     else if (/^[1-9]$/.test(event.key) && items[Number(event.key) - 1]) { event.preventDefault(); close(); items[Number(event.key) - 1]!.pick(event); }
   });
+  // Position against whatever contains the menu (the page, or the element's positioned wrapper).
+  menu.style.left = "0px";
+  menu.style.top = "0px";
+  host.append(menu);
+  const origin = menu.getBoundingClientRect();
   const box = anchor.getBoundingClientRect();
-  menu.style.left = `${Math.round(box.left + window.scrollX)}px`;
-  menu.style.top = `${Math.round(box.bottom + window.scrollY + 4)}px`;
-  document.body.append(menu);
+  menu.style.left = `${Math.round(box.left - origin.left)}px`;
+  menu.style.top = `${Math.round(box.bottom - origin.top + 4)}px`;
   document.addEventListener("pointerdown", outside, true);
   (menu.querySelector<HTMLElement>('[aria-checked="true"]') ?? menu.querySelector<HTMLElement>(".am-menu-item"))?.focus();
 }
@@ -81,7 +89,15 @@ function wantsMenu(event: KeyboardEvent): boolean {
   return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
 }
 
-export function decorateControls(root: HTMLElement, actionable: ActionableDocument): void {
+/**
+ * `onAction` receives every gesture on a control (the host decides what to do with it: the
+ * desktop reader writes back, the embedded element dispatches a change event); `menuHost` holds
+ * the mark and option menus. Nothing here is shared between callers.
+ */
+export function decorateControls(root: HTMLElement, actionable: ActionableDocument, onAction: ControlHandler, menuHost: MenuHost): void {
+  const act = (event: Event, control: Control, action: ControlAction): void => {
+    if (event.isTrusted) onAction(control, action); // Only a real click or key press may write.
+  };
   const byLine = new Map(actionable.controls.map(control => [control.line, control]));
   for (const li of root.querySelectorAll<HTMLElement>("li[data-src]")) {
     const control = byLine.get(Number(li.dataset.src!.split("-")[0]));
@@ -105,7 +121,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
       box.dataset.mark = control.state;
       box.setAttribute("aria-hidden", "true");
       button.append(box);
-      const menu = (): void => openMenu(button, `Mark ${name}`, MARKS.map(mark => ({
+      const menu = (): void => openMenu(menuHost, button, `Mark ${name}`, MARKS.map(mark => ({
         label: MARK_LABELS[mark], current: mark === control.state, pick: event => act(event, control, { kind: "mark", to: mark }),
       })));
       button.addEventListener("click", event => {
@@ -129,8 +145,9 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
       button.addEventListener("keydown", event => {
         if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"].includes(event.key)) return;
         event.preventDefault();
-        // `root` is a staging element whose children move into the page, so query the live document.
-        const group = [...(button.closest("#reader-document") ?? button.ownerDocument).querySelectorAll<HTMLButtonElement>(`.am-choice[data-group="${control.group}"]`)];
+        // `root` is a staging element whose children move into the page, so query the live tree
+        // (the page, or this element's shadow root: another element's group is never reached).
+        const group = [...(button.getRootNode() as Document | ShadowRoot).querySelectorAll<HTMLButtonElement>(`.am-choice[data-group="${control.group}"]`)];
         const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
         group[(group.indexOf(button) + step + group.length) % group.length]?.focus();
       });
@@ -203,7 +220,7 @@ export function decorateControls(root: HTMLElement, actionable: ActionableDocume
     chip.setAttribute("role", "button");
     chip.setAttribute("aria-label", `${control.key}: ${control.value || "none"}. Click for ${next}; right-click for all options`);
     chip.classList.add("am-live");
-    const menu = (): void => openMenu(chip, control.key, control.options.map(option => ({
+    const menu = (): void => openMenu(menuHost, chip, control.key, control.options.map(option => ({
       label: option, current: option === control.value, pick: event => act(event, control, { kind: "chip", value: option }),
     })));
     chip.addEventListener("click", event => act(event, control, { kind: "chip", value: next }));

@@ -217,6 +217,27 @@ E2E_TARGET=preview npm run test:e2e  # Playwright Chromium against the productio
 npm run agent:check   # typecheck + lint + unit + serve tests + observatory guard
 ```
 
+### Embedding the reader
+
+`npm run embed:build` writes `dist-embed/` with a `<mdviewer-reader>` element: the reading view with its
+clickable marks, choices, fields and chips, for another page or tool. It never writes anywhere. A real
+click dispatches `change` with `detail.patches` (the same line patches the app saves); the host applies
+them and sets `markdown` again. See [`docs/design/ACTIONABLE_MARKDOWN.md`](docs/design/ACTIONABLE_MARKDOWN.md).
+
+```html
+<script type="module" src="/mdviewer-reader.js"></script>
+<mdviewer-reader id="doc"></mdviewer-reader>
+<script>
+  const doc = document.getElementById("doc");
+  doc.markdown = text;
+  doc.addEventListener("change", event => {
+    // Per patch: check lines[patch.line - 1] === patch.expect, set it to patch.replace, then save.
+    text = applyPatches(text, event.detail.patches); // your few lines, or src/render/actionable.ts
+    doc.markdown = text;
+  });
+</script>
+```
+
 ## How export works
 
 MDviewer paginates once with [Paged.js](https://pagedjs.org/) and feeds that single, already-broken page layout to **two** export paths:
