@@ -60,7 +60,7 @@ const settings = loadSettings();
 const docs = new DesktopDocuments();
 // PDF tabs (PDF_WORKBENCH.md, P1). The view loads lazily; at most one is mounted at a time.
 const pdfs = new PdfTabs();
-let pdfView: { id: string; view: Promise<PdfView> } | null = null;
+let pdfView: { id: string; view: Promise<PdfView>; abort: AbortController } | null = null;
 /** A PDF is shown when one is active and no reader document is. */
 const pdfShown = (): boolean => !app && !!pdfs.active && !docs.reader.activeId;
 const isPdfTab = (id: string): boolean => pdfs.tabs.some(tab => tab.id === id);
@@ -282,7 +282,7 @@ function rememberReaderPosition(): void {
  * replaces only changed blocks (S2c); anything else (another document, settings) is a full render.
  */
 function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
-  if (pdfShown()) { syncDocuments(); showPdf(); return Promise.resolve(); }
+  if (pdfShown()) { ++renderGeneration; syncDocuments(); showPdf(); return Promise.resolve(); }
   pdfHost.hidden = true;
   scroll.hidden = false;
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
@@ -392,6 +392,17 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   return renderChain;
 }
 
+/**
+ * Hand the view to the active PDF tab: flush and close Edit (its text stays with its document),
+ * remember the reader position, and leave no reader document active, so no reader command (Save,
+ * Edit, Export, copy) can act on a document that is not shown.
+ */
+function focusPdf(): void {
+  if (editing) { flushEdit(); editing = false; }
+  rememberReaderPosition();
+  docs.reader.activeId = null;
+}
+
 /** Show the active PDF tab, mounting its view (and loading the PDF chunk) when needed. */
 function showPdf(): void {
   const tab = pdfs.active;
@@ -403,17 +414,24 @@ function showPdf(): void {
   outline.replaceChildren();
   status.textContent = `Opening ${tab.name}…`;
   saveState.textContent = "";
+  const abort = new AbortController();
   const view = import("../pdf").then(module => module.mountPdf(pdfHost, {
-    name: tab.name, bytes: tab.bytes, outline, openExternal: openWebLink,
+    name: tab.name, bytes: tab.bytes, outline, openExternal: openWebLink, signal: abort.signal,
     status: text => { if (pdfView?.id === tab.id && pdfShown()) status.textContent = text; },
   }));
-  pdfView = { id: tab.id, view };
-  view.catch(error => { if (pdfView?.id === tab.id) report(`Could not open ${tab.name}: ${errorText(error)}`); });
+  const current = { id: tab.id, view, abort };
+  pdfView = current;
+  view.catch(error => {
+    if (pdfView !== current) return;
+    pdfView = null; // the next activation retries
+    report(`Could not open ${tab.name}: ${errorText(error)}`);
+  });
 }
 
 function closePdfView(): void {
   const current = pdfView;
   pdfView = null;
+  current?.abort.abort();
   void current?.view.then(view => view.destroy(), () => undefined);
 }
 
@@ -421,7 +439,9 @@ function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
   const previousActiveId = docs.reader.activeId;
+  const keepPdf = pdfShown() && request !== generation;
   errors.push(...docs.addBatch(batch.documents, request === generation));
+  if (keepPdf) docs.reader.activeId = null;
   syncDocuments(); // The workspace's addBatch emits before the imported clean baselines are recorded.
   if (errors.length) report(errors.join(" "));
   // Capture the notices for this batch only, after publishing its immediate errors.
@@ -444,6 +464,7 @@ async function readFiles(files: File[]): Promise<void> {
   for (const file of files.slice(0, 32)) {
     try {
       if (isPdfFile(file.name, file.type)) {
+        if (app || changingMode) throw new Error("Return to the reading view to open a PDF.");
         if (file.size > MAX_PDF_BYTES) throw new Error("PDFs larger than 200 MB cannot be opened.");
         const problem = pdfs.add(file.name, new Uint8Array(await file.arrayBuffer()));
         if (problem) throw new Error(problem);
@@ -469,10 +490,7 @@ async function readFiles(files: File[]): Promise<void> {
   }
   if (files.length > 32) batch.errors.push({ name: "Extra files", message: "Open at most 32 files at once." });
   // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
-  if (openedPdf && !batch.documents.length && !app && !changingMode) {
-    rememberReaderPosition();
-    docs.reader.activeId = null;
-  }
+  if (openedPdf && !batch.documents.length && !app && !changingMode) focusPdf();
   commitBatch(batch, request);
   if (openedPdf && !batch.documents.length) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
 }
@@ -837,8 +855,8 @@ function closeDocumentById(id: string): void {
 function activateDocument(id: string): void {
   if (isPdfTab(id)) {
     if (changingMode || (pdfShown() && pdfs.activeId === id)) return;
-    rememberReaderPosition();
-    ++generation; pdfs.activeId = id; docs.reader.activeId = null; report(""); void render();
+    focusPdf();
+    ++generation; pdfs.activeId = id; report(""); void render();
     return;
   }
   if (changingMode || docs.reader.activeId === id || !docs.reader.documents.some(doc => doc.id === id)) return;
@@ -1077,7 +1095,7 @@ if (native.available && readTemplate) {
 }
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
-registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
+registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode && !pdfShown(),
   run: () => setEditing(!editing) });
 registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !nativeSaveBusy && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });

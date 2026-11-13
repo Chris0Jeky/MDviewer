@@ -27,9 +27,9 @@ export function assemble(objects: string[], trailer = "/Root 1 0 R", header = "%
 const stream = (content: string): string => `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
 
 /**
- * Two pages. Page 1: a title line, a link to page 2, an https link, and four links that must
- * never act (javascript: URI, Launch, JavaScript, SubmitForm). Page 2 is rotated 90°. Two
- * bookmarks. A document OpenAction that is JavaScript.
+ * Two pages. Page 1: a title line, a link to page 2, an https link, and five links that must
+ * never act (javascript: URI, Launch, JavaScript, SubmitForm, GoToR with a /D). Page 2 is rotated
+ * 90° and has a one-character run ("7"). Two bookmarks. A document OpenAction that is JavaScript.
  */
 export function linkedDocument(): Uint8Array {
   const link = (y: number, action: string): string =>
@@ -37,7 +37,7 @@ export function linkedDocument(): Uint8Array {
   return assemble([
     "<< /Type /Catalog /Pages 2 0 R /Outlines 11 0 R /OpenAction << /S /JavaScript /JS (app.alert\\(1\\)) >> >>",
     "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R /Annots [7 0 R 8 0 R 9 0 R 10 0 R 14 0 R 15 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R /Annots [7 0 R 8 0 R 9 0 R 10 0 R 14 0 R 15 0 R 17 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 90 /Resources << /Font << /F1 5 0 R >> >> /Contents 16 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     stream("BT /F1 24 Tf 72 700 Td (Hello PDF world) Tj ET BT /F1 12 Tf 72 600 Td (Go to page two) Tj ET"),
@@ -50,7 +50,8 @@ export function linkedDocument(): Uint8Array {
     "<< /Title (Second page) /Parent 11 0 R /Prev 12 0 R /Dest [4 0 R /Fit] >>",
     link(440, "/A << /S /JavaScript /JS (app.alert\\(2\\)) >>"),
     link(400, "/A << /S /SubmitForm /F << /FS /URL /F (https://example.org/submit) >> >>"),
-    stream("BT /F1 18 Tf 72 700 Td (Second page) Tj ET"),
+    stream("BT /F1 18 Tf 72 700 Td (Second page) Tj ET BT /F1 12 Tf 300 72 Td (7) Tj ET"),
+    link(360, "/A << /S /GoToR /F (other.pdf) /D [0 /Fit] >>"),
   ]);
 }
 
