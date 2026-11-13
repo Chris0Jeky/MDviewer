@@ -304,14 +304,11 @@ pub struct Scan {
     pub truncated: bool,
 }
 
-#[cfg(windows)]
-fn is_reparse(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-#[cfg(not(windows))]
-fn is_reparse(metadata: &fs::Metadata) -> bool {
+/// A junction, symlink or other name-redirecting reparse point: never followed. Std reports
+/// exactly these (the reparse tag's name-surrogate bit) as symlinks on Windows. A OneDrive Files
+/// On-Demand placeholder is also a reparse point (cloud tag, `RECALL_ON_DATA_ACCESS` while it is
+/// not downloaded) but redirects nowhere, so a synced project folder scans like any other (#251).
+fn redirects(metadata: &fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
@@ -322,7 +319,7 @@ fn is_markdown(path: &Path) -> bool {
 }
 
 /// Bounded walk of a project folder for Markdown files and agent data files (`is_agent_data`).
-/// Never follows a junction, symlink or other reparse point; skips build/dependency folders and
+/// Never follows a junction, symlink or other redirecting reparse point; skips build/dependency folders and
 /// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
     let mut scan = Scan::default();
@@ -336,7 +333,7 @@ pub fn scan(root: &Path) -> Scan {
             let Ok(metadata) = fs::symlink_metadata(&path) else {
                 continue;
             };
-            if is_reparse(&metadata) {
+            if redirects(&metadata) {
                 continue;
             }
             if metadata.is_dir() {
@@ -401,7 +398,7 @@ fn template_project<'a>(projects: &'a [Stamped], path: &Path) -> Option<&'a Path
 /// Read a pinned project's template (name, text) with no side effect: no binding, watcher,
 /// Recent entry or seen mark, and nothing written. Only a Markdown file directly inside a
 /// pinned project's `templates/` folder qualifies; neither that folder nor the file may be a
-/// junction, symlink or other reparse point; the usual local-path and encoding rules apply,
+/// junction, symlink or other redirecting reparse point; the usual local-path and encoding rules apply,
 /// with a 1 MB cap (`MAX_TEMPLATE_BYTES`).
 pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, String), String> {
     template_project(projects, path).ok_or("This is not a template of a pinned project.")?;
@@ -411,7 +408,7 @@ pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, Strin
             Ok(metadata) if metadata.is_file() && metadata.len() > MAX_TEMPLATE_BYTES => {
                 return Err("This template is larger than 1 MB.".into());
             }
-            Ok(metadata) if !is_reparse(&metadata) => {}
+            Ok(metadata) if !redirects(&metadata) => {}
             Ok(_) => {
                 return Err("This template goes through a folder shortcut and is not read.".into())
             }
@@ -557,7 +554,7 @@ mod tests {
             store.session.iter().map(|e| e.path.clone()).collect()
         };
         // Launch: only a is open (the others were unavailable); a record before any restore.
-        store.record_session(&[a.clone()], 5);
+        store.record_session(std::slice::from_ref(&a), 5);
         assert_eq!(paths(&store), [a.clone(), b.clone(), c.clone()]);
         // The user closes a: it is forgotten, the unreopened ones are still carried.
         store.record_session(&[], 6);
@@ -565,14 +562,22 @@ mod tests {
         // A carried file that opens later is owned by the open set; closing it forgets it.
         store.record_session(&[abs(&dir, "B.md")], 7);
         store.record_session(&[], 8);
-        assert_eq!(paths(&store), [c.clone()]);
+        assert_eq!(paths(&store), std::slice::from_ref(&c));
         // Only a file that is definitely gone is dropped after a reopen attempt.
-        store.settle_restore(&[c.clone()], |_| false);
-        assert_eq!(paths(&store), [c.clone()], "unavailable, not gone: kept");
-        store.settle_restore(&[b.clone()], |_| true);
+        store.settle_restore(std::slice::from_ref(&c), |_| false);
+        assert_eq!(
+            paths(&store),
+            std::slice::from_ref(&c),
+            "unavailable, not gone: kept"
+        );
+        store.settle_restore(std::slice::from_ref(&b), |_| true);
         store.record_session(&[], 9);
-        assert_eq!(paths(&store), [c.clone()], "not attempted: kept");
-        store.settle_restore(&[c.clone()], |_| true);
+        assert_eq!(
+            paths(&store),
+            std::slice::from_ref(&c),
+            "not attempted: kept"
+        );
+        store.settle_restore(std::slice::from_ref(&c), |_| true);
         store.record_session(&[], 10);
         assert!(store.session.is_empty());
         // Open files take the cap; carried ones fill what is left.
@@ -584,7 +589,11 @@ mod tests {
         assert_eq!(store.session.len(), crate::file_policy::MAX_BATCH_FILES);
         assert!(!paths(&store).contains(&a));
         store.record_session(&many[..3], 12);
-        assert_eq!(paths(&store).last(), Some(&a), "carried after the open files");
+        assert_eq!(
+            paths(&store).last(),
+            Some(&a),
+            "carried after the open files"
+        );
         store.clear();
         assert!(store.unrestored.is_empty() && store.session.is_empty());
     }
@@ -709,6 +718,27 @@ mod tests {
             .collect();
         assert_eq!(files, ["mine.md"]);
         fs::remove_dir(&link).unwrap(); // Removes the junction only.
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn scan_never_follows_a_directory_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("secret.md"), b"x").unwrap();
+        fs::write(dir.path().join("mine.md"), b"x").unwrap();
+        let link = dir.path().join("linked");
+        // Creating a symlink needs a privilege some machines do not grant: skip there.
+        if std::os::windows::fs::symlink_dir(outside.path(), &link).is_err() {
+            return;
+        }
+        let files: Vec<_> = scan(dir.path())
+            .files
+            .into_iter()
+            .map(|f| f.relative)
+            .collect();
+        assert_eq!(files, ["mine.md"]);
+        fs::remove_dir(&link).unwrap();
     }
 
     #[test]

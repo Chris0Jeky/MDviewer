@@ -1349,14 +1349,18 @@ if (native.available) {
     run: async () => {
       const target = docs.saveTarget();
       if (!target?.binding) return;
-      report(await native.library.pinDocument(target.binding.token)
-        ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+      // A pin that holds only for this run (library file unwritable) is an error, never "Pinned".
+      try {
+        report(await native.library.pinDocument(target.binding.token)
+          ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+      } catch (error) { report(errorText(error)); }
       window.dispatchEvent(new Event("mdviewer:library-changed"));
     } });
   registerCommand({ id: "library.addProject", title: "Pin a project folder…", enabled: () => !changingMode && !nativeSaveBusy,
     run: async () => {
-      try { if (await native.library.addProject()) { report("Project pinned to the library."); window.dispatchEvent(new Event("mdviewer:library-changed")); } }
+      try { if (await native.library.addProject()) report("Project pinned to the library."); }
       catch (error) { report(errorText(error)); }
+      window.dispatchEvent(new Event("mdviewer:library-changed"));
     } });
   registerCommand({ id: "session.toggleRestore", title: "Reopen last session on launch (on/off)",
     run: async () => {
