@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "../src/app/App";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App, PDF_PAGE_STALL_MS } from "../src/app/App";
 import { createRenderScheduler, DocStore, type RenderReason } from "../src/app/state";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
 import { SaveCanceled } from "../src/export/destination";
@@ -173,5 +173,165 @@ describe("App export ownership and completed-render metadata", () => {
     await t.app.exportPdf();
     expect(mocks.exportPdf).not.toHaveBeenCalled();
     expect(t.fatal).toHaveBeenCalledWith(expect.stringContaining("No paginated document"));
+  });
+});
+
+/**
+ * #201: a stop request is honored while queued, preparing or rendering, keeps the lease and the
+ * busy state until the renderer settles, and is never offered once a save has been handed off.
+ */
+describe("App PDF export cancellation", () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const gate = () => {
+    let open!: () => void;
+    const opened = new Promise<void>(resolve => { open = resolve; });
+    return { opened, open };
+  };
+  /** A renderer that keeps reading the host and rejects with the abort reason only once released. */
+  function stalledRenderer() {
+    const entered = gate();
+    const release = gate();
+    let options!: FallbackPdfOptions;
+    mocks.exportPdf.mockImplementationOnce(async (_host, _settings, opts) => {
+      options = opts;
+      entered.open();
+      await release.opened;
+      opts.signal?.throwIfAborted();
+      return "download-requested";
+    });
+    return { entered: entered.opened, release: release.open, options: () => options };
+  }
+
+  it("is offered while preparing, keeps the lease until the renderer settles, then retries cleanly", async () => {
+    const t = fixture();
+    const renderer = stalledRenderer();
+    const exported = t.app.exportPdf();
+    await renderer.entered;
+    t.scheduler.schedule("content");
+    const queuedRender = t.scheduler.flush();
+    t.app.cancelPdfExport();
+    expect(t.app.exportState.pdf.phase).toBe("cancel-requested");
+    expect(renderer.options().signal?.aborted).toBe(true);
+    // Feedback from the stopped operation is obsolete, and it still owns the host.
+    renderer.options().onProgress?.(1, 4);
+    expect(t.app.exportState.pdf.phase).toBe("cancel-requested");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(t.app.exportState.busy).toBe(true);
+    expect(t.host.textContent).toBe("Completed pages");
+    renderer.release();
+    await Promise.all([exported, queuedRender]);
+    expect(t.app.exportState.pdf.phase).toBe("export-canceled");
+    expect(t.app.exportState.busy).toBe(false);
+    expect(t.fatal).not.toHaveBeenCalled();
+    mocks.exportPdf.mockResolvedValueOnce("saved");
+    await t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("saved");
+  });
+
+  it("never touches the render host when canceled while still waiting for the lease", async () => {
+    const t = fixture();
+    const holder = gate();
+    const holding = t.scheduler.withRenderLock(() => holder.opened);
+    const exported = t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("preparing");
+    t.app.cancelPdfExport();
+    expect(t.app.exportState.pdf.phase).toBe("cancel-requested");
+    holder.open();
+    await Promise.all([holding, exported]);
+    expect(mocks.exportPdf).not.toHaveBeenCalled();
+    expect(t.app.exportState.pdf.phase).toBe("export-canceled");
+    expect(t.app.exportState.busy).toBe(false);
+  });
+
+  it("is a no-op once the save is handed off, and after it is already requested", async () => {
+    const t = fixture();
+    const handoff = gate();
+    const entered = gate();
+    mocks.exportPdf.mockImplementationOnce(async (_host, _settings, options) => {
+      options.onSaving?.("native");
+      entered.open();
+      await handoff.opened;
+      expect(options.signal?.aborted).toBe(false);
+      return "saved";
+    });
+    const exported = t.app.exportPdf();
+    await entered.opened;
+    t.app.cancelPdfExport();
+    expect(t.app.exportState.pdf.phase).toBe("saving");
+    handoff.open();
+    await exported;
+    expect(t.app.exportState.pdf.phase).toBe("saved");
+    t.app.cancelPdfExport();
+    expect(t.app.exportState.pdf.phase).toBe("saved");
+  });
+
+  it("stops a stalled page, reports a failure that points to Print, and keeps the lease until it settles", async () => {
+    vi.useFakeTimers();
+    const t = fixture();
+    const renderer = stalledRenderer();
+    const exported = t.app.exportPdf();
+    await vi.advanceTimersByTimeAsync(0);
+    await renderer.entered;
+    renderer.options().onProgress?.(1, 5);
+    await vi.advanceTimersByTimeAsync(PDF_PAGE_STALL_MS - 1);
+    expect(t.app.exportState.pdf.phase).toBe("rendering");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.app.exportState.pdf.phase).toBe("cancel-requested");
+    expect(t.app.exportState.busy).toBe(true);
+    renderer.release();
+    await exported;
+    expect(t.app.exportState.pdf).toEqual({ phase: "failed", message: expect.stringContaining("Print / Save as PDF") });
+    expect(t.fatal).toHaveBeenCalledWith(expect.stringContaining("no progress"));
+    expect(t.app.exportState.busy).toBe(false);
+    expect(vi.getTimerCount(), "the watchdog does not outlive the export").toBe(0);
+  });
+
+  it("resets the stall budget on each page and stops it at the save handoff", async () => {
+    vi.useFakeTimers();
+    const t = fixture();
+    const finish = gate();
+    const entered = gate();
+    let options!: FallbackPdfOptions;
+    mocks.exportPdf.mockImplementationOnce(async (_host, _settings, opts) => {
+      options = opts;
+      entered.open();
+      await finish.opened;
+      return "saved";
+    });
+    const exported = t.app.exportPdf();
+    await vi.advanceTimersByTimeAsync(0);
+    await entered.opened;
+    await vi.advanceTimersByTimeAsync(PDF_PAGE_STALL_MS - 1000);
+    options.onProgress?.(1, 2);
+    await vi.advanceTimersByTimeAsync(PDF_PAGE_STALL_MS - 1000);
+    options.onProgress?.(2, 2);
+    expect(t.app.exportState.pdf.phase).toBe("rendering");
+    options.onSaving?.("native");
+    // A save dialog may stay open indefinitely; nothing may stop it.
+    await vi.advanceTimersByTimeAsync(PDF_PAGE_STALL_MS * 10);
+    expect(t.app.exportState.pdf.phase).toBe("saving");
+    finish.open();
+    await exported;
+    expect(t.app.exportState.pdf.phase).toBe("saved");
+  });
+
+  it("repeats cancel and retry without retaining timers or a stuck export", async () => {
+    vi.useFakeTimers();
+    const t = fixture();
+    for (let cycle = 0; cycle < 5; cycle++) {
+      const renderer = stalledRenderer();
+      const exported = t.app.exportPdf();
+      await vi.advanceTimersByTimeAsync(0);
+      await renderer.entered;
+      t.app.cancelPdfExport();
+      renderer.release();
+      await exported;
+      expect(t.app.exportState.pdf.phase).toBe("export-canceled");
+      expect(t.app.exportState.busy).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+    mocks.exportPdf.mockResolvedValueOnce("saved");
+    await t.app.exportPdf();
+    expect(t.app.exportState.pdf.phase).toBe("saved");
   });
 });

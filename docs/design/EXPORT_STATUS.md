@@ -25,6 +25,8 @@ completed page and quarter milestones, at most five times per capture.
 | Downloading | Capture finished and jsPDF's browser handoff promise is pending; “Starting PDF download…” |
 | Saved | Native destination resolved successfully; “PDF saved.” |
 | Download requested | jsPDF completed the browser handoff; “PDF download requested.” |
+| Cancel requested | The user asked to stop (#201); the lease is held until the renderer settles; “Canceling PDF export…” |
+| Export canceled | Stopped before any save was handed off; nothing saved; “PDF export canceled. Nothing was saved…” |
 | Canceled | Native destination rejected with `SaveCanceled`; document remains open |
 | Failed | Preparation, capture, or save failed; existing fatal detail remains available and export can retry |
 
@@ -36,8 +38,9 @@ styles and remains visible in print.
 
 A browser download does not prove a disk write or disclose a canceled browser
 prompt. Only a resolved native destination produces the “saved” message. A native
-cancel is distinct from a capture/save error. This change adds no Cancel button
-and does not implement issue #201.
+cancel is distinct from a capture/save error. A Cancel button (#201) is shown
+only in Preparing and Rendering, is hidden from the save handoff on, and never
+takes or moves focus; see `RASTER_OFFLINE_CAPTURE.md` "Bounded cancellation".
 
 ## Preserved contracts
 

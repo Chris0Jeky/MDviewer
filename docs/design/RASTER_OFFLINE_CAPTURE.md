@@ -138,9 +138,46 @@ success or any failure, including errors outside `onclone`. Owned resource
 listeners and timers are disposed; unrelated frames remain. A failure saves no
 PDF and leaves the existing error feedback/retry behavior available. The frame,
 CSS and font waits are bounded individually; the library's preceding image/font
-waits and the complete multi-page export still have no new overall timeout.
-[#201](https://github.com/Chris0Jeky/MDviewer/issues/201) tracks bounded cancellation
-and cleanup while preserving render ownership and the existing no-save controls.
+waits are not individually bounded here; cancellation and the progress bound that cover them
+are defined in "Bounded cancellation" below ([#201](https://github.com/Chris0Jeky/MDviewer/issues/201)),
+which preserves render ownership and the existing no-save controls.
+
+## Bounded cancellation (#201)
+
+One `AbortController` per raster export, owned by `App.exportPdf` and passed as
+`FallbackPdfOptions.signal`. A rejected promise is never taken for "stopped": the export settles only
+after everything that can read the render host has, so `withRenderLock` is not released early and no late
+callback can touch a replacement host.
+
+| Phase | Behavior on cancel |
+| --- | --- |
+| Waiting for the lease | The queued callback throws before preparation or any host access; ordinary renders run meanwhile. |
+| Render preparation | Not interruptible (it is the ordinary render of the requested input). The callback stops right after it. |
+| Frame mount, CSS, `srcdoc` navigation | Interrupted: the signal reaches `createOfflineCapture`, the adapter's stylesheet wait and the renderer (html2canvas-pro 2.6 `signal`: iframe load, stylesheet wait, image preload, paint checkpoints). |
+| Clone fonts | The adapter's font wait is interrupted. The renderer's own `documentClone.fonts.ready` await, and any synchronous layout or paint, are not (see the limitation below). |
+| Between pages / assembly | The signal is checked before each page, before encoding it and before `pdf.output`; a finished page is dropped and its canvas zeroed. No partial PDF is ever assembled or saved. |
+| Native dialog / browser handoff | The last check is immediately before `onSaving`. After it Cancel is hidden: a native dialog uses its own Cancel (`SaveCanceled`), and a browser download prompt is not observable. |
+
+Two states are distinct. `cancel-requested` ("Canceling PDF export…") means the lease and busy state are
+still held, the Cancel control is hidden and progress from the stopped operation is ignored. The terminal
+`export-canceled` ("PDF export canceled. Nothing was saved.") means every reader has settled and a retry is
+safe. User cancellation is never reported as a failure; the save dialog's own cancel keeps the `canceled`
+phase. Owned frames, listeners, timers and canvases are released as the capture unwinds (`capturePage`'s
+`finally`; the abortable, font and frame waits remove their own listeners and timers).
+
+**Budget.** There is no whole-document wall-clock deadline: large documents legitimately run long, and a
+representative budget needs the workloads of [#202](https://github.com/Chris0Jeky/MDviewer/issues/202). The
+policy is a progress bound, `PDF_PAGE_STALL_MS` (90 s) from the start of capture or the previous page. It
+covers the adapter's own waits (frame, CSS and fonts, 10 s each) plus the renderer's 15 s image timeout with
+margin. On expiry the export is aborted through the same path and ends as a failure whose message offers
+Print / Save as PDF. The watchdog stops at the save handoff.
+
+**Known upstream limitation.** A JavaScript timer cannot preempt a synchronous main-thread section, and
+html2canvas-pro 2.6 awaits `documentClone.fonts.ready` without a signal. A capture stalled there (reproduced
+in `tests/e2e/export-cancel.spec.ts` by parking the clone's font set) cannot be stopped: Cancel stays at
+`cancel-requested` with the lease held until the renderer yields. That is deliberate rather than hidden
+behind a relaxed deadline; Print remains the fallback. A hard bound would need renderer isolation (a worker or
+a separate document), which is not designed here.
 
 ## Historical diagnosis and required acceptance
 

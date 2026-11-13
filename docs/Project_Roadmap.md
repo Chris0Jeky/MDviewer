@@ -246,7 +246,7 @@ export paths.
   live/PWA and representative Windows acceptance remain separate open gates.
 - **Done (2026-11-05): Shiki 4.6 [#193](https://github.com/Chris0Jeky/MDviewer/pull/193), merge `5fbb219c`.** The real compressed WASM loader is qualified with a test-only jsdom byte-stream compatibility bridge. The generated WASM JavaScript asset is smaller; this does not establish representative runtime performance. Both Node lanes passed 832 units at the historical `203c0979` application checkpoint.
 - **Measured responsiveness:** [#202](https://github.com/Chris0Jeky/MDviewer/issues/202) refreshes the existing performance ladder and profiles authoring bottlenecks. Incremental page feedback already ships; whole-process native comparisons and budgets stay in #169.
-- **Export lifetime:** [#201](https://github.com/Chris0Jeky/MDviewer/issues/201) designs bounded cancellation beyond the current per-phase CSS/font/frame deadlines. Offline output qualification is already complete.
+- **Export lifetime:** [#201](https://github.com/Chris0Jeky/MDviewer/issues/201) bounded cancellation is implemented: Cancel while preparing or rendering, the lease held until the renderer settles, a per-page progress bound and the Print fallback. The renderer's uninterruptible `fonts.ready` wait is recorded in `RASTER_OFFLINE_CAPTURE.md`. Offline output qualification is already complete.
 - **Done:** sanitize untrusted raw HTML, CSS resource URLs (including escaped/obfuscated forms),
   embedded images, and Mermaid SVG output.
 - **Done:** Mermaid fences bypass Shiki and render to sanitized, styled SVG text across flowchart and
@@ -320,6 +320,6 @@ Explicitly out of scope for now; revisit only after P1–P3 land.
 1. Preserve the shipped no-slice, sanitization, edit-ownership and export-lifetime contracts.
 2. Keep the shipped Windows Save/Save As (#196: S1a #226, S1b #231) conflict-safe as new document kinds arrive.
 3. Implement and fault-test the reviewed opt-in recovery design (#197, parked), coordinated with file identity, revocation and storage limits.
-4. Qualify cancellation (#201) and improve measured authoring bottlenecks (#202). Keep representative native acceptance and efficiency evidence in #169.
+4. Qualify cancellation (#201, implemented; human and second-engine acceptance open) and improve measured authoring bottlenecks (#202). Keep representative native acceptance and efficiency evidence in #169.
 5. Resolve the remaining ledger-backed follow-ups in [Future work](FUTURE_WORK.md), including Unicode IDs, the upstream SDK issue and the explicitly deferred pagination trade-off.
 6. Keep P4 options, canonical-host selection and human release/deployment decisions explicit; do not infer their completion from green CI.

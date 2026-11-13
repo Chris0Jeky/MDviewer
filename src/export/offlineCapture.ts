@@ -22,7 +22,8 @@ function stylesheetLinks(document: Document): HTMLLinkElement[] {
  * Linked CSS loads only in this destination; its normal load/error guard still
  * decides whether the PDF can be saved. No CSS text or asset URLs are rewritten.
  */
-export async function createOfflineCapture(source: Document, container: HTMLElement, controller: string) {
+export async function createOfflineCapture(source: Document, container: HTMLElement, controller: string, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const view = source.defaultView;
   if (!view) throw captureLifecycleError();
   const links = stylesheetLinks(source);
@@ -53,15 +54,18 @@ export async function createOfflineCapture(source: Document, container: HTMLElem
   frame.scrolling = "no";
   frame.srcdoc = "<!doctype html><html><head></head><body></body></html>";
   await new Promise<void>((resolve, reject) => {
-    const finish = (error?: Error) => {
+    const finish = (error?: unknown) => {
       view.clearTimeout(timeout);
       frame.removeEventListener("load", loaded);
       frame.removeEventListener("error", failed);
+      signal?.removeEventListener("abort", aborted);
       if (error) reject(error); else resolve();
     };
     const loaded = () => { if (frame.contentDocument?.URL === "about:srcdoc") finish(); };
     const failed = () => finish(captureLifecycleError());
+    const aborted = () => finish(signal?.reason);
     const timeout = view.setTimeout(failed, 10_000);
+    signal?.addEventListener("abort", aborted, { once: true });
     frame.addEventListener("load", loaded);
     frame.addEventListener("error", failed);
     container.append(frame);
