@@ -186,6 +186,8 @@ Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
   on-disk copy of the text, as such a sibling instead of deleting it (#313). It never
   completes the Save As under the chosen name. A Save As failure reported to the
   caller still removes the temporary, because the editor keeps the text.
+  Recovery runs when something next touches that folder (a Save, a line patch, or
+  opening a missing path there), so until then the text sits in the `.mdv-replace-*.tmp`.
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).
