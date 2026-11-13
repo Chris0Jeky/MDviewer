@@ -169,3 +169,17 @@ describe("auditPagination geometry", () => {
   });
 });
 
+describe("auditPagination unrendered text", () => {
+  it("sees a tail lost inside one plain text node", () => {
+    const source = html('<ul data-mdv-atomic-id="atomic-4"><li data-ref="1">alpha beta gamma delta</li></ul>');
+    const host = html(page('<ul><li data-ref="1">alpha beta</li></ul>'));
+    expect(auditPagination(source, host)?.problem).toBe("content was left unrendered");
+  });
+
+  it("accepts a text node split across pages and reflowed whitespace", () => {
+    const source = html('<p data-ref="1">alpha  beta\n gamma delta</p>');
+    const host = html(page('<p data-ref="1">alpha beta </p>') + page('<p data-ref="1">gamma delta</p>'));
+    expect(auditPagination(source, host)).toBeNull();
+  });
+});
+

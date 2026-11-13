@@ -187,10 +187,15 @@ function splitByRecovery(host: HTMLElement, marked: Map<string, string>): string
  * hidden overflow columns to its right.
  */
 export function auditPagination(source: ParentNode, host: HTMLElement): PaginationProblem | null {
-  const rendered = new Set<string>();
-  for (const el of host.querySelectorAll<HTMLElement>("[data-ref]")) rendered.add(el.dataset.ref!);
+  // Own text per source ref, across every fragment Paged.js made of it, in page order.
+  // Whitespace is dropped because a split reflows it; a lost tail is not.
+  const rendered = new Map<string, string>();
+  for (const el of host.querySelectorAll<HTMLElement>("[data-ref]")) {
+    rendered.set(el.dataset.ref!, (rendered.get(el.dataset.ref!) ?? "") + ownText(el));
+  }
   for (const el of source.querySelectorAll<HTMLElement>("[data-ref]")) {
-    if (rendered.has(el.dataset.ref!) || !hasOwnText(el)) continue;
+    const text = ownText(el);
+    if (!text || rendered.get(el.dataset.ref!)?.includes(text)) continue;
     return { problem: "content was left unrendered", atomicId: atomicIdOf(el) };
   }
 
@@ -259,11 +264,17 @@ function atomicIdOf(el: Element): string | null {
   return el.closest(`[${ATOMIC_ID_ATTR}]`)?.getAttribute(ATOMIC_ID_ATTR) ?? null;
 }
 
-function hasOwnText(el: Element): boolean {
+/** The element's own text nodes (not its descendants'), whitespace removed. */
+function ownText(el: Element): string {
+  let text = "";
   for (const child of el.childNodes) {
-    if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) return true;
+    if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? "";
   }
-  return false;
+  return text.replace(/\s+/g, "");
+}
+
+function hasOwnText(el: Element): boolean {
+  return ownText(el) !== "";
 }
 
 function isEmptyPage(content: HTMLElement): boolean {
