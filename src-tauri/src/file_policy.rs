@@ -220,8 +220,6 @@ fn error_for(path: &Path, message: &str) -> FileError {
     }
 }
 
-// Never turn a Markdown open into a device or UNC/network request. Ordinary local
-// absolute paths, including Windows' long-path disk prefix, remain supported.
 /// True for a name Win32 maps to a device instead of a file: CON, PRN, AUX, NUL,
 /// CONIN$, CONOUT$, COM0-9 and LPT0-9 including the superscript forms (COM¹, LPT³),
 /// with or without an extension, and with spaces before the extension (`NUL .png`),
@@ -248,6 +246,8 @@ pub fn is_device_name(name: &str) -> bool {
         )
 }
 
+// Never turn a Markdown open into a device or UNC/network request. Ordinary local
+// absolute paths, including Windows' long-path disk prefix, remain supported.
 pub fn is_local_file_path(path: &Path) -> bool {
     #[cfg(windows)]
     {
