@@ -99,7 +99,16 @@ fn same(a: &Path, b: &Path) -> bool {
     seen_key(a) == seen_key(b)
 }
 
+/// `serde_json` refuses a path that is not valid Unicode (an unpaired UTF-16 surrogate in a
+/// Windows name), which would fail every save. Such a path is never stored.
+fn storable(path: &Path) -> bool {
+    path.to_str().is_some()
+}
+
 fn upsert(list: &mut Vec<Stamped>, path: &Path, at: u64, cap: usize) {
+    if !storable(path) {
+        return;
+    }
     list.retain(|entry| !same(&entry.path, path));
     list.insert(
         0,
@@ -116,8 +125,9 @@ impl Store {
         upsert(&mut self.recent, path, at, MAX_RECENT);
     }
     pub fn pin_file(&mut self, path: &Path, at: u64) -> bool {
-        if self.pinned_files.len() >= MAX_PINS
-            && !self.pinned_files.iter().any(|e| same(&e.path, path))
+        if !storable(path)
+            || (self.pinned_files.len() >= MAX_PINS
+                && !self.pinned_files.iter().any(|e| same(&e.path, path)))
         {
             return false;
         }
@@ -125,7 +135,7 @@ impl Store {
         true
     }
     pub fn pin_project(&mut self, path: &Path, at: u64) -> bool {
-        if !crate::file_policy::is_local_file_path(path) {
+        if !storable(path) || !crate::file_policy::is_local_file_path(path) {
             return false;
         }
         if self.projects.len() >= MAX_PINS && !self.projects.iter().any(|e| same(&e.path, path)) {
@@ -164,7 +174,7 @@ impl Store {
         let mut unique = HashSet::new();
         self.session = paths
             .iter()
-            .filter(|path| unique.insert(path.to_string_lossy().to_lowercase()))
+            .filter(|path| storable(path) && unique.insert(seen_key(path)))
             .take(crate::file_policy::MAX_BATCH_FILES)
             .map(|path| Stamped {
                 path: path.clone(),
@@ -187,7 +197,8 @@ impl Store {
 
     /// Drop anything that is not an absolute local drive path, and re-apply caps.
     fn sanitize(mut self) -> Self {
-        let keep = |e: &Stamped| crate::file_policy::is_local_file_path(&e.path);
+        let keep =
+            |e: &Stamped| storable(&e.path) && crate::file_policy::is_local_file_path(&e.path);
         for (list, cap) in [
             (&mut self.recent, MAX_RECENT),
             (&mut self.pinned_files, MAX_PINS),
@@ -511,6 +522,47 @@ mod tests {
         assert_eq!(load(&file), (store.clone().sanitize(), true));
         store.clear();
         assert_eq!(store, Store::default());
+    }
+
+    /// A path `serde_json` cannot write: an unpaired UTF-16 surrogate (Windows) or invalid UTF-8.
+    fn unwritable(dir: &tempfile::TempDir) -> PathBuf {
+        #[cfg(windows)]
+        let name = {
+            use std::os::windows::ffi::OsStringExt;
+            std::ffi::OsString::from_wide(&[0x61, 0xD800, 0x2E, 0x6D, 0x64])
+        };
+        #[cfg(unix)]
+        let name = {
+            use std::os::unix::ffi::OsStringExt;
+            std::ffi::OsString::from_vec(vec![0x61, 0xFF, 0x2E, 0x6D, 0x64])
+        };
+        dir.path().join(name)
+    }
+
+    #[test]
+    fn a_path_json_cannot_write_is_never_stored_so_saving_keeps_working() {
+        let dir = tempfile::tempdir().unwrap();
+        let (bad, good) = (unwritable(&dir), abs(&dir, "good.md"));
+        assert!(bad.to_str().is_none());
+        let mut store = Store::default();
+        store.opened(&bad, 1);
+        store.mark_seen(&bad, 1);
+        assert!(!store.pin_file(&bad, 1));
+        assert!(!store.pin_project(&bad, 1));
+        store.record_session(&[bad.clone(), good.clone()], 1);
+        store.opened(&good, 2);
+        let file = dir.path().join("library.json");
+        save(&file, &store).expect("the library still persists");
+        assert_eq!(load(&file).0.recent.len(), 1);
+        assert_eq!(store.session.len(), 1);
+        assert!(store.seen.is_empty() && store.pinned_files.is_empty());
+        // A store that somehow holds one (an old build) is cleaned on load, not left unsavable.
+        store.recent.push(Stamped { path: bad, at: 3 });
+        assert!(store
+            .sanitize()
+            .recent
+            .iter()
+            .all(|e| e.path.to_str().is_some()));
     }
 
     #[test]
