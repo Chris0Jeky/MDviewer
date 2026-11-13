@@ -39,6 +39,7 @@ export const test = base.extend<{ audit: Audit }>({
         window.__desktopEvidence.prints.push({ text: host?.innerText ?? "", sheets: host?.querySelectorAll(".pagedjs_page").length ?? 0 });
       };
     });
+    if (onBrowserHost()) await installPickers(page);
     await page.goto("/desktop.html");
     await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
     await expect(page.locator("html")).toHaveAttribute("data-shell", "ready");
@@ -51,6 +52,67 @@ export const test = base.extend<{ audit: Audit }>({
 });
 
 export { expect };
+
+/**
+ * The suite also runs on the browser host (project `webhost-desktop`, web parity W2a): the same
+ * shell, with files opened as real handles from the origin private file system. The OS pickers
+ * cannot be driven headless, so a test-only override hands the app those handles; `window.__pick`
+ * names the files Open returns and `window.__saveAs` the file Save As returns (abort when unset).
+ */
+export const onBrowserHost = (): boolean => ["webhost-desktop", "webhost-chromium"].includes(test.info().project.name);
+
+declare global {
+  interface Window { __pick: string[]; __saveAs: string | null }
+}
+
+export async function installPickers(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.__pick = [];
+    window.__saveAs = null;
+    const abort = () => new DOMException("The user aborted a request.", "AbortError");
+    Object.assign(window, {
+      showOpenFilePicker: async () => {
+        const names = window.__pick.splice(0);
+        if (!names.length) throw abort();
+        const root = await navigator.storage.getDirectory();
+        return Promise.all(names.map(name => root.getFileHandle(name)));
+      },
+      showSaveFilePicker: async () => {
+        if (!window.__saveAs) throw abort();
+        return (await navigator.storage.getDirectory()).getFileHandle(window.__saveAs, { create: true });
+      },
+    });
+  });
+}
+
+/**
+ * Save a copy (a download). Without a file host Ctrl+S is Save Copy; where Ctrl+S saves the file in
+ * place (the browser host) the copy is the explicit command: Save Markdown in the workspace, the
+ * palette's "Save a copy…" in the reader. In-place Save is covered by `tests/webhost-e2e/save.spec.ts`.
+ */
+export async function saveCopy(page: Page, from: import("@playwright/test").Locator): Promise<void> {
+  if (!onBrowserHost()) { await from.press("Control+s"); return; }
+  if (await page.locator("#desktop-workspace").isVisible()) {
+    await page.getByRole("button", { name: "Save Markdown", exact: true }).click();
+    return;
+  }
+  await page.keyboard.press("Control+K");
+  await page.getByRole("combobox", { name: "Search commands and files" }).fill("Save a copy");
+  await page.keyboard.press("Enter");
+}
+
+/** Write a file into the origin private file system (the browser host's "disk" in tests). */
+export const writeFile = (page: Page, name: string, bytes: Buffer): Promise<void> => page.evaluate(async ({ name, bytes }) => {
+  const handle = await (await navigator.storage.getDirectory()).getFileHandle(name, { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(new Uint8Array(bytes));
+  await writable.close();
+}, { name, bytes: [...bytes] });
+
+export const readFile = async (page: Page, name: string): Promise<Buffer> => Buffer.from(await page.evaluate(async name => {
+  const file = await (await (await navigator.storage.getDirectory()).getFileHandle(name)).getFile();
+  return [...new Uint8Array(await file.arrayBuffer())];
+}, name));
 
 export const RICH_MARKDOWN = `# Desktop field notes
 
@@ -78,6 +140,13 @@ flowchart LR
 `;
 
 export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
+  if (onBrowserHost()) {
+    // The browser host opens the files themselves (bound, savable in place).
+    for (const file of files) await writeFile(page, file.name, Buffer.from(file.text));
+    await page.evaluate(names => { window.__pick = names; }, files.map(file => file.name));
+    await page.keyboard.press("Control+O");
+    return;
+  }
   const chooser = page.waitForEvent("filechooser");
   // Ctrl+O works from the empty state, the tabs and the document alike (S3 has no Open button in the bar).
   await page.keyboard.press("Control+O");

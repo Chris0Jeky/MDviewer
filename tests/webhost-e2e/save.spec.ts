@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { test, expect, documentTabs, readyReader } from "../desktop-e2e/helpers";
+import { test, expect, documentTabs, readFile, readyReader, writeFile } from "../desktop-e2e/helpers";
 
 /**
  * Open and Save on the browser host (web parity W1). In Chromium the files are real
@@ -7,45 +7,9 @@ import { test, expect, documentTabs, readyReader } from "../desktop-e2e/helpers"
  * headless, so a test-only override of `showOpenFilePicker`/`showSaveFilePicker` hands the app
  * OPFS handles. The app then reads, compares and writes them through the same API calls a
  * user-picked file gets (`getFile`, `createWritable`). Firefox has no picker API and proves the
- * fallback: a file input to open, a download to save, and nothing written in place.
+ * fallback: a file input to open, a download to save, and nothing written in place. The shared
+ * fixture (`../desktop-e2e/helpers.ts`, `installPickers`) installs the override in Chromium.
  */
-declare global {
-  interface Window { __pick: string[]; __saveAs: string | null }
-}
-
-async function installPickers(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.__pick = [];
-    window.__saveAs = null;
-    const abort = () => new DOMException("The user aborted a request.", "AbortError");
-    Object.assign(window, {
-      showOpenFilePicker: async () => {
-        if (!window.__pick.length) throw abort();
-        const root = await navigator.storage.getDirectory();
-        return Promise.all(window.__pick.map(name => root.getFileHandle(name)));
-      },
-      showSaveFilePicker: async () => {
-        if (!window.__saveAs) throw abort();
-        return (await navigator.storage.getDirectory()).getFileHandle(window.__saveAs, { create: true });
-      },
-    });
-  });
-  await page.goto("/desktop.html");
-  // The shell boots after the browser host loads; a key pressed before that reaches nothing.
-  await expect(page.locator("html")).toHaveAttribute("data-shell", "ready");
-}
-
-const writeFile = (page: Page, name: string, bytes: Buffer) => page.evaluate(async ({ name, bytes }) => {
-  const handle = await (await navigator.storage.getDirectory()).getFileHandle(name, { create: true });
-  const writable = await handle.createWritable();
-  await writable.write(new Uint8Array(bytes));
-  await writable.close();
-}, { name, bytes: [...bytes] });
-
-const readFile = async (page: Page, name: string): Promise<Buffer> => Buffer.from(await page.evaluate(async name => {
-  const file = await (await (await navigator.storage.getDirectory()).getFileHandle(name)).getFile();
-  return [...new Uint8Array(await file.arrayBuffer())];
-}, name));
 
 /** `text` (LF) in a file's conventions, as an editor of that file would write it. */
 function encode(text: string, encoding: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be", eol: "\n" | "\r\n" | "\r"): Buffer {
@@ -75,7 +39,6 @@ async function appendInEdit(page: Page, text: string): Promise<void> {
 
 test.describe("Chromium: the file the user picked", () => {
   test.skip(({ browserName }) => browserName !== "chromium", "File System Access API");
-  test.beforeEach(async ({ page }) => { await installPickers(page); });
 
   const CASES = [
     ["utf-8", "\n"], ["utf-8-bom", "\r\n"], ["utf-16le", "\r\n"], ["utf-16be", "\n"], ["utf-8", "\r"],

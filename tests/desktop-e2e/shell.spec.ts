@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN, openPdf } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN, openPdf, onBrowserHost } from "./helpers";
 
 const DOCS = [
   { name: "alpha.md", text: "# Alpha\n\nFirst document.\n\n## Second section\n\nMore." },
@@ -16,7 +16,8 @@ test("with a document open the chrome is one 40 px bar and a 24 px status line",
   await expect(page.locator("#shell-panel")).toBeHidden();
   await expect(page.locator("#reader-status")).toContainText("alpha.md · ");
   await expect(page.locator("#reader-status")).toContainText(/\d+ words · ~\d+ tokens/);
-  await expect(page.locator("#reader-save-state")).toHaveText("In memory");
+  // Opened through the browser host the files are bound to disk; otherwise they are copies in memory.
+  await expect(page.locator("#reader-save-state")).toHaveText(onBrowserHost() ? "Saved" : "In memory");
   await expect(documentTabs(page)).toHaveText(["alpha.md", "beta.md"]);
   await expect(documentTabs(page).first()).toHaveAttribute("aria-selected", "true");
 });

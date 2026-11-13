@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, newInWorkspace, readyWorkspace } from "./helpers";
+import { test, expect, newInWorkspace, readyWorkspace, saveCopy } from "./helpers";
 
 test("keyboard New, layout, Find and Save expose usable names, states and focus", async ({ page, browser, browserName }, info) => {
   await info.attach("browser-runtime", { body: JSON.stringify({ engine: browserName, version: browser.version() }), contentType: "application/json" });
@@ -30,7 +30,7 @@ test("keyboard New, layout, Find and Save expose usable names, states and focus"
   await query.press("Escape");
   await expect(input).toBeFocused();
   const saving = page.waitForEvent("download");
-  await input.press("Control+s");
+  await saveCopy(page, input);
   const saved = await saving;
   expect(await readFile((await saved.path())!, "utf8")).toBe(text);
   await expect(page.getByRole("button", { name: "Save Markdown", exact: true })).toBeEnabled();

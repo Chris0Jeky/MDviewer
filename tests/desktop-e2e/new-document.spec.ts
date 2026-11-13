@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
+import { test, expect, documentTabs, moreMenu, openFiles, readyReader, readyWorkspace, openPdf, saveCopy } from "./helpers";
 
 test("New starts a local note in Edit beside the live reader and saves exact Markdown", async ({ page, audit }) => {
   await expect(page.locator("#editor-input, #paged-output")).toHaveCount(0);
@@ -19,7 +19,7 @@ test("New starts a local note in Edit beside the live reader and saves exact Mar
   // Edit is the reader plus a source pane: no workspace, preview or Paged.js code is loaded.
   expect(audit.requests.filter(url => /\/assets\/(?:workspace|App|paged|pagedjs)[^/]*\.(?:js|css)$/i.test(url))).toEqual([]);
   const saving = page.waitForEvent("download");
-  await editor.press("Control+s");
+  await saveCopy(page, editor);
   const saved = await saving;
   expect(saved.suggestedFilename()).toBe("Untitled.md");
   expect(await readFile((await saved.path())!, "utf8")).toBe(source);
