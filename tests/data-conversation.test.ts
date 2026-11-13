@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { toReadable } from "../src/data";
+import { beforeAll, describe, expect, it } from "vitest";
+import { copyValue, prepare, toReadable, valueAt } from "../src/data";
 import { cellText } from "../src/data/escape";
 import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
@@ -230,5 +230,32 @@ describe("image data with duplicate keys (verification of #273)", () => {
     for (const secret of ["PARTDATA", "AAAA", "BBBB"]) expect(result.markdown).not.toContain(secret);
     expect(result.markdown).toContain("data not shown \\(16 characters\\)");
     expect(result.truncated).toBe(false);
+  });
+});
+
+describe("conversations inside multi-document YAML (#291)", () => {
+  beforeAll(() => prepare("yaml"));
+  const NL = String.fromCharCode(10);
+  const yaml = [
+    "- {role: user, content: first question}",
+    "- {role: assistant, content: first answer}",
+    "---",
+    "model: invented",
+    "messages:",
+    "  - {role: user, content: second question}",
+    "  - {role: assistant, content: second answer}",
+  ].join(NL);
+
+  it("maps each turn to a path inside its own document, and those paths resolve", () => {
+    const result = toReadable(yaml, "yaml");
+    const lines = result.markdown.split(NL);
+    const at = (text: string): string | undefined => result.map.get(lines.findIndex(l => l.includes(text)) + 1);
+    expect(at("first answer")).toBe("$[0][1].content");
+    expect(at("second answer")).toBe("$[1].messages[1].content");
+    expect(at("invented")).toBe("$[1].model");
+    for (const [text, expected] of [["first answer", "first answer"], ["second answer", "second answer"], ["invented", "invented"]] as const) {
+      expect(copyValue(valueAt(yaml, "yaml", at(text)!)!)).toBe(expected);
+    }
+    for (const path of new Set(result.map.values())) expect(valueAt(yaml, "yaml", path), path).toBeDefined();
   });
 });

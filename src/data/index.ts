@@ -155,7 +155,7 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
   let invalid = false;
   const render = (value: import("./json").JsonValue, path = "$", level = 2): void => {
     const conversation = conversationList(value);
-    if (conversation) renderConversation(lens, value, conversation);
+    if (conversation) renderConversation(lens, value, conversation, path);
     else lens.render(value, path, level);
   };
   if (kind === "csv") {

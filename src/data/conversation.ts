@@ -234,14 +234,15 @@ export function conversationRecord(lens: Lens, value: JsonValue | undefined, pat
   if (wrapped) metadata(lens, value as ObjectValue, path, ["message"]);
 }
 
-export function renderConversation(lens: Lens, root: JsonValue, list: ArrayValue): void {
+/** `base` is the root's own path: `$`, or `$[i]` for the i-th document of a YAML stream. */
+export function renderConversation(lens: Lens, root: JsonValue, list: ArrayValue, base = "$"): void {
   conversationOverview(lens, list.items);
   if (!lens.take()) return; // root
-  const path = root === list ? "$" : "$.messages";
+  const path = root === list ? base : `${base}.messages`;
   if (root !== list && root.kind === "object") {
     // Request parameters precede the turns, even if messages was the first member.
     const entries = root.entries.filter(e => e.key !== "messages");
-    if (entries.length) lens.renderMembers({ ...root, entries }, "$", 2);
+    if (entries.length) lens.renderMembers({ ...root, entries }, base, 2);
     if (!lens.take()) return; // messages list
   }
   for (const [i, value] of list.items.entries()) {
