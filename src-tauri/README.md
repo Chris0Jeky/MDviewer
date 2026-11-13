@@ -123,12 +123,12 @@ absolute paths and Unix-millisecond times only, written atomically. It is loaded
 library use; a corrupt file is renamed `library.json.corrupt-<ms>` and replaced by an empty
 library. Opens and Save As record recents. Commands take opaque per-process ids (`library_list`,
 `library_scan`, `library_open`, `library_pin` by token or id, `library_unpin`, `library_forget`,
-`library_mark_seen`, `library_add_project` via the native folder picker, `library_clear`); the
+`library_mark_seen`, `library_mark_seen_many` (ids; one write), `library_add_project` via the native folder picker, `library_clear`); the
 webview never supplies a path. `library_scan` walks a pinned project for `.md`/`.markdown` files
 and agent data files (Readable data D5: a data-extension file inside `.claude/`, `.codex/` or
 `.agent-harness/`, or the root `.mcp.json`, listed with `agent: true`; other data files stay out, and credential stores
 named `auth.json`, `.credentials.json` or `credentials.json` are never listed)
-(depth 8, 5,000 files), skips `node_modules`, `.git`, `target`, `dist`, `build`, `.venv` and the
+(depth 8, 5,000 files, 10,000 directories, 5 s; `truncated` reports any bound), skips `node_modules`, `.git`, `target`, `dist`, `build`, `.venv` and the
 checkouts under `.claude/worktrees/`,
 includes dot-folders such as `.claude`, never follows junctions or symlinks, and marks agent
 files (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `.claude/agents/*.md`, `MEMORY.md`, `memory/*.md`,

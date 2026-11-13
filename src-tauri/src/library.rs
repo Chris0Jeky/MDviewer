@@ -154,6 +154,21 @@ impl Store {
     pub fn mark_seen(&mut self, path: &Path, at: u64) {
         upsert(&mut self.seen, path, at, MAX_SEEN);
     }
+    /// Stamp every path as seen at `at`; the same as `mark_seen` for each, in one pass.
+    pub fn mark_seen_many(&mut self, paths: &[PathBuf], at: u64) {
+        let mut unique = HashSet::new();
+        let fresh: Vec<Stamped> = paths
+            .iter()
+            .filter(|path| storable(path) && unique.insert(seen_key(path)))
+            .map(|path| Stamped {
+                path: path.clone(),
+                at,
+            })
+            .collect();
+        self.seen.retain(|e| !unique.contains(&seen_key(&e.path)));
+        self.seen.splice(0..0, fresh);
+        self.seen.truncate(MAX_SEEN);
+    }
     /// Every seen stamp by `seen_key`, built once so a scan looks files up in O(1).
     pub fn seen_map(&self) -> HashMap<String, u64> {
         self.seen
@@ -563,6 +578,33 @@ mod tests {
             .recent
             .iter()
             .all(|e| e.path.to_str().is_some()));
+    }
+
+    #[test]
+    fn mark_seen_many_stamps_every_path_once_dedupes_and_keeps_the_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::default();
+        store.mark_seen(&abs(&dir, "old.md"), 1);
+        store.mark_seen(&abs(&dir, "keep.md"), 2);
+        store.mark_seen_many(
+            &[
+                abs(&dir, "a.md"),
+                abs(&dir, "OLD.md"),
+                abs(&dir, "A.MD"),
+                unwritable(&dir),
+            ],
+            9,
+        );
+        let seen = store.seen_map();
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "a.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "old.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "keep.md"))), Some(&2));
+        let many: Vec<_> = (0..MAX_SEEN + 5)
+            .map(|n| abs(&dir, &format!("{n}.md")))
+            .collect();
+        store.mark_seen_many(&many, 10);
+        assert_eq!(store.seen.len(), MAX_SEEN);
     }
 
     #[test]

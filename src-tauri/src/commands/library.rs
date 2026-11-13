@@ -314,6 +314,24 @@ pub(crate) fn library_mark_seen(app: AppHandle, id: String) {
     }
 }
 
+/// Mark every listed entry seen and persist once (`library_mark_seen` writes per call).
+/// Unknown ids are skipped; at most `MAX_SEEN` are read.
+#[tauri::command]
+pub(crate) fn library_mark_seen_many(app: AppHandle, ids: Vec<String>) {
+    let paths: Vec<PathBuf> = with_library(&app, |l| {
+        ids.iter()
+            .take(library::MAX_SEEN)
+            .filter_map(|id| l.ids.path(id).map(Path::to_path_buf))
+            .collect()
+    });
+    if !paths.is_empty() {
+        mutate(&app, |store, at| {
+            store.mark_seen_many(&paths, at);
+            true
+        });
+    }
+}
+
 /// Pin a project folder chosen in the native folder picker.
 #[tauri::command]
 pub(crate) async fn library_add_project(
