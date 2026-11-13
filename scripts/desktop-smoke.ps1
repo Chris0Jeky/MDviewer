@@ -21,7 +21,7 @@ param(
     # Internal out-of-process UIA worker. It uses Windows PowerShell's framework UIA.
     [switch]$Probe,
     [long]$WindowHandle,
-    [ValidateSet('heading', 'button', 'toggle', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
+    [ValidateSet('heading', 'button', 'toggle', 'locate', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
     [string]$ButtonName,
     [string]$SavePath,
     [string]$DialogTitle = 'Save export',
@@ -144,6 +144,20 @@ public static class SmokeWindow {
             Write-ProbePhase 'getting-window-element'
             $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$WindowHandle)
             Write-ProbePhase 'window-element-ready'
+            if ($ProbeAction -eq 'locate') {
+                # Where a named element is on screen, and whether it lies inside the window (#334, #335).
+                Write-ProbePhase 'locating'
+                $located = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $ButtonName))
+                if ($null -eq $located) { throw 'The requested element is not there yet.' }
+                $box = $located.Current.BoundingRectangle
+                $windowBox = $window.Current.BoundingRectangle
+                $result.top = $box.Y
+                $result.inWindow = ($box.Top -ge $windowBox.Top) -and ($box.Bottom -le $windowBox.Bottom)
+                $result.found = $true
+                Write-ProbeResult
+                exit 0
+            }
             if ($ProbeAction -eq 'button') {
                 Write-ProbePhase 'finding-button'
                 $button = Find-Button $window $ButtonName
@@ -208,29 +222,6 @@ public static class SmokeWindow {
                     $undo = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $undoCondition)
                     if ($null -ne $undo) { $undo.SetFocus(); $result.undoFocused = $true; break }
                     Start-Sleep -Milliseconds 100
-                }
-                # #335: the Undo control is inside the window, not scrolled away or off screen.
-                if ($null -ne $undo) {
-                    $undoBox = $undo.Current.BoundingRectangle
-                    $windowBox = $window.Current.BoundingRectangle
-                    $result.undoInWindow = ($undoBox.Top -ge $windowBox.Top) -and ($undoBox.Bottom -le $windowBox.Bottom)
-                    if (-not $result.undoInWindow) { throw "The Undo control is outside the window: $undoBox in $windowBox." }
-                }
-                # #334: the same item (now marked done) is where it was on screen, within 2 px.
-                $doneName = $ButtonName -replace '\(To do\)$', '(Done)'
-                $doneCondition = [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::NameProperty, $doneName)
-                $doneClock = [System.Diagnostics.Stopwatch]::StartNew()
-                $done = $null
-                while ($null -eq $done -and $doneClock.Elapsed.TotalSeconds -lt 6) {
-                    $done = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $doneCondition)
-                    if ($null -eq $done) { Start-Sleep -Milliseconds 100 }
-                }
-                if ($null -eq $done) { throw "The toggled checkbox '$doneName' did not appear." }
-                Start-Sleep -Milliseconds 700
-                $result.checkboxTopAfter = $done.Current.BoundingRectangle.Y
-                if ([Math]::Abs($result.checkboxTopAfter - $result.checkboxTopBefore) -gt 2) {
-                    throw "The view moved after the write-back: the item was at $($result.checkboxTopBefore) and is at $($result.checkboxTopAfter)."
                 }
                 Write-ProbeResult
                 Write-ProbePhase 'undo-focused'
@@ -664,7 +655,7 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if ($null -ne $evidence.result) {
             $result = $evidence.result
             if (-not $result.runtimeReady) { throw "Native UI '$Action' worker bootstrap failed: $($result.reason)" }
-            if ($result.found) { return }
+            if ($result.found) { $script:lastProbeResult = $result; return }
             $lastReason = $result.reason
         } else {
             throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
@@ -824,10 +815,20 @@ try {
     }
     [void](Wait-ForHeading $tasksHeading 'tasks-document.png')
     Invoke-SmokeAction 'toggle' 'Ship the smoke (To do)'
+    $topBefore = $script:lastProbeResult.checkboxTopBefore
     $toggledEvidence = Wait-ExportFile $tasksPath {
         param([byte[]]$bytes)
         [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($toggledBytes)
     }
+    # #334: the toggled item is where it was on screen; #335: Undo is inside the window.
+    Start-Sleep -Milliseconds 700
+    Invoke-SmokeAction 'locate' 'Ship the smoke (Done)'
+    $topAfter = $script:lastProbeResult.top
+    if ($null -eq $topBefore -or [Math]::Abs($topAfter - $topBefore) -gt 2) {
+        throw "The view moved after the write-back: the task was at $topBefore and is at $topAfter."
+    }
+    Invoke-SmokeAction 'locate' 'Undo'
+    if (-not $script:lastProbeResult.inWindow) { throw 'The Undo control is outside the window after a write-back.' }
     Invoke-SmokeAction 'button' 'Undo'
     $undoneEvidence = Wait-ExportFile $tasksPath {
         param([byte[]]$bytes)

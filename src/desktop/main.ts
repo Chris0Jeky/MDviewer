@@ -103,6 +103,7 @@ function showActionNotice(notice: Notice | null): void {
       keys.textContent = notice.action.keys;
       action.append(" ", keys);
       action.setAttribute("aria-keyshortcuts", notice.action.keys.replace("Ctrl", "Control"));
+      action.setAttribute("aria-label", notice.action.label); // the name stays "Undo"; the shortcut is its own property
     }
     action.addEventListener("click", () => notice.action!.run());
     actionNotice.append(action);
@@ -131,7 +132,7 @@ const writeback = createWriteback({
     return docs.applyReload(target, { outcome: "changed", text, generation, encoding: doc.binding.encoding, eol: doc.binding.eol });
   },
   setText: (doc, text) => { doc.text = text; doc.dirty = true; ++generation; syncDocuments(); },
-  // A write patches only the changed block (as Edit does): a full render would reset and restore the
+  // A write patches only the changed block (as Edit typing does): a full render would reset and restore the
   // offset across the code and diagram upgrades above it, and the view would jump (#334). Focus returns
   // to the same control so keyboard users keep their place.
   rerender: () => {
@@ -148,7 +149,7 @@ setControlHandler((control, action) => { void writeback.change(control, action);
 // Ctrl+Z in the reader undoes the last saved change (#335). Text fields keep their own undo, and Edit
 // and the workspace own Ctrl+Z there; a shortcut with nothing to undo is left to the browser.
 window.addEventListener("keydown", event => {
-  if (event.defaultPrevented || event.isComposing || event.repeat || app || editing) return;
+  if (event.defaultPrevented || event.isComposing || event.repeat || app || editing || modalOpen() || document.querySelector(".am-menu")) return;
   if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return;
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
