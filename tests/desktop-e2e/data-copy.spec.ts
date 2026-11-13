@@ -73,7 +73,7 @@ test("the copy items are commands: the palette copies, and a copied reference na
 
 test("JSON Lines: a record's path, and jq reads the slurped array", async ({ page }) => {
   await openFiles(page, [{ name: "events.jsonl", text: EVENTS }]);
-  await readyReader(page, "Data");
+  await readyReader(page, "events.jsonl");
   await pick(page, "stop");
   await moreMenu(page, "Copy path (JSONPath)");
   await moreMenu(page, "Copy path (jq)");
