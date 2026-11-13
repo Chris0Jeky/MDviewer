@@ -170,6 +170,12 @@ function setTheme(choice: "light" | "dark" | "sepia" | "system"): void {
 // Live reload (S1c): a dirty document whose file changed on disk gets a
 // non-modal bar. Nothing is discarded without a click.
 const dismissedConflicts = new Set<string>();
+// File events that arrived while the document owner was changing; finishMode replays them (#234).
+const pendingFollow = new Set<string>();
+// Bumped when a mode change starts: a re-read that spans one answers for the previous owner (#257).
+let modeEpoch = 0;
+// Clean documents still marked changed on disk that were asked to follow their file again (#234).
+const refollowed = new Set<string>();
 function conflictBar(after: HTMLElement): { bar: HTMLElement; text: HTMLElement } {
   const bar = document.createElement("div");
   bar.className = "reader-notice file-conflict";
@@ -230,6 +236,14 @@ async function flushSession(): Promise<void> {
   await native.session.record(tokens);
 }
 
+/** Back to clean while the file changed (Keep mine, then undo): follow the file, once per change (#234). */
+function followIfClean(target = docs.saveTarget()): void {
+  if (target?.binding?.disk === "changed" && !target.dirty && !changingMode && !refollowed.has(target.binding.token)) {
+    refollowed.add(target.binding.token);
+    void followChange(target.binding.token);
+  }
+}
+
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
@@ -262,6 +276,7 @@ function syncDocuments(): void {
   const titled = pdfShown() ? pdfs.active : active;
   document.title = titled ? `${titled.name} — MDviewer` : "MDviewer";
   recordSession();
+  followIfClean(target);
   const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
     && !dismissedConflicts.has(target.binding.token);
   for (const { bar, text } of conflictBars) {
@@ -755,7 +770,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
   editHost.replaceChildren();
   rememberReaderPosition();
   themeAtEntry = settings.screenTheme;
-  changingMode = true; ++generation; ++renderGeneration;
+  changingMode = true; ++generation; ++renderGeneration; ++modeEpoch;
   // Layout needs a visible workspace, but its controls must not accept input
   // until the initial render and source handoff have finished.
   appRoot.inert = true;
@@ -775,7 +790,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     app = mounted.app;
     docs.adoptReaderInto(app);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
-    const offText = app.store.on("text", () => { generation += 1; });
+    const offText = app.store.on("text", () => { generation += 1; followIfClean(); });
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
       if (!app) return;
@@ -807,7 +822,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
 
 async function returnToReader(): Promise<void> {
   if (!app || changingMode || app.exportState.busy || nativeSaveBusy) return;
-  changingMode = true; ++generation;
+  changingMode = true; ++generation; ++modeEpoch;
   appRoot.inert = true; // No edits or sample actions may race the ownership snapshot.
   syncDocuments();
   try {
@@ -858,6 +873,7 @@ async function returnToReader(): Promise<void> {
 function finishMode(): void {
   changingMode = false;
   for (const { batch, request } of queuedBatches.splice(0)) commitBatch(batch, request);
+  for (const token of [...pendingFollow]) { pendingFollow.delete(token); void followChange(token); }
   syncDocuments();
 }
 
@@ -955,8 +971,21 @@ window.addEventListener("dragover", event => {
 window.addEventListener("drop", event => {
   if (!event.dataTransfer?.types.includes("Files")) return;
   event.preventDefault();
+  // A host that can bind dropped files (the browser host) opens them as their files.
+  const bound = changingMode ? null : native.openDropped?.(event.dataTransfer.items);
+  if (bound) { void openBound(bound); return; }
   void readFiles(Array.from(event.dataTransfer.files));
 });
+
+async function openBound(dropped: Promise<OpenBatch | { copies: File[] }>): Promise<void> {
+  const request = ++generation;
+  report("");
+  try {
+    const batch = await dropped;
+    if ("copies" in batch) await readFiles(batch.copies);
+    else commitBatch(batch, request);
+  } catch (error) { report(`Could not open files: ${errorText(error)}`); }
+}
 
 const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
 function conflictText(name: string, reason: Extract<SaveResult, { outcome: "conflict" }>["reason"]): string {
@@ -974,6 +1003,7 @@ const FAILURES: Record<string, string> = {
   "too-large": "is larger than the 25 MB save limit.",
   "invalid-destination": "needs a .md or .markdown file name.",
   "revoked-after-write": "was saved, but it was closed while saving.",
+  "permission-denied": "could not be written because the browser did not allow it.",
 };
 
 /** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
@@ -1041,14 +1071,23 @@ function saveCopy(): void {
 
 /** Handle one changed file reported by the host watcher. */
 async function followChange(token: string): Promise<void> {
+  if (changingMode) { pendingFollow.add(token); return; }
   const target = docs.byToken(token);
   if (!target) return;
+  const epoch = modeEpoch;
+  const sent = target.binding?.generation ?? 0;
   let result: ReadResult;
-  try { result = await native.readDocument(token, !target.dirty, target.binding?.generation ?? 0); }
+  try { result = await native.readDocument(token, !target.dirty, sent); }
   catch { return; } // A failed re-read changes nothing; the next notification retries.
+  if (changingMode) { pendingFollow.add(token); return; }
   const current = docs.byToken(token);
-  if (!current || current.id !== target.id) return;
+  if (!current) return;
+  // The owner changed (#257) or a Save or Reload moved the binding (#248) while this read ran, so
+  // its answer describes an older state. Ask again: the host gives adopted text to a webview behind it.
+  if (epoch !== modeEpoch || (current.binding?.generation ?? 0) !== sent) { void followChange(token); return; }
+  if (current.id !== target.id) return;
   if (result.outcome === "unchanged") {
+    refollowed.delete(token);
     if (current.binding?.disk !== "synced") { docs.markDisk(token, "synced"); syncDocuments(); }
     return;
   }
@@ -1062,11 +1101,13 @@ async function followChange(token: string): Promise<void> {
   if (result.text === null || current.dirty) {
     // Dirty: keep the edits and the old read, so Save conflicts instead of overwriting.
     dismissedConflicts.delete(token);
+    refollowed.delete(token);
     docs.markDisk(token, "changed");
     syncDocuments();
     return;
   }
   if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  refollowed.delete(token);
   if (current.owner === "reader") {
     const doc = docs.reader.documents.find(open => open.id === current.id);
     if (doc) writeback.checkOverwritten(doc);
@@ -1075,19 +1116,42 @@ async function followChange(token: string): Promise<void> {
   syncDocuments();
 }
 
+// Tokens with an explicit Reload in flight: a second click waits for the first.
+const reloading = new Set<string>();
 async function reloadFromDisk(): Promise<void> {
   const target = docs.saveTarget();
-  if (!target?.binding || changingMode || nativeSaveBusy) return;
-  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
-  if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
-    if (target.owner === "reader") void render();
+  if (!target?.binding || changingMode || nativeSaveBusy || reloading.has(target.binding.token)) return;
+  const token = target.binding.token;
+  const epoch = modeEpoch;
+  reloading.add(token);
+  let result: ReadResult | null;
+  try { result = await native.readDocument(token, true, target.binding.generation).catch(() => null); }
+  finally { reloading.delete(token); }
+  if (changingMode || epoch !== modeEpoch) {
+    // The owner changed while this read ran: the watcher path follows it under the new owner.
+    if (changingMode) pendingFollow.add(token); else void followChange(token);
+    report(`Reloading ${target.name} was interrupted by the mode change. Choose Reload again if it still differs.`);
+    return;
+  }
+  // The same document, found by its binding: switching tabs meanwhile must not drop the reload.
+  const now = docs.byToken(token);
+  if (!now || now.id !== target.id) { syncDocuments(); return; }
+  if (result?.outcome === "changed" && result.text !== null && now.text !== target.text) {
+    // Typed after the click (#255): never replace those keystrokes. The host keeps the new read, so
+    // another Reload still offers the file's text.
+    report(`You edited ${target.name} while it reloaded. Your edits are kept; choose Reload again to replace them.`);
+  } else if (result?.outcome === "changed" && result.text !== null && docs.applyReload(now, { ...result, text: result.text })) {
+    refollowed.delete(token);
+    if (now.owner === "reader" && docs.reader.activeId === now.id) void render();
     report(`Reloaded ${target.name} from disk.`);
   } else if (result?.outcome === "unchanged") {
-    docs.markDisk(target.binding.token, "synced");
+    docs.markDisk(token, "synced");
     report(`${target.name} already matches the file on disk.`);
   } else if (result?.outcome === "missing") {
-    docs.markDisk(target.binding.token, "missing");
+    docs.markDisk(token, "missing");
     report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+  } else if (!result || result.outcome === "failed") {
+    report(`Could not reload ${target.name} from disk. Try again.`);
   }
   syncDocuments();
 }
@@ -1499,12 +1563,14 @@ if (native.available) {
       catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
-  setDownloadDestination(async (blob, filename) => {
+  // A host without an export dialog (the browser) keeps exports as ordinary downloads.
+  const exportTo = native.save?.bind(native);
+  if (exportTo) setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
     syncDocuments();
     try {
-      const result = await native.save(blob, filename);
+      const result = await exportTo(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;
@@ -1555,3 +1621,5 @@ if (native.available) {
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));
 }
 syncDocuments();
+// Every command and shortcut is installed: keys pressed from here on reach the shell.
+document.documentElement.dataset.shell = "ready";

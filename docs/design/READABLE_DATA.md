@@ -110,6 +110,9 @@ The same generic layout applies inside YAML multi-document and conversation view
 2. Every scalar is shown exactly as written. Numbers keep their source text, so large integers and
    `1.0` are not altered. This needs MDviewer's own small parser, which also gives line and column
    for errors, tolerates comments, keeps duplicate keys and records where each value sits.
+   Columns count UTF-16 code units in every format (an emoji is two).
+   A YAML alias reads `alias of &name (anchor at line N)`; an alias with no anchor before it is
+   reported as a problem.
 3. Nothing is dropped silently. Anything collapsed or cut states how much, and offers the rest.
 4. Data cannot create structure. Every value is escaped, so a string holding `|`, a backtick,
    `# heading`, `- [ ]` or HTML shows as that text. Strings rendered as Markdown pass the same
@@ -124,8 +127,11 @@ content (the common chat-message shape), or agent transcript records that wrap s
 - A turn carrying only tool results is headed as a tool result, with its actual role in parentheses.
 - Message text is rendered as Markdown.
 - Tool calls, tool results and thinking are collapsed, each with its name and a one-line summary.
-- The overview counts turns and tool calls by name, and gives the time span and token totals when
-  the file has them.
+- An OpenAI-style assistant turn with `tool_calls` and no content is a turn; its calls are counted
+  by function name.
+- The overview counts turns and tool calls by name, and gives the time span (earliest to latest
+  readable time, whatever the file order) and token totals when the file has them. Plain decimals
+  add exactly; other spellings (an exponent) are shown as "about".
 - A record the lens does not understand is shown with the generic lens, collapsed. It is never
   skipped.
 
@@ -137,6 +143,9 @@ content (the common chat-message shape), or agent transcript records that wrap s
   `SIZE_HARD_BYTES`). The readable view is built to a budget
   (initially 20,000 values, or 500 records of a JSON Lines file), then offers the next part and
   "Show all". The overview always describes the whole file. Budgets are set by measurement.
+  Memory is bounded before the budget applies: a YAML stream composes at most 10,000 documents
+  (the rest are counted, not read or checked), and CSV and TSV keep cells only for the rows the
+  values budget can hold, while still counting every row and column.
 - **Large view.** The large-document confirmation (`SIZE_SOFT_BYTES`, about 250 KB, "Pagination
   may briefly freeze the page") today measures the file's bytes at open. For a data document it
   also counts the readable view, which can be larger than the file (listed under Boundaries).
