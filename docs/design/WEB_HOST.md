@@ -1,6 +1,6 @@
 # The browser host (web parity)
 
-Status: **W0 and W1 implemented; W2 to W5 open.** Contract: Track W in
+Status: **W0, W1 and W2a implemented; W2b to W5 open.** Contract: Track W in
 [`2026-11-13-complete-push.md`](2026-11-13-complete-push.md). This note records how the browser host
 meets the native file rules in [`FILE_LIFECYCLE.md`](FILE_LIFECYCLE.md) and where it cannot.
 
@@ -8,8 +8,9 @@ meets the native file rules in [`FILE_LIFECYCLE.md`](FILE_LIFECYCLE.md) and wher
 
 Every platform call in the companion shell goes through one typed `Host` (`src/desktop/native.ts`).
 Windows runs `tauriHost` (`src/desktop/hosts/tauri.ts`), and nothing else calls `invoke`. The
-browser host (`src/desktop/hosts/browser.ts`) is loaded only by a web-shell build
-(`vite build --config vite.desktop.config.ts --mode webhost`) and only outside Tauri. In the Windows
+browser host (`src/desktop/hosts/browser.ts`) is loaded only by a web-shell build (the web build,
+`vite.config.ts`, where the shell is the second entry `/desktop.html`; and the test build
+`vite build --config vite.desktop.config.ts --mode webhost`) and only outside Tauri. In the Windows
 build the selection folds to `tauriHost` and the browser host is not bundled; CI job `webhost` greps
 `dist-desktop` to keep it that way. Where the browser lacks `showOpenFilePicker` and
 `showSaveFilePicker` (Firefox and Safari today), `browserHost.available` is false and the shell keeps
@@ -54,6 +55,28 @@ its file input, Save Copy download and in-memory documents.
   without `adopt` (a later Save still conflicts) and adopted with it (new baseline, generation + 1).
 - Write permission is asked for (`requestPermission`), never assumed. A refusal reports
   `permission-denied` and keeps the text open.
+
+## The shell on the web (W2a)
+
+The web build serves the companion shell as a second entry, `/desktop.html`, on the browser host;
+`/` stays the existing app until the default flip (W2b, with its human acceptance item AI-11). The
+whole Windows shell suite (`tests/desktop-e2e/`) also runs on the browser host: project
+`webhost-desktop` in `playwright.webhost.config.ts`, against the CSP'd `--mode webhost` build.
+There the shared fixture opens real OPFS handles (one folder per pick), so documents are bound and
+Ctrl+S saves in place; assertions that are about the fallback (a downloaded copy, "In memory", the
+file input) reach the same behaviour through its explicit command or a dropped copy, and say so.
+Specs that fake the Tauri IPC (`fakeHost.ts`) keep running the Tauri host there.
+
+Running the suite on a file host surfaced, and this slice fixes, two things that were also true
+on Windows but never exercised: the workspace's session strip with Save and Save As wrapped over
+the editor in a small window (it now stays one line), and a dropped item with no file handle failed
+the drop (it now opens as a copy).
+
+Not yet on the web shell: the Library, session restore, relative links, local images and templates
+(W4, W5), and following outside changes (W3). Until they land the browser host returns an empty
+library, no session and an "is not available in this browser yet" error for linked files, images
+and templates; the shell still shows the Library tab, so the default flip (W2b) must state or hide
+what is not built yet.
 
 ## Proof
 
