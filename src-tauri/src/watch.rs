@@ -123,7 +123,7 @@ impl FileWatch {
                     }
                 }
             })
-            .map_err(|error| notify::Error::io(error))?;
+            .map_err(notify::Error::io)?;
         Ok(Running { watcher, changes })
     }
 

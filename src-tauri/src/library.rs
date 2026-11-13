@@ -409,7 +409,8 @@ fn scan_with(root: &Path, max_dirs: usize, deadline: Instant, now: impl Fn() -> 
             }
         }
     }
-    scan.files.sort_by(|a, b| b.modified.cmp(&a.modified));
+    scan.files
+        .sort_by_key(|file| std::cmp::Reverse(file.modified));
     scan
 }
 
@@ -635,7 +636,7 @@ mod tests {
         assert_eq!(store.session_to_restore(&[]), [a.clone(), b.clone()]);
         assert_eq!(
             store.session_to_restore(&[abs(&dir, "B.md")]),
-            [a.clone()],
+            std::slice::from_ref(&a),
             "already open files are skipped"
         );
         let file = dir.path().join("library.json");
