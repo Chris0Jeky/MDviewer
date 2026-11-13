@@ -59,6 +59,7 @@ Export click → capture document id/name/text and settings NOW
 | Actionable Markdown: native line-patch write-back (A2, #244; 1-based fix #268) | `src-tauri/src/linepatch.rs`, `src-tauri/src/commands/patch.rs` (`patch_document`), webview side `src/desktop/reader/writeback.ts` | Rust unit tests in both modules, shared fixtures `tests/fixtures/actionable/` (also read by `tests/actionable.test.ts` and `tests/desktop-e2e/actionable.spec.ts`), native smoke step in `scripts/desktop-smoke.ps1` (#275); `docs/design/ACTIONABLE_MARKDOWN.md` |
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
+| Embeddable reader element `<mdviewer-reader>` and its `change` event (A5, #300) | `src/embed/reader.ts`, `vite.embed.config.ts`, `src/desktop/reader/controls.ts` (`decorateControls(root, actionable, onAction, menuHost)`), `src/desktop/render.ts` (`options.controls`, `options.copy`) | `tests/embed-e2e/reader.spec.ts` (`npm run embed:test`; CI e2e job), `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
 | Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
@@ -289,7 +290,7 @@ only where the cell cannot show the value well: JSON embedded in a string, clear
 `tests/data-copy.test.ts`. The webview copy menu and Save readable view as Markdown are issue #299. The native half
 of D5, agent data files in the Library, is merged (#290; see the table above).
 
-## Actionable Markdown (A1 to A3)
+## Actionable Markdown (A1 to A5)
 
 Contract: `docs/design/ACTIONABLE_MARKDOWN.md`. The parser is pure; the reader and the native host
 share its 1-based line numbering and the fixtures in `tests/fixtures/actionable/` (`*.md` with
@@ -313,8 +314,12 @@ actionableGlyphs(md: MarkdownIt): void;                              // static g
 markFields(tokens, actionable, TokenCtor): void; chipRow(actionable): HTMLElement | null;
 
 // src/desktop/reader/controls.ts: DOM decoration, click/keyboard/menu gestures
-decorateControls(root: HTMLElement, actionable: ActionableDocument): void;
+decorateControls(root: HTMLElement, actionable: ActionableDocument, onAction: ControlHandler, menuHost: MenuHost): void; // MenuHost = HTMLElement | ShadowRoot
 setControlHandler(next: ControlHandler | null): void; controlHandler(): ControlHandler | null;
+desktopControlHandler: ControlHandler;                               // what the desktop entry passes: the handler above, read at gesture time
+
+// src/embed/reader.ts (A5): <mdviewer-reader>, a shadow-root host of the same reader
+class MdviewerReader extends HTMLElement { markdown: string /* also the attribute */ }  // event "change": CustomEvent<{ patches: LinePatch[] }>, trusted gestures only
 
 // src/desktop/reader/writeback.ts: A3 write-back and Undo notice
 createWriteback(deps: WritebackDeps): { change(control, action): Promise<void>; checkOverwritten(doc): void; forget(): void; settled(): Promise<void> };

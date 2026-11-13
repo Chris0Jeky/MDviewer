@@ -650,7 +650,7 @@ paginated output keeps fields as text and omits chips with the front matter. Con
 `tests/desktop-e2e/actionable.spec.ts`.
 
 Actionable Markdown, A3 (interaction). `src/desktop/reader/controls.ts` `decorateControls(root,
-actionable)` runs after `decorateCopy` and turns the parsed controls (never authored HTML) into
+actionable, onAction, menuHost)` runs after `decorateCopy` and turns the parsed controls (never authored HTML) into
 controls: marks are `role="checkbox"` buttons (click steps the `marks:` cycle; right click, the
 context-menu key or Shift+F10 opens all six, digits pick), choices are radios in a `radiogroup`
 (one tab stop; arrows move; click or Space selects), field values edit inline (Enter commits,
@@ -664,6 +664,22 @@ a reload that puts the old span back shows "Another program overwrote this chang
 again. Unbound, dirty or web-build documents change in memory and become dirty. Tests:
 `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`,
 `tests/desktop-e2e/actionable.spec.ts`.
+
+Actionable Markdown, A5 (the embeddable element, #300). `decorateControls` takes its gesture handler
+(`onAction(control, action)`) and its `menuHost` (the body, or a shadow root's wrapper) as arguments;
+the desktop entry passes `desktopControlHandler` (the module-level handler `setControlHandler` sets,
+read at gesture time) and `document.body`, so nothing changed there. Menus position against whatever
+contains them, close on the composed path of a press and read focus from their own root, so they work
+inside a shadow root. `renderReaderDocument(..., options)` gains `controls: { onAction, menuHost }` and
+`copy: false` (no Copy buttons). `src/embed/reader.ts` defines `<mdviewer-reader>`: a shadow root holding
+the reader's `reader.css`, `document.css`, `shiki.css` and KaTeX's rules (`?inline`, with `:root`
+rewritten to `:host`), one `article.doc.reader-document`, the `markdown` property and attribute, and a
+`change` event `{ patches }` built with `planChange` from a trusted gesture only. Renders from all
+elements share one queue (Mermaid is a singleton) and a stale render is dropped by a per-element
+generation. `vite.embed.config.ts` is a plain build of that one entry (not library mode, which inlines
+assets as base64) into `dist-embed/` (`npm run embed:build`; gitignored); the `@font-face` rules of the
+math fonts reach the page through a `<link>` to `mdviewer-reader.css`. Test:
+`tests/embed-e2e/reader.spec.ts` (`npm run embed:test`, `playwright.embed.config.ts`, CI e2e job).
 
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
