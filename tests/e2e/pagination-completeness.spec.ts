@@ -229,6 +229,15 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
     await loadMarkdownIntoApp(page, NOCUTOFF);
     await waitForPagination(page);
     await expect(page.locator("#page-chip")).not.toHaveAttribute("data-count", "0");
+    // Under a reduced zoom the failing re-render hides the stack while it lays out at scale 1.
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: 0.5 }));
+    await expect(page.locator("#canvas")).toHaveAttribute("data-zoom", "0.5");
+    await page.evaluate(() => {
+      const host = document.getElementById("paged-output")!;
+      const seen: string[] = [];
+      (window as unknown as { __hostVisibility: string[] }).__hostVisibility = seen;
+      new MutationObserver(() => seen.push(host.style.visibility)).observe(host, { attributes: true, attributeFilter: ["style"] });
+    });
     await loadMarkdownIntoApp(page, forcedStall("image"), "forced-fatal.md");
 
     const error = page.locator("#error-card");
@@ -237,6 +246,8 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
     expect(await page.locator("#paged-output .pagedjs_page").count()).toBe(0);
     await expect(page.locator("#page-chip")).toHaveAttribute("data-count", "0");
     // A failed layout under a reduced zoom must not leave the (empty) stack hidden.
+    const seen = await page.evaluate(() => (window as unknown as { __hostVisibility: string[] }).__hostVisibility);
+    expect(seen, "the failing layout really ran hidden").toContain("hidden");
     await expect(page.locator("#paged-output")).toHaveCSS("visibility", "visible");
 
     await page.evaluate(() => window.__mdviewer?.exportPdf());
