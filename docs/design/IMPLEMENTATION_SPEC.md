@@ -650,7 +650,7 @@ paginated output keeps fields as text and omits chips with the front matter. Con
 `tests/desktop-e2e/actionable.spec.ts`.
 
 Actionable Markdown, A3 (interaction). `src/desktop/reader/controls.ts` `decorateControls(root,
-actionable)` runs after `decorateCopy` and turns the parsed controls (never authored HTML) into
+actionable, onAction, menuHost)` runs after `decorateCopy` and turns the parsed controls (never authored HTML) into
 controls: marks are `role="checkbox"` buttons (click steps the `marks:` cycle; right click, the
 context-menu key or Shift+F10 opens all six, digits pick), choices are radios in a `radiogroup`
 (one tab stop; arrows move; click or Space selects), field values edit inline (Enter commits,
@@ -664,6 +664,22 @@ a reload that puts the old span back shows "Another program overwrote this chang
 again. Unbound, dirty or web-build documents change in memory and become dirty. Tests:
 `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`,
 `tests/desktop-e2e/actionable.spec.ts`.
+
+Actionable Markdown, A5 (the embeddable element, #300). `decorateControls` takes its gesture handler
+(`onAction(control, action)`) and its `menuHost` (the body, or a shadow root's wrapper) as arguments;
+the desktop entry passes `desktopControlHandler` (the module-level handler `setControlHandler` sets,
+read at gesture time) and `document.body`, so nothing changed there. Menus position against whatever
+contains them, close on the composed path of a press and read focus from their own root, so they work
+inside a shadow root. `renderReaderDocument(..., options)` gains `controls: { onAction, menuHost }` and
+`copy: false` (no Copy buttons). `src/embed/reader.ts` defines `<mdviewer-reader>`: a shadow root holding
+the reader's `reader.css`, `document.css`, `shiki.css` and KaTeX's rules (`?inline`, with `:root`
+rewritten to `:host`), one `article.doc.reader-document`, the `markdown` property and attribute, and a
+`change` event `{ patches }` built with `planChange` from a trusted gesture only. Renders from all
+elements share one queue (Mermaid is a singleton) and a stale render is dropped by a per-element
+generation. `vite.embed.config.ts` is a plain build of that one entry (not library mode, which inlines
+assets as base64) into `dist-embed/` (`npm run embed:build`; gitignored); the `@font-face` rules of the
+math fonts reach the page through a `<link>` to `mdviewer-reader.css`. Test:
+`tests/embed-e2e/reader.spec.ts` (`npm run embed:test`, `playwright.embed.config.ts`, CI e2e job).
 
 Reader source map and copy (`src/desktop/reader/{sourcemap,copy}.ts`). After parsing,
 the reader stamps every block token with `data-src="start-end"` (1-based, inclusive,
@@ -812,3 +828,28 @@ Ctrl+S in the reader saves a Markdown copy. Proof: `tests/desktop-e2e/edit.spec.
 (patching keeps the highlighted block, undo across a toggle, Find and Ctrl+B in the source,
 two patched diagrams with distinct SVG ids, no pagination code loaded),
 `tests/desktop-e2e/new-document.spec.ts`, `tests/desktop-new-document.test.ts`.
+
+## 16. PDF workbench (P1a)
+
+Design and engine decision: [PDF_WORKBENCH.md](PDF_WORKBENCH.md). A PDF is its own tab kind, kept
+apart from `ReaderSession` text documents in `src/desktop/pdfs.ts` (`PdfTabs`: 16 tabs, 200 MB per
+file, 400 MB held, `%PDF-` signature check). The shell shows a PDF when one is active and no reader
+document is (`pdfShown()` in `src/desktop/main.ts`); Edit, Save and Export PDF… are unavailable
+while it is shown. `import("../pdf")` happens only in `showPdf()`; one view is mounted at a time.
+
+```typescript
+// src/pdf/engine.ts — the only module that calls PDFium
+loadEngine(wasmBinary?: ArrayBuffer): Promise<WrappedPdfiumModule>;
+openPdf(bytes: Uint8Array, password?: string): Promise<PdfDocument>; // throws PdfOpenError{code}
+class PdfDocument { pageCount; pageSize(i); render(i, scale); textRuns(i); pageText(i); find(i, q);
+  outline(); links(i); releasePage(i); close() }
+// src/pdf/index.ts (lazy chunk)
+mountPdf(host: HTMLElement, options: PdfViewOptions): Promise<PdfView>; // { pageCount, zoomBy, focusFind, showOutline, destroy }
+```
+
+Coordinates are CSS pixels at zoom 1 in the displayed orientation. Bitmaps are capped at 16,384 px
+per side and 32 M pixels; at most 12 pages hold a bitmap. Links: `page` and http(s) `uri` act,
+everything else is `blocked` with a reason. Proof: `tests/pdf-engine.test.ts` (synthetic corpus in
+`tests/helpers/pdfCorpus.ts`, second parser pdf.js) and `tests/desktop-e2e/pdf-read.spec.ts`
+(no PDF chunk before a PDF opens, text, outline, find, links, zoom, thumbnails, password,
+non-PDF refusal, 1,000 pages with at most 12 drawn).

@@ -48,7 +48,10 @@ reset, clean, `checkout --`, `restore`):
 ## Recovery (always allowed)
 
 - `git rebase --abort`, `git merge --abort`, `git cherry-pick --abort`
-- `git stash` / `git stash pop`
+- `git stash push -u -m "<unique tag>"`, then `git stash apply <sha>` (find the sha with
+  `git stash list --format='%H %gs'`). Never bare `git stash pop`: the stash stack is shared by every
+  worktree, so `pop` can take another session's entry. Deleting a branch (`git branch -D`) or a stash
+  entry (`git stash drop`/`clear`) is not recovery and needs explicit approval.
 - `git reflog` to find lost commits, then `git switch -c rescue <sha>`
 
 ## When you get tangled

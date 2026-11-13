@@ -11,7 +11,7 @@ import { collectFences, installSourceMap, sourceLines, stampSourceMap } from "./
 import { decorateCopy } from "./reader/copy";
 import { parseActionable } from "../render/actionable";
 import { chipRow, markFields } from "./reader/actionable";
-import { decorateControls } from "./reader/controls";
+import { decorateControls, desktopControlHandler, type ControlHandler, type MenuHost } from "./reader/controls";
 
 /**
  * Continuous reading keeps natural endnotes and never invokes Paged.js.
@@ -28,7 +28,13 @@ export async function renderReaderDocument(
   fileName = "",
   paint?: (document: HTMLElement) => HTMLElement | null,
   /** A data document's readable view: actionable controls and the front matter card stay off. */
-  options: { data?: boolean } = {},
+  options: {
+    data?: boolean;
+    /** Where control gestures go and where menus open (default: the desktop reader's handler and the page body). */
+    controls?: { onAction: ControlHandler; menuHost: MenuHost };
+    /** false leaves out the Copy buttons, which announce through the page body (the embedded element). */
+    copy?: boolean;
+  } = {},
 ): Promise<{ document: HTMLElement; warnings: string[] }> {
   const md = createMarkdown(null, settings);
   const env = {};
@@ -66,8 +72,8 @@ export async function renderReaderDocument(
   const chips = chipRow(actionable);
   if (chips) document.prepend(chips);
   // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
-  decorateCopy(document, source, fileName);
-  decorateControls(document, actionable);
+  if (options.copy !== false) decorateCopy(document, source, fileName);
+  decorateControls(document, actionable, options.controls?.onAction ?? desktopControlHandler, options.controls?.menuHost ?? window.document.body);
   const warnings = result.warnings.map(warning => warning.message);
   if (!text.trim()) warnings.push("This document is empty. Press Ctrl+E to write in it.");
 
