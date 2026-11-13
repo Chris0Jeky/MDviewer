@@ -27,15 +27,32 @@ describe("PDF engine (P1 open and read)", () => {
     } finally { doc.close(); }
   });
 
-  it("acts only on page jumps and http, https or mailto links; every other action is blocked", async () => {
+  it("acts only on page jumps and http(s) links; every other action, remote GoTo included, is blocked", async () => {
     const doc = await openPdf(linkedDocument());
     try {
       const targets = doc.links(0).map(link => link.target);
       expect(targets).toContainEqual({ kind: "page", page: 1 });
       expect(targets).toContainEqual({ kind: "uri", uri: "https://example.org/" });
       const blocked = targets.filter(target => target.kind === "blocked");
-      expect(blocked).toHaveLength(4); // javascript: URI, Launch, JavaScript, SubmitForm
+      expect(blocked).toHaveLength(5); // javascript: URI, Launch, JavaScript, SubmitForm, GoToR
       expect(targets.some(target => target.kind === "uri" && /javascript/i.test(target.uri))).toBe(false);
+    } finally { doc.close(); }
+  });
+
+  it("keeps a one-character text run (a page number) in the text layer", async () => {
+    const doc = await openPdf(linkedDocument());
+    try { expect(doc.textRuns(1).map(run => run.text)).toContain("7"); } finally { doc.close(); }
+  });
+
+  it("find and pageText leave no page handles behind on pages the view does not hold", async () => {
+    const doc = await openPdf(await longDocument(40, 3));
+    try {
+      const cached = doc as unknown as { pages: Map<number, number>; texts: Map<number, number> };
+      for (let i = 0; i < doc.pageCount; i++) doc.find(i, "fox");
+      expect(doc.pageText(5)).toContain("Page 6");
+      expect([cached.pages.size, cached.texts.size]).toEqual([0, 0]);
+      doc.textRuns(3); // the view's own pages stay cached until released
+      expect(cached.texts.size).toBe(1);
     } finally { doc.close(); }
   });
 

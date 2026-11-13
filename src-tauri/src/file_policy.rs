@@ -483,16 +483,18 @@ fn decode_markdown(bytes: Vec<u8>) -> Result<String, &'static str> {
     let text = if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
         let little_endian = bytes[0] == 0xff;
         let payload = &bytes[2..];
-        if payload.len() % 2 != 0 {
+        if !payload.len().is_multiple_of(2) {
             return Err(ENCODING_ERROR);
         }
         let units = payload
-            .chunks_exact(2)
-            .map(|pair| {
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&pair| {
                 if little_endian {
-                    u16::from_le_bytes([pair[0], pair[1]])
+                    u16::from_le_bytes(pair)
                 } else {
-                    u16::from_be_bytes([pair[0], pair[1]])
+                    u16::from_be_bytes(pair)
                 }
             })
             .collect::<Vec<_>>();

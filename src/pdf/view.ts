@@ -10,8 +10,10 @@ export interface PdfViewOptions {
   bytes: Uint8Array;
   /** The shell's outline panel; the view fills it with the PDF's bookmarks while it is shown. */
   outline: HTMLElement;
-  /** The shell's confirm-then-open path for http, https and mailto links. */
+  /** The shell's one path for http(s) links. */
   openExternal(url: string): void;
+  /** Aborted when the shell no longer wants this view (another PDF was chosen before it opened). */
+  signal?: AbortSignal;
   /** A one-line status (page, count, zoom). */
   status(text: string): void;
 }
@@ -26,6 +28,8 @@ export interface PdfView {
 }
 
 const MAX_LIVE = 12;
+/** About 400 MB of RGBA across the drawn pages (PDF_WORKBENCH.md, "Caps"). */
+const MAX_LIVE_PIXELS = 100_000_000;
 const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 const GAP = 16;
 
@@ -80,8 +84,8 @@ export async function mountPdf(host: HTMLElement, options: PdfViewOptions): Prom
   const attempt = async (password: string): Promise<boolean> => {
     try {
       const doc = await openPdf(options.bytes, password);
-      if (destroyed) { doc.close(); return true; }
-      view = buildView(root, doc, options);
+      if (destroyed || options.signal?.aborted) { doc.close(); root.remove(); return true; }
+      try { view = buildView(root, doc, options); } catch (error) { doc.close(); throw error; }
       return true;
     } catch (error) {
       if (error instanceof PdfOpenError && error.code === "password") return false;
@@ -198,15 +202,19 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   };
 
   // Drawing: visible pages draw, the oldest beyond MAX_LIVE are released.
-  const live = new Map<number, { zoom: number }>();
+  const live = new Map<number, { zoom: number; pixels: number }>();
   const visible = new Set<number>();
   let queued = false;
+  let closed = false;
+  /** The pages to hold drawn: the MAX_LIVE visible pages nearest the current one. */
+  const wanted = (): number[] => [...visible].sort((a, b) => Math.abs(a - current) - Math.abs(b - current)).slice(0, MAX_LIVE);
   const drawQueue = (): void => {
-    if (queued) return;
+    if (queued || closed) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
-      const next = [...visible].sort((a, b) => Math.abs(a - current) - Math.abs(b - current)).find(i => live.get(i)?.zoom !== zoom);
+      if (closed) return;
+      const next = wanted().find(i => live.get(i)?.zoom !== zoom);
       if (next === undefined) return;
       draw(next);
       drawQueue();
@@ -219,7 +227,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     let image;
     try { image = doc.render(i, scale); } catch (error) {
       page.replaceChildren(el("p", "pdf-error", error instanceof Error ? error.message : "This page could not be drawn."));
-      live.set(i, { zoom });
+      live.set(i, { zoom, pixels: 0 });
       return;
     }
     const canvas = el("canvas", "pdf-canvas");
@@ -229,10 +237,13 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     canvas.setAttribute("aria-hidden", "true");
     page.replaceChildren(canvas, textLayer(i), linkLayer(i), hitLayer(i));
     live.delete(i);
-    live.set(i, { zoom });
-    for (const old of live.keys()) {
-      if (live.size <= MAX_LIVE) break;
-      if (visible.has(old)) continue;
+    live.set(i, { zoom, pixels: image.width * image.height });
+    // Release the oldest pages beyond MAX_LIVE or MAX_LIVE_PIXELS, never one on screen.
+    const total = (): number => [...live.values()].reduce((sum, entry) => sum + entry.pixels, 0);
+    const keep = new Set(wanted());
+    for (const old of [...live.keys()]) {
+      if (live.size <= MAX_LIVE && total() <= MAX_LIVE_PIXELS) break;
+      if (keep.has(old) || old === i) continue;
       release(old);
     }
   };
@@ -279,12 +290,15 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
         node.setAttribute("aria-label", `Go to page ${target.page + 1}`);
         node.addEventListener("click", event => { event.preventDefault(); goTo(target.page); });
       } else if (target.kind === "uri") {
+        // No href: only this handler opens it, through the shell (no middle-click or drag bypass).
         node = el("a", "pdf-link");
-        (node as HTMLAnchorElement).href = target.uri;
-        (node as HTMLAnchorElement).rel = "noopener noreferrer";
+        node.tabIndex = 0;
+        node.setAttribute("role", "link");
         node.setAttribute("aria-label", `Open ${target.uri}`);
         node.title = target.uri;
-        node.addEventListener("click", event => { event.preventDefault(); options.openExternal(target.uri); });
+        const open = (): void => options.openExternal(target.uri);
+        node.addEventListener("click", event => { event.preventDefault(); open(); });
+        node.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); open(); } });
       } else {
         node = el("span", "pdf-link pdf-link-blocked");
         node.title = `Not followed: ${target.reason}`;
@@ -420,6 +434,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
         canvas.setAttribute("aria-hidden", "true");
         item.prepend(canvas);
       } catch { /* the label stays; the page view reports the error */ }
+      if (!live.has(i)) doc.releasePage(i); // thumbnails keep no engine handles
     }
   }, { root: thumbs, rootMargin: "200px 0px" });
   let thumbsBuilt = false;
@@ -494,6 +509,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     focusFind: () => { find.focus(); find.select(); },
     showOutline,
     destroy: () => {
+      closed = true;
       ++findGeneration;
       window.clearTimeout(findTimer);
       observer.disconnect();

@@ -6,7 +6,7 @@ import { isEnabled, listCommands, runCommand, type Command } from "../commands";
  * for automation) and their enabled and checked states are refreshed whenever it opens.
  */
 export type MenuEntry =
-  | { command: string; id?: string; role?: "menuitemradio" | "menuitemcheckbox"; checked?: () => boolean; disabled?: () => boolean }
+  | { command: string; id?: string; role?: "menuitemradio" | "menuitemcheckbox"; checked?: () => boolean; disabled?: () => boolean; hidden?: () => boolean }
   | "separator";
 
 const KEY_LABELS: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→" };
@@ -51,8 +51,8 @@ export function mountMenu(button: HTMLButtonElement, menu: HTMLElement, entries:
     const known = commands();
     for (const { element, entry } of items) {
       const command = known.get(entry.command);
-      element.hidden = !command;
-      if (!command) continue;
+      element.hidden = !command || !!entry.hidden?.();
+      if (element.hidden || !command) continue;
       element.replaceChildren();
       const check = document.createElement("span");
       check.className = "shell-menu-check";

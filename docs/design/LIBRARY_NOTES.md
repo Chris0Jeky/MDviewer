@@ -49,6 +49,14 @@ import and instantiated under `'wasm-unsafe-eval'`; it runs on the main thread (
 On upgrade: re-run `tests/pdf-engine.test.ts` and the desktop `pdf-read` suite, and recheck the
 third-party list in the wasm.
 
+Dependency review (2026-11-13, `dependency-auditor`): approved with notes. No advisories; no install
+scripts; one publisher and no npm provenance. The 2.x line lives on upstream branch `v2` (2.15.1 =
+commit `eb14d5ae4`); upstream `main` moved to 3.x, so a later move to 3.x is a planned migration, not
+a patch bump. The wasm contains FreeType 2.14.1 (FTL), libjpeg-turbo 3.1.0, OpenJPEG 2.5.4, Little
+CMS 2.15, libpng 1.6.43, zlib 1.3.1, AGG 2.3 (its own permissive licence), ICU 77.1, Abseil,
+fast_float and the Emscripten runtime (musl, libc++); texts in `docs/licenses/`. Not verified: that
+the published wasm reproduces from source.
+
 `pdfjs-dist` is the second parser that reopens every corpus file and, from P2, every saved output
 (`pdfjs-dist/legacy/build/pdf.mjs` in Node). It never ships. It pulls the optional native
 `@napi-rs/canvas` binaries, unused by the tests.

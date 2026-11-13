@@ -93,9 +93,10 @@ export class PdfDocument {
 
   /** Displayed page size in points (the page's own rotation applied). */
   pageSize(index: number): { width: number; height: number } {
+    this.check(index);
     const out = this.scratch(16);
     try {
-      this.P.FPDF_GetPageSizeByIndexF(this.doc, index, out);
+      if (!this.P.FPDF_GetPageSizeByIndexF(this.doc, index, out)) throw new Error(`Page ${index + 1} has no size.`);
       const M = this.P.pdfium;
       return { width: M.getValue(out, "float"), height: M.getValue(out + 4, "float") };
     } finally { this.free(out); }
@@ -137,9 +138,23 @@ export class PdfDocument {
     return runs;
   }
 
+  /**
+   * Run `use` on a page's text handle. A page the view already holds stays cached; any other page is
+   * closed again afterwards, so a whole-document find does not keep every page parsed in WASM memory.
+   */
+  private withText<T>(index: number, use: (tp: number) => T): T {
+    const cached = this.texts.has(index);
+    const hadPage = this.pages.has(index);
+    try { return use(this.text(index)); } finally { if (!cached && !hadPage) this.releasePage(index); }
+  }
+
   /** All of a page's text, in reading order as PDFium extracts it. */
   pageText(index: number): string {
-    const P = this.P, tp = this.text(index);
+    return this.withText(index, tp => this.pageTextOf(tp));
+  }
+
+  private pageTextOf(tp: number): string {
+    const P = this.P;
     const n = P.FPDFText_CountChars(tp);
     if (n <= 0) return "";
     return this.wide((buf, len) => P.FPDFText_GetText(tp, 0, Math.min(n, len / 2 - 1), buf) * 2, (n + 1) * 2);
@@ -148,7 +163,11 @@ export class PdfDocument {
   /** Every match of `query` on a page, each as its rectangles. Case-insensitive. */
   find(index: number, query: string): Rect[][] {
     if (!query) return [];
-    const P = this.P, M = P.pdfium, tp = this.text(index);
+    return this.withText(index, tp => this.findIn(index, tp, query));
+  }
+
+  private findIn(index: number, tp: number, query: string): Rect[][] {
+    const P = this.P, M = P.pdfium;
     const needle = this.wstr(query);
     const handle = P.FPDFText_FindStart(tp, needle, 0, 0);
     const matches: Rect[][] = [];
@@ -234,13 +253,14 @@ export class PdfDocument {
 
   private linkTarget(link: number): LinkTarget {
     const P = this.P;
-    const dest = P.FPDFLink_GetDest(this.doc, link);
-    if (dest) {
-      const page = P.FPDFDest_GetDestPageIndex(this.doc, dest);
-      return page >= 0 && page < this.pageCount ? { kind: "page", page } : { kind: "blocked", reason: "a link to a missing page" };
-    }
     const action = P.FPDFLink_GetAction(link);
-    if (!action) return { kind: "blocked", reason: "a link with no action" };
+    // Decide by the action's type first: remote and embedded GoTo actions also carry a /D that
+    // FPDFLink_GetDest would resolve against this document.
+    if (!action) {
+      const dest = P.FPDFLink_GetDest(this.doc, link);
+      const page = dest ? P.FPDFDest_GetDestPageIndex(this.doc, dest) : -1;
+      return page >= 0 && page < this.pageCount ? { kind: "page", page } : { kind: "blocked", reason: "a link with no action" };
+    }
     const type = P.FPDFAction_GetType(action);
     if (type === 1) {
       const target = P.FPDFAction_GetDest(this.doc, action);
@@ -268,9 +288,13 @@ export class PdfDocument {
     } finally { this.free(out); }
   }
 
-  private page(index: number): number {
+  private check(index: number): void {
     if (!this.doc) throw new Error("This PDF is closed.");
     if (!Number.isInteger(index) || index < 0 || index >= this.pageCount) throw new RangeError(`No page ${index + 1}.`);
+  }
+
+  private page(index: number): number {
+    this.check(index);
     let page = this.pages.get(index);
     if (!page) {
       page = this.P.FPDF_LoadPage(this.doc, index);
@@ -309,7 +333,7 @@ export class PdfDocument {
   /** Call a PDFium getter that fills a UTF-16LE buffer; `fill(buf, byteLength)` returns bytes needed. */
   private wide(fill: (buf: number, bytes: number) => number, size?: number): string {
     const bytes = size ?? fill(0, 0);
-    if (bytes <= 2) return "";
+    if (bytes <= 0) return "";
     const p = this.scratch(bytes + 2);
     try {
       heap(this.P).fill(0, p, p + bytes + 2);
