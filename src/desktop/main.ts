@@ -22,7 +22,7 @@ import { dataDocumentKind, dataLabelOf, prepareRenderText, renderTextOf, showAll
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
-import { dataCopy, dataReference, hasValues, readableCopy, trackDataTarget, type DataCopyKind } from "./reader/dataCopy";
+import { dataCopy, dataReference, dataViewOf, hasValues, readableCopy, trackDataTarget, type DataCopyKind } from "./reader/dataCopy";
 import { setControlHandler } from "./reader/controls";
 import { createWriteback, type Notice } from "./reader/writeback";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
@@ -1174,7 +1174,7 @@ registerCommand({ id: "document.copyReference", title: "Copy reference (path and
 const DATA_COPY: [DataCopyKind, string][] = [
   ["value", "Copy value"], ["jsonPath", "Copy path (JSONPath)"], ["jq", "Copy path (jq)"], ["subtree", "Copy subtree as JSON"],
 ];
-const hasData = (): boolean => !app && !changingMode && hasValues(docs.reader.active && renderTextOf(docs.reader.active.name, docs.reader.active.text).data);
+const hasData = (): boolean => !app && !changingMode && hasValues(docs.reader.active && dataViewOf(docs.reader.active));
 for (const [kind, title] of DATA_COPY) {
   registerCommand({ id: `data.copy.${kind}`, title, enabled: hasData, run: () => {
     const doc = docs.reader.active;

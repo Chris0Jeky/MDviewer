@@ -43,8 +43,16 @@ export function pathAt(view: DataView, node: Node | null): string | undefined {
 
 const NONE = "There is no value to copy here. Select a value in the readable view first.";
 
+/**
+ * The document's data view, or null for Markdown, for a parse error and before a lazy parser
+ * (YAML) has loaded. Menus ask this synchronously, so it must never throw.
+ */
+export function dataViewOf(doc: { name: string; text: string }): DataView | null {
+  try { return renderTextOf(doc.name, doc.text).data ?? null; } catch { return null; }
+}
+
 export function dataCopy(kind: DataCopyKind, doc: { name: string; text: string }, root: Element): DataCopy {
-  const view = renderTextOf(doc.name, doc.text).data;
+  const view = dataViewOf(doc);
   if (!hasValues(view)) return { problem: "Copying a value needs a JSON, JSON Lines, YAML, TOML or CSV document." };
   const path = pathAt(view, target(root));
   const value = path === undefined ? undefined : valueAt(doc.text, view.kind, path, doc.name);
@@ -62,15 +70,18 @@ export function dataCopy(kind: DataCopyKind, doc: { name: string; text: string }
 
 /** What follows a document's path in a copied reference: `#$.a[0]`, or "" when it names no value; null for Markdown. */
 export function dataReference(doc: { name: string; text: string }, root: Element): string | null {
-  const view = renderTextOf(doc.name, doc.text).data;
+  const view = dataViewOf(doc);
   if (!view) return null;
   const path = hasValues(view) ? pathAt(view, target(root)) : undefined;
-  return path === undefined || path === "$" ? "" : `#${path}`;
+  // Name only a path that resolves to a value, as Copy value would.
+  if (path === undefined || path === "$" || valueAt(doc.text, view.kind, path, doc.name) === undefined) return "";
+  return `#${path}`;
 }
 
 /** The readable view as a Markdown copy: exactly the render text, under a `.md` name of its own. */
 export function readableCopy(doc: { name: string; text: string }): { name: string; text: string } | null {
-  const view = renderTextOf(doc.name, doc.text);
+  let view;
+  try { view = renderTextOf(doc.name, doc.text); } catch { return null; }
   if (!view.data) return null;
   const base = doc.name.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, "");
   return { name: `${base || "Untitled"}.readable.md`, text: view.text };
