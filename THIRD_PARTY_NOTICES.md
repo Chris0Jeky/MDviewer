@@ -9,3 +9,8 @@ relicensed by this project.
 and the installed dependency licence texts into `dist/`. Preserve those files
 when redistributing or deploying the built application and satisfy the
 corresponding dependency terms.
+
+The PDF engine `@embedpdf/pdfium` is PDFium (BSD-3-Clause, Apache-2.0) compiled to WebAssembly
+under an MIT wrapper. The libraries compiled into its `pdfium.wasm` and their licence texts are
+listed in `docs/licenses/PDFIUM_THIRD_PARTY_NOTICES.txt`, which the build appends to
+`THIRD_PARTY_LICENSES.txt`.

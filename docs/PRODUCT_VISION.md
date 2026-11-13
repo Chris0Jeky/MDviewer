@@ -59,6 +59,7 @@ The source pane feeds the *same* pipeline that produces the PDF, so editing uses
 
 - **No document cloud backend.** No accounts, cloud sync, remote conversion or server-side document storage.
 - **Focused output.** Markdown source and PDF are the current outputs. DOCX, EPUB and slide export are outside the current roadmap.
+- **PDF as an input (2026-11-13 owner direction).** PDFs open, read and, slice by slice, become editable on the device ([PDF workbench](design/PDF_WORKBENCH.md)); they never go through the Markdown pipeline and never leave the device.
 - **Not a general HTML printer.** The break strategy is tuned for the documents above, not arbitrary web pages.
 
 ## The quality bar

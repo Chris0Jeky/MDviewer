@@ -812,3 +812,28 @@ Ctrl+S in the reader saves a Markdown copy. Proof: `tests/desktop-e2e/edit.spec.
 (patching keeps the highlighted block, undo across a toggle, Find and Ctrl+B in the source,
 two patched diagrams with distinct SVG ids, no pagination code loaded),
 `tests/desktop-e2e/new-document.spec.ts`, `tests/desktop-new-document.test.ts`.
+
+## 16. PDF workbench (P1a)
+
+Design and engine decision: [PDF_WORKBENCH.md](PDF_WORKBENCH.md). A PDF is its own tab kind, kept
+apart from `ReaderSession` text documents in `src/desktop/pdfs.ts` (`PdfTabs`: 16 tabs, 200 MB per
+file, 400 MB held, `%PDF-` signature check). The shell shows a PDF when one is active and no reader
+document is (`pdfShown()` in `src/desktop/main.ts`); Edit, Save and Export PDF… are unavailable
+while it is shown. `import("../pdf")` happens only in `showPdf()`; one view is mounted at a time.
+
+```typescript
+// src/pdf/engine.ts — the only module that calls PDFium
+loadEngine(wasmBinary?: ArrayBuffer): Promise<WrappedPdfiumModule>;
+openPdf(bytes: Uint8Array, password?: string): Promise<PdfDocument>; // throws PdfOpenError{code}
+class PdfDocument { pageCount; pageSize(i); render(i, scale); textRuns(i); pageText(i); find(i, q);
+  outline(); links(i); releasePage(i); close() }
+// src/pdf/index.ts (lazy chunk)
+mountPdf(host: HTMLElement, options: PdfViewOptions): Promise<PdfView>; // { pageCount, zoomBy, focusFind, showOutline, destroy }
+```
+
+Coordinates are CSS pixels at zoom 1 in the displayed orientation. Bitmaps are capped at 16,384 px
+per side and 32 M pixels; at most 12 pages hold a bitmap. Links: `page` and http(s) `uri` act,
+everything else is `blocked` with a reason. Proof: `tests/pdf-engine.test.ts` (synthetic corpus in
+`tests/helpers/pdfCorpus.ts`, second parser pdf.js) and `tests/desktop-e2e/pdf-read.spec.ts`
+(no PDF chunk before a PDF opens, text, outline, find, links, zoom, thumbnails, password,
+non-PDF refusal, 1,000 pages with at most 12 drawn).
