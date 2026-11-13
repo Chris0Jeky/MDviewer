@@ -409,6 +409,7 @@ Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md`
 
 - `src/pdf/engine.ts`: the only PDFium caller (`openPdf`, `PdfDocument`, `PdfOpenError`, `heap`).
 - `src/pdf/view.ts` + `pdf.css`: the reading view (`mountPdf`); `src/pdf/index.ts` is the lazy entry.
+- `src/pdf/journal.ts` (P2): `PdfEdit`, `Journal`, `apply`, `describe`; page edits live on `PdfDocument`.
 - `src/desktop/pdfs.ts`: eager PDF tab store (`PdfTabs`, `isPdfFile`, `hasPdfSignature`, caps).
 - Shell wire-up in `src/desktop/main.ts`: `pdfShown`, `showPdf`, `closePdfView`, `openWebLink`, the
   PDF branches of `readFiles`, `activateDocument`, `closeDocumentById`, `resizeText`, `render`.
@@ -416,8 +417,8 @@ Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md`
   `file_policy.rs` (`PDF_EXTENSIONS`, `MAX_PDF_BYTES`, `is_pdf_name`, `has_pdf_signature`,
   `Document.pdf`), `commands/open.rs` (`kind: "pdf"`, no watcher). `Host.readPdf` / `Host.releasePdf`
   in `src/desktop/native.ts`, Tauri side in `src/desktop/hosts/tauri.ts`, `openNativePdfs` in `main.ts`.
-- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`,
-  `tests/desktop-e2e/pdf-native.spec.ts` (fake host: `pdfs` seed, `read_pdf`), Rust tests in `commands/pdf.rs`.
+- Tests: `tests/pdf-engine.test.ts`, `tests/pdf-pages.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`,
+  `tests/desktop-e2e/pdf-native.spec.ts`, `tests/desktop-e2e/pdf-pages.spec.ts` (fake host: `pdfs` seed, `read_pdf`), Rust tests in `commands/pdf.rs`.
 
 ## Development dependency compatibility
 

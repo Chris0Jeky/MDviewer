@@ -68,3 +68,10 @@
 .pdf-error { margin: 24px; color: var(--reader-fg); }
 
 @media print { .reader-pdf { display: none !important; } }
+
+/* Pages bar (P2): a second, quieter row of page operations. */
+.pdf-pagebar { padding-top: 4px; padding-bottom: 4px; background: var(--reader-bg); }
+.pdf-target { min-width: 9em; color: var(--reader-muted); font-variant-numeric: tabular-nums; }
+.pdf-view .pdf-save { height: 30px; padding: 0 14px; }
+.pdf-view .pdf-thumb[aria-pressed="true"] { background: var(--reader-sel); color: var(--reader-fg); }
+.pdf-view .pdf-thumb[draggable="true"] { cursor: grab; }

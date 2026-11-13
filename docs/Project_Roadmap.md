@@ -37,8 +37,8 @@ JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy
 
 [PDF workbench](design/PDF_WORKBENCH.md) (owner direction, 2026-11-13; contract
 [complete push](design/2026-11-13-complete-push.md), track P): P0 design and engine decision merged
-(#312, PDFium-WASM); P1a reading view in progress; P1b native open, then P2 pages, P3 annotate, P4
-edit on the page, P5 decompile to Markdown, P6 page source.
+(#312, PDFium-WASM); P1a reading view merged (#322); P1b native open (#344) and P2 pages in review;
+then P3 annotate, P4 edit on the page, P5 decompile to Markdown, P6 page source.
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain open** (AI-6, AI-7, AI-8, AI-10 and the hands-on #169 boxes are delegated to agent QA by owner decision 2026-11-13, not accepted; AI-9 and the #169 signing decision stay with the owner). Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and

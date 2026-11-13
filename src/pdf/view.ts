@@ -4,6 +4,7 @@
  * Only visible pages hold bitmaps; at most MAX_LIVE pages are drawn at once.
  */
 import { openPdf, PdfOpenError, type PdfDocument, type Rect } from "./engine";
+import { describe, Journal, type PdfEdit } from "./journal";
 
 export interface PdfViewOptions {
   name: string;
@@ -14,6 +15,12 @@ export interface PdfViewOptions {
   openExternal(url: string): void;
   /** Aborted when the shell no longer wants this view (another PDF was chosen before it opened). */
   signal?: AbortSignal;
+  /** Save bytes as a copy the user places (download on the web, a native dialog on Windows). */
+  saveCopy?(bytes: Uint8Array, filename: string): Promise<void>;
+  /** Open bytes as a new, unsaved PDF tab (Extract). */
+  openPdf?(name: string, bytes: Uint8Array): void;
+  /** The document has (or no longer has) unsaved changes. */
+  onDirty?(dirty: boolean): void;
   /** A one-line status (page, count, zoom). */
   status(text: string): void;
 }
@@ -24,7 +31,19 @@ export interface PdfView {
   focusFind(): void;
   /** Re-fill the shell outline (after the shell switched back to this PDF). */
   showOutline(): void;
-  destroy(): void;
+  /** `keepDocument` leaves the engine document open (an internal rebuild after an edit). */
+  destroy(keepDocument?: boolean): void;
+}
+
+/** What survives a rebuild of the view after an edit, undo or redo. */
+interface Session {
+  doc: PdfDocument;
+  journal: Journal;
+  zoom: number;
+  page: number;
+  thumbs: boolean;
+  selected: Set<number>;
+  rebuild(): void;
 }
 
 const MAX_LIVE = 12;
@@ -47,6 +66,16 @@ const ICONS: Record<string, string> = {
   up: '<path d="M4 10l4-4 4 4"/>',
   down: '<path d="M4 6l4 4 4-4"/>',
   fit: '<path d="M2.5 8h11M5 5.5L2.5 8 5 10.5M11 5.5l2.5 2.5-2.5 2.5"/>',
+  rotl: '<path d="M3 6.5A5 5 0 1 1 4.5 11.5"/><path d="M3 3v3.5h3.5"/>',
+  rotr: '<path d="M13 6.5A5 5 0 1 0 11.5 11.5"/><path d="M13 3v3.5H9.5"/>',
+  copy: '<rect x="5.5" y="5.5" width="8" height="8.5" rx="1"/><path d="M3.5 10.5V3a1 1 0 0 1 1-1h6"/>',
+  trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9"/>',
+  blank: '<path d="M4 2h5.5L12 4.5V14H4z"/><path d="M8 7.5v4M6 9.5h4"/>',
+  image: '<rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 11l3.5-3.5 3 3 2-2 2.5 2.5"/><circle cx="10.5" cy="6" r="1"/>',
+  addpdf: '<path d="M4 2h5.5L12 4.5V14H4z"/><path d="M9.5 2v2.5H12M6 10h4M8 8v4"/>',
+  extract: '<path d="M4 2h5.5L12 4.5V8M4 2v12h4"/><path d="M10 11h4.5M12.5 9l2 2-2 2"/>',
+  undo: '<path d="M4 6.5h6a3.5 3.5 0 0 1 0 7H6"/><path d="M6.5 4L4 6.5 6.5 9"/>',
+  redo: '<path d="M12 6.5H6a3.5 3.5 0 0 0 0 7h4"/><path d="M9.5 4L12 6.5 9.5 9"/>',
 };
 
 function icon(name: keyof typeof ICONS): SVGSVGElement {
@@ -85,7 +114,14 @@ export async function mountPdf(host: HTMLElement, options: PdfViewOptions): Prom
     try {
       const doc = await openPdf(options.bytes, password);
       if (destroyed || options.signal?.aborted) { doc.close(); root.remove(); return true; }
-      try { view = buildView(root, doc, options); } catch (error) { doc.close(); throw error; }
+      const session: Session = {
+        doc, journal: new Journal(options.bytes, password), zoom: 1, page: 0, thumbs: false, selected: new Set(),
+        rebuild: () => {
+          view?.destroy(true);
+          view = buildView(root, session.doc, options, session);
+        },
+      };
+      try { view = buildView(root, doc, options, session); } catch (error) { doc.close(); throw error; }
       return true;
     } catch (error) {
       if (error instanceof PdfOpenError && error.code === "password") return false;
@@ -131,10 +167,11 @@ function passwordPrompt(root: HTMLElement, options: PdfViewOptions, attempt: (pa
   queueMicrotask(() => input.focus());
 }
 
-function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions): PdfView {
+function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions, session: Session): PdfView {
   const sizes = Array.from({ length: doc.pageCount }, (_, i) => doc.pageSize(i));
-  let zoom = 1;
-  let current = 0;
+  let zoom = session.zoom;
+  let current = Math.min(session.page, doc.pageCount - 1);
+  for (const index of [...session.selected]) if (index >= doc.pageCount) session.selected.delete(index);
 
   // Toolbar
   const toolbar = el("div", "pdf-toolbar");
@@ -170,6 +207,49 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     group(find, findPrev, findNext, findCount),
   );
 
+  // Pages bar (P2): operations act on the selected thumbnails, or on the current page.
+  const pagebar = el("div", "pdf-toolbar pdf-pagebar");
+  pagebar.setAttribute("role", "toolbar");
+  pagebar.setAttribute("aria-label", "Pages");
+  const target = el("span", "pdf-target");
+  target.setAttribute("aria-live", "polite");
+  const rotateLeft = button(icon("rotl"), "Rotate left");
+  const rotateRight = button(icon("rotr"), "Rotate right");
+  const moveEarlier = button(icon("up"), "Move earlier");
+  const moveLater = button(icon("down"), "Move later");
+  const duplicate = button(icon("copy"), "Duplicate");
+  const remove = button(icon("trash"), "Delete (Del in thumbnails)");
+  const insertBlank = button(icon("blank"), "Insert a blank page after");
+  const insertImages = button(icon("image"), "Insert images as pages…");
+  const insertPdfs = button(icon("addpdf"), "Insert pages from other PDFs…");
+  const extract = button(icon("extract"), "Extract to a new PDF");
+  const undo = button(icon("undo"), "Undo (Ctrl+Z)");
+  const redo = button(icon("redo"), "Redo (Ctrl+Y)");
+  const save = el("button", "pdf-primary pdf-save", "Save a copy…");
+  save.type = "button";
+  const pick = (accept: string): HTMLInputElement => {
+    const input = el("input");
+    input.type = "file";
+    input.accept = accept;
+    input.multiple = true;
+    input.hidden = true;
+    return input;
+  };
+  const imagePicker = pick("image/png,image/jpeg,.png,.jpg,.jpeg");
+  const pdfPicker = pick(".pdf,application/pdf");
+  pagebar.append(
+    group(target),
+    group(rotateLeft, rotateRight, moveEarlier, moveLater, duplicate, remove),
+    group(insertBlank, insertImages, insertPdfs, extract),
+    group(undo, redo),
+    group(save),
+    imagePicker, pdfPicker,
+  );
+  undo.disabled = !session.journal.canUndo;
+  redo.disabled = !session.journal.canRedo;
+  if (!options.saveCopy) save.hidden = true;
+  if (!options.openPdf) extract.hidden = true;
+
   // Body
   const body = el("div", "pdf-body");
   const thumbs = el("nav", "pdf-thumbs");
@@ -181,7 +261,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   const column = el("div", "pdf-pages");
   scroller.append(column);
   body.append(thumbs, scroller);
-  root.replaceChildren(toolbar, body);
+  root.replaceChildren(toolbar, pagebar, body);
 
   const pages = sizes.map((_, i) => {
     const page = el("div", "pdf-page");
@@ -386,6 +466,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     if (document.activeElement !== pageInput) pageInput.value = String(page + 1);
     options.status(`${options.name} · page ${page + 1} of ${doc.pageCount} · PDF`);
     for (const thumb of thumbs.children) thumb.toggleAttribute("aria-current", (thumb as HTMLElement).dataset.page === String(page));
+    if (!session.selected.size) target.textContent = `Page ${page + 1}`;
   };
   scroller.addEventListener("scroll", syncPage, { passive: true });
   pageInput.addEventListener("change", () => {
@@ -438,20 +519,213 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     }
   }, { root: thumbs, rootMargin: "200px 0px" });
   let thumbsBuilt = false;
-  thumbsToggle.addEventListener("click", () => {
-    thumbs.hidden = !thumbs.hidden;
-    thumbsToggle.setAttribute("aria-pressed", String(!thumbs.hidden));
-    if (thumbs.hidden || thumbsBuilt) return;
+  let anchor = current;
+  const showSelection = (): void => {
+    for (const thumb of thumbs.children) {
+      const i = Number((thumb as HTMLElement).dataset.page);
+      thumb.setAttribute("aria-pressed", String(session.selected.has(i)));
+    }
+    const n = session.selected.size;
+    target.textContent = n > 1 ? `${n} pages selected` : n === 1 ? `Page ${[...session.selected][0]! + 1} selected` : `Page ${current + 1}`;
+  };
+  const buildThumbs = (): void => {
+    if (thumbsBuilt) return;
     thumbsBuilt = true;
     thumbs.replaceChildren(...sizes.map((_, i) => {
       const item = button("", `Page ${i + 1}`, "pdf-thumb");
       item.dataset.page = String(i);
+      item.draggable = true;
       item.append(el("span", undefined, String(i + 1)));
-      item.addEventListener("click", () => goTo(i));
+      item.addEventListener("click", event => {
+        if (event.shiftKey) {
+          const [from, to] = [Math.min(anchor, i), Math.max(anchor, i)];
+          for (let n = from; n <= to; n++) session.selected.add(n);
+        } else if (event.ctrlKey || event.metaKey) {
+          if (!session.selected.delete(i)) session.selected.add(i);
+          anchor = i;
+        } else {
+          session.selected.clear();
+          session.selected.add(i);
+          anchor = i;
+          goTo(i);
+        }
+        showSelection();
+      });
+      item.addEventListener("keydown", event => {
+        if (event.key === "Delete") { event.preventDefault(); remove.click(); }
+      });
+      item.addEventListener("dragstart", event => {
+        if (!session.selected.has(i)) { session.selected.clear(); session.selected.add(i); showSelection(); }
+        event.dataTransfer?.setData("application/x-mdviewer-pdf-pages", "1");
+      });
+      item.addEventListener("dragover", event => {
+        if (event.dataTransfer?.types.includes("application/x-mdviewer-pdf-pages")) event.preventDefault();
+      });
+      item.addEventListener("drop", event => {
+        if (!event.dataTransfer?.types.includes("application/x-mdviewer-pdf-pages")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const moving = [...session.selected].sort((a, b) => a - b);
+        const before = moving.filter(page => page < i).length;
+        const to = Math.min(doc.pageCount - moving.length, Math.max(0, i - before));
+        void edit({ op: "move", pages: moving, to }, to);
+      });
       thumbObserver.observe(item);
       return item;
     }));
+    showSelection();
     syncPage();
+  };
+  const setThumbs = (open: boolean): void => {
+    thumbs.hidden = !open;
+    session.thumbs = open;
+    thumbsToggle.setAttribute("aria-pressed", String(open));
+    if (open) buildThumbs();
+  };
+  thumbsToggle.addEventListener("click", () => setThumbs(!session.thumbs));
+
+  // Edits (P2): journal, rebuild, dirty mark.
+  const targets = (): number[] => (session.selected.size ? [...session.selected] : [current]).sort((a, b) => a - b);
+  const remember = (page: number): void => {
+    session.zoom = zoom;
+    session.page = Math.max(0, page);
+  };
+  let busy = false;
+  const edit = async (change: PdfEdit, focusPage = current): Promise<void> => {
+    if (busy) return;
+    try {
+      session.journal.record(session.doc, change);
+    } catch (error) {
+      options.status(`${options.name} · ${error instanceof Error ? error.message : "That change could not be made."}`);
+      return;
+    }
+    session.selected.clear();
+    remember(focusPage);
+    options.onDirty?.(session.journal.dirty);
+    options.status(`${options.name} · ${describe(change)} · not saved`);
+    session.rebuild();
+  };
+  const step = async (direction: "undo" | "redo"): Promise<void> => {
+    if (busy || (direction === "undo" ? !session.journal.canUndo : !session.journal.canRedo)) return;
+    busy = true;
+    try {
+      const next = await (direction === "undo" ? session.journal.undo() : session.journal.redo());
+      const old = session.doc;
+      session.doc = next;
+      old.close();
+      session.selected.clear();
+      remember(Math.min(current, next.pageCount - 1));
+      options.onDirty?.(session.journal.dirty);
+      options.status(`${options.name} · ${direction === "undo" ? "Undone" : "Redone"}`);
+      busy = false;
+      session.rebuild();
+    } catch (error) {
+      busy = false;
+      options.status(`${options.name} · ${error instanceof Error ? error.message : "That could not be undone."}`);
+    }
+  };
+  rotateLeft.addEventListener("click", () => void edit({ op: "rotate", pages: targets(), quarterTurns: -1 }));
+  rotateRight.addEventListener("click", () => void edit({ op: "rotate", pages: targets(), quarterTurns: 1 }));
+  duplicate.addEventListener("click", () => {
+    const pages = targets();
+    void edit({ op: "duplicate", pages }, pages[pages.length - 1]! + 1);
+  });
+  remove.addEventListener("click", () => {
+    const pages = targets();
+    void edit({ op: "delete", pages }, Math.max(0, pages[0]! - 1));
+  });
+  moveEarlier.addEventListener("click", () => {
+    const pages = targets();
+    if (pages[0]! > 0) void edit({ op: "move", pages, to: pages[0]! - 1 }, pages[0]! - 1);
+  });
+  moveLater.addEventListener("click", () => {
+    const pages = targets();
+    if (pages[pages.length - 1]! < doc.pageCount - 1) void edit({ op: "move", pages, to: pages[0]! + 1 }, pages[0]! + 1);
+  });
+  insertBlank.addEventListener("click", () => {
+    const after = targets().at(-1)!;
+    const size = sizes[after]!;
+    void edit({ op: "insertBlank", at: after + 1, width: size.width, height: size.height }, after + 1);
+  });
+  insertImages.addEventListener("click", () => imagePicker.click());
+  insertPdfs.addEventListener("click", () => pdfPicker.click());
+  imagePicker.addEventListener("change", () => {
+    const files = [...(imagePicker.files ?? [])];
+    imagePicker.value = "";
+    void insertFiles(files, "image");
+  });
+  pdfPicker.addEventListener("change", () => {
+    const files = [...(pdfPicker.files ?? [])];
+    pdfPicker.value = "";
+    void insertFiles(files, "pdf");
+  });
+  /** Insert files after the target pages, one journal entry each. Images are decoded by the browser first. */
+  const insertFiles = async (files: File[], kind: "image" | "pdf"): Promise<void> => {
+    let at = targets().at(-1)! + 1;
+    const changes: PdfEdit[] = [];
+    for (const file of files.slice(0, 50)) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (kind === "pdf") { changes.push({ op: "insertPdf", at, bytes, name: file.name }); continue; }
+      const png = bytes[0] === 0x89 && bytes[1] === 0x50;
+      try {
+        const bitmap = await createImageBitmap(new Blob([bytes]));
+        changes.push({ op: "insertImage", at, bytes, kind: png ? "png" : "jpeg", width: bitmap.width, height: bitmap.height, name: file.name });
+        bitmap.close();
+      } catch {
+        options.status(`${options.name} · ${file.name} is not a PNG or JPEG image`);
+        return;
+      }
+      at += 1;
+    }
+    let focus = targets().at(-1)! + 1;
+    for (const change of changes) {
+      if (change.op === "insertPdf") change.at = focus;
+      try { session.journal.record(session.doc, change); } catch (error) {
+        options.status(`${options.name} · ${change.op === "insertPdf" ? change.name : "Image"}: ${error instanceof Error ? error.message : "could not be inserted"}`);
+        break;
+      }
+      focus = change.op === "insertPdf" ? focus + session.doc.pageCount - doc.pageCount : focus + 1;
+    }
+    session.selected.clear();
+    remember(targets().at(-1)! + 1);
+    options.onDirty?.(session.journal.dirty);
+    options.status(`${options.name} · inserted ${changes.length} file${changes.length === 1 ? "" : "s"} · not saved`);
+    session.rebuild();
+  };
+  extract.addEventListener("click", () => {
+    const pages = targets();
+    try {
+      const bytes = session.doc.extract(pages);
+      const base = options.name.replace(/\.pdf$/i, "");
+      const label = pages.length === 1 ? `page ${pages[0]! + 1}` : `${pages.length} pages`;
+      options.openPdf?.(`${base} (${label}).pdf`, bytes);
+    } catch (error) {
+      options.status(`${options.name} · ${error instanceof Error ? error.message : "Extract failed."}`);
+    }
+  });
+  undo.addEventListener("click", () => void step("undo"));
+  redo.addEventListener("click", () => void step("redo"));
+  save.addEventListener("click", () => {
+    if (!options.saveCopy) return;
+    // Additions append an incremental update (the original bytes stay unchanged at the start);
+    // a removal rewrites the file so the removed content is gone (PDF_WORKBENCH.md, save model).
+    const journal = session.journal;
+    const mode = !journal.dirty ? "unchanged" : journal.removes ? "full" : "incremental";
+    let bytes: Uint8Array;
+    try { bytes = mode === "unchanged" ? journal.original : session.doc.save(mode); } catch (error) {
+      options.status(`${options.name} · ${error instanceof Error ? error.message : "The PDF could not be written."}`);
+      return;
+    }
+    const base = options.name.replace(/\.pdf$/i, "");
+    save.disabled = true;
+    void options.saveCopy(bytes, `${base}${mode === "unchanged" ? "" : " (edited)"}.pdf`).then(() => {
+      const how = mode === "full" ? "rewritten in full, so removed pages are gone from the file"
+        : mode === "incremental" ? "your changes were appended; the original bytes are unchanged at the start of the file" : "unchanged";
+      options.status(`${options.name} · saved a copy (${how}). This tab still has your changes.`);
+    }, (error: unknown) => {
+      if (error instanceof Error && error.name === "SaveCanceled") return;
+      options.status(`${options.name} · could not save a copy: ${error instanceof Error ? error.message : String(error)}`);
+    }).finally(() => { save.disabled = false; });
   });
 
   // Outline
@@ -482,6 +756,12 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   // Keyboard: Ctrl+F finds while the PDF is shown.
   const onKey = (event: KeyboardEvent): void => {
     if (!root.isConnected || root.closest("[hidden]")) return;
+    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !typing && root.contains(document.activeElement)) {
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) { event.preventDefault(); void step("undo"); return; }
+      if (key === "y" || (key === "z" && event.shiftKey)) { event.preventDefault(); void step("redo"); return; }
+    }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "f") {
       event.preventDefault();
       find.focus();
@@ -501,14 +781,18 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   layout();
   for (const page of pages) observer.observe(page);
   showOutline();
-  options.status(`${options.name} · page 1 of ${doc.pageCount} · PDF`);
+  if (session.thumbs) setThumbs(true);
+  showSelection();
+  if (current > 0) goTo(current);
+  if (!session.journal.dirty) options.status(`${options.name} · page ${current + 1} of ${doc.pageCount} · PDF`);
 
   return {
     pageCount: doc.pageCount,
     zoomBy,
     focusFind: () => { find.focus(); find.select(); },
     showOutline,
-    destroy: () => {
+    destroy: (keepDocument = false) => {
+      remember(current);
       closed = true;
       ++findGeneration;
       window.clearTimeout(findTimer);
@@ -517,7 +801,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
       document.removeEventListener("keydown", onKey);
       outlineList?.remove(); // only this view's list: a newer view may own the panel already
       root.replaceChildren();
-      doc.close();
+      if (!keepDocument) doc.close();
     },
   };
 }

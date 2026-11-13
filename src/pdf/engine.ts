@@ -71,7 +71,7 @@ export async function openPdf(bytes: Uint8Array, password = ""): Promise<PdfDocu
 }
 
 export class PdfDocument {
-  readonly pageCount: number;
+  pageCount: number;
   private readonly memory: number;
   private doc: number;
   private readonly pages = new Map<number, number>();
@@ -229,6 +229,165 @@ export class PdfDocument {
       }
     } finally { this.free(pos); this.free(link); this.free(rect); }
     return links;
+  }
+
+  // ---- Page edits (P2). Each leaves the document consistent; callers re-read sizes afterwards. ----
+
+  /** Move the pages at `indices` (current order) so they start at `dest` (an index in the result). */
+  movePages(indices: readonly number[], dest: number): void {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    sorted.forEach(index => this.check(index));
+    if (!sorted.length || dest < 0 || dest > this.pageCount - sorted.length) throw new RangeError("No such position.");
+    this.withInts(sorted, (ptr, n) => {
+      if (!this.P.FPDF_MovePages(this.doc, ptr, n, dest)) throw new Error("The pages could not be moved.");
+    });
+    this.resetPages();
+  }
+
+  /** Turn a page by quarter turns (positive is clockwise). */
+  rotatePage(index: number, quarterTurns: number): void {
+    const page = this.page(index);
+    const next = (((this.P.FPDFPage_GetRotation(page) + quarterTurns) % 4) + 4) % 4;
+    this.P.FPDFPage_SetRotation(page, next);
+    this.resetPages();
+  }
+
+  /** Delete pages; at least one page must remain. Content stays in the file until a full rewrite. */
+  deletePages(indices: readonly number[]): void {
+    const sorted = [...new Set(indices)].sort((a, b) => b - a);
+    sorted.forEach(index => this.check(index));
+    if (sorted.length >= this.pageCount) throw new Error("A PDF needs at least one page.");
+    this.resetPages();
+    for (const index of sorted) this.P.FPDFPage_Delete(this.doc, index);
+    this.pageCount = this.P.FPDF_GetPageCount(this.doc);
+  }
+
+  /** Copy pages of this document, inserted right after the last of them. */
+  duplicatePages(indices: readonly number[]): void {
+    const sorted = [...new Set(indices)].sort((a, b) => a - b);
+    sorted.forEach(index => this.check(index));
+    const at = sorted[sorted.length - 1]! + 1;
+    this.importFrom(this.doc, sorted, at);
+  }
+
+  /** Insert pages of another PDF (all when `pages` is omitted) at `at`. */
+  insertPdf(bytes: Uint8Array, at: number, pages?: readonly number[], password = ""): void {
+    const other = new PdfDocument(this.P, bytes, password);
+    try {
+      const chosen = pages ?? Array.from({ length: other.pageCount }, (_, i) => i);
+      chosen.forEach(index => other.check(index));
+      this.importFrom(other.doc, chosen, at);
+    } finally { other.close(); }
+  }
+
+  /** Insert a blank page of the given size in points. */
+  insertBlank(at: number, width: number, height: number): void {
+    this.checkInsert(at);
+    const page = this.P.FPDFPage_New(this.doc, at, width, height);
+    if (!page) throw new Error("The page could not be added.");
+    this.P.FPDF_ClosePage(page);
+    this.resetPages();
+    this.pageCount = this.P.FPDF_GetPageCount(this.doc);
+  }
+
+  /** Insert a PNG or JPEG as a page of its own size (96 px per inch). */
+  insertImage(at: number, bytes: Uint8Array, kind: "png" | "jpeg", pixelWidth: number, pixelHeight: number): void {
+    this.checkInsert(at);
+    if (!(pixelWidth > 0 && pixelHeight > 0)) throw new Error("The image has no size.");
+    // PDFium's decoders trap on some malformed input: admit only a recognised signature here, and
+    // callers decode the image in the browser first (view.ts) so only valid images reach PDFium.
+    const png = [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => bytes[i] === byte);
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (kind === "png" ? !png : !jpeg) throw new Error("This image could not be read.");
+    const width = pixelWidth * 0.75, height = pixelHeight * 0.75;
+    const P = this.P;
+    const page = P.FPDFPage_New(this.doc, at, width, height);
+    if (!page) throw new Error("The page could not be added.");
+    const data = this.scratch(Math.max(1, bytes.length));
+    try {
+      heap(P).set(bytes, data);
+      const image = P.FPDFPageObj_NewImageObj(this.doc);
+      const set = kind === "png" ? P.EPDFImageObj_SetPng : P.EPDFImageObj_SetJpeg;
+      if (!image || !set(0, 0, image, data, bytes.length)) {
+        if (image) P.FPDFPageObj_Destroy(image);
+        P.FPDF_ClosePage(page);
+        P.FPDFPage_Delete(this.doc, at);
+        throw new Error("This image could not be read.");
+      }
+      P.FPDFImageObj_SetMatrix(image, width, 0, 0, height, 0, 0);
+      P.FPDFPage_InsertObject(page, image);
+      P.FPDFPage_GenerateContent(page);
+    } finally {
+      this.free(data);
+      P.FPDF_ClosePage(page);
+    }
+    this.resetPages();
+    this.pageCount = P.FPDF_GetPageCount(this.doc);
+  }
+
+  /** A new PDF holding copies of `indices`, in that order. */
+  extract(indices: readonly number[]): Uint8Array {
+    indices.forEach(index => this.check(index));
+    const P = this.P;
+    const target = P.FPDF_CreateNewDocument();
+    if (!target) throw new Error("The engine is out of memory.");
+    try {
+      this.withInts(indices, (ptr, n) => {
+        if (!P.FPDF_ImportPagesByIndex(target, this.doc, ptr, n, 0)) throw new Error("The pages could not be copied.");
+      });
+      return this.write(target, 2);
+    } finally { P.FPDF_CloseDocument(target); }
+  }
+
+  /**
+   * Serialize the document. `incremental` appends an update to the original bytes (they stay a
+   * prefix); `full` rewrites the file, dropping earlier revisions (PDF_WORKBENCH.md, save model).
+   */
+  save(mode: "incremental" | "full"): Uint8Array {
+    if (!this.doc) throw new Error("This PDF is closed.");
+    return this.write(this.doc, mode === "incremental" ? 1 : 2);
+  }
+
+  private write(doc: number, flags: number): Uint8Array {
+    const P = this.P;
+    const writer = P.PDFiumExt_OpenFileWriter();
+    if (!writer) throw new Error("The engine is out of memory.");
+    try {
+      if (!P.FPDF_SaveAsCopy(doc, writer, flags)) throw new Error("The PDF could not be written.");
+      const size = P.PDFiumExt_GetFileWriterSize(writer);
+      const out = this.scratch(Math.max(1, size));
+      try {
+        P.PDFiumExt_GetFileWriterData(writer, out, size);
+        return heap(P).slice(out, out + size);
+      } finally { this.free(out); }
+    } finally { P.PDFiumExt_CloseFileWriter(writer); }
+  }
+
+  private importFrom(source: number, indices: readonly number[], at: number): void {
+    this.checkInsert(at);
+    this.withInts(indices, (ptr, n) => {
+      if (!this.P.FPDF_ImportPagesByIndex(this.doc, source, ptr, n, at)) throw new Error("The pages could not be copied.");
+    });
+    this.resetPages();
+    this.pageCount = this.P.FPDF_GetPageCount(this.doc);
+  }
+
+  private checkInsert(at: number): void {
+    if (!this.doc) throw new Error("This PDF is closed.");
+    if (!Number.isInteger(at) || at < 0 || at > this.pageCount) throw new RangeError("No such position.");
+  }
+
+  private withInts(values: readonly number[], use: (ptr: number, count: number) => void): void {
+    const ptr = this.scratch(Math.max(4, values.length * 4));
+    try {
+      values.forEach((value, i) => this.P.pdfium.setValue(ptr + 4 * i, value, "i32"));
+      use(ptr, values.length);
+    } finally { this.free(ptr); }
+  }
+
+  /** Page indices shift after an edit: drop every cached handle. */
+  private resetPages(): void {
+    for (const index of [...this.pages.keys()]) this.releasePage(index);
   }
 
   close(): void {
