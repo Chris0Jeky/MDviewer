@@ -172,6 +172,12 @@ Unsupported scope and recovery behavior are documented in the native README's
 pre-existing `file_policy.rs` lints outside this slice. This evidence does not tick
 the implementation gate or qualify native Save.
 
+Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
+
+- A save commits under the leaf the file system stores for the original, read from
+  its held handle, so a short (8.3) or differently cased input name cannot rename
+  the document.
+
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).

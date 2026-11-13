@@ -329,6 +329,28 @@ mod win {
         }
         Ok((id, len))
     }
+    /// The leaf name the file system stores for `file`. A short (8.3) or
+    /// differently cased input opens the same file under another spelling (#229).
+    fn real_leaf(file: &File) -> io::Result<OsString> {
+        // FILE_NAME_INFO: a u32 byte length, then up to 32767 UTF-16 units.
+        let mut buf = vec![0u32; 1 + 16384];
+        // SAFETY: u32-aligned writable buffer of the stated size.
+        bool_result(unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileNormalizedNameInfo,
+                buf.as_mut_ptr().cast(),
+                (buf.len() * 4) as u32,
+            )
+        })?;
+        let units: Vec<u16> = buf[1..]
+            .iter()
+            .flat_map(|w| [*w as u16, (*w >> 16) as u16])
+            .take(buf[0] as usize / 2)
+            .collect();
+        let leaf = units.rsplit(|&u| u == u16::from(b'\\')).next().unwrap();
+        Ok(OsString::from_wide(leaf))
+    }
     fn read_handle(file: &mut File, max: u64) -> io::Result<(Snapshot, Vec<u8>)> {
         let (id, len) = identity(file)?;
         if len > max {
@@ -580,13 +602,19 @@ mod win {
     ) -> Result<ReplaceOutcome, ReplaceError> {
         point(Stage::Open)?;
         let parents = Parents::hold(path)?;
-        let dest = &parents.path;
+        let mut dest = parents.path.clone();
         let mut original = if let Some(snap) = expected {
-            let mut file = open(dest).map_err(|e| err(e, Stage::Open))?;
+            let mut file = open(&dest).map_err(|e| err(e, Stage::Open))?;
             verify(&mut file, snap)?;
+            // Commit under the stored leaf, never the caller's short or
+            // differently cased spelling; the stored leaf is validated too.
+            let leaf = real_leaf(&file).map_err(|e| err(e, Stage::Verify))?;
+            if dest.file_name() != Some(leaf.as_os_str()) {
+                dest = checked_path(&path.with_file_name(&leaf))?;
+            }
             Some(file)
         } else {
-            match open(dest) {
+            match open(&dest) {
                 Ok(file) => {
                     regular(&file)?;
                     return Err(ReplaceError::Conflict(ConflictKind::Replaced));
@@ -629,7 +657,7 @@ mod win {
                 rename(file, &aside_path).map_err(|e| err(e, Stage::RenameAside))?;
             }
             point(Stage::RenameIntoPlace)?;
-            rename(&temp, dest).map_err(|e| err(e, Stage::RenameIntoPlace))
+            rename(&temp, &dest).map_err(|e| err(e, Stage::RenameIntoPlace))
         })();
         // Past the commit point the save happened: report it. Cleanup is best
         // effort; a leftover aside/journal is reconciled by recover_one.
@@ -1264,6 +1292,48 @@ mod win {
                 eprintln!("FAULT {stage:?}: injected=1 crash=1 recovered=2");
             }
         }
+        fn names(dir: &Path) -> Vec<OsString> {
+            fs::read_dir(dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .map(|e| e.file_name())
+                .collect()
+        }
+        fn short_path(path: &Path) -> Option<PathBuf> {
+            let long = wide(path);
+            let mut buf = vec![0u16; 1024];
+            // SAFETY: terminated input, writable buffer of the stated length.
+            let n = unsafe { GetShortPathNameW(long.as_ptr(), buf.as_mut_ptr(), 1024) } as usize;
+            let short = PathBuf::from(OsString::from_wide(&buf[..n.min(1024)]));
+            (n > 0 && n < 1024 && short.file_name() != path.file_name()).then_some(short)
+        }
+        #[test]
+        fn short_or_differently_cased_input_names_keep_the_stored_name() {
+            // #229: the commit rename must use the stored leaf, not the caller's spelling.
+            // The case variant is the proving input: NTFS name tunneling can restore
+            // the long name after a rename to a just-freed 8.3 name, masking that one.
+            let (_dir, path) = fixture();
+            let upper = path.with_file_name("RÉSUMÉ.MD");
+            let mut inputs = vec![upper];
+            match short_path(&path) {
+                Some(short) => inputs.push(short),
+                None => {
+                    eprintln!("SCOPE 8.3 input name NOT VERIFIED (no short name on this volume)")
+                }
+            }
+            for input in inputs {
+                let (snap, _) = snapshot_read(&input, 100).unwrap();
+                replace_if_unchanged(&input, &snap, NEW).unwrap();
+                assert_eq!(
+                    names(path.parent().unwrap()),
+                    vec![OsString::from("résumé.md")],
+                    "{input:?}"
+                );
+                assert_eq!(fs::read(&path).unwrap(), NEW);
+                fs::write(&path, OLD).unwrap();
+            }
+        }
+
         #[test]
         fn read_only_originals_are_refused_and_left_untouched() {
             let (_dir, path) = fixture();

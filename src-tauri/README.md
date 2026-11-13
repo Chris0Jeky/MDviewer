@@ -228,7 +228,9 @@ The original and every ancestor stay open without write/delete sharing through
 verification and commit. Existing writable handles or mapped views cause a
 `Locked` refusal, including a writable view retained after its file handle closes.
 The two no-clobber renames use `NtSetInformationFile` with a leaf name and NULL
-root, relative to the source handle's directory. This avoids reopening a locked
+root, relative to the source handle's directory. The new file takes the leaf the
+file system stores for the original (read from its handle), so a short (8.3) or
+differently cased input name never renames the document (#229). This avoids reopening a locked
 parent for writes. See Microsoft's [rename-information contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
 and [sharing contract](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
 
