@@ -50,7 +50,7 @@ it("does not convert native cancellation or write failure into a browser downloa
 
 it("sends raw UTF-8 bytes and an encoded filename, retaining cancellation", async () => {
   ipc.invoke.mockResolvedValueOnce({ canceled: true });
-  const result = await native.save(new Blob(["café"]), "Résumé notes.md");
+  const result = await native.save!(new Blob(["café"]), "Résumé notes.md");
   expect(result).toEqual({ canceled: true });
   expect(ipc.invoke).toHaveBeenCalledTimes(1);
   const [command, bytes, options] = ipc.invoke.mock.calls[0]!;
@@ -64,7 +64,7 @@ it("sends raw UTF-8 bytes and an encoded filename, retaining cancellation", asyn
 
 it("refuses oversize exports before allocating or calling IPC", async () => {
   const arrayBuffer = vi.fn();
-  await expect(native.save({ size: 128 * 1024 * 1024 + 1, arrayBuffer } as unknown as Blob, "large.pdf"))
+  await expect(native.save!({ size: 128 * 1024 * 1024 + 1, arrayBuffer } as unknown as Blob, "large.pdf"))
     .rejects.toThrow("128 MiB");
   expect(arrayBuffer).not.toHaveBeenCalled();
   expect(ipc.invoke).not.toHaveBeenCalled();

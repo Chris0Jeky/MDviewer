@@ -30,20 +30,32 @@ function clearlyMarkdown(text: string): boolean {
   return /^ {0,3}#{1,6} /m.test(text) || /^ {0,3}(?:`{3,}|~{3,})/m.test(text)
     || (text.match(/^ {0,3}(?:[-+*]|\d+[.)])\s+\S/gm)?.length ?? 0) >= 2;
 }
+/** The instant a value names, if it does: an epoch in 2000 to 2100 (seconds or milliseconds) or a full ISO time. */
+function instant(value: JsonValue): Date | undefined {
+  const text = raw(value);
+  let date: Date | undefined;
+  if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
+    const n = Number(text);
+    date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
+    if (date.getTime() < Date.UTC(2000, 0, 1) || date.getTime() > Date.UTC(2100, 0, 1)) date = undefined;
+  } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
+    // Only a full timestamp with a zone: a date alone is already readable and names no instant.
+    date = new Date(text);
+  }
+  return date && Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+/** Milliseconds since the epoch of the instant a value names, or undefined. */
+export function epoch(value: JsonValue): number | undefined {
+  return instant(value)?.getTime();
+}
+
 export function hint(value: JsonValue, key: string, timeZone: string): string {
   const text = raw(value);
   if (/(^|_)(time|date|at|ts|timestamp|created|updated)$/i.test(key)
     || /[a-z](?:Time|Date|At|Ts|Timestamp)$/.test(key)) {
-    let date: Date | undefined;
-    if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
-      const n = Number(text);
-      date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
-      if (date.getTime() < Date.UTC(2000, 0, 1) || date.getTime() > Date.UTC(2100, 0, 1)) date = undefined;
-    } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
-      // Only a full timestamp with a zone: a date alone is already readable and names no instant.
-      date = new Date(text);
-    }
-    if (date && Number.isFinite(date.getTime())) {
+    const date = instant(value);
+    if (date) {
       const parts = new Intl.DateTimeFormat("en-GB", {
         timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
       }).formatToParts(date);
@@ -55,8 +67,9 @@ export function hint(value: JsonValue, key: string, timeZone: string): string {
   const n = Number(text);
   if (!Number.isFinite(n)) return "";
   const human = (amount: number): string => String(Number(amount.toFixed(2)));
-  // Only when the key names bytes (`bytes`, `total_bytes`, `sizeBytes`, `size`), not `max_megabytes`.
-  if (/(^|_)bytes$|[a-z]Bytes$|^size$/i.test(key) && !/(kilo|mega|giga)bytes$/i.test(key) && n >= 0) {
+  // Only when the key names bytes (`bytes`, `total_bytes`, `outBytes`), not `max_megabytes`,
+  // `kbytes` or `maxMBytes`; a bare `size` is as often a font or a shirt.
+  if ((/(^|_)bytes$/i.test(key) || /[a-z]Bytes$/.test(key)) && !/(kilo|mega|giga|tera|peta)bytes$/i.test(key) && !/[a-z][KMGTP]Bytes$/.test(key) && n >= 0) {
     if (n >= 1024 ** 3) return `${human(n / 1024 ** 3)} GiB`;
     if (n >= 1024 ** 2) return `${human(n / 1024 ** 2)} MiB`;
     if (n >= 1024) return `${human(n / 1024)} KiB`;
@@ -68,7 +81,7 @@ export function hint(value: JsonValue, key: string, timeZone: string): string {
     const seconds = ms ? n / 1000 : n;
     if (Math.abs(seconds) >= 3600) return `${human(seconds / 3600)} h`;
     if (Math.abs(seconds) >= 60) return `${human(seconds / 60)} min`;
-    return `${human(seconds)} s`;
+    return Math.abs(seconds) < 1 ? `${human(seconds * 1000)} ms` : `${human(seconds)} s`;
   }
   return "";
 }
