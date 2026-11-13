@@ -35,7 +35,7 @@ in slices A1–A5. A1 to A4 are merged on main (see P2); A5 ([#300](https://gith
 readable view derived on the device. D0 to D4 and the D6 readability pass are merged on main, and JSON,
 JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is next (see P2).
 
-**#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
+**#169 and AI-6/AI-7/AI-8/AI-9 remain open** (AI-6, AI-7, AI-8, AI-10 and the hands-on #169 boxes are delegated to agent QA by owner decision 2026-11-13, not accepted; AI-9 and the #169 signing decision stay with the owner). Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
 [optional recovery](design/RECOVERY.md) designs merged in #209; no in-place writes
 or recovery storage were implemented by that design PR.

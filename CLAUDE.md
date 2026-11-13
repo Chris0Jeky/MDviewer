@@ -46,14 +46,20 @@ remains design-only and sessions stay memory-only.
 
 ## Human Action Items
 
-`ACTION_ITEMS.md` is the running list of tasks only the user (Chris) can do — manual
-browser testing, product go/no-go — plus a verified current-state snapshot. Rules:
+`ACTION_ITEMS.md` is the running list of tasks only the user (Chris) can do — credentials,
+repository and environment settings, approvals, product, licence and signing decisions — plus a
+verified current-state snapshot. Mechanical acceptance checks (trying a build on files, browser and
+live-site passes, install, print, keyboard and Narrator) are **agent QA work** by owner decision
+2026-11-13: they sit under "Delegated to agent QA" with charters in `docs/qa/ACCEPTANCE.md`. Rules:
 
 1. **Read it at session start.**
 2. **Flag every OPEN / BLOCKED item** near the top of any status report, summary, or handoff. Never let an open item go unmentioned.
 3. **Clear an item only on explicit user confirmation.** Move it to the Completed log with date + one-line result.
 4. **Keep the current-state snapshot accurate** when verified truth changes.
 5. When you discover a new human-only task, add an `AI-N` item with a step-by-step guide and tell the user.
+   A check an agent can run is never a human-only task: add it to `docs/qa/ACCEPTANCE.md` instead.
+6. **Delegated is not accepted.** A delegated item's status changes only with evidence (CI link, QA
+   session report, issue); never record a delegated item as accepted by the owner.
 
 ## Git Workflow
 
@@ -120,8 +126,10 @@ change is considered done:
   render/pagination/export change). Render order intact.
 - **CI/tests**: `npm run typecheck`, `npm run lint`, `npm run test` green; `npm run test:e2e`
   green for render/pagination/export/UI changes. New code has tests.
-- **Manual (Gate, human)**: drag-drop → preview → Print/Save-as-PDF and Download-PDF verified in
-  a real browser for UI/pagination/export changes (tracked as an AI-N item when it needs Chris).
+- **Acceptance (agent QA)**: for UI/pagination/export changes, drag-drop → preview →
+  Print/Save-as-PDF and Download-PDF verified in a real browser by the QA lane on the next green
+  build, under its charter in `docs/qa/ACCEPTANCE.md`; findings become `qa` issues. Not an owner
+  task (owner decision 2026-11-13).
 - **Zero tech debt**: no TODO without a tracked follow-up; no skipped required tests; no silent workarounds. Report the existing opt-in performance-ladder skips separately; they do not replace required verification.
 - **Docs sync**: roadmap, `IMPLEMENTATION_SPEC.md`, and `AGENT_INDEX.md` updated if their truth changed.
 

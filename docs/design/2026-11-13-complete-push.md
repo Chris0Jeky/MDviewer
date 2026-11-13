@@ -248,7 +248,11 @@ coordinator: what merged, proof, what is not verified, next slice, any decision 
 
 ## Human items
 
-AI-6, AI-7, AI-8, AI-9, AI-10 and #169 stay OPEN and are not touched by this push. Lanes add, when
-their work ships: **AI-11** accept the web shell before the default flip is deployed (W2);
-**AI-12** try PDF editing on copies of your own PDFs (P2 to P4); **AI-13** try the new readable
-kinds on your own files (D7, D8). Each with a step-by-step guide, as `ACTION_ITEMS.md` requires.
+Owner decision 2026-11-13: mechanical acceptance checks are agent QA work, not owner tasks. AI-6,
+AI-7, AI-8, AI-10 and the hands-on boxes of #169 moved to "Delegated to agent QA" in
+`ACTION_ITEMS.md` (delegated, not accepted); only AI-9 and the parked #169 signing decision stay
+with the owner. The planned owner items become **QA charters** in `docs/qa/ACCEPTANCE.md`, run by
+the QA lane on the first green build after a lane reports the feature merged: **AI-11** the web
+shell before the default flip is deployed (W2); **AI-12** PDF editing on copies of invented PDFs
+(P2 to P4); **AI-13** the new readable kinds (D7, D8). Lanes tell the QA lane when a user-visible
+feature merges; they add no owner task.

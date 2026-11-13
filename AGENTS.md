@@ -104,8 +104,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
 - Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
-- Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
-  UI/pagination/export, zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
+- Review/merge gates: correctness (no-slice holds), CI/tests green, an agent QA acceptance check
+  for UI/pagination/export (`docs/qa/ACCEPTANCE.md`; mechanical acceptance is agent work by owner
+  decision 2026-11-13, never an owner task), zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
 
 ## Security / Privacy Guardrails
 
