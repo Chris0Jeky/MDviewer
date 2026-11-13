@@ -84,6 +84,12 @@ pub struct Store {
     pub session: Vec<Stamped>,
     /// "Reopen last session on launch" is on unless this is set.
     pub restore_off: bool,
+    /// Last session's files no open document stands for yet: not reopened because they were
+    /// unavailable at launch or cut by the file cap. Kept in every record until the file is open
+    /// (then the open set owns it) or the library is cleared. Memory only: it starts as the
+    /// stored session (`Library::load`) and the file already holds what it carries.
+    #[serde(skip)]
+    pub unrestored: Vec<Stamped>,
 }
 
 fn same(a: &Path, b: &Path) -> bool {
@@ -146,18 +152,29 @@ impl Store {
         };
     }
 
-    /// Replace the remembered session with these files (32 at most, like a session).
+    /// Replace the remembered session with the open files (32 at most, like a session), followed by
+    /// the last session's files that were never reopened, so a flaky launch never forgets them.
     pub fn record_session(&mut self, paths: &[PathBuf], at: u64) {
+        self.unrestored
+            .retain(|entry| !paths.iter().any(|path| same(path, &entry.path)));
+        let open = paths.iter().map(|path| Stamped {
+            path: path.clone(),
+            at,
+        });
         let mut unique = HashSet::new();
-        self.session = paths
-            .iter()
-            .filter(|path| unique.insert(path.to_string_lossy().to_lowercase()))
+        self.session = open
+            .chain(self.unrestored.iter().cloned())
+            .filter(|entry| unique.insert(entry.path.to_string_lossy().to_lowercase()))
             .take(crate::file_policy::MAX_BATCH_FILES)
-            .map(|path| Stamped {
-                path: path.clone(),
-                at,
-            })
             .collect();
+    }
+
+    /// After a reopen attempt: forget a carried file only when it is definitely gone (deleted
+    /// from a folder that is still there). An unplugged drive or a locked file is kept.
+    pub fn settle_restore(&mut self, attempted: &[PathBuf], gone: impl Fn(&Path) -> bool) {
+        self.unrestored.retain(|entry| {
+            !(attempted.iter().any(|path| same(path, &entry.path)) && gone(&entry.path))
+        });
     }
 
     /// The files to reopen on launch, minus any already open.
@@ -516,6 +533,60 @@ mod tests {
         let many: Vec<_> = (0..40).map(|n| abs(&dir, &format!("{n}.md"))).collect();
         store.record_session(&many, 1);
         assert_eq!(store.session.len(), crate::file_policy::MAX_BATCH_FILES);
+    }
+
+    #[test]
+    fn unrestored_session_files_are_carried_until_opened_gone_or_cleared() {
+        let dir = tempfile::tempdir().unwrap();
+        let [a, b, c] = ["a.md", "b.md", "c.md"].map(|n| abs(&dir, n));
+        let stamped = |paths: &[&PathBuf]| -> Vec<Stamped> {
+            paths
+                .iter()
+                .map(|p| Stamped {
+                    path: (*p).clone(),
+                    at: 1,
+                })
+                .collect()
+        };
+        let mut store = Store {
+            session: stamped(&[&a, &b, &c]),
+            unrestored: stamped(&[&a, &b, &c]),
+            ..Store::default()
+        };
+        let paths = |store: &Store| -> Vec<PathBuf> {
+            store.session.iter().map(|e| e.path.clone()).collect()
+        };
+        // Launch: only a is open (the others were unavailable); a record before any restore.
+        store.record_session(&[a.clone()], 5);
+        assert_eq!(paths(&store), [a.clone(), b.clone(), c.clone()]);
+        // The user closes a: it is forgotten, the unreopened ones are still carried.
+        store.record_session(&[], 6);
+        assert_eq!(paths(&store), [b.clone(), c.clone()]);
+        // A carried file that opens later is owned by the open set; closing it forgets it.
+        store.record_session(&[abs(&dir, "B.md")], 7);
+        store.record_session(&[], 8);
+        assert_eq!(paths(&store), [c.clone()]);
+        // Only a file that is definitely gone is dropped after a reopen attempt.
+        store.settle_restore(&[c.clone()], |_| false);
+        assert_eq!(paths(&store), [c.clone()], "unavailable, not gone: kept");
+        store.settle_restore(&[b.clone()], |_| true);
+        store.record_session(&[], 9);
+        assert_eq!(paths(&store), [c.clone()], "not attempted: kept");
+        store.settle_restore(&[c.clone()], |_| true);
+        store.record_session(&[], 10);
+        assert!(store.session.is_empty());
+        // Open files take the cap; carried ones fill what is left.
+        store.unrestored = stamped(&[&a]);
+        let many: Vec<_> = (0..crate::file_policy::MAX_BATCH_FILES)
+            .map(|n| abs(&dir, &format!("{n}.md")))
+            .collect();
+        store.record_session(&many, 11);
+        assert_eq!(store.session.len(), crate::file_policy::MAX_BATCH_FILES);
+        assert!(!paths(&store).contains(&a));
+        store.record_session(&many[..3], 12);
+        assert_eq!(paths(&store).last(), Some(&a), "carried after the open files");
+        store.clear();
+        assert!(store.unrestored.is_empty() && store.session.is_empty());
     }
 
     #[test]

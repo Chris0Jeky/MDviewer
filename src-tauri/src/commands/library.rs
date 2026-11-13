@@ -26,7 +26,8 @@ pub(crate) struct Library {
 
 impl Library {
     fn load(file: Option<PathBuf>) -> Self {
-        let (store, writable) = file.as_deref().map(library::load).unwrap_or_default();
+        let (mut store, writable) = file.as_deref().map(library::load).unwrap_or_default();
+        store.unrestored = store.session.clone();
         Self {
             file,
             writable,
@@ -406,6 +407,12 @@ pub(crate) async fn session_record(
     .map_err(|_| "The session could not be recorded.".to_string())
 }
 
+/// True when the file was deleted from a folder that is still there (not an unplugged drive).
+fn is_gone(path: &Path) -> bool {
+    matches!(std::fs::metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+        && path.parent().is_some_and(Path::is_dir)
+}
+
 /// Reopen the last session's files that are not already open (setting on by default).
 #[tauri::command]
 pub(crate) async fn session_restore(
@@ -436,9 +443,13 @@ pub(crate) async fn session_restore(
         .await
         .map_err(|_| "The last session could not be read.".to_string())?
     };
+    let attempted = restore.clone();
     let batch = tauri::async_runtime::spawn_blocking(move || read_batch(restore, capture_revision))
         .await
         .map_err(|_| "The last session could not be reopened.".to_string())?;
+    with_library(&app, |library| {
+        library.store.settle_restore(&attempted, is_gone)
+    });
     Ok(OpenBatch::from_read_batch(
         batch,
         &mut state
@@ -465,6 +476,7 @@ pub(crate) fn session_setting(app: AppHandle, restore: Option<bool>) -> SessionS
             library.store.restore_off = !restore;
             if !restore {
                 library.store.session.clear();
+                library.store.unrestored.clear();
             }
             persisted = library.persist();
         }

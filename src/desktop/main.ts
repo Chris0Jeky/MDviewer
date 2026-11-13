@@ -196,6 +196,17 @@ function errorText(error: unknown): string {
 let sessionReady = false;
 let sessionTimer: ReturnType<typeof setTimeout> | undefined;
 let lastSession = "";
+// Records run one after another, so a flush at close can never be overtaken by an older list (#250).
+let recording: Promise<void> = Promise.resolve();
+function sendSession(tokens: string[]): Promise<void> {
+  const key = tokens.join(",");
+  const sent = recording.then(async () => {
+    if (key === lastSession) return;
+    await native.session.record(tokens);
+    lastSession = key;
+  });
+  return recording = sent.catch(() => undefined);
+}
 function recordSession(): void {
   if (!native.available || !sessionReady) return;
   // A mode transition empties one owner before the other takes over: never record that.
@@ -203,22 +214,15 @@ function recordSession(): void {
   clearTimeout(sessionTimer);
   sessionTimer = setTimeout(() => {
     if (changingMode) return; // finishMode syncs and schedules again.
-    const tokens = docs.boundTokens();
-    const key = tokens.join(",");
-    if (key === lastSession) return;
-    lastSession = key;
-    void native.session.record(tokens).catch(() => undefined);
+    void sendSession(docs.boundTokens());
   }, 500);
 }
 
-/** On window close: send the current open set now instead of after the debounce. */
+/** On window close: send the current open set now, after any record still in flight. */
 async function flushSession(): Promise<void> {
   if (!native.available || !sessionReady) return;
   clearTimeout(sessionTimer);
-  const tokens = docs.boundTokens();
-  if (tokens.join(",") === lastSession) return;
-  lastSession = tokens.join(",");
-  await native.session.record(tokens);
+  await sendSession(docs.boundTokens());
 }
 
 function syncDocuments(): void {
