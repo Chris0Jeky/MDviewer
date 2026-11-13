@@ -285,10 +285,19 @@ export const browserHost: Host = {
   async readDocument(token, adoptChange, seen): Promise<ReadResult> {
     const binding = bindings.get(token);
     if (!binding) return { outcome: "failed", code: "revoked" };
-    let read: Snapshot;
-    try { read = await snapshot(binding.handle); }
-    catch (error) { return isMissing(error) ? { outcome: "missing" } : { outcome: "failed", code: "unreadable" }; }
-    if (bindings.get(token) !== binding) return { outcome: "failed", code: "revoked" };
+    // A save, patch or other re-read can move the binding while this read is in flight; a read
+    // that began before the move may hold older bytes and must not be adopted as newer (#256,
+    // as `reload.rs` does). Retry it; after three tries report busy and change nothing.
+    let read: Snapshot | null = null;
+    for (let attempt = 0; attempt < 3 && !read; attempt++) {
+      const before = binding.generation;
+      let current: Snapshot;
+      try { current = await snapshot(binding.handle); }
+      catch (error) { return isMissing(error) ? { outcome: "missing" } : { outcome: "failed", code: "unreadable" }; }
+      if (bindings.get(token) !== binding) return { outcome: "failed", code: "revoked" };
+      if (binding.generation === before || current.digest === binding.digest) read = current;
+    }
+    if (!read) return { outcome: "failed", code: "busy" };
     if (read.digest === binding.digest) {
       binding.modified = read.modified; // A rewrite with the same bytes is not a change.
       if (binding.generation === seen) return { outcome: "unchanged" };

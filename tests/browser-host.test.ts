@@ -197,6 +197,27 @@ describe("browser host: re-read and line patches", () => {
     expect(await host.saveDocument(doc.token!, 1, "# Tasks\n", false)).toMatchObject({ outcome: "saved" });
   });
 
+  it("a re-read overtaken by a save never installs the older bytes (#256)", async () => {
+    const handle = new FakeHandle("live.md", utf8("one\n"));
+    const doc = await open(handle);
+    handle.outside(utf8("version A\n"));
+    // The re-read captures "version A"; before it settles, a save writes "version B".
+    const getFile = handle.getFile.bind(handle);
+    let first = true;
+    handle.getFile = async () => {
+      const file = await getFile();
+      if (first) {
+        first = false;
+        handle.outside(utf8("one\n")); // put the baseline back so the save's check passes
+        handle.modified = 1_000;
+        await host.saveDocument(doc.token!, 0, "version B\n", false);
+      }
+      return file;
+    };
+    const result = await host.readDocument(doc.token!, true, 0);
+    expect(result).toEqual({ outcome: "changed", text: "version B\n", generation: 1, encoding: "utf-8", eol: "lf" });
+  });
+
   it("a released token can no longer save or re-read", async () => {
     const doc = await open(new FakeHandle("notes.md", utf8("# Notes\n")));
     await host.releaseDocument(doc.token!);
