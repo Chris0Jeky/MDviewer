@@ -24,8 +24,8 @@ its file input, Save Copy download and in-memory documents.
 - On open the host records the file's size, `lastModified` and SHA-256, plus its encoding and line
   endings. The rules are the native ones, mirrored in `src/desktop/hosts/codec.ts` and tested with
   the Rust cases in `tests/browser-codec.test.ts`.
-- **Save** re-reads the file and compares size, `lastModified` and digest with what this document
-  last read or wrote. Any difference refuses the save as `conflict: changed`, a missing file as
+- **Save** re-reads the file and compares its size and digest with what this document last read or
+  wrote. Any difference refuses the save as `conflict: changed`, a missing file as
   `conflict: missing`, and nothing is written. Only then does it write through `createWritable`,
   which Chromium commits by swapping a temporary file in on `close()`.
 - **What this does not promise.** The native host holds the file open from the comparison to the
@@ -47,7 +47,7 @@ its file input, Save Copy download and in-memory documents.
   today. The browser host has no `save`, so an export can never be written over a bound document.
 - **Line patches** (Actionable Markdown) read the current file, place the patches by line and
   expected text (`unplaced` otherwise), keep every line ending byte-for-byte, and write with the same
-  check. They follow `linepatch.rs`'s shape rules (1 to 256 patches, one per line, no NUL). One retry
+  check. They apply the main `linepatch.rs` shape rules (1 to 256 patches, one per line, no NUL, no line break in `expect`; the per-line length cap is not mirrored). One retry
   on an outside change matches the native retry. A patched file keeps its mixed endings; only Save
   converts them to LF, after consent.
 - **Re-read** (`readDocument`) follows `reload.rs`: same bytes are `unchanged`; a change is held
