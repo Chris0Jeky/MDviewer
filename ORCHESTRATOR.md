@@ -3,6 +3,12 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
+> **ACTIVE PUSH — 2026-11-13 (complete push):** the owner asked to finish the queue, make the web as capable as
+> Windows, add more readable kinds and modify PDFs. Contract: [2026-11-13-complete-push.md](docs/design/2026-11-13-complete-push.md).
+> Three lanes run in parallel: **Finish** (Track F queue, then readable kinds D7 and D8), **Web** (W0 typed `Host`
+> contract, then the browser host and the shell on the web) and **PDF** (P0 spike and `PDF_WORKBENCH.md`, then P1 to P6).
+> The checkpoint below is the baseline the push started from; each lane updates its own rows here as it merges.
+
 > **CURRENT CHECKPOINT — 2026-11-12 (Companion push close-out):**
 > Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
 > listed by area; open ones are marked **open**. Re-read GitHub before starting work.
