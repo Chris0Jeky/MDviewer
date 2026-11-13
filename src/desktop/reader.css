@@ -33,6 +33,19 @@ body > #reader-shell { height: 100%; display: flex; flex-direction: column; }
 .reader-document .callout, .reader-document .mermaid-figure, .reader-document .katex-error { color: #202a38; }
 .reader-document figure.mermaid-figure { background: white; border-radius: 6px; padding: 12px; }
 .reader-document tbody tr:nth-child(even) { background: transparent; }
+/* A wide table scrolls inside its own box (render.ts wrapTables); the card and the page never do.
+   Six or more columns keep each cell on a natural line (capped at 22em, so one long cell wraps) instead of
+   squeezing the columns until the words break letter by letter; fewer columns reflow to the card as before.
+   The edge shadows show that there is more to the side. */
+.reader-table { margin: 0 0 var(--doc-space); max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain;
+  background:
+    linear-gradient(to right, var(--reader-paper) 30%, transparent) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--reader-paper) 30%, transparent) right / 24px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, var(--reader-fg) 22%, transparent), transparent) left / 10px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, var(--reader-fg) 22%, transparent), transparent) right / 10px 100% no-repeat scroll; }
+.reader-table > table { margin: 0; }
+.reader-table > table:has(> thead > tr > :nth-child(6)) { width: max-content; min-width: 100%; max-width: none; }
+.reader-table > table:has(> thead > tr > :nth-child(6)) :is(th, td) { max-width: 22em; }
 :root[data-app-theme="dark"] .reader-document { --doc-code-bg: #2c3441; --doc-quote-fg: #c1cbd8; --doc-quote-bar: #59677b; }
 :root[data-app-theme="dark"] .reader-document :not(pre) > code { color: #ffb1cb; }
 :root[data-app-theme="sepia"] .reader-document:not([data-code-theme="nord"]) .shiki { background-color: var(--reader-paper) !important; } /* paper, as light shows white on white; Nord stays dark in both variants */
