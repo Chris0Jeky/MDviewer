@@ -240,7 +240,7 @@ class Lens { line(text?, path?); render(value, path?, level?, indent?, key?); co
 Lens.recordTable(items): RecordTable | undefined;       // D6: one schema pass; columns, `flatten` for one level of nested objects
 Lens.renderTable(rows, plan, path?, level?, indent?, lineColumn?, charged?): void; // record table; `lineColumn` adds a Line column (JSON Lines)
 childPath(path: string, key: string): string;           // JSONPath-style child path
-hint(value: JsonValue, key: string, timeZone: string): string; shape(value: JsonValue): string;
+hint(value: JsonValue, key: string, timeZone: string): string; epoch(value: JsonValue): number | undefined; shape(value: JsonValue): string;
 budget(value: number | undefined, fallback: number): number; count(n: number, noun: string): string;
 
 // src/data/conversation.ts: the conversation lens for chat and agent transcripts (D2)

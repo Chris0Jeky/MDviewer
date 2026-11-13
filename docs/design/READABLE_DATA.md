@@ -127,8 +127,11 @@ content (the common chat-message shape), or agent transcript records that wrap s
 - A turn carrying only tool results is headed as a tool result, with its actual role in parentheses.
 - Message text is rendered as Markdown.
 - Tool calls, tool results and thinking are collapsed, each with its name and a one-line summary.
-- The overview counts turns and tool calls by name, and gives the time span and token totals when
-  the file has them.
+- An OpenAI-style assistant turn with `tool_calls` and no content is a turn; its calls are counted
+  by function name.
+- The overview counts turns and tool calls by name, and gives the time span (earliest to latest
+  readable time, whatever the file order) and token totals when the file has them. Plain decimals
+  add exactly; other spellings (an exponent) are shown as "about".
 - A record the lens does not understand is shown with the generic lens, collapsed. It is never
   skipped.
 

@@ -30,20 +30,32 @@ function clearlyMarkdown(text: string): boolean {
   return /^ {0,3}#{1,6} /m.test(text) || /^ {0,3}(?:`{3,}|~{3,})/m.test(text)
     || (text.match(/^ {0,3}(?:[-+*]|\d+[.)])\s+\S/gm)?.length ?? 0) >= 2;
 }
+/** The instant a value names, if it does: an epoch in 2000 to 2100 (seconds or milliseconds) or a full ISO time. */
+function instant(value: JsonValue): Date | undefined {
+  const text = raw(value);
+  let date: Date | undefined;
+  if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
+    const n = Number(text);
+    date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
+    if (date.getTime() < Date.UTC(2000, 0, 1) || date.getTime() > Date.UTC(2100, 0, 1)) date = undefined;
+  } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
+    // Only a full timestamp with a zone: a date alone is already readable and names no instant.
+    date = new Date(text);
+  }
+  return date && Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+/** Milliseconds since the epoch of the instant a value names, or undefined. */
+export function epoch(value: JsonValue): number | undefined {
+  return instant(value)?.getTime();
+}
+
 export function hint(value: JsonValue, key: string, timeZone: string): string {
   const text = raw(value);
   if (/(^|_)(time|date|at|ts|timestamp|created|updated)$/i.test(key)
     || /[a-z](?:Time|Date|At|Ts|Timestamp)$/.test(key)) {
-    let date: Date | undefined;
-    if (value.kind === "number" || (value.kind === "string" && /^-?\d+(?:\.\d+)?$/.test(text))) {
-      const n = Number(text);
-      date = new Date(Math.abs(n) < 1e11 ? n * 1000 : n);
-      if (date.getTime() < Date.UTC(2000, 0, 1) || date.getTime() > Date.UTC(2100, 0, 1)) date = undefined;
-    } else if (value.kind === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/.test(text)) {
-      // Only a full timestamp with a zone: a date alone is already readable and names no instant.
-      date = new Date(text);
-    }
-    if (date && Number.isFinite(date.getTime())) {
+    const date = instant(value);
+    if (date) {
       const parts = new Intl.DateTimeFormat("en-GB", {
         timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
       }).formatToParts(date);

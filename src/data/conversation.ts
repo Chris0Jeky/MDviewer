@@ -1,6 +1,6 @@
 import { cellText, fence } from "./escape";
 import type { JsonValue, ParseResult } from "./json";
-import { childPath, count, hint, type Lens } from "./lens";
+import { childPath, count, epoch, hint, type Lens } from "./lens";
 
 type ObjectValue = Extract<JsonValue, { kind: "object" }>;
 type ArrayValue = Extract<JsonValue, { kind: "array" }>;
@@ -20,8 +20,17 @@ function string(value: JsonValue | undefined): string | undefined {
 function message(value: JsonValue | undefined): ObjectValue | undefined {
   if (value?.kind !== "object" || member(value, "role")?.kind !== "string") return undefined;
   const content = member(value, "content");
-  return content?.kind === "string" || (content?.kind === "array" && content.items.every(part =>
+  // An OpenAI assistant turn that only calls tools has no content (null or absent) but tool_calls.
+  const calls = member(value, "tool_calls");
+  const toolCalls = (content === undefined || (content.kind === "literal" && content.raw === "null"))
+    && calls?.kind === "array" && calls.items.length > 0;
+  return content?.kind === "string" || toolCalls || (content?.kind === "array" && content.items.every(part =>
     part.kind === "object" && member(part, "type")?.kind === "string")) ? value : undefined;
+}
+
+/** What the heading and the overview call a role; an empty one would leave a blank heading. */
+function roleName(role: string): string {
+  return role === "" ? "(no role)" : role;
 }
 
 function turn(value: JsonValue | undefined): ObjectValue | undefined {
@@ -90,10 +99,22 @@ function time(lens: Lens, value: JsonValue | undefined): string {
   return hint(value, "timestamp", lens.timeZone) || (value.kind === "string" ? value.value : value.kind === "number" ? value.raw : "");
 }
 
+/** Plain decimals add exactly; any other spelling (an exponent) is only "about", or not shown if not finite. */
 function total(values: string[]): string {
   if (values.length === 1) return values[0]!;
-  if (values.every(v => /^-?\d+$/.test(v))) return values.reduce((n, v) => n + BigInt(v), 0n).toString();
-  return String(values.reduce((n, v) => n + Number(v), 0));
+  if (values.every(v => /^-?\d+(?:\.\d+)?$/.test(v))) {
+    const scale = values.reduce((n, v) => Math.max(n, v.split(".")[1]?.length ?? 0), 0);
+    const sum = values.reduce((n, v) => {
+      const [whole, fraction = ""] = v.split(".");
+      const magnitude = BigInt(whole!.replace("-", "") + fraction.padEnd(scale, "0"));
+      return n + (v.startsWith("-") ? -magnitude : magnitude);
+    }, 0n);
+    const digits = (sum < 0n ? -sum : sum).toString().padStart(scale + 1, "0");
+    const text = scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\.?0+$/, "") : digits;
+    return (sum < 0n ? "-" : "") + text;
+  }
+  const sum = values.reduce((n, v) => n + Number(v), 0);
+  return Number.isFinite(sum) ? `about ${sum}` : "";
 }
 
 export function conversationOverview(lens: Lens, records: readonly (JsonValue | undefined)[]): void {
@@ -105,8 +126,13 @@ export function conversationOverview(lens: Lens, records: readonly (JsonValue | 
     const msg = turn(record);
     if (msg) {
       const role = string(member(msg, "role"))!;
-      roles.set(role, (roles.get(role) ?? 0) + 1);
+      roles.set(roleName(role), (roles.get(roleName(role)) ?? 0) + 1);
       const content = member(msg, "content");
+      const calls = member(msg, "tool_calls");
+      if (calls?.kind === "array") for (const call of calls.items) {
+        const name = string(member(member(call, "function"), "name")) ?? "(unnamed)";
+        tools.set(name, (tools.get(name) ?? 0) + 1);
+      }
       if (content?.kind === "array") for (const part of content.items) {
         if (string(member(part, "type")) !== "tool_use") continue;
         const name = string(member(part, "name")) ?? "(unnamed)";
@@ -127,13 +153,24 @@ export function conversationOverview(lens: Lens, records: readonly (JsonValue | 
   }
   const facts = [`${count([...roles.values()].reduce((a, b) => a + b, 0), "turn")}: ${[...roles].map(([role, n]) => `${n} ${cellText(role)}`).join(", ")}`];
   if (tools.size) facts.push(`tool calls: ${[...tools].map(([name, n]) => `${cellText(name)} ${n}`).join(", ")}`);
-  // Format only what the span shows: the first and last readable timestamps, not every record's.
+  // Format only what the span shows. The earliest and latest instants name it, whatever the file
+  // order; stamps that are no instant (free text) can only be taken first and last, as written.
+  let earliest: JsonValue | undefined, latest: JsonValue | undefined, from = Infinity, to = -Infinity;
+  for (const stamp of stamps) {
+    const ms = epoch(stamp);
+    if (ms === undefined) continue;
+    if (ms < from) { from = ms; earliest = stamp; }
+    if (ms > to) { to = ms; latest = stamp; }
+  }
   let first = "";
-  for (const stamp of stamps) { first = time(lens, stamp); if (first) break; }
+  if (earliest && latest) { first = time(lens, earliest); }
+  else for (const stamp of stamps) { first = time(lens, stamp); if (first) break; }
   let last = "";
-  for (let i = stamps.length - 1; i >= 0 && first && !last; i--) last = time(lens, stamps[i]!);
+  if (earliest && latest) last = time(lens, latest);
+  else for (let i = stamps.length - 1; i >= 0 && first && !last; i--) last = time(lens, stamps[i]!);
   if (first && last) facts.push(`time span: ${cellText(first)} – ${cellText(last)}`);
-  const totals = Object.entries(tokens).filter(([, values]) => values.length).map(([name, values]) => `${cellText(name)}: ${cellText(total(values))}`);
+  const totals = Object.entries(tokens).filter(([, values]) => values.length).map(([name, values]) => [name, total(values)] as const).filter(([, sum]) => sum)
+    .map(([name, sum]) => `${cellText(name)}: ${cellText(sum)}`);
   if (totals.length) facts.push(`tokens: ${totals.join(", ")}`);
   // One fact per visual line: the layout's own break, since soft line breaks would run them together.
   facts.forEach((fact, i) => lens.line(i < facts.length - 1 ? `${fact}<br>` : fact));
@@ -183,7 +220,7 @@ function part(lens: Lens, value: JsonValue, path: string): void {
     const first = firstString(body) ?? "";
     const label = type === "tool_use" ? `Tool call: ${name} · ${clip(first.replace(/\r\n|\r|\n/g, " "))}`
       : type === "tool_result" ? `Tool result${string(member(value, "name")) !== undefined ? `: ${name}` : ""} · ${clip(first.split(/\r\n|\r|\n/, 1)[0]!)}`
-      : `Thinking · ${count(string(body)?.length ?? 0, "character")}`;
+      : `Thinking · ${count(Array.from(string(body) ?? "").length, "character")}`; // code points, not UTF-16 units
     details(lens, label, path, () => {
       if (body!.kind === "string") {
         if (lens.take(lens.count(body!))) { lens.line(fence(body!.value), childPath(path, field)); lens.line(); }
@@ -211,17 +248,19 @@ export function conversationRecord(lens: Lens, value: JsonValue | undefined, pat
   if (!lens.take()) return; // record object
   const wrapped = msg !== value;
   if (wrapped && !lens.take()) return; // message object
-  if (!lens.take()) return; // role
+  // The role string is charged as the whole value it is: its text may look like embedded JSON.
+  if (!lens.take(lens.count(member(msg, "role")!))) return;
   const role = string(member(msg, "role"))!;
   const stamp = time(lens, timestamp(value));
-  const content = member(msg, "content")!;
-  const toolOnly = content.kind === "array" && content.items.length > 0
+  const content = member(msg, "content");
+  const toolOnly = content?.kind === "array" && content.items.length > 0
     && content.items.every(p => string(member(p, "type")) === "tool_result");
-  const label = toolOnly ? `Tool result (${role})` : role.charAt(0).toUpperCase() + role.slice(1);
+  const name = roleName(role);
+  const label = toolOnly ? `Tool result (${name})` : name.charAt(0).toUpperCase() + name.slice(1);
   lens.line(`## ${cellText(label)}${stamp ? ` · ${cellText(stamp)}` : ""}`, path); lens.line();
   const msgPath = wrapped ? childPath(path, "message") : path;
   const contentPath = childPath(msgPath, "content");
-  if (content.kind === "array") {
+  if (content?.kind === "array") {
     if (lens.take()) {
       if (!content.items.length) { lens.line(cellText("[]"), contentPath); lens.line(); }
       for (const [i, item] of content.items.entries()) {
@@ -229,7 +268,8 @@ export function conversationRecord(lens: Lens, value: JsonValue | undefined, pat
         part(lens, item, `${contentPath}[${i}]`);
       }
     }
-  } else if (content.kind === "string") lens.renderProse(content, contentPath);
+  } else if (content?.kind === "string") lens.renderProse(content, contentPath);
+  else if (content && !lens.take(lens.count(content))) return; // a null content of a tool-calling turn
   metadata(lens, msg, msgPath, ["role", "content"]);
   if (wrapped) metadata(lens, value as ObjectValue, path, ["message"]);
 }
