@@ -24,6 +24,7 @@ import { dataDocumentKind, dataLabelOf, prepareRenderText, renderTextOf, showAll
 import { patchDocument } from "./reader/patch";
 import type { EditorController, SplitterController } from "./edit";
 import { mountSelectionCopy } from "./reader/copy";
+import { dataCopy, dataReference, dataViewOf, hasValues, readableCopy, trackDataTarget, type DataCopyKind } from "./reader/dataCopy";
 import { setControlHandler } from "./reader/controls";
 import { createWriteback, type Notice } from "./reader/writeback";
 import { SaveCanceled, setDownloadDestination } from "../export/destination";
@@ -83,6 +84,7 @@ let renderedReaderId: string | null = null;
 const tabs = mountTabs(element("shell-tabs"), { activate: activateDocument, close: closeDocumentById });
 
 mountSelectionCopy(content);
+trackDataTarget(content);
 
 // Actionable Markdown (A3): a short non-modal notice offers Undo after a saved change.
 const actionNotice = document.createElement("div");
@@ -1258,7 +1260,34 @@ registerCommand({ id: "document.copyReference", title: "Copy reference (path and
     // Run from the palette, the reader selection is the one captured when it opened.
     const range = selectionRange(content, window.getSelection()) ?? paletteSelection;
     paletteSelection = null;
+    const dataRef = dataReference(doc, content); // a data document names a value path, not a readable-view line
+    if (dataRef !== null) { copyToClipboard(where + dataRef, "Copied a reference to the document."); return; }
     copyToClipboard(range ? `${where}:${range[0] === range[1] ? range[0] : `${range[0]}-${range[1]}`}` : where, "Copied a reference to the document.");
+  } });
+// Readable data (D5): copy what the reader's selection sits on, or save the readable view itself.
+const DATA_COPY: [DataCopyKind, string][] = [
+  ["value", "Copy value"], ["jsonPath", "Copy path (JSONPath)"], ["jq", "Copy path (jq)"], ["subtree", "Copy subtree as JSON"],
+];
+const hasData = (): boolean => !app && !changingMode && hasValues(docs.reader.active && dataViewOf(docs.reader.active));
+for (const [kind, title] of DATA_COPY) {
+  registerCommand({ id: `data.copy.${kind}`, title, enabled: hasData, run: () => {
+    const doc = docs.reader.active;
+    const copied = doc && dataCopy(kind, doc, content);
+    if (!copied) return;
+    if ("text" in copied) copyToClipboard(copied.text, copied.done);
+    else report(copied.problem);
+  } });
+}
+const savingReadable = (): boolean => { const target = docs.saveTarget(); return !!target && !!readableCopy(target); };
+registerCommand({ id: "document.saveReadable", title: "Save readable view as Markdown…", enabled: () => !changingMode && !nativeSaveBusy && savingReadable(),
+  run: () => {
+    const target = docs.saveTarget();
+    const copy = target && !changingMode && !nativeSaveBusy ? readableCopy(target) : null;
+    if (!copy) return;
+    void Promise.resolve(downloadMarkdown(copy.name, copy.text)).then(
+      () => report(`Saved the readable view of ${target!.name} as ${copy.name}. The open document is unchanged.`),
+      error => { if (!(error instanceof SaveCanceled)) report(`Could not save the readable view: ${errorText(error)}`); },
+    );
   } });
 registerCommand({ id: "document.reload", title: "Reload from disk", enabled: () => !!bound() && !changingMode && !nativeSaveBusy, run: reloadFromDisk });
 
@@ -1270,6 +1299,8 @@ const moreMenu: MenuEntry[] = [
   { command: "document.save", disabled: () => !somethingToSave() },
   { command: "document.saveAs", id: "reader-save-as" },
   { command: "document.saveCopy", id: "reader-save-copy" },
+  { command: "document.saveReadable", id: "reader-save-readable", hidden: () => !savingReadable() },
+  ...DATA_COPY.map(([kind]): MenuEntry => ({ command: `data.copy.${kind}`, id: `reader-copy-${kind}`, hidden: () => !hasData() })),
   { command: "workspace.enter", id: "reader-workspace" },
   { command: "export.pdf" },
   "separator",
