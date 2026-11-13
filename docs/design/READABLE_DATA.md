@@ -104,6 +104,12 @@ The same generic layout applies inside YAML multi-document and conversation view
   Durations and byte sizes gain a human form when the key names the unit.
 - **Empty values** (`{}`, `[]`, `""`, `null`) are shown as what they are.
 
+## Wide tables (#301)
+
+- **Reader.** Every table sits in a `.reader-table` box (`wrapTables` in `src/desktop/render.ts`, carrying the table's source range like a code block's wrapper). A table of six or more columns keeps each cell on a natural line (capped at 22em) and scrolls sideways inside that box; the card and the page never scroll sideways. Fewer columns reflow to the card. Headers are never broken inside a word.
+- **PDF.** A table always reflows to the page width and is never zoomed or clipped. Seven or more columns also get a smaller type size (`print.css`: 7, 10 and 14 columns). Past about 16 columns of long values the columns still break words; that is the cost of the no-clip guarantee in portrait.
+- **Collapsed content.** A closed `<details>` (tool calls, metadata) stays closed in the PDF, so its content is not printed; the pagination audit ignores blocks inside it.
+
 ## Fidelity
 
 1. Keys are shown verbatim. Within an object's table and among its sections the order is the file's order; the table comes before the sections.
