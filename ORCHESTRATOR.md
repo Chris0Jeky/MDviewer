@@ -3,6 +3,12 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
+> **ACTIVE PUSH — 2026-11-13 (complete push):** the owner asked to finish the queue, make the web as capable as
+> Windows, add more readable kinds and modify PDFs. Contract: [2026-11-13-complete-push.md](docs/design/2026-11-13-complete-push.md).
+> Three lanes run in parallel: **Finish** (Track F queue, then readable kinds D7 and D8), **Web** (W0 typed `Host`
+> contract, then the browser host and the shell on the web) and **PDF** (P0 spike and `PDF_WORKBENCH.md`, then P1 to P6).
+> The checkpoint below is the baseline the push started from; each lane updates its own rows here as it merges.
+
 > **CURRENT CHECKPOINT — 2026-11-12 (Companion push close-out):**
 > Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
 > listed by area; open ones are marked **open**. Re-read GitHub before starting work.
@@ -73,8 +79,9 @@
 > conversations; #303 desktop e2e Ctrl+O chooser timeouts under load; #229 `replace.rs` hardening; #234 live reload; #236
 > Library scan and store hardening; #240 file-policy device names; #242 pagination follow-ups from #237.
 >
-> **Human items:** AI-6, AI-7, AI-8, AI-9, AI-10 and [#169](https://github.com/Chris0Jeky/MDviewer/issues/169)
-> are all **OPEN**; none was cleared. Nobody has accepted the companion features on real files (AI-10).
+> **Human items:** only **AI-9** and the parked [#169](https://github.com/Chris0Jeky/MDviewer/issues/169)
+> signing decision are OPEN. By owner decision 2026-11-13, AI-6, AI-7, AI-8, AI-10 and the hands-on #169 boxes
+> are delegated to agent QA (`docs/qa/ACCEPTANCE.md`); delegated is not accepted, and none has passed yet.
 > Documents stay in memory except explicit saves and the Windows Library/session files of paths only. No
 > signing, updater, deployment or performance claim follows. Local Windows builds and native checks:
 > [WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md#local-windows-builds-and-native-checks).

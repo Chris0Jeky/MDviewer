@@ -445,3 +445,29 @@ describe("review of #293", () => {
     expect(md).toContain("1024 (1 KiB)");
   });
 });
+
+describe("hint follow-ups (#296)", () => {
+  const md = (value: object): string => toReadable(JSON.stringify(value), "json").markdown;
+
+  it("hints only bare bytes keys, not larger-unit names or a bare size", () => {
+    for (const key of ["terabytes", "petabytes", "kbytes", "mbytes", "teraBytes", "maxMBytes", "size", "font_size"]) {
+      expect(md({ [key]: 2048 })).not.toContain("KiB");
+    }
+    for (const key of ["bytes", "total_bytes", "outBytes", "sizeBytes", "TOTAL_BYTES"]) {
+      expect(md({ [key]: 2048 })).toContain("2 KiB");
+    }
+  });
+
+  it("shows sub-second durations in ms, not as 0 s", () => {
+    expect(md({ elapsed_ms: 2 })).toContain("2 (2 ms)");
+    expect(md({ wait_seconds: 0.25 })).toContain("0\\.25 (250 ms)");
+    expect(md({ elapsed_ms: 1500 })).toContain("(1\\.5 s)");
+    expect(md({ elapsed_ms: 0 })).toContain("0 (0 ms)");
+  });
+
+  it("labels a JSON Lines detail by its line and column", () => {
+    const view = toReadable('{"id":1,"description":"first\\nsecond"}\n{"id":2,"description":"ok"}', "jsonl");
+    expect(view.markdown).toContain("## line 1\\: description");
+    expect(view.markdown).not.toContain("## 0: description");
+  });
+});

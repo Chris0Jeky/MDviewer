@@ -172,6 +172,22 @@ Unsupported scope and recovery behavior are documented in the native README's
 pre-existing `file_policy.rs` lints outside this slice. This evidence does not tick
 the implementation gate or qualify native Save.
 
+Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
+
+- A save commits under the leaf the file system stores for the original, read from
+  its held handle, so a short (8.3) or differently cased input name cannot rename
+  the document.
+- A replace copies the original's DACL to the temporary before commit and refuses
+  the save when it cannot, so a file with a tighter ACL than its folder is not
+  loosened. Owner and SACL are not copied; Save As keeps the folder default.
+- A recovered sibling `name (MDviewer recovered <id>).ext` shortens a long stem so
+  the name fits 255 UTF-16 units, never splitting a surrogate pair.
+- Recovery after a Save As that crashed before commit keeps its temporary, the only
+  on-disk copy of the text, as such a sibling instead of deleting it (#313). It never
+  completes the Save As under the chosen name. A Save As failure reported to the
+  caller still removes the temporary, because the editor keeps the text.
+  Recovery runs when something next touches that folder (a Save, a line patch, or
+  opening a missing path there), so until then the text sits in the `.mdv-replace-*.tmp`.
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).

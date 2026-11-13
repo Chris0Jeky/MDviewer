@@ -1,7 +1,7 @@
 # Actionable Markdown, version 1
 
-Status: **specification drafted 2026-11-11. A1 to A3 are merged; A4 (templates) is in review; A5 is
-later.** Added to the
+Status: **specification drafted 2026-11-11. A1 to A4 are merged; A5 (the embeddable
+element, #300) is implemented and in review.** Added to the
 companion push by the owner on 11 November 2026 (asked "Add actionable Markdown (clickable
 checkboxes, marks, fields, chips) to this push?", answered "Yes, add it"). MDviewer owns this
 contract. It answers the Lumenfold coordinator's v0 proposal (owner request, 11 November 2026) and
@@ -156,9 +156,47 @@ and reordering by drag are not part of version 1.
 
 ## The same view inside another tool
 
-Later, the reading view ships as an embeddable element that takes Markdown text and emits a change
-event carrying the same line patches. The host page applies them and saves. One renderer, two
-hosts. It follows controls 1 to 6 working in the app.
+The reading view ships as an embeddable element, `<mdviewer-reader>`, that takes Markdown text and
+emits a change event carrying the same line patches. The host page applies them and saves. One
+renderer, two hosts: the element runs `renderReaderDocument` and `decorateControls` from the app.
+
+```html
+<script type="module" src="/mdviewer-reader.js"></script>
+<mdviewer-reader id="doc"></mdviewer-reader>
+<script>
+  const doc = document.getElementById("doc");
+  doc.markdown = text;                         // also the `markdown` attribute
+  doc.addEventListener("change", event => {
+    const lines = text.split("\n");
+    for (const patch of event.detail.patches) { // { line (1-based), id?, expect, replace }
+      if (lines[patch.line - 1] !== patch.expect) return; // stale: render again
+      lines[patch.line - 1] = patch.replace;
+    }
+    save(text = lines.join("\n"));
+    doc.markdown = text;                       // the element re-renders from the host's text
+  });
+</script>
+```
+
+- **The event.** `change` (a `CustomEvent`, bubbling and composed) with `detail: { patches: LinePatch[] }`,
+  the same patches `planChange` gives the app, against the text last given to the element. A gesture
+  that changes nothing gives no event. The element never writes anywhere and never edits its own
+  text; until the host sets `markdown` again the view is unchanged.
+- **Trusted gestures only.** As in the app (`event.isTrusted`), a script that clicks the element
+  writes nothing and opens no menu.
+- **Per element.** Each element has its own handler, its own menus (inside its shadow root) and its
+  own keyboard groups. Two elements on a page do not reach each other.
+- **Look.** The reader's stylesheets are inlined into the shadow root. Set `data-app-theme="dark"` or
+  `"sepia"` on the element for another palette. The math fonts are the one thing a shadow root cannot
+  hold: the bundle adds a `<link>` to its own `mdviewer-reader.css` (next to it) to the page head.
+- **What it leaves out.** The Copy buttons (they speak through the page body), the outline and every
+  desktop shell feature. A render failure shows an alert in the element.
+- **No network, no persistence.** The element makes no request of its own beyond loading its bundle's
+  chunks (code grammars, diagrams, math fonts) from the bundle's own origin, and stores nothing.
+- **Build.** `npm run embed:build` writes `dist-embed/` (gitignored): `mdviewer-reader.js`, the chunks
+  it loads on demand, the stylesheet and the fonts. Serve the folder as is; `npm run embed:test` is the
+  Playwright e2e (a real click on a plain page, one event with the exact patches, the host applies
+  them, two elements apart), and CI runs it.
 
 ## Conformance
 
@@ -175,7 +213,7 @@ generator can copy these as its own golden tests. No real document ever becomes 
 | A2 | Native line-patch command on the conflict-safe replace, with byte-exact and placement tests | Registry (S0a), replace primitive (S1a) |
 | A3 | Interaction: click, keyboard, menus, Undo notice, placement messages; in-memory path for the web build | A1, A2, live reload (S1c) |
 | A4 | Templates | Library folders (S4), Save As (S1b) |
-| A5 | Embeddable element and its change event | A3 |
+| A5 | Embeddable element and its change event (#300) | A3 |
 
 ## Changes from v0
 

@@ -6,9 +6,11 @@ Exact checks, reviewed heads and Windows artifacts are recorded in the
 The [roadmap](Project_Roadmap.md) owns phase status; each issue owns its acceptance
 criteria and dependencies. Re-read GitHub before starting new work.
 
-**Human acceptance remains OPEN:** [Windows #169](https://github.com/Chris0Jeky/MDviewer/issues/169)
-and [AI-6, AI-7, AI-8, AI-9](../ACTION_ITEMS.md#open-items). Code merges and automated
-checks do not close those gates. The last verified deployment record stays in
+**Acceptance remains open:** [AI-9](../ACTION_ITEMS.md#open-items) stays with the owner; the
+[Windows #169](https://github.com/Chris0Jeky/MDviewer/issues/169) hands-on boxes and
+[AI-6, AI-7, AI-8, AI-10](../ACTION_ITEMS.md#delegated-to-agent-qa-owner-decision-2026-11-13) are
+delegated to agent QA (owner decision 2026-11-13). Code merges and automated checks do not close
+those gates. The last verified deployment record stays in
 [DEPLOYMENT.md](DEPLOYMENT.md); newer repository commits are not deployment evidence.
 
 ## Direction and current boundary
@@ -61,7 +63,8 @@ identifies a dependency; **Deferred** is deliberately lower priority.
 | Later · Ready | [#204 — Unicode heading/TOC identity](https://github.com/Chris0Jeky/MDviewer/issues/204) | Consistent heading IDs and encoded fragments across reader, TOC/page numbers and vector/Print PDF links; preserve raster visual output. Include duplicates and compatibility. CSS selector escaping already exists. |
 | Later · Waiting on upstream | [#206 — Preview engagement accounting](https://github.com/Chris0Jeky/MDviewer/issues/206) | Fix the marked-pane scroll latch upstream and import a regenerated locked SDK with behavioral/consent controls. No manual vendored edit. |
 | Next · A1–A4 merged | [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) | Owner-confirmed 2026-11-11 as part of the [companion push](design/2026-11-11-companion-push.md). A1 parser and static controls (#252), A2 native line patch (#244) and A3 interaction (#263) are merged; A4 templates (native read #285, picker and command #286, wiring #295) are merged; A5 embeddable element (#300) is later. The grammar is fixed for generators that build to it. |
-| Next · D0–D6 merged (D5 pure part); D5 webview next | [Readable data v1](design/READABLE_DATA.md) | Owner-requested 2026-11-12: JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text open as a readable view derived as Markdown by a pure function and shown by the existing reader. D0 to D4 (parsers #281, native #284, webview #288), the D6 readability pass (#293) and agent data files in the Library (#290) are merged. D5: the pure copy module is merged (#289); the webview copy menu and Save readable view as Markdown is #299. |
+| Next · D0–D6 merged; D7, D8 next | [Readable data v1](design/READABLE_DATA.md) | Owner-requested 2026-11-12: JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text open as a readable view derived as Markdown by a pure function and shown by the existing reader. D0 to D4 (parsers #281, native #284, webview #288), the D6 readability pass (#293) and agent data files in the Library (#290) are merged. D5: the pure copy module (#289) and the webview copy menu and Save readable view as Markdown (#299) are merged. More kinds (D7, D8) follow the [complete push](design/2026-11-13-complete-push.md). |
+| Now · Contract merged | [Complete push](design/2026-11-13-complete-push.md) | Owner direction 2026-11-13: finish this queue (Track F), web parity with the Windows shell (Track W), more readable kinds (Track D) and a local PDF workbench (Track P). The contract states seams, limits and proof per slice. |
 | Deferred · Research | [#205 — Pagination whitespace](https://github.com/Chris0Jeky/MDviewer/issues/205) | Distinguish unavoidable keep-whole space from avoidable layout; retain the trade-off unless an improvement preserves no-slice and legibility. |
 
 The two persistence issues require coordinated operating-contract, native-capability
@@ -74,9 +77,9 @@ cloud synchronization. No document content, paths or titles may enter telemetry.
 | Tracking | Remaining evidence |
 | --- | --- |
 | [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) | Ordinary Windows install/uninstall, Explorer associations, keyboard/Narrator, printer output, representative cold/warm startup and complete WebView2 process measurements, budgets and signing/distribution. Its verified preview links/checksums are the handoff. |
-| [AI-6](../ACTION_ITEMS.md#open-items) | Manual typing feel and second-engine editing acceptance. Automation in #203 supplies regressions; it does not self-clear the checklist. |
-| [AI-7](../ACTION_ITEMS.md#open-items) | Live-site/PWA acceptance, including the actual install/offline/two-version update flow. Historical cache-header and theme-color fixes are already recorded. |
-| [AI-8](../ACTION_ITEMS.md#open-items) | Live Pulseboard Beta-bar/consent acceptance. The SDK is deliberately inert under automation. |
+| [AI-6](../ACTION_ITEMS.md#delegated-to-agent-qa-owner-decision-2026-11-13) (agent QA) | Manual typing feel and second-engine editing acceptance. Automation in #203 supplies regressions; it does not replace the QA charter. |
+| [AI-7](../ACTION_ITEMS.md#delegated-to-agent-qa-owner-decision-2026-11-13) (agent QA) | Live-site/PWA acceptance, including the actual install/offline/two-version update flow. Historical cache-header and theme-color fixes are already recorded. |
+| [AI-8](../ACTION_ITEMS.md#delegated-to-agent-qa-owner-decision-2026-11-13) (agent QA) | Live Pulseboard Beta-bar/consent acceptance. The SDK is deliberately inert under automation. |
 | [AI-9](../ACTION_ITEMS.md#open-items) | Production environment configuration and the first approved live automated promotion. Dry-run success and merging main are not deployment. |
 
 The Windows preview is unsigned and has no automatic updater. #169 owns that release

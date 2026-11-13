@@ -22,17 +22,7 @@ pub fn export_name(name: &str) -> Result<ExportKind, &'static str> {
     {
         return Err("Use a valid filename without a directory path.");
     }
-    let stem = name
-        .split('.')
-        .next()
-        .unwrap_or("")
-        .trim_end()
-        .to_ascii_uppercase();
-    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || (stem.len() == 4
-            && (stem.starts_with("COM") || stem.starts_with("LPT"))
-            && matches!(stem.as_bytes()[3], b'1'..=b'9'))
-    {
+    if crate::file_policy::is_device_name(name) {
         return Err("This filename is reserved by Windows. Choose another name.");
     }
     match name
@@ -137,6 +127,8 @@ mod tests {
             "con.pdf",
             "COM1.md",
             "LPT9.md",
+            "NUL .md",
+            "COM².pdf",
             "a.md ",
             "a.md.",
             "a\n.md",

@@ -70,7 +70,7 @@ jobs:
           cache: npm
       - run: npm ci --engine-strict
       - name: Install the pinned Rust toolchain
-        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - name: Restore native build dependencies
         id: native-cache
         uses: actions/cache/restore@v6
@@ -95,6 +95,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run desktop:licenses
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Lint native code with clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
       - name: Test native file, URL and export policies
         working-directory: src-tauri
         run: cargo test --release --locked

@@ -27,6 +27,7 @@
     "allow-library-unpin",
     "allow-library-forget",
     "allow-library-mark-seen",
+    "allow-library-mark-seen-many",
     "allow-library-add-project",
     "allow-library-clear",
     "allow-open-relative",

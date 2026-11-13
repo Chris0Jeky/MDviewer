@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { test, expect, RICH_MARKDOWN, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline, openPdf } from "./helpers";
+import { test, expect, RICH_MARKDOWN, chooseWithShortcut, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline, openPdf } from "./helpers";
 import { pdfRegionInk, type PdfRegion } from "./pdfPixels";
 
 test("production reader renders rich Markdown without loading the editing workspace", async ({ page, audit }) => {
@@ -339,8 +339,7 @@ test("workspace teardown releases global listeners and later input fires once", 
   }
   await openPdf(page);
   await readyWorkspace(page, "# One");
-  const chooser = page.waitForEvent("filechooser");
-  await page.keyboard.press("Control+o");
+  const chooser = chooseWithShortcut(page);
   // Native and File API paths must share BOM-aware decoding in the workspace.
   await (await chooser).setFiles({ name: "two.md", mimeType: "text/markdown", buffer: Buffer.from("\ufeff# Two", "utf16le") });
   await readyWorkspace(page, "# Two");
