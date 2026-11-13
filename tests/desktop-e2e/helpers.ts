@@ -167,8 +167,10 @@ export async function openFiles(page: Page, files: Array<{ name: string; text: s
   }
   const chooser = page.waitForEvent("filechooser");
   await open();
-  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: bytesOf(file) })));
+  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: mimeOf(file.name), buffer: bytesOf(file) })));
 }
+/** What a browser reports for the file: Markdown by its extension, anything else as opaque bytes. */
+const mimeOf = (name: string): string => /\.(?:md|markdown)$/i.test(name) ? "text/markdown" : "application/octet-stream";
 const bytesOf = (file: { text: string } | { bytes: Buffer }): Buffer => "bytes" in file ? file.bytes : Buffer.from(file.text);
 
 /** A new blank document in the PDF workspace: New opens Edit (S5), then Export PDF…. */
