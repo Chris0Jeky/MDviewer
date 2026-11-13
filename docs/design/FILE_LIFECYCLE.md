@@ -182,7 +182,10 @@ Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
   loosened. Owner and SACL are not copied; Save As keeps the folder default.
 - A recovered sibling `name (MDviewer recovered <id>).ext` shortens a long stem so
   the name fits 255 UTF-16 units, never splitting a surrogate pair.
-
+- Recovery after a Save As that crashed before commit keeps its temporary, the only
+  on-disk copy of the text, as such a sibling instead of deleting it (#313). It never
+  completes the Save As under the chosen name. A Save As failure reported to the
+  caller still removes the temporary, because the editor keeps the text.
 ## Implementation slices and qualification
 
 - [x] Independently review this behavior/capability design and the recovery boundary (#209).

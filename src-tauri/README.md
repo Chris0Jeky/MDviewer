@@ -245,7 +245,10 @@ overwritten. `create_new` uses the same no-clobber commit without an original.
 never committed. If an outside file took the name, or the committed file was later
 moved away, the original's bytes are kept as a visible `name (MDviewer recovered
 <id>).ext` sibling rather than deleted; a long stem is shortened so that name fits
-255 UTF-16 units (#229). Otherwise it preserves the existing
+255 UTF-16 units (#229). A `create_new` (Save As) that crashed after its journal
+owned the temporary but before commit keeps that temporary, the only on-disk copy
+of the text, as such a sibling instead of deleting it (#313); a failure the caller
+was told about still removes it, since the editor keeps the text. Otherwise it preserves the existing
 destination and cleans only verified transaction artifacts. Repeated recovery is
 harmless, and one stuck journal does not stop the rest of the folder. Modified
 artifacts, malformed journals or locked files are refused and retained. Once the

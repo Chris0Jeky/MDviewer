@@ -737,6 +737,11 @@ mod win {
                 disposition(&journal, true).map_err(|e| err(e, Stage::Cleanup))
             })()
             .is_ok();
+        if committed.is_err() && original.is_none() {
+            // A reported Save As failure: the caller still holds the text, so
+            // the rollback below must not keep this temp as a recovered sibling.
+            let _ = disposition(&temp, true);
+        }
         drop(original);
         drop(temp);
         drop(journal);
@@ -818,6 +823,15 @@ mod win {
             }
             // Otherwise the save committed and its file was moved away later:
             // nothing remains to reconcile but the journal itself.
+        }
+        // A Save As (no original) that never committed: the verified temp is the
+        // only on-disk copy of the text, so keep it as a visible sibling (#313).
+        if old.is_none() {
+            if let Some(f) = temp.take() {
+                let kept = recovered_name(&dest);
+                rename(&f, &kept)?;
+                touched.extend([temp_path.clone(), kept]);
+            }
         }
         if let Some(f) = aside {
             disposition(&f, true)?;
@@ -1644,29 +1658,48 @@ mod win {
                 }
                 assert_eq!(path.exists(), stage == Stage::Cleanup);
                 assert_clean(path.parent().unwrap());
+                // The caller still holds the text after a reported failure: no sibling.
+                assert!(recovered(path.parent().unwrap()).is_empty(), "{stage:?}");
 
-                let (dir, path) = fixture();
-                let status = Command::new(std::env::current_exe().unwrap())
-                    .args([
-                        "--exact",
-                        "replace::win::tests::process_helper",
-                        "--nocapture",
-                    ])
-                    .env("MDV_REPLACE_HELPER", "crash-create")
-                    .env("MDV_REPLACE_DIR", dir.path())
-                    .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
-                    .stdout(Stdio::null())
-                    .status()
-                    .unwrap();
-                assert_eq!(status.code(), Some(79));
-                recover_journal(path.parent().unwrap()).unwrap();
-                assert!(recover_journal(path.parent().unwrap()).unwrap().is_empty());
-                if path.exists() {
-                    assert_eq!(fs::read(&path).unwrap(), NEW);
+                // #313: once the journal owns the temp, a crash before commit leaves
+                // the only on-disk copy of the text; recovery keeps it as a sibling,
+                // also when another file has since taken the name.
+                let durable = matches!(stage, Stage::RenameAside | Stage::RenameIntoPlace);
+                for claimant in [false, true] {
+                    let (dir, path) = fixture();
+                    let status = Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            "replace::win::tests::process_helper",
+                            "--nocapture",
+                        ])
+                        .env("MDV_REPLACE_HELPER", "crash-create")
+                        .env("MDV_REPLACE_DIR", dir.path())
+                        .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
+                        .stdout(Stdio::null())
+                        .status()
+                        .unwrap();
+                    assert_eq!(status.code(), Some(79));
+                    if claimant && !path.exists() {
+                        fs::write(&path, EXTERNAL).unwrap();
+                    }
+                    recover_journal(path.parent().unwrap()).unwrap();
+                    assert!(recover_journal(path.parent().unwrap()).unwrap().is_empty());
+                    let expected: &[u8] = match (stage, claimant) {
+                        (Stage::Cleanup, _) => NEW,
+                        (_, true) => EXTERNAL,
+                        _ => b"",
+                    };
+                    assert_eq!(fs::read(&path).unwrap_or_default(), expected);
+                    assert_eq!(path.exists(), stage == Stage::Cleanup || claimant);
+                    assert_eq!(
+                        recovered(path.parent().unwrap()),
+                        if durable { vec![NEW.to_vec()] } else { vec![] },
+                        "{stage:?} claimant={claimant}"
+                    );
+                    assert_clean(path.parent().unwrap());
                 }
-                assert_eq!(path.exists(), stage == Stage::Cleanup);
-                assert_clean(path.parent().unwrap());
-                eprintln!("FAULT create-new {stage:?}: injected=1 crash=1 recovered=2");
+                eprintln!("FAULT create-new {stage:?}: injected=1 crash=2 recovered=3");
             }
         }
 
