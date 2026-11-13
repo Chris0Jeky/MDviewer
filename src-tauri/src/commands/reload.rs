@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::State;
 
-use crate::file_policy::{read_markdown, MAX_FILE_BYTES};
-use crate::registry::{capture_revision, Registry, Token};
+use crate::file_policy::{read_markdown, Document, FileError, MAX_FILE_BYTES};
+use crate::registry::{capture_revision, Binding, Registry, Token};
 use crate::DesktopState;
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -48,24 +48,54 @@ pub(crate) fn reread(
     adopt: bool,
     seen: u64,
 ) -> ReadResult {
-    let Some(path) = lock(registry)
-        .get(token)
-        .map(|binding| binding.path.clone())
-    else {
-        return ReadResult::Failed { code: "revoked" };
-    };
-    if !path.exists() {
-        return ReadResult::Missing;
+    reread_with(registry, token, adopt, seen, |path| {
+        read_markdown(path, MAX_FILE_BYTES, capture_revision)
+    })
+}
+
+/// Reads happen outside the registry lock, so another re-read or a Save can move
+/// the binding (its generation) while ours is in flight. A read that started before the binding
+/// moved may hold older bytes; adopting it would install stale text as newer
+/// (#256). Such a read is retried; after `READ_ATTEMPTS` it reports `busy` and
+/// changes nothing (the next file event asks again).
+const READ_ATTEMPTS: usize = 3;
+
+fn reread_with(
+    registry: &Mutex<Registry>,
+    token: &Token,
+    adopt: bool,
+    seen: u64,
+    read: impl Fn(&std::path::Path) -> Result<Document, FileError>,
+) -> ReadResult {
+    for _ in 0..READ_ATTEMPTS {
+        let Some((path, before)) = lock(registry)
+            .get(token)
+            .map(|binding| (binding.path.clone(), binding.generation))
+        else {
+            return ReadResult::Failed { code: "revoked" };
+        };
+        crate::replace::recover_if_missing(&path);
+        if !path.exists() {
+            return ReadResult::Missing;
+        }
+        let doc = match read(&path) {
+            Ok(doc) => doc,
+            Err(_) if !path.exists() => return ReadResult::Missing,
+            Err(_) => return ReadResult::Failed { code: "unreadable" },
+        };
+        let mut registry = lock(registry);
+        let Some(binding) = registry.get_mut(token) else {
+            return ReadResult::Failed { code: "revoked" };
+        };
+        if binding.generation != before && doc.digest != binding.digest {
+            continue;
+        }
+        return settle(binding, doc, adopt, seen);
     }
-    let doc = match read_markdown(&path, MAX_FILE_BYTES, capture_revision) {
-        Ok(doc) => doc,
-        Err(_) if !path.exists() => return ReadResult::Missing,
-        Err(_) => return ReadResult::Failed { code: "unreadable" },
-    };
-    let mut registry = lock(registry);
-    let Some(binding) = registry.get_mut(token) else {
-        return ReadResult::Failed { code: "revoked" };
-    };
+    ReadResult::Failed { code: "busy" }
+}
+
+fn settle(binding: &mut Binding, doc: Document, adopt: bool, seen: u64) -> ReadResult {
     // Compare with the binding as it is now, not as it was before the read: a save
     // of ours that finished meanwhile must not look like an outside change.
     if doc.digest == binding.digest {
@@ -126,7 +156,6 @@ mod tests {
     use super::*;
     use crate::commands::save::save_bound;
     use crate::file_policy::read_batch;
-    use crate::registry::Binding;
 
     fn open(registry: &Mutex<Registry>, path: &std::path::Path) -> Token {
         let doc = read_batch([path.to_path_buf()], capture_revision)
@@ -261,5 +290,90 @@ mod tests {
             reread(&registry, &token, true, gen(&registry, &token)),
             ReadResult::Failed { code: "revoked" }
         );
+    }
+
+    #[test]
+    fn a_read_overtaken_by_a_newer_adopt_never_installs_the_older_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("live.md");
+        std::fs::write(
+            &path, b"one
+",
+        )
+        .unwrap();
+        let registry = Mutex::new(Registry::default());
+        let token = open(&registry, &path);
+        std::fs::write(
+            &path,
+            b"version A
+",
+        )
+        .unwrap();
+        let reads = std::cell::Cell::new(0);
+        // Read A captures "version A", then (before it takes the lock) read B sees
+        // "version B" on disk and adopts it.
+        let result = reread_with(&registry, &token, true, 0, |p| {
+            let doc = read_markdown(p, MAX_FILE_BYTES, capture_revision);
+            if reads.replace(reads.get() + 1) == 0 {
+                std::fs::write(
+                    p,
+                    b"version B
+",
+                )
+                .unwrap();
+                assert!(matches!(
+                    reread(&registry, &token, true, 0),
+                    ReadResult::Changed { generation: 1, .. }
+                ));
+            }
+            doc
+        });
+        assert_eq!(reads.get(), 2, "the overtaken read was retried");
+        assert_eq!(
+            result,
+            ReadResult::Changed {
+                text: Some(
+                    "version B
+"
+                    .into()
+                ),
+                generation: 1,
+                encoding: "utf-8",
+                eol: "lf"
+            },
+            "A must not be installed over B"
+        );
+        assert_eq!(reread(&registry, &token, true, 1), ReadResult::Unchanged);
+    }
+
+    #[test]
+    fn a_read_that_keeps_being_overtaken_gives_up_without_changing_anything() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("live.md");
+        std::fs::write(
+            &path, b"one
+",
+        )
+        .unwrap();
+        let registry = Mutex::new(Registry::default());
+        let token = open(&registry, &path);
+        let n = std::cell::Cell::new(0);
+        let result = reread_with(&registry, &token, true, 0, |p| {
+            let doc = read_markdown(p, MAX_FILE_BYTES, capture_revision);
+            n.set(n.get() + 1);
+            std::fs::write(
+                p,
+                format!(
+                    "v{}
+",
+                    n.get()
+                ),
+            )
+            .unwrap();
+            let _ = reread(&registry, &token, true, 0);
+            doc
+        });
+        assert_eq!(result, ReadResult::Failed { code: "busy" });
+        assert_eq!(gen(&registry, &token), READ_ATTEMPTS as u64);
     }
 }

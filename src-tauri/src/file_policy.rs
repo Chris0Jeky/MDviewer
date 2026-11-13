@@ -184,6 +184,8 @@ pub fn read_batch(
             skipped += 1;
             continue;
         }
+        // A crash between the two renames of a save leaves the original aside (#249).
+        crate::replace::recover_if_missing(&path);
         match read_markdown(&path, remaining, &capture) {
             Ok(document) => {
                 // Limit both disk bytes and decoded UTF-8: UTF-16 can grow when decoded.
