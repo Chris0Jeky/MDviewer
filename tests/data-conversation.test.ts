@@ -280,6 +280,13 @@ describe("conversation lens accuracy (#278)", () => {
     expect(markdown).toContain("input\\_tokens: about 2000\\.1");
   });
 
+  it("a turn with duplicate content keys is not taken for a tool-only turn (Codex on #326)", () => {
+    const text = '[{"role":"user","content":"hello"},{"role":"assistant","content":"firstdup","content":"seconddup","tool_calls":[{"id":"c1","type":"function","function":{"name":"x","arguments":"{}"}}]}]';
+    const markdown = toReadable(text, "json").markdown;
+    expect(markdown).toContain("firstdup");
+    expect(markdown).toContain("seconddup");
+  });
+
   it("recognises OpenAI tool-call turns whose content is null", () => {
     const call = (id: string): unknown => ({ role: "assistant", content: null, tool_calls: [{ id, type: "function", function: { name: "get_weather", arguments: "{}" } }] });
     const result = view([user, call("a"), call("b"), { role: "tool", tool_call_id: "a", content: "sunny" }]);

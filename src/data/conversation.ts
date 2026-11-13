@@ -22,7 +22,9 @@ function message(value: JsonValue | undefined): ObjectValue | undefined {
   const content = member(value, "content");
   // An OpenAI assistant turn that only calls tools has no content (null or absent) but tool_calls.
   const calls = member(value, "tool_calls");
-  const toolCalls = (content === undefined || (content.kind === "literal" && content.raw === "null"))
+  // Absent means no content key at all: a duplicated one is ambiguous and stays with the generic lens.
+  const absent = value.entries.every(entry => entry.key !== "content");
+  const toolCalls = (absent || (content?.kind === "literal" && content.raw === "null"))
     && calls?.kind === "array" && calls.items.length > 0;
   return content?.kind === "string" || toolCalls || (content?.kind === "array" && content.items.every(part =>
     part.kind === "object" && member(part, "type")?.kind === "string")) ? value : undefined;
