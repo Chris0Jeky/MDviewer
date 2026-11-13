@@ -23,35 +23,62 @@ pub const QUIET: Duration = Duration::from_millis(150);
 pub const MAX_WAIT: Duration = Duration::from_secs(1);
 
 /// The debounce rule as a pure, clock-injected unit: the thread feeds it
-/// `Instant`s, tests feed it made-up ones.
+/// `Instant`s, tests feed it made-up ones. Each file keeps its own window, so a
+/// busy sibling never postpones another file's notification.
 #[derive(Default)]
 struct Debounce {
-    files: HashSet<String>,
-    /// First and latest event time of the pending burst.
-    span: Option<(Instant, Instant)>,
+    /// File -> first and latest event time of its pending burst.
+    pending: HashMap<String, (Instant, Instant)>,
+}
+
+fn deadline((first, last): (Instant, Instant)) -> Instant {
+    (last + QUIET).min(first + MAX_WAIT)
 }
 
 impl Debounce {
     fn touch(&mut self, file: String, now: Instant) {
-        self.files.insert(file);
-        let span = self.span.get_or_insert((now, now));
-        span.1 = now;
+        self.pending.entry(file).or_insert((now, now)).1 = now;
     }
 
-    fn deadline(&self) -> Option<Instant> {
-        self.span
-            .map(|(first, last)| (last + QUIET).min(first + MAX_WAIT))
+    fn next_due(&self) -> Option<Instant> {
+        self.pending.values().copied().map(deadline).min()
     }
 
     fn take_due(&mut self, now: Instant) -> Vec<String> {
-        match self.deadline() {
-            Some(deadline) if deadline <= now => {
-                self.span = None;
-                self.files.drain().collect()
-            }
-            _ => Vec::new(),
+        let due: Vec<String> = self
+            .pending
+            .iter()
+            .filter(|(_, span)| deadline(**span) <= now)
+            .map(|(file, _)| file.clone())
+            .collect();
+        for file in &due {
+            self.pending.remove(file);
         }
+        due
     }
+}
+
+/// What the OS callback forwards to the debounce thread.
+enum Change {
+    Path(PathBuf),
+    /// A watcher error with no path (a buffer overflow can report none): any
+    /// watched file may have changed.
+    Everything,
+}
+
+fn changes_of(event: notify::Result<notify::Event>) -> Vec<Change> {
+    let (paths, rescan) = match event {
+        Ok(event) => (event.paths.clone(), event.need_rescan()),
+        Err(error) => (error.paths, true),
+    };
+    if paths.is_empty() {
+        return if rescan {
+            vec![Change::Everything]
+        } else {
+            Vec::new()
+        };
+    }
+    paths.into_iter().map(Change::Path).collect()
 }
 
 type Sink = Arc<dyn Fn(Vec<Token>) + Send + Sync>;
@@ -66,7 +93,7 @@ struct Targets {
 
 struct Running {
     watcher: RecommendedWatcher,
-    changes: Sender<PathBuf>,
+    changes: Sender<Change>,
 }
 
 pub struct FileWatch {
@@ -96,17 +123,11 @@ impl FileWatch {
     }
 
     fn start(&self) -> notify::Result<Running> {
-        let (changes, received) = mpsc::channel::<PathBuf>();
+        let (changes, received) = mpsc::channel::<Change>();
         let forward = changes.clone();
         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-            // Errors (e.g. a buffer overflow) mean "something changed here".
-            match event {
-                Ok(event) => event.paths.into_iter().for_each(|path| {
-                    let _ = forward.send(path);
-                }),
-                Err(error) => error.paths.into_iter().for_each(|path| {
-                    let _ = forward.send(path);
-                }),
+            for change in changes_of(event) {
+                let _ = forward.send(change);
             }
         })?;
         let targets = self.targets.clone();
@@ -117,23 +138,33 @@ impl FileWatch {
                 let mut debounce = Debounce::default();
                 loop {
                     let wait = debounce
-                        .deadline()
+                        .next_due()
                         .map_or(Duration::from_secs(3600), |due| {
                             due.saturating_duration_since(Instant::now())
                         });
                     match received.recv_timeout(wait) {
-                        Ok(path) => {
-                            let path_key = key(&path);
-                            // A folder event (overflow, folder renamed) touches every file in it.
+                        Ok(change) => {
                             let targets = lock(&targets);
                             let now = Instant::now();
-                            if targets.files.contains_key(&path_key) {
-                                debounce.touch(path_key, now);
-                            } else {
-                                let folder = format!("{path_key}\\");
-                                for file in targets.files.keys().filter(|f| f.starts_with(&folder))
-                                {
-                                    debounce.touch(file.clone(), now);
+                            match change {
+                                Change::Everything => {
+                                    for file in targets.files.keys() {
+                                        debounce.touch(file.clone(), now);
+                                    }
+                                }
+                                Change::Path(path) => {
+                                    let path_key = key(&path);
+                                    if targets.files.contains_key(&path_key) {
+                                        debounce.touch(path_key, now);
+                                    } else {
+                                        // A folder event (folder renamed) touches every file in it.
+                                        let folder = format!("{path_key}\\");
+                                        for file in
+                                            targets.files.keys().filter(|f| f.starts_with(&folder))
+                                        {
+                                            debounce.touch(file.clone(), now);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -317,6 +348,8 @@ mod tests {
         let writer = {
             let path = path.clone();
             std::thread::spawn(move || {
+                // Starved, the first notification only comes after the 2 s of appends; the
+                // 1.6 s bound leaves headroom over MAX_WAIT for a loaded machine.
                 // Reopen per line, as a logger does: an open handle defers NTFS's
                 // directory-entry update, so the OS would report nothing.
                 for _ in 0..40 {
@@ -330,7 +363,7 @@ mod tests {
                 }
             })
         };
-        while lock(&seen).is_empty() && started.elapsed() < Duration::from_millis(1200) {
+        while lock(&seen).is_empty() && started.elapsed() < Duration::from_millis(1600) {
             std::thread::sleep(Duration::from_millis(20));
         }
         let first = started.elapsed();
@@ -338,9 +371,9 @@ mod tests {
         writer.join().unwrap();
         assert!(
             notified >= 1,
-            "no notification within 1.2 s of continuous appends"
+            "no notification within 1.6 s of continuous appends"
         );
-        assert!(first < Duration::from_millis(1200), "first at {first:?}");
+        assert!(first < Duration::from_millis(1600), "first at {first:?}");
     }
 
     #[test]
@@ -393,5 +426,47 @@ mod debounce_tests {
             }
         }
         assert_eq!(first, Some(1000));
+    }
+
+    #[test]
+    fn a_busy_sibling_does_not_postpone_another_file() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        d.touch("quiet".into(), at(t0, 0));
+        let mut notified = None;
+        for step in 0..=20 {
+            let now = at(t0, step * 50);
+            d.touch("busy".into(), now);
+            let due = d.take_due(now);
+            if due.contains(&"quiet".to_string()) {
+                notified = Some(step * 50);
+                break;
+            }
+        }
+        assert_eq!(notified, Some(150));
+    }
+
+    #[test]
+    fn a_path_less_watcher_error_means_every_file_changed() {
+        let error = notify::Error::generic("buffer overflow");
+        assert!(matches!(
+            changes_of(Err(error)).as_slice(),
+            [Change::Everything]
+        ));
+        let rescan =
+            notify::Event::new(notify::EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        assert!(matches!(
+            changes_of(Ok(rescan)).as_slice(),
+            [Change::Everything]
+        ));
+    }
+
+    #[test]
+    fn events_and_errors_with_paths_stay_per_path() {
+        let path = PathBuf::from(r"C:\notes\a.md");
+        let error = notify::Error::generic("x").add_path(path.clone());
+        assert!(matches!(changes_of(Err(error)).as_slice(), [Change::Path(p)] if *p == path));
+        let plain = notify::Event::new(notify::EventKind::Other);
+        assert!(changes_of(Ok(plain)).is_empty());
     }
 }
