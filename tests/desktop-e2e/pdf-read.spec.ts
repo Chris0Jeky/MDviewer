@@ -120,6 +120,11 @@ test("a 1,000-page PDF stays responsive and keeps few pages drawn", async ({ pag
   await expect(view(page).getByRole("spinbutton", { name: "Page number" })).toHaveValue("1000");
   await expect(view(page).locator(".pdf-page").last().locator(".pdf-text")).toContainText("Page 1000 line 1 ");
   expect(await view(page).locator(".pdf-page canvas").count()).toBeLessThanOrEqual(12);
+  // Zoomed far out, more than 12 pages are on screen: still at most 12 bitmaps.
+  for (let i = 0; i < 6; i++) await view(page).getByRole("button", { name: "Zoom out (Ctrl+-)" }).click();
+  await expect(view(page).locator(".pdf-zoom-label")).toHaveText("50%");
+  await page.waitForTimeout(1500);
+  expect(await view(page).locator(".pdf-page canvas").count()).toBeLessThanOrEqual(12);
 });
 
 test("Edit closes, with its text kept, when a PDF tab is shown", async ({ page }) => {

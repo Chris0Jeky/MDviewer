@@ -206,13 +206,15 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   const visible = new Set<number>();
   let queued = false;
   let closed = false;
+  /** The pages to hold drawn: the MAX_LIVE visible pages nearest the current one. */
+  const wanted = (): number[] => [...visible].sort((a, b) => Math.abs(a - current) - Math.abs(b - current)).slice(0, MAX_LIVE);
   const drawQueue = (): void => {
     if (queued || closed) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
       if (closed) return;
-      const next = [...visible].sort((a, b) => Math.abs(a - current) - Math.abs(b - current)).find(i => live.get(i)?.zoom !== zoom);
+      const next = wanted().find(i => live.get(i)?.zoom !== zoom);
       if (next === undefined) return;
       draw(next);
       drawQueue();
@@ -238,9 +240,10 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
     live.set(i, { zoom, pixels: image.width * image.height });
     // Release the oldest pages beyond MAX_LIVE or MAX_LIVE_PIXELS, never one on screen.
     const total = (): number => [...live.values()].reduce((sum, entry) => sum + entry.pixels, 0);
+    const keep = new Set(wanted());
     for (const old of [...live.keys()]) {
       if (live.size <= MAX_LIVE && total() <= MAX_LIVE_PIXELS) break;
-      if (visible.has(old) || old === i) continue;
+      if (keep.has(old) || old === i) continue;
       release(old);
     }
   };

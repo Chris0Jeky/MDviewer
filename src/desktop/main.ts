@@ -490,9 +490,12 @@ async function readFiles(files: File[]): Promise<void> {
   }
   if (files.length > 32) batch.errors.push({ name: "Extra files", message: "Open at most 32 files at once." });
   // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
-  if (openedPdf && !batch.documents.length && !app && !changingMode) focusPdf();
+  // Only the newest import may take the view (a slow PDF read must not override a later choice).
+  const showPdfNow = openedPdf && !batch.documents.length && request === generation && !app && !changingMode;
+  if (showPdfNow) focusPdf();
   commitBatch(batch, request);
-  if (openedPdf && !batch.documents.length) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
+  if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
+  else if (openedPdf) syncDocuments();
 }
 
 async function open(): Promise<void> {
