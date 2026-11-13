@@ -839,6 +839,17 @@ bytes through `Host.readPdf(token)` (`read_pdf`, digest-checked against the open
 file differs) and calls `Host.releasePdf(token)` (`release_pdf`) when the tab closes. `commitBatch`
 splits `kind: "pdf"` documents off to `openNativePdfs`; only the newest open takes the view.
 
+Pages (P2): `PdfDocument` gains `movePages`, `rotatePage`, `deletePages`, `duplicatePages`,
+`insertPdf`, `insertBlank`, `insertImage` (PNG/JPEG signature checked here; the view decodes the image
+with `createImageBitmap` first, because PDFium traps on some malformed images), `extract` and
+`save("incremental" | "full")`. `src/pdf/journal.ts`: `PdfEdit` (plain data), `Journal.record`
+(applies, then records; a failure records nothing), `undo`/`redo` (reopen the original bytes, replay),
+`removes` (a delete in the applied edits); caps 500 entries and 400 MB of inserted files. The view
+rebuilds after each edit (zoom, page, thumbnails and selection survive in a `Session`). Save a copy:
+unchanged → the original bytes; a removal → full rewrite; otherwise incremental (the original stays
+a byte prefix). The shell saves through the download destination (Windows dialog) or a download, opens
+Extract results as new unsaved tabs, marks edited PDF tabs dirty and asks before closing them.
+
 Coordinates are CSS pixels at zoom 1 in the displayed orientation. Bitmaps are capped at 16,384 px
 per side and 32 M pixels; at most 12 pages hold a bitmap. Links: `page` and http(s) `uri` act,
 everything else is `blocked` with a reason. Proof: `tests/pdf-engine.test.ts` (synthetic corpus in

@@ -297,6 +297,28 @@
 
 ## OPEN items
 
+- **AI-12 — Try PDF editing on copies of your own PDFs (manual acceptance; grows with P3 and P4).**
+  MDviewer can now open a PDF and rearrange its pages, saving the result as a copy. Automated tests
+  prove this on invented PDFs; only you can judge it on real ones. Work on **copies**: copy a few of
+  your PDFs into a scratch folder first (a long report, a scanned document, a form, one with a
+  password if you have one). Nothing here changes the original file.
+  1. Get the current Windows build as in AI-10, step 1 (a run on `main` after this item was added).
+  2. Open one of the copies with **Open** (Ctrl+O) or by dropping it on the window. Check that the
+     pages look right, that you can select and copy text, that **Ctrl+F** finds a word, that the
+     outline panel (Ctrl+B) lists its bookmarks if it has any, and that zoom and the page box work.
+  3. Click the thumbnails button (left of the page box). Drag a thumbnail to a new place, select one
+     and press **Rotate right**, select one and press **Delete**, then **Undo** (Ctrl+Z) and **Redo**.
+  4. Use **Insert pages from other PDFs…** to add another copy, and **Insert images as pages…** to add
+     a photo or screenshot (PNG or JPEG).
+  5. Press **Save a copy…** and save next to the copies. The status line says whether the file was
+     rewritten in full (after a delete) or had your changes appended.
+  6. Open the saved copy in **another PDF reader** (Edge, Acrobat, or your usual one). Check the page
+     order, the rotation, that the deleted page is gone and the inserted pages are there.
+  7. Select two thumbnails (Ctrl+click) and press **Extract to a new PDF**. A new tab opens; save it as
+     a copy and check it in the other reader too.
+  8. Reply "AI-12 pages part is done" (or report what looked wrong: which file, what you did, what you
+     saw). Later steps for annotations, forms and text editing are added here when they ship.
+
 - **AI-10 — Try the Windows build on your own files (manual acceptance).** The reader can now
   change your Markdown (tick a task box, edit a line, save) and show JSON and transcripts as readable
   documents. Automated tests prove this on invented files; only you can judge it on real ones. Work
