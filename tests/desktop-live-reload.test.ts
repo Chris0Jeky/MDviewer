@@ -122,6 +122,17 @@ describe("desktop live reload", () => {
     expect(option()).toBe("notes.md");
   });
 
+  it("our own write echoing back before its reply moves the binding without re-rendering (#345)", async () => {
+    await openReader(bound("notes.md", "# One"));
+    const renders = boundary.render.mock.calls.length;
+    boundary.read.mockResolvedValueOnce(changed("# One", 1)); // the host is one write ahead; same text
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(boundary.read).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(boundary.render, "no full re-render for text already shown").toHaveBeenCalledTimes(renders);
+    expect(shown()).toBe("# One");
+  });
+
   it("our own save echoing back changes nothing", async () => {
     await openReader(bound("notes.md", "# One"));
     const renders = boundary.render.mock.calls.length;

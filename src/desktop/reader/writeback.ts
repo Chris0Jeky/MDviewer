@@ -13,7 +13,8 @@ import type { ReaderDocument } from "../session";
  */
 export interface Notice {
   text: string;
-  action?: { label: string; run(): void };
+  /** `keys` names the shortcut that runs the action too (shown beside it and in aria-keyshortcuts). */
+  action?: { label: string; keys?: string; run(): void };
 }
 
 export interface WritebackDeps {
@@ -61,6 +62,8 @@ export function createWriteback(deps: WritebackDeps): {
   forget(): void;
   /** Resolves when no host write is in flight (Edit waits for it before showing the text). */
   settled(): Promise<void>;
+  /** Undo the last saved change while its notice could still offer it (Ctrl+Z in the reader, #335). */
+  undoLast(): boolean;
 } {
   let last: LastSave | null = null;
   let busy = false;
@@ -124,7 +127,7 @@ export function createWriteback(deps: WritebackDeps): {
       const patched = patches.find(patch => patch.line === control.line) ?? patches[0]!;
       last = { docId: doc.id, token: doc.binding!.token, name: doc.name, control, line: patched.replace, before: patched.expect, after: patched.replace, action, undo: inversePatches(patches) };
       const saved = last;
-      deps.notice({ text: describe(control, action), action: { label: "Undo", run: () => { void undo(saved); } } });
+      deps.notice({ text: describe(control, action), action: { label: "Undo", keys: "Ctrl+Z", run: () => { void undo(saved); } } });
     } finally { end(); }
   }
 
@@ -160,5 +163,8 @@ export function createWriteback(deps: WritebackDeps): {
     deps.notice({ text: "Another program overwrote this change.", action: { label: "Apply again", run: () => { void change(found.control, saved.action, saved); } } });
   }
 
-  return { change, checkOverwritten, forget: () => { last = null; }, settled: () => inFlight };
+  return {
+    change, checkOverwritten, forget: () => { last = null; }, settled: () => inFlight,
+    undoLast: () => { if (!last || busy) return false; void undo(last); return true; },
+  };
 }
