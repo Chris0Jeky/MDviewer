@@ -206,6 +206,10 @@ public static class SmokeWindow {
                     Start-Sleep -Milliseconds 500
                 }
                 $result.checkboxTopBefore = $checkbox.Current.BoundingRectangle.Y
+                # A neighbour that does not change measures the view; the toggled box redraws itself.
+                $reference = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Keep this one (Done)'))
+                if ($null -ne $reference) { $result.referenceTopBefore = $reference.Current.BoundingRectangle.Y }
                 Write-ProbeResult
                 Write-ProbePhase 'toggling-checkbox'
                 $pattern.Toggle()
@@ -261,13 +265,23 @@ public static class SmokeWindow {
                 Write-ProbePhase 'save-button-invoked'
                 exit 0
             }
-            $containerCondition = [System.Windows.Automation.OrCondition]::new(
+            # 'pdf:<name>' looks for a PDF page region (role=region, "Page N") anywhere in the window:
+            # the view creates pages only after the engine's wasm loaded and opened the file (P1-4).
+            # The PDF host div itself is not exposed to UI Automation, so the window is the container.
+            $pdfText = $ExpectedHeading.StartsWith('pdf:')
+            if ($pdfText) { $ExpectedHeading = $ExpectedHeading.Substring(4) }
+            $containerCondition = if ($pdfText) {
                 [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::NameProperty, 'Markdown document'),
-                [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-document'))
+                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $OwnerProcessId)
+            } else {
+                [System.Windows.Automation.OrCondition]::new(
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::NameProperty, 'Markdown document'),
+                    [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-document'))
+            }
             Write-ProbePhase 'finding-reader-document'
-            $document = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition)
+            $document = if ($pdfText) { $window } else { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition) }
             if ($null -eq $document) {
                 $result.reason = 'The reader document is not present in the accessibility tree.'
             } else {
@@ -815,6 +829,7 @@ try {
     }
     [void](Wait-ForHeading $tasksHeading 'tasks-document.png')
     Invoke-SmokeAction 'toggle' 'Ship the smoke (To do)'
+    $script:lastToggleResult = $script:lastProbeResult
     $topBefore = $script:lastProbeResult.checkboxTopBefore
     $toggledEvidence = Wait-ExportFile $tasksPath {
         param([byte[]]$bytes)
@@ -822,10 +837,13 @@ try {
     }
     # #334: the toggled item is where it was on screen; #335: Undo is inside the window.
     Start-Sleep -Milliseconds 700
+    $referenceBefore = $script:lastToggleResult.referenceTopBefore
     Invoke-SmokeAction 'locate' 'Ship the smoke (Done)'
-    $topAfter = $script:lastProbeResult.top
-    if ($null -eq $topBefore -or [Math]::Abs($topAfter - $topBefore) -gt 2) {
-        throw "The view moved after the write-back: the task was at $topBefore and is at $topAfter."
+    $taskAfter = $script:lastProbeResult.top
+    Invoke-SmokeAction 'locate' 'Keep this one (Done)'
+    $referenceAfter = $script:lastProbeResult.top
+    if ($null -eq $referenceBefore -or [Math]::Abs($referenceAfter - $referenceBefore) -gt 2) {
+        throw "The view moved after the write-back: the next item was at $referenceBefore and is at $referenceAfter (the task: $topBefore, then $taskAfter)."
     }
     Invoke-SmokeAction 'locate' 'Undo'
     if (-not $script:lastProbeResult.inWindow) { throw 'The Undo control is outside the window after a write-back.' }
@@ -880,6 +898,34 @@ try {
         param([byte[]]$bytes)
         [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($csvBytes)
     }
+    # P1b / P1-4: a forwarded PDF opens in a PDF tab under the production CSP: the engine's wasm
+    # loads and draws, and its text layer is in the accessibility tree. The file is hand-assembled.
+    $pdfName = 'smoke.pdf'
+    $pdfPath = Join-Path $fixtureDirectory $pdfName
+    $pdfObjects = @(
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        "<< /Length 47 >>`nstream`nBT /F1 24 Tf 72 700 Td (Native PDF smoke) Tj ET`nendstream"
+    )
+    $pdfSource = "%PDF-1.7`n"
+    $pdfOffsets = @()
+    for ($i = 0; $i -lt $pdfObjects.Count; $i++) {
+        $pdfOffsets += $pdfSource.Length
+        $pdfSource += "$($i + 1) 0 obj`n$($pdfObjects[$i])`nendobj`n"
+    }
+    $pdfXref = $pdfSource.Length
+    $pdfSource += "xref`n0 $($pdfObjects.Count + 1)`n0000000000 65535 f `n"
+    foreach ($offset in $pdfOffsets) { $pdfSource += ("{0:D10} 00000 n `n" -f $offset) }
+    $pdfSource += "trailer`n<< /Size $($pdfObjects.Count + 1) /Root 1 0 R >>`nstartxref`n$pdfXref`n%%EOF`n"
+    [System.IO.File]::WriteAllBytes($pdfPath, [System.Text.Encoding]::ASCII.GetBytes($pdfSource))
+    $sixth = Start-OwnedProcess $exe @($pdfName) $fixtureDirectory
+    if (-not $sixth.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
+        throw 'The PDF launch stayed alive instead of forwarding to the existing instance.'
+    }
+    [void](Wait-ForHeading 'pdf:Page 1' 'pdf-document.png')
+    $metrics.pdf = [ordered]@{ forwardedPdfPageRegionVerified = $true }
     $metrics.data = [ordered]@{
         csvHeadingVerified = $true; csvSaveAsExactRawBytes = $true; csvSaveAs = $csvSaveAsEvidence
         readableHeadingVerified = $true

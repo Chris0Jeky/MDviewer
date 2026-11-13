@@ -27,6 +27,23 @@ pub fn document_extension(name: &str) -> Option<String> {
 }
 pub const MAX_BATCH_FILES: usize = 32;
 
+/// PDFs (docs/design/PDF_WORKBENCH.md): opened as bytes, never decoded as text, with their own cap.
+pub const PDF_EXTENSIONS: &[&str] = &["pdf"];
+pub const MAX_PDF_BYTES: u64 = 200_000_000;
+
+pub fn is_pdf_name(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, extension)| {
+        PDF_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+    })
+}
+
+/// A PDF starts with `%PDF-` within its first 1,024 bytes.
+pub fn has_pdf_signature(bytes: &[u8]) -> bool {
+    bytes[..bytes.len().min(1024)]
+        .windows(5)
+        .any(|window| window == b"%PDF-")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Encoding {
     Utf8,
@@ -126,6 +143,8 @@ pub struct Document {
     pub identity: Option<FileIdentity>,
     pub encoding: Encoding,
     pub eol: Eol,
+    /// A PDF's raw bytes; `text` is then empty. None for text documents.
+    pub pdf: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -187,10 +206,13 @@ pub fn read_batch(
         // A crash between the two renames of a save leaves the original aside (#249).
         crate::replace::recover_if_missing(&path);
         match read_markdown(&path, remaining, &capture) {
-            Ok(document) => {
+            Ok(mut document) => {
                 // Limit both disk bytes and decoded UTF-8: UTF-16 can grow when decoded.
-                remaining =
-                    remaining.saturating_sub(document.bytes.max(document.text.len() as u64));
+                // A PDF has its own per-file cap and is re-read on demand (`read_pdf`).
+                if document.pdf.take().is_none() {
+                    remaining =
+                        remaining.saturating_sub(document.bytes.max(document.text.len() as u64));
+                }
                 batch.documents.push(document);
             }
             Err(error) => batch.errors.push(error),
@@ -283,7 +305,18 @@ pub fn read_markdown(
     limit: u64,
     capture: impl FnOnce(&File, &[u8]) -> ReadRevision,
 ) -> Result<Document, FileError> {
-    let limit = limit.min(MAX_FILE_BYTES);
+    let pdf = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(is_pdf_name);
+    let (limit, too_large) = if pdf {
+        (MAX_PDF_BYTES, "PDFs larger than 200 MB cannot be opened.")
+    } else {
+        (
+            limit.min(MAX_FILE_BYTES),
+            "This selection exceeds the 25 MB limit. Open fewer or smaller files.",
+        )
+    };
     if !is_local_file_path(path) {
         return Err(error_for(
             path,
@@ -294,11 +327,12 @@ pub fn read_markdown(
         .file_name()
         .and_then(|name| name.to_str())
         .and_then(document_extension)
-        .is_some();
+        .is_some()
+        || pdf;
     if !supported {
         return Err(error_for(
             path,
-            "Only Markdown, JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text (.txt, .log) files are supported.",
+            "Only Markdown, PDF, JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text (.txt, .log) files are supported.",
         ));
     }
     let metadata = fs::metadata(path).map_err(|_| {
@@ -314,10 +348,7 @@ pub fn read_markdown(
         ));
     }
     if metadata.len() > limit {
-        return Err(error_for(
-            path,
-            "This selection exceeds the 25 MB limit. Open fewer or smaller files.",
-        ));
+        return Err(error_for(path, too_large));
     }
     let file = File::open(path).map_err(|_| {
         error_for(
@@ -336,14 +367,36 @@ pub fn read_markdown(
         ));
     }
     if opened.len() > limit {
-        return Err(error_for(
-            path,
-            "This selection exceeds the 25 MB limit. Open fewer or smaller files.",
-        ));
+        return Err(error_for(path, too_large));
     }
-    let raw = read_bounded(&file, limit).map_err(|message| error_for(path, message))?;
+    let raw = read_bounded(&file, limit).map_err(|message| {
+        error_for(
+            path,
+            if pdf && message.contains("25 MB") {
+                too_large
+            } else {
+                message
+            },
+        )
+    })?;
     let bytes = raw.len() as u64;
     let revision = capture(&file, &raw);
+    if pdf {
+        if !has_pdf_signature(&raw) {
+            return Err(error_for(path, "This file is not a PDF."));
+        }
+        return Ok(Document {
+            name: filename(path),
+            text: String::new(),
+            bytes,
+            path: path.to_path_buf(),
+            digest: revision.digest,
+            identity: revision.identity,
+            encoding: Encoding::Utf8,
+            eol: Eol::None,
+            pdf: Some(raw),
+        });
+    }
     let encoding = Encoding::detect(&raw);
     let text = decode_markdown(raw).map_err(|message| error_for(path, message))?;
     if text.len() as u64 > limit {
@@ -361,6 +414,7 @@ pub fn read_markdown(
         digest: revision.digest,
         identity: revision.identity,
         encoding,
+        pdf: None,
     })
 }
 

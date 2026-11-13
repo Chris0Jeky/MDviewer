@@ -107,10 +107,13 @@ fn main() {
             commands::library::library_unpin,
             commands::library::library_forget,
             commands::library::library_mark_seen,
+            commands::library::library_mark_seen_many,
             commands::library::library_add_project,
             commands::library::library_clear,
             commands::links::open_relative,
             commands::links::read_asset,
+            commands::pdf::read_pdf,
+            commands::pdf::release_pdf,
             commands::library::session_record,
             commands::library::session_restore,
             commands::library::session_setting

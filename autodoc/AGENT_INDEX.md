@@ -36,6 +36,7 @@ Export click → capture document id/name/text and settings NOW
 | Reader shell: bar, tabs, More menu, palette, panel (Library, Outline), status (S3) | `src/desktop/shell/{tabs,menu,palette,panel,library-panel,status}.ts`, `src/desktop/shell/shell.css`, `desktop.html` | `tests/desktop-e2e/{shell,library}.spec.ts`, spec §14 |
 | Windows continuous reader and lazy workspace handoff | `src/desktop/{main,documents,commands,panels,session,render,workspace,native}.ts`, `desktop.html`, `vite.desktop.config.ts` | `tests/desktop-{session,lifetime,foundations}.test.ts`, `tests/desktop-e2e/` (including bounded Undo recovery), spec §14; `docs/WINDOWS_DESKTOP.md` |
 | Host contract (web parity W0): every platform call goes through one typed `Host` | `src/desktop/native.ts` (`Host`, result types, `native`), `src/desktop/hosts/tauri.ts` (`tauriHost`, the only `invoke` caller) | Desktop e2e against the shared in-memory IPC fake `tests/desktop-e2e/fakeHost.ts` (`installFakeHost`, `fakeCalls`); `docs/design/2026-11-13-complete-push.md` Track W |
+| Browser host (web parity W1): open and Save over the File System Access API, fallbacks elsewhere | `src/desktop/hosts/browser.ts` (`browserHost`), `src/desktop/hosts/codec.ts` (TS mirror of `file_policy.rs` encode/decode), selection in `src/desktop/native.ts` (`--mode webhost` / `VITE_MDV_BROWSER_HOST`), `npm run webhost:build` | `tests/browser-{codec,host}.test.ts`, `tests/webhost-e2e/` (`playwright.webhost.config.ts`: OPFS handles in Chromium, fallback in Firefox), CI job `webhost` (also guards that `dist-desktop` has no browser host); `docs/design/WEB_HOST.md` |
 | Native file/URL/export capabilities, single-instance forwarding and Windows artifacts | `src-tauri/`, `.github/workflows/desktop.yml`, `scripts/desktop-{smoke.ps1,native-licenses.mjs}` | Native Rust tests, actual Windows smoke; `src-tauri/README.md`; no webview filesystem/shell access |
 | App orchestration, parsed-fence grammar preparation, captured export inputs, completed-render eligibility, update reload decision | `src/app/App.ts` | `tests/app-fence-languages.test.ts`, `tests/app-export-fence.test.ts`, `tests/app-export-lifetime.test.ts`; spec §§3,5,9 |
 | Document memory, atomic `addBatch` imports and serialized/coalesced render-host leases | `src/app/state.ts` | `tests/state.test.ts`, `tests/render-lease.test.ts` |
@@ -60,6 +61,7 @@ Export click → capture document id/name/text and settings NOW
 | Actionable Markdown: native line-patch write-back (A2, #244; 1-based fix #268) | `src-tauri/src/linepatch.rs`, `src-tauri/src/commands/patch.rs` (`patch_document`), webview side `src/desktop/reader/writeback.ts` | Rust unit tests in both modules, shared fixtures `tests/fixtures/actionable/` (also read by `tests/actionable.test.ts` and `tests/desktop-e2e/actionable.spec.ts`), native smoke step in `scripts/desktop-smoke.ps1` (#275); `docs/design/ACTIONABLE_MARKDOWN.md` |
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
+| Embeddable reader element `<mdviewer-reader>` and its `change` event (A5, #300) | `src/embed/reader.ts`, `vite.embed.config.ts`, `src/desktop/reader/controls.ts` (`decorateControls(root, actionable, onAction, menuHost)`), `src/desktop/render.ts` (`options.controls`, `options.copy`) | `tests/embed-e2e/reader.spec.ts` (`npm run embed:test`; CI e2e job), `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Data copy menu (value, JSONPath, jq, subtree), data-document copy reference, Save readable view as Markdown (D5, #299) | `src/desktop/reader/dataCopy.ts` (`dataCopy`, `dataReference`, `readableCopy`, `pathAt`, `trackDataTarget`); commands `data.copy.*` and `document.saveReadable` in `src/desktop/main.ts`; `MenuEntry.hidden` in `src/desktop/shell/menu.ts` | `tests/desktop-data-copy.test.ts`, `tests/desktop-e2e/data-copy.spec.ts`, spec READABLE_DATA.md "Copy" |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
@@ -167,7 +169,7 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 
 Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow verifies supported Node 24 with strict engine checks and runs production Chromium on Node 24. The existing Node 22 required-check context remains a legacy compatibility probe until branch protection is updated. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
-Required tests must pass; report existing opt-in performance-ladder skips separately. No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain OPEN. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's historical deployment-evidence inconsistency is closed, while AI-7's separate live/PWA acceptance remains open. Preserve historical receipts and record actual commit/run identifiers in handoffs.
+Required tests must pass; report existing opt-in performance-ladder skips separately. No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain OPEN; the mechanical checks among them are agent QA charters (`docs/qa/ACCEPTANCE.md`, owner decision 2026-11-13). #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's historical deployment-evidence inconsistency is closed, while AI-7's separate live/PWA acceptance remains open. Preserve historical receipts and record actual commit/run identifiers in handoffs.
 
 ## Latest-close recovery seam
 
@@ -242,18 +244,18 @@ class Lens { line(text?, path?); render(value, path?, level?, indent?, key?); co
 Lens.recordTable(items): RecordTable | undefined;       // D6: one schema pass; columns, `flatten` for one level of nested objects
 Lens.renderTable(rows, plan, path?, level?, indent?, lineColumn?, charged?): void; // record table; `lineColumn` adds a Line column (JSON Lines)
 childPath(path: string, key: string): string;           // JSONPath-style child path
-hint(value: JsonValue, key: string, timeZone: string): string; shape(value: JsonValue): string;
+hint(value: JsonValue, key: string, timeZone: string): string; epoch(value: JsonValue): number | undefined; shape(value: JsonValue): string;
 budget(value: number | undefined, fallback: number): number; count(n: number, noun: string): string;
 
 // src/data/conversation.ts: the conversation lens for chat and agent transcripts (D2)
 isConversation(records): boolean; conversationList(value): ArrayValue | undefined;
 conversationOverview(lens, records): void; conversationRecord(lens, value, path, index, bad?): void;
-renderConversation(lens, root, list): void;
+renderConversation(lens, root, list, base?): void;   // `base`: the root's own path (`$`, or `$[i]` in a YAML stream)
 
 // src/data/{yaml,toml,csv}.ts (D4): parse to JsonValue plus problems
-prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared
+prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared; composes at most MAX_YAML_DOCUMENTS (rest: `unread`)
 parseToml(text: string): ParseResult;
-parseCsv(text: string, delimiter?: string): CsvResult;               // RFC 4180; TSV passes "\t"
+parseCsv(text: string, delimiter?: string, keep?: number): CsvResult; // RFC 4180; cells kept for `keep` rows, `rows` counts all; TSV passes "\t"
 
 // src/data/escape.ts: keep data from becoming Markdown or HTML
 escapeText(text: string): string; cellText(text: string): string; fence(text: string): string;
@@ -292,7 +294,7 @@ only where the cell cannot show the value well: JSON embedded in a string, clear
 `src/desktop/reader/dataCopy.ts`: the reader's selection resolves to a `data-src` line, `Readable.map` gives its path. The native half
 of D5, agent data files in the Library, is merged (#290; see the table above).
 
-## Actionable Markdown (A1 to A3)
+## Actionable Markdown (A1 to A5)
 
 Contract: `docs/design/ACTIONABLE_MARKDOWN.md`. The parser is pure; the reader and the native host
 share its 1-based line numbering and the fixtures in `tests/fixtures/actionable/` (`*.md` with
@@ -316,8 +318,12 @@ actionableGlyphs(md: MarkdownIt): void;                              // static g
 markFields(tokens, actionable, TokenCtor): void; chipRow(actionable): HTMLElement | null;
 
 // src/desktop/reader/controls.ts: DOM decoration, click/keyboard/menu gestures
-decorateControls(root: HTMLElement, actionable: ActionableDocument): void;
+decorateControls(root: HTMLElement, actionable: ActionableDocument, onAction: ControlHandler, menuHost: MenuHost): void; // MenuHost = HTMLElement | ShadowRoot
 setControlHandler(next: ControlHandler | null): void; controlHandler(): ControlHandler | null;
+desktopControlHandler: ControlHandler;                               // what the desktop entry passes: the handler above, read at gesture time
+
+// src/embed/reader.ts (A5): <mdviewer-reader>, a shadow-root host of the same reader
+class MdviewerReader extends HTMLElement { markdown: string /* also the attribute */ }  // event "change": CustomEvent<{ patches: LinePatch[] }>, trusted gestures only
 
 // src/desktop/reader/writeback.ts: A3 write-back and Undo notice
 createWriteback(deps: WritebackDeps): { change(control, action): Promise<void>; checkOverwritten(doc): void; forget(): void; settled(): Promise<void> };
@@ -396,6 +402,22 @@ Modules with optional embeds explicitly await the workspace gate to preserve exi
 embedded-language colors; that compatibility path is excluded from workspace preparation.
 Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/highlight-reader.test.ts`,
 `tests/desktop-e2e/startup.spec.ts`.
+
+## PDF workbench (`src/pdf/`, P1a)
+
+Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md` §16.
+
+- `src/pdf/engine.ts`: the only PDFium caller (`openPdf`, `PdfDocument`, `PdfOpenError`, `heap`).
+- `src/pdf/view.ts` + `pdf.css`: the reading view (`mountPdf`); `src/pdf/index.ts` is the lazy entry.
+- `src/desktop/pdfs.ts`: eager PDF tab store (`PdfTabs`, `isPdfFile`, `hasPdfSignature`, caps).
+- Shell wire-up in `src/desktop/main.ts`: `pdfShown`, `showPdf`, `closePdfView`, `openWebLink`, the
+  PDF branches of `readFiles`, `activateDocument`, `closeDocumentById`, `resizeText`, `render`.
+- Native (P1b): `src-tauri/src/commands/pdf.rs` (`read_pdf`, `release_pdf`, the PDF token registry),
+  `file_policy.rs` (`PDF_EXTENSIONS`, `MAX_PDF_BYTES`, `is_pdf_name`, `has_pdf_signature`,
+  `Document.pdf`), `commands/open.rs` (`kind: "pdf"`, no watcher). `Host.readPdf` / `Host.releasePdf`
+  in `src/desktop/native.ts`, Tauri side in `src/desktop/hosts/tauri.ts`, `openNativePdfs` in `main.ts`.
+- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`,
+  `tests/desktop-e2e/pdf-native.spec.ts` (fake host: `pdfs` seed, `read_pdf`), Rust tests in `commands/pdf.rs`.
 
 ## Development dependency compatibility
 

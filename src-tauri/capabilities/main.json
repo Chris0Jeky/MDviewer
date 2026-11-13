@@ -27,10 +27,13 @@
     "allow-library-unpin",
     "allow-library-forget",
     "allow-library-mark-seen",
+    "allow-library-mark-seen-many",
     "allow-library-add-project",
     "allow-library-clear",
     "allow-open-relative",
     "allow-read-asset",
+    "allow-read-pdf",
+    "allow-release-pdf",
     "allow-session-record",
     "allow-session-restore",
     "allow-session-setting"

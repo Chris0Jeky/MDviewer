@@ -23,6 +23,8 @@ export interface FakeSeed {
   saveAs?: { name: string; dir: string };
   /** Files passed at launch, [name, text]: the first `take_pending_files` returns them, bound. */
   pending?: Array<[string, string]>;
+  /** PDFs by library id: [name, bytes as base64]. `library_open` returns them as `kind: "pdf"`. */
+  pdfs?: Record<string, [string, string]>;
 }
 export interface FakeState { calls: Array<[string, Record<string, unknown>]>; files: Record<string, string> }
 declare global { interface Window { __fake: FakeState } }
@@ -74,6 +76,11 @@ export async function installFakeHost(page: Page, seed: FakeSeed = {}): Promise<
         return { files: files.map(({ seen, ...file }) => ({ ...file, unseen: !seen && !state.seen.has(file.id) })), truncated: false };
       },
       library_open: ({ id }) => {
+        const pdf = seed.pdfs?.[id as string];
+        if (pdf) {
+          const token = (id as string).padEnd(32, "0");
+          return { documents: [{ name: pdf[0], text: "", bytes: 0, token, path: `C:\\work\\${pdf[0]}`, dir: "C:\\work", encoding: "utf-8", eol: "none", kind: "pdf" }], errors: [], canceled: false };
+        }
         const [name, text] = seed.texts?.[id as string] ?? ["missing.md", "# Missing\n"];
         state.seen.add(id as string);
         const document = { name, text, bytes: text.length, token: (id as string).padEnd(32, "0"), path: `C:\\work\\board\\${name}`, dir: "C:\\work\\board", encoding: "utf-8", eol: "lf" };
@@ -96,6 +103,11 @@ export async function installFakeHost(page: Page, seed: FakeSeed = {}): Promise<
         if (!seed.saveAs) return { outcome: "canceled" };
         const { name, dir } = seed.saveAs;
         return { outcome: "saved", token: "s".repeat(32), generation: ++saved, name, path: `${dir}/${name}`, dir, encoding: "utf-8", eol: "lf" };
+      },
+      read_pdf: ({ token }) => {
+        const found = Object.entries(seed.pdfs ?? {}).find(([id]) => id.padEnd(32, "0") === token);
+        if (!found) throw new Error("revoked");
+        return Uint8Array.from(atob(found[1][1]), c => c.charCodeAt(0)).buffer;
       },
       "plugin:event|listen": () => ++callback,
     };

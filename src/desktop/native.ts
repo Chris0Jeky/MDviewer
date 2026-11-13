@@ -8,6 +8,8 @@ export interface OpenBatch {
     token?: string | null; path?: string; dir?: string;
     encoding?: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
     eol?: "lf" | "crlf" | "cr" | "mixed" | "none";
+    /** `"pdf"`: `text` is empty, the token is a PDF token and the bytes come from `readPdf`. */
+    kind?: "pdf";
   }>;
   errors: Array<{ name: string; message: string }>;
   canceled: boolean;
@@ -64,9 +66,15 @@ export interface Host {
   readonly available: boolean;
   open(): Promise<OpenBatch>;
   takePending(): Promise<OpenBatch>;
+  /**
+   * Open dropped files bound to their files, or null when this host cannot (the shell then reads
+   * them as unbound copies). `copies` hands back files that have no file behind them, to be
+   * read as copies. Call synchronously inside the drop event: the items expire after it.
+   */
+  openDropped?(items: DataTransferItemList): Promise<OpenBatch | { copies: File[] }> | null;
   external(url: string): Promise<void>;
-  /** Save an export (PDF, Markdown copy, data) to a destination the user picks. */
-  save(blob: Blob, filename: string): Promise<{ canceled: boolean }>;
+  /** Save an export (PDF, Markdown copy, data) to a destination the user picks; without it, exports download. */
+  save?(blob: Blob, filename: string): Promise<{ canceled: boolean }>;
   /** Apply line patches to the bound document `token` as one conflict-checked change. */
   patchDocument(token: string, patches: LinePatch[]): Promise<PatchResult>;
   /** Save in place through the document's capability; never sends a path. */
@@ -96,6 +104,13 @@ export interface Host {
   openRelative(token: string, href: string): Promise<OpenBatch>;
   /** Bytes of a local image referenced by the bound document `token` (typed, 20 MB cap). */
   readAsset(token: string, src: string): Promise<ArrayBuffer>;
+  /**
+   * The bytes of a PDF the host opened (`kind: "pdf"`; 200 MB cap; PDF_WORKBENCH.md, P1b). Rejects
+   * with "changed" when the file is no longer the one that was opened, "revoked" for an unknown token.
+   */
+  readPdf(token: string): Promise<Uint8Array>;
+  /** Forget a PDF token when its tab closes. */
+  releasePdf(token: string): Promise<void>;
   /** The last session (S7): the webview sends tokens. */
   session: {
     record(tokens: string[]): Promise<void>;
@@ -108,4 +123,12 @@ export interface Host {
   onClose(canClose: () => boolean, beforeClose?: () => Promise<void>): Promise<() => void>;
 }
 
-export const native: Host = tauriHost;
+/**
+ * Windows runs `tauriHost`. Only a web-shell build (`VITE_MDV_BROWSER_HOST=1`) loads the browser
+ * host, and only outside Tauri; in the Windows build the condition folds to false and the browser
+ * host is not bundled. Where the browser host has no File System Access API its `available` is
+ * false and the shell keeps its file-input and download fallbacks.
+ */
+export const native: Host = !tauriHost.available && import.meta.env.VITE_MDV_BROWSER_HOST === "1"
+  ? (await import("./hosts/browser")).browserHost
+  : tauriHost;

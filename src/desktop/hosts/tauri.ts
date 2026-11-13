@@ -62,6 +62,8 @@ export const tauriHost: Host = {
   openRelative: (token: string, href: string): Promise<OpenBatch> => invoke("open_relative", { token, href }),
   /** Bytes of a local image referenced by the bound document `token` (typed, 20 MB cap). */
   readAsset: (token: string, src: string): Promise<ArrayBuffer> => invoke("read_asset", { token, src }),
+  readPdf: async (token: string): Promise<Uint8Array> => new Uint8Array(await invoke<ArrayBuffer>("read_pdf", { token })),
+  releasePdf: (token: string): Promise<void> => invoke("release_pdf", { token }),
   /** The last session (S7): paths stay native; the webview sends tokens. */
   session: {
     record: (tokens: string[]): Promise<void> => invoke("session_record", { tokens }),

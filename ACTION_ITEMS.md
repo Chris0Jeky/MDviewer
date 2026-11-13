@@ -1,19 +1,37 @@
 # Action Items — Human-Only Tasks
 
-> **Purpose.** This file tracks tasks only the human (the maintainer) can do — manual browser
-> testing, environment setup that needs real binaries, and product/licensing decisions — plus a
-> verified current-state snapshot for session continuity.
+> **Purpose.** This file tracks tasks only the human (the maintainer) can do — credentials and
+> repository or environment settings, approvals, and product, licensing and signing decisions — plus
+> the acceptance checks the owner delegated to agent QA and a verified current-state snapshot.
 >
 > **Rules for agents.**
 > 1. **Read this file at session start.**
-> 2. **Flag every OPEN item** near the top of any summary, status report, or handoff.
-> 3. **Clear an item only on explicit human confirmation** (e.g. "AI-1 is done"). Move it to the
+> 2. **Flag every OPEN item** near the top of any summary, status report, or handoff, and list the
+>    delegated items with their status ("delegated, not accepted" until their charters pass).
+> 3. **Clear an OPEN item only on explicit human confirmation** (e.g. "AI-9 is done"). Move it to the
 >    Completed log with the date and a one-line result. Never self-clear or assume completion.
-> 4. **Keep the Current State snapshot accurate** when verified truth changes.
+> 4. **Never give the owner a mechanical check.** Trying a build, browser and live-site checks,
+>    install, print, keyboard and screen-reader passes are agent QA work (owner decision 2026-11-13):
+>    add them to `docs/qa/ACCEPTANCE.md`, not here. A new OPEN item is only for what no agent can do.
+> 5. **Delegated is not accepted.** A delegated item's status changes only with evidence (a CI link,
+>    a QA session report, an issue number); agents never mark one as accepted by the owner. A
+>    delegated item moves to the Completed log only when every row of its charter in
+>    `docs/qa/ACCEPTANCE.md` has passed or is recorded "not verified (no agent can check it; owner decision 2026-11-13 not to be asked)", with the
+>    evidence linked, and its Completed entry names every not-verified row. A not-verified row is
+>    never acceptance: a #169 box is ticked only when every one of its rows passed.
+> 6. **Keep the Current State snapshot accurate** when verified truth changes.
 
 ---
 
 ## Current State (snapshot)
+
+- **2026-11-13 (acceptance delegated to agent QA)** — main
+  [`59d6c27`](https://github.com/Chris0Jeky/MDviewer/commit/59d6c27). During AI-10 on the CI build from `722cbbd`
+  the owner found #334 and #335 and moved mechanical acceptance checks to agent QA. AI-6, AI-7, AI-8, AI-10 and
+  the four hands-on boxes of #169 are now under "Delegated to agent QA"; AI-11 to AI-13 become QA charters. None
+  was accepted. The only OPEN owner items are **AI-9** and the parked **#169 signing decision**.
+
+### Earlier snapshots (historical)
 
 - **2026-11-12 (Companion push close-out)** — main
   [`2544bc4`](https://github.com/Chris0Jeky/MDviewer/commit/2544bc4) (merge of #297). Its CI
@@ -30,8 +48,6 @@
   and #169 remain OPEN; none was cleared.** No deployment, signed release or performance claim is made; the
   deployed site is unchanged. The ordered queue and every PR/issue number are in
   [ORCHESTRATOR.md](ORCHESTRATOR.md).
-
-### Earlier snapshots (historical)
 
 - **2026-11-12 (companion push: Readable data and Actionable Markdown on main)** — main
   [`8984b9b`](https://github.com/Chris0Jeky/MDviewer/commit/8984b9b7fa29a7d5bafc16f56b96597ef1c454ed)
@@ -297,7 +313,52 @@
 
 ## OPEN items
 
-- **AI-10 — Try the Windows build on your own files (manual acceptance).** The reader can now
+- **#169 (signing box) — Decide code-signing and distribution policy before a public release.** PARKED
+  until a public release is planned. Owner decision only; agents prepare the options when asked.
+  Track it in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169).
+
+- **AI-9 — Harden the `production` environment before the first live automated deploy.**
+  `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path
+  created an **unprotected** `production` environment; PR #126 now isolates dry runs
+  from environments/credentials and transfers the exact tested artifact. Real dry
+  acceptance passed on 2026-10-02 (runs 37075799089 and 37076144920), with live jobs
+  skipped, no pending approvals or new production records. The in-workflow main-only
+  guard is not a control (a dispatch runs the workflow file from its own branch), so the
+  environment settings are what keep the Cloudflare token off other branches. Full
+  steps: docs/DEPLOYMENT.md "Automated deploy".
+  1. GitHub → Settings → Environments → `production` (create it if absent).
+  2. Deployment branches and tags → Selected branches → add `main` only.
+  3. Required reviewers → add yourself (live runs wait; the separate dry job has no environment).
+  4. Environment secrets → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+     If you already added them as repository secrets, delete those copies.
+  5. Actions → Deploy → Run workflow on a reviewed branch or `main` with `dry_run=true`;
+     confirm it goes green without production approval or a new deployment record.
+     Then run once live from `main`, approve, and run the live smoke in
+     docs/DEPLOYMENT.md.
+  6. Reply "AI-9 is done" (or report what failed).
+
+## Delegated to agent QA (owner decision 2026-11-13)
+
+On 2026-11-13, two minutes into AI-10, the owner found two bugs the automated suites had missed
+(#334, #335) and decided, in the owner's words: "these checks... I think we can automate them via QA testing
+and sessions with agents. This is not a good use of my limited time at the moment, clear the action
+points like these, please". This supersedes the same day's choice to defer AI-6 and AI-7 until after
+the web redesign.
+
+**Delegated is not accepted.** These items left the owner's list; they did not pass. Each shows its
+status: *not run*, *automated in CI* (with a link), *agent session run* (with evidence) or *defect
+filed* (with issue numbers). The QA lane owns them; charters and latest results live in
+`docs/qa/ACCEPTANCE.md`. Anything no agent can check is recorded as "not verified (no agent can check it; owner decision 2026-11-13 not to be asked)" and never sent back to the owner. In the former owner steps below, "you" and
+"your own files" now mean the QA agent working on invented files only (never the owner's documents),
+and the "Reply ... is done" and "only you can close this item" lines no longer apply: rule 5 above
+says when a delegated item closes.
+
+- **AI-10 — Try the Windows build on realistic (invented) files.** Delegated 2026-11-13.
+  - **Status:** defect filed: the owner ran steps 1 to 4 on the CI portable build from `722cbbd` (run 43342508614) and found [#334](https://github.com/Chris0Jeky/MDviewer/issues/334) (a tick scrolls the reader) and [#335](https://github.com/Chris0Jeky/MDviewer/issues/335) (write-back Undo hard to find). Agent session: not run.
+  - **Not verifiable by an agent:** the owner's own documents stay private, so agents use an invented corpus modelled on agent-written Markdown; "confusing or missing" is judged by the agent, not the owner.
+  - **Former owner steps** (charter source; no owner reply is expected any more):
+
+  The reader can now
   change your Markdown (tick a task box, edit a line, save) and show JSON and transcripts as readable
   documents. Automated tests prove this on invented files; only you can judge it on real ones. Work
   on files you can afford to change: first make a backup copy of each one (or use a file in a Git
@@ -330,27 +391,12 @@
      User or Assistant. Note anything confusing or missing.
   8. Reply "AI-10 is done" (or report what looked wrong: which file type, what you did, what you saw).
 
-- **AI-9 — Harden the `production` environment before the first live automated deploy.**
-  `.github/workflows/deploy.yml` has only run as `dry_run`. The old PR #116 path
-  created an **unprotected** `production` environment; PR #126 now isolates dry runs
-  from environments/credentials and transfers the exact tested artifact. Real dry
-  acceptance passed on 2026-10-02 (runs 37075799089 and 37076144920), with live jobs
-  skipped, no pending approvals or new production records. The in-workflow main-only
-  guard is not a control (a dispatch runs the workflow file from its own branch), so the
-  environment settings are what keep the Cloudflare token off other branches. Full
-  steps: docs/DEPLOYMENT.md "Automated deploy".
-  1. GitHub → Settings → Environments → `production` (create it if absent).
-  2. Deployment branches and tags → Selected branches → add `main` only.
-  3. Required reviewers → add yourself (live runs wait; the separate dry job has no environment).
-  4. Environment secrets → add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-     If you already added them as repository secrets, delete those copies.
-  5. Actions → Deploy → Run workflow on a reviewed branch or `main` with `dry_run=true`;
-     confirm it goes green without production approval or a new deployment record.
-     Then run once live from `main`, approve, and run the live smoke in
-     docs/DEPLOYMENT.md.
-  6. Reply "AI-9 is done" (or report what failed).
+- **AI-8 — Pulseboard Beta bar on the live site.** Delegated 2026-11-13.
+  - **Status:** not run.
+  - **Not verifiable by an agent:** whether Pulseboard stores the events (a Pulseboard-side change); the SDK is inert under automation, so this needs a real browser session on the live site.
+  - **Former owner steps** (charter source; no owner reply is expected any more):
 
-- **AI-8 — Accept the Pulseboard Beta bar on the live site (manual gate, after deploy).** The
+  The
   Pulseboard SDK 3.1 install (PR #105, Pulseboard#105) is proven by unit
   tests and the artifact guard, but the SDK is deliberately inert under Playwright and off the
   production origin, so only the live site shows the real bar. Nothing is stored until Pulseboard
@@ -369,7 +415,12 @@
   5. With Global Privacy Control on (Brave, or Firefox's setting), reload: no bar, no request.
   6. Reply "AI-8 is done" (or report what looked wrong).
 
-- **AI-7 — Accept the QA-sweep fixes on the live site (manual gate).** Steps 1–3 are done
+- **AI-7 — QA-sweep fixes on the live site.** Delegated 2026-11-13.
+  - **Status:** not run (steps 1 to 3 were done for deployment `bf04155f` on 2026-10-02).
+  - **Not verifiable by an agent:** the stable-origin update toast (step 5) needs a second live deployment, which waits on AI-9.
+  - **Former owner steps** (charter source; no owner reply is expected any more):
+
+  Steps 1–3 are done
   again for the current deployment (2026-10-02): application `main` `51b9758`
   passed exact-head hosted CI and Windows qualification; deployed via the existing
   direct-upload path (immutable URL `https://bf04155f.mdviewer-c9r.pages.dev/`,
@@ -409,7 +460,12 @@
      the deferred QA item. Residual trade-off: Export sits off the initial phone
      viewport until swiped or focus-scrolled into view.
 
-- **AI-6 — Accept the split workspace in a real browser (manual UI gate).** The split editor is
+- **AI-6 — Split workspace in a real browser.** Delegated 2026-11-13.
+  - **Status:** not run by an agent; Chromium and Firefox authoring regressions run in hosted CI (`docs/design/AUTHORING_QUALITY.md`).
+  - **Not verifiable by an agent:** how typing *feels* to a person; agents measure the proxies (input-to-paint latency, caret and token alignment) instead. Safari on macOS (no Mac on this host).
+  - **Former owner steps** (charter source; no owner reply is expected any more):
+
+  The split editor is
   merged to `main` (PR #36, `87249e0`) with 36/36 Chromium E2E tests green, including layer
   alignment, live typing → pagination, divider drag, and print-media checks. Automated coverage
   cannot judge how the *typing* feels, and only you can close this item.
@@ -455,6 +511,20 @@
   once already. Step 12 is the only one that touches the non-Chromium gap.
 
   Reply "AI-6 is done" (or report what looked wrong) and it moves to the Completed log.
+
+- **[#169](https://github.com/Chris0Jeky/MDviewer/issues/169) hands-on boxes — Windows install and uninstall, Explorer associations, keyboard and Narrator, printing.** Delegated 2026-11-13.
+  The boxes stay unticked in #169 until agent evidence is recorded there. Install, uninstall and
+  Explorer-association checks run only in Windows Sandbox, a virtual machine or a separate Windows
+  account, never on the owner's account: the installer registers file associations and can replace
+  the owner's installed copy and its app data. Where no such place is available they stay not run.
+  - **Status:** not run. The native Windows smoke in hosted CI covers launch, Unicode paths, second-instance forwarding and saves ([WINDOWS_SMOKE.md](docs/design/WINDOWS_SMOKE.md)).
+  - **Not verifiable by an agent:** a physical printer; the quality of real speech output; first-run behaviour on a separate ordinary Windows account (agents run on the owner's account and must not change the owner's file associations).
+  - The #169 performance boxes were never owner steps: they are agent measurement work tracked in #169 and #202.
+
+- **AI-11, AI-12, AI-13 — web shell, PDF editing, new readable kinds.** Planned by the
+  [complete push](docs/design/2026-11-13-complete-push.md) as owner tasks; they are QA charters instead.
+  - **Status:** not run (the features have not shipped yet). The QA lane runs each charter on the first green build after its lane reports the feature merged.
+
 
 ## Completed log
 
