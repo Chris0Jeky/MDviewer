@@ -184,6 +184,14 @@ public static class SmokeWindow {
                 Write-ProbePhase 'getting-toggle-pattern'
                 $pattern = $checkbox.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
                 $result.found = $true
+                # #334: the checkbox sits mid-document; a write-back must not move the view. Bring it
+                # into view, note where it is on screen, and compare after the re-render below.
+                $scrollItem = $null
+                if ($checkbox.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scrollItem)) {
+                    $scrollItem.ScrollIntoView()
+                    Start-Sleep -Milliseconds 500
+                }
+                $result.checkboxTopBefore = $checkbox.Current.BoundingRectangle.Y
                 Write-ProbeResult
                 Write-ProbePhase 'toggling-checkbox'
                 $pattern.Toggle()
@@ -200,6 +208,29 @@ public static class SmokeWindow {
                     $undo = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $undoCondition)
                     if ($null -ne $undo) { $undo.SetFocus(); $result.undoFocused = $true; break }
                     Start-Sleep -Milliseconds 100
+                }
+                # #335: the Undo control is inside the window, not scrolled away or off screen.
+                if ($null -ne $undo) {
+                    $undoBox = $undo.Current.BoundingRectangle
+                    $windowBox = $window.Current.BoundingRectangle
+                    $result.undoInWindow = ($undoBox.Top -ge $windowBox.Top) -and ($undoBox.Bottom -le $windowBox.Bottom)
+                    if (-not $result.undoInWindow) { throw "The Undo control is outside the window: $undoBox in $windowBox." }
+                }
+                # #334: the same item (now marked done) is where it was on screen, within 2 px.
+                $doneName = $ButtonName -replace '\(To do\)$', '(Done)'
+                $doneCondition = [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, $doneName)
+                $doneClock = [System.Diagnostics.Stopwatch]::StartNew()
+                $done = $null
+                while ($null -eq $done -and $doneClock.Elapsed.TotalSeconds -lt 6) {
+                    $done = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $doneCondition)
+                    if ($null -eq $done) { Start-Sleep -Milliseconds 100 }
+                }
+                if ($null -eq $done) { throw "The toggled checkbox '$doneName' did not appear." }
+                Start-Sleep -Milliseconds 700
+                $result.checkboxTopAfter = $done.Current.BoundingRectangle.Y
+                if ([Math]::Abs($result.checkboxTopAfter - $result.checkboxTopBefore) -gt 2) {
+                    throw "The view moved after the write-back: the item was at $($result.checkboxTopBefore) and is at $($result.checkboxTopAfter)."
                 }
                 Write-ProbeResult
                 Write-ProbePhase 'undo-focused'
@@ -781,7 +812,9 @@ try {
     $tasksHeading = 'MDviewer native tasks'
     $tasksName = 'tasks.md'
     $tasksPath = Join-Path $fixtureDirectory $tasksName
-    $tasksText = "# $tasksHeading`r`n`r`n- [ ] Ship the smoke`r`n- [x] Keep this one`r`n"
+    # Long enough to scroll, with the task in the middle (#334: a write-back keeps the view still).
+    $tasksFiller = (1..40 | ForEach-Object { "Paragraph $_ of the native task smoke, invented text.`r`n`r`n" }) -join ''
+    $tasksText = "# $tasksHeading`r`n`r`n$tasksFiller- [ ] Ship the smoke`r`n- [x] Keep this one`r`n`r`n$tasksFiller"
     $tasksBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText)
     $toggledBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText.Replace('- [ ] Ship', '- [x] Ship'))
     [System.IO.File]::WriteAllBytes($tasksPath, $tasksBytes)

@@ -315,8 +315,11 @@
      `git diff`). Exactly that one box should have changed (`[ ]` to `[x]`) and nothing else,
      including line endings and blank lines at the end.
   4. Back in MDviewer, tick a second empty box and, **within about 10 seconds**, click **Undo** in the
-     small notice that appears (it closes by itself after about 10 seconds unless the pointer rests
-     on it). Compare the file on disk again: the second box should be empty again, exactly as before.
+     small dark notice at the bottom centre of the window (or press **Ctrl+Z**; the notice closes by
+     itself after about 10 seconds unless the pointer rests on it). Compare the file on disk again:
+     the second box should be empty again, exactly as before. **Fixed since your first try
+     (2026-11-13, #334 and #335):** a tick no longer moves the view, and Undo now shows its Ctrl+Z
+     shortcut and works from the keyboard. Re-check both on a build from a `main` run after that fix.
   5. Press **Edit** (Ctrl+E), change a line of text, and press Ctrl+S. Check on disk that your
      change was saved and the rest of the file is the same.
   6. Open one of your own `.json` files. It should appear as a readable document (a title, an overview
