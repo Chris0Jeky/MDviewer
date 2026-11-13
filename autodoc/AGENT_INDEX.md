@@ -246,7 +246,7 @@ budget(value: number | undefined, fallback: number): number; count(n: number, no
 // src/data/conversation.ts: the conversation lens for chat and agent transcripts (D2)
 isConversation(records): boolean; conversationList(value): ArrayValue | undefined;
 conversationOverview(lens, records): void; conversationRecord(lens, value, path, index, bad?): void;
-renderConversation(lens, root, list): void;
+renderConversation(lens, root, list, base?): void;   // `base`: the root's own path (`$`, or `$[i]` in a YAML stream)
 
 // src/data/{yaml,toml,csv}.ts (D4): parse to JsonValue plus problems
 prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared
