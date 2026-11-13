@@ -313,6 +313,24 @@ describe("browser host: re-read and line patches", () => {
     expect(await host.saveDocument(doc.token!, 1, "# Tasks\n- [x] One\n", false)).toEqual({ outcome: "mixed-line-endings" });
   });
 
+  it("a reload that adopts an outside change while Save waits never lets the save write over it", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    // While Save waits for write permission, another program writes and a reload adopts it.
+    Object.assign(handle, {
+      queryPermission: async ({ mode }: { mode: string }) => {
+        if (mode === "readwrite") {
+          handle.outside(utf8("# Theirs\n"));
+          expect(await host.readDocument(doc.token!, true, 0)).toMatchObject({ outcome: "changed", text: "# Theirs\n", generation: 1 });
+        }
+        return "granted";
+      },
+    });
+    expect(await host.saveDocument(doc.token!, 0, "# Mine, from the old text\n", false)).toEqual({ outcome: "conflict", reason: "changed" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Theirs\n");
+    expect(handle.writes).toBe(0);
+  });
+
   it("a released token can no longer save or re-read", async () => {
     const doc = await open(new FakeHandle("notes.md", utf8("# Notes\n")));
     await host.releaseDocument(doc.token!);
