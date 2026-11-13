@@ -94,4 +94,15 @@ describe("desktop session flush ordering (#250)", () => {
     await flushed;
     expect(boundary.record.mock.calls).toEqual([[[token(1)]], [[]]]);
   });
+
+  it("a record that never lands cannot keep the window open (#336 review)", async () => {
+    boundary.pending.mockResolvedValueOnce(launched).mockResolvedValue(empty);
+    boundary.restore.mockResolvedValue(empty);
+    boundary.record.mockReturnValue(never());
+    await import("../src/desktop/main");
+    await vi.waitFor(() => expect(boundary.record).toHaveBeenCalled(), { timeout: 2000 });
+    const started = Date.now();
+    await closeHandlers()[1]();
+    expect(Date.now() - started).toBeLessThan(4000);
+  }, 10_000);
 });

@@ -222,10 +222,14 @@ function recordSession(): void {
  * On window close: send the current open set now, after any record still in flight. Safe before the
  * last session is restored: the host keeps every entry that has not been reopened yet (#305).
  */
+// A session write that never lands (a locked or scanned library.json) must not keep the window open.
+const FLUSH_WAIT_MS = 2000;
 async function flushSession(): Promise<void> {
   if (!native.available) return;
   clearTimeout(sessionTimer);
-  await sendSession(docs.boundTokens());
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([sendSession(docs.boundTokens()), new Promise<void>(resolve => { timer = setTimeout(resolve, FLUSH_WAIT_MS); })]);
+  clearTimeout(timer);
 }
 
 function syncDocuments(): void {
