@@ -50,6 +50,7 @@ export interface PaginationProblem {
 
 const ATOMIC_ID_ATTR = "data-mdv-atomic-id";
 const PAGE_CONTENT_SELECTOR = ".pagedjs_page_content";
+const FOOTNOTE_AREA_SELECTOR = ".pagedjs_footnote_area";
 const BLANK_PAGE_CLASS = "pagedjs_blank_page";
 /** Flow blocks whose geometry must stay inside their page's content box. */
 const FLOW_BLOCKS =
@@ -209,7 +210,7 @@ export function auditPagination(source: ParentNode, host: HTMLElement): Paginati
     // Paged.js inserts an intentional blank page for a left/right (recto/verso) break.
     if (!content || page.classList.contains(BLANK_PAGE_CLASS)) continue;
     contentPage += 1;
-    if (pages.length > 1 && isEmptyPage(content)) {
+    if (pages.length > 1 && isEmptyPage(page, content)) {
       const next = pages[index + 1]?.querySelector<HTMLElement>(`[${ATOMIC_ID_ATTR}]`);
       return { problem: `page ${index + 1} is empty`, atomicId: next ? atomicIdOf(next) : null };
     }
@@ -277,6 +278,12 @@ function hasOwnText(el: Element): boolean {
   return ownText(el) !== "";
 }
 
-function isEmptyPage(content: HTMLElement): boolean {
-  return !content.textContent?.trim() && !content.querySelector("img, svg, hr, table, canvas");
+/** No body content, and no notes in the page's footnote area (a notes-only last page). */
+function isEmptyPage(sheet: HTMLElement, content: HTMLElement): boolean {
+  const notes = sheet.querySelector<HTMLElement>(FOOTNOTE_AREA_SELECTOR);
+  return (
+    !content.textContent?.trim() &&
+    !content.querySelector("img, svg, hr, table, canvas") &&
+    !notes?.textContent?.trim()
+  );
 }

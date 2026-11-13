@@ -183,3 +183,19 @@ describe("auditPagination unrendered text", () => {
   });
 });
 
+describe("auditPagination notes-only pages", () => {
+  const source = html('<p data-ref="1">closing</p>');
+
+  it("treats a page whose notes sit in its footnote area as complete", () => {
+    const host = html(
+      page('<p data-ref="1">closing</p>') + page("", '<span data-ref="9">Footnote 80 continues here</span>'),
+    );
+    expect(auditPagination(source, host)).toBeNull();
+  });
+
+  it("still flags a page with nothing in its body or its footnote area", () => {
+    expect(auditPagination(source, html(page('<p data-ref="1">closing</p>') + page("")))?.problem).toBe(
+      "page 2 is empty",
+    );
+  });
+});
