@@ -24,7 +24,7 @@ export function trackDataTarget(root: HTMLElement): void {
 const target = (root: Element): Node | null => (anchor && root.contains(anchor) ? anchor : null);
 
 /** Plain text has no parsed values to point at; every other data kind does. */
-export const hasValues = (view: DataView | null | undefined): view is DataView => !!view && view.kind !== "text";
+export const hasValues = (view: DataView | null | undefined): view is DataView => !!view && view.kind !== "text" && view.kind !== "html";
 
 /**
  * The value path of the readable-view block a node sits on: the first line of its stamped range

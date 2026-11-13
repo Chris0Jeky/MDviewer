@@ -177,7 +177,7 @@ function fixtureRoots(text: string, kind: DataKind): (JsonValue | undefined)[] {
     case "yaml": return parseYaml(text).values;
     case "toml": return [parseToml(text).value];
     case "csv": return [parseCsv(text).value];
-    case "text": return [];
+    case "text": case "html": return [];
   }
 }
 

@@ -18,9 +18,9 @@ export interface RenderText {
 }
 
 /** Every format `src/data/` reads (D1, D4). */
-const OPENABLE: ReadonlySet<DataKind> = new Set(["json", "jsonl", "text", "yaml", "toml", "csv"]);
+const OPENABLE: ReadonlySet<DataKind> = new Set(["json", "jsonl", "text", "yaml", "toml", "csv", "html"]);
 const LABELS: Record<DataKind, string> = {
-  json: "JSON", jsonl: "JSON Lines", yaml: "YAML", toml: "TOML", csv: "CSV", text: "Plain text",
+  json: "JSON", jsonl: "JSON Lines", yaml: "YAML", toml: "TOML", csv: "CSV", text: "Plain text", html: "HTML",
 };
 /** The data kind a file opens as, or null for Markdown (and for formats not yet supported). */
 export function dataDocumentKind(fileName: string): DataKind | null {

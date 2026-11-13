@@ -26,7 +26,7 @@ describe("readable data fixtures", () => {
 describe("dataKindOf", () => {
   it.each([
     ["x.json", "json"], ["x.JSONC", "json"], ["x.jsonl", "jsonl"], ["x.NDJSON", "jsonl"],
-    ["x.yaml", "yaml"], ["x.YML", "yaml"], ["x.toml", "toml"], ["x.csv", "csv"], ["x.TSV", "csv"], ["notes.txt", "text"], ["server.LOG", "text"],
+    ["x.yaml", "yaml"], ["x.YML", "yaml"], ["x.toml", "toml"], ["x.csv", "csv"], ["x.TSV", "csv"], ["notes.txt", "text"], ["server.LOG", "text"], ["page.html", "html"], ["OLD.HTM", "html"],
     ["json", null], ["x.md", null], ["x.json.bak", null], ["folder.json/no-extension", null], ["x.json?x", null],
   ])("%s -> %s", (name, kind) => expect(dataKindOf(name!)).toBe(kind));
 });

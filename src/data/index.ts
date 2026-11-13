@@ -5,6 +5,7 @@ import { budget, count, Lens, shape, type TableRow } from "./lens";
 import { parseCsv } from "./csv";
 import { parseToml } from "./toml";
 import { parseYaml, prepareYaml } from "./yaml";
+import { htmlView } from "./html";
 import type { DataKind, Problem, Readable, ReadableOptions } from "./types";
 export type { DataKind, Problem, Readable, ReadableOptions } from "./types";
 export { valueAt, copyValue, subtreeJson, pathForms } from "./copy";
@@ -23,6 +24,7 @@ export function dataKindOf(fileName: string): DataKind | null {
     case "toml": return "toml";
     case "csv": case "tsv": return "csv";
     case "txt": case "log": return "text";
+    case "html": case "htm": return "html";
     default: return null;
   }
 }
@@ -42,6 +44,7 @@ export function toReadable(text: string, kind: DataKind, options: ReadableOption
   const problems: Problem[] = [];
   lens.line(`# ${cellText(options.fileName ?? "Data")}`, "$");
   if (kind === "text") return plainText(text, options, lens);
+  if (kind === "html") return htmlView(text, size(text), lens);
   if (kind !== "json" && kind !== "jsonl") {
     return structured(text, kind, options, lens);
   }
