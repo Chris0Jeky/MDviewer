@@ -285,24 +285,22 @@ describe("injectToc against real markdown-it output", () => {
   });
 
   /**
-   * RESIDUAL (documented, not fixed): SLUGIFY drops every non-ASCII character, so ids for
-   * non-Latin headings are lossy. It is NOT a correctness bug — markdown-it-anchor
-   * de-duplicates colliding slugs (`caf`, `caf-1`) and the TOC link text is now correct
-   * either way. Making SLUGIFY unicode-aware would percent-encode the id, and
-   * handler.ts:fillTocPageNumbers resolves targets via `decodeURIComponent(href)`, so the
-   * screen-preview page numbers would stop resolving. Locked down here so the trade-off is
-   * visible if anyone revisits it.
+   * Non-ASCII headings keep their letters in the id (#204; full matrix in
+   * heading-ids.test.ts). `Café` and `Caf` no longer collide, and the TOC link text is
+   * unchanged either way.
    */
-  it("documents the ASCII-only slug behaviour and its de-duplication", () => {
-    const root = renderDoc("## Café\n\n## Caf\n\n## Ünïcödé\n");
+  it("keeps Unicode letters in ids and de-duplicates colliding slugs", () => {
+    const root = renderDoc("## Café\n\n## Caf\n\n## Ünïcödé\n\n## Café\n");
     const ids = Array.from(root.querySelectorAll("h2")).map((h) => h.id);
-    expect(ids).toEqual(["caf", "caf-1", "ncd"]);
-    expect(new Set(ids).size, "ids stay unique despite the lossy slug").toBe(ids.length);
+    expect(ids).toEqual(["café", "caf", "ünïcödé", "café-1"]);
 
     injectToc(root, settings({ showToc: true }));
     expect(
       Array.from(root.querySelectorAll("a.toc-link .toc-text")).map((s) => s.textContent),
-    ).toEqual(["Café", "Caf", "Ünïcödé"]);
+    ).toEqual(["Café", "Caf", "Ünïcödé", "Café"]);
+    expect(
+      Array.from(root.querySelectorAll("a.toc-link")).map((a) => decodeURIComponent(a.getAttribute("href")!.slice(1))),
+    ).toEqual(ids);
   });
 });
 

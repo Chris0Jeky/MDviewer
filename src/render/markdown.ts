@@ -46,21 +46,26 @@ export interface RenderWarning {
 /**
  * Slugify shared across anchor, toc-done-right, and our synthesized TOC fallback so every
  * heading id and every link target are produced by the identical function — the only way to
- * guarantee they match. Trims, lowercases, collapses whitespace to hyphens, drops anything
- * outside `[\w-]`, and percent-encodes the result so non-ASCII headings stay valid in `href`.
+ * guarantee they match. The id is the heading text trimmed, lowercased, NFC-normalised,
+ * whitespace-collapsed to hyphens and stripped to Unicode letters, marks, numbers, `_` and `-`
+ * (emoji, punctuation and invisible bidi controls drop out). It is the DECODED id: fragments
+ * in hrefs are percent-encoded by the browser and decoded again by `decodeURIComponent`, so
+ * the id itself never contains `%`. ASCII headings slug exactly as before.
  */
 export const SLUGIFY: (s: string) => string = (s: string): string => {
   const base = String(s)
     .trim()
     .toLowerCase()
+    .normalize("NFC")
     .replace(/\s+/g, "-")
-    .replace(/[^\w-]/g, "");
+    // Emoji presentation selectors and the keycap mark are marks (\p{M}) but belong to the emoji.
+    .replace(/[︎️⃣]/gu, "")
+    .replace(/[^\p{L}\p{M}\p{N}_-]/gu, "");
   // A CSS id selector (used by Paged.js `target-counter` for the TOC and by our own
   // resolvers) must not start with a digit or hyphen. Numbered headings like
   // "## 1. Introduction" would otherwise produce "#1-introduction", an invalid selector
   // that throws mid-pagination. Prefix those — and empty slugs — to stay query-safe.
-  const safe = base && /^[a-z_]/.test(base) ? base : `sec-${base}`;
-  return encodeURIComponent(safe);
+  return base && /^[\p{L}_]/u.test(base) ? base : `sec-${base}`;
 };
 
 /** Container-callout flavours; each becomes a `:::name` fenced block. */
