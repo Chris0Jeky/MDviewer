@@ -973,25 +973,39 @@ async function followChange(token: string): Promise<void> {
   syncDocuments();
 }
 
+// Tokens with an explicit Reload in flight: a second click waits for the first.
+const reloading = new Set<string>();
 async function reloadFromDisk(): Promise<void> {
   const target = docs.saveTarget();
-  if (!target?.binding || changingMode || nativeSaveBusy) return;
-  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
-  const now = docs.saveTarget();
-  if (!now || now.id !== target.id) { syncDocuments(); return; } // the owner changed; the watcher follows
+  if (!target?.binding || changingMode || nativeSaveBusy || reloading.has(target.binding.token)) return;
+  const token = target.binding.token;
+  const epoch = modeEpoch;
+  reloading.add(token);
+  let result: ReadResult | null;
+  try { result = await native.readDocument(token, true, target.binding.generation).catch(() => null); }
+  finally { reloading.delete(token); }
+  if (changingMode || epoch !== modeEpoch) {
+    // The owner changed while this read ran: the watcher path follows it under the new owner.
+    if (changingMode) pendingFollow.add(token); else void followChange(token);
+    report(`Reloading ${target.name} was interrupted by the mode change. Choose Reload again if it still differs.`);
+    return;
+  }
+  // The same document, found by its binding: switching tabs meanwhile must not drop the reload.
+  const now = docs.byToken(token);
+  if (!now || now.id !== target.id) { syncDocuments(); return; }
   if (result?.outcome === "changed" && result.text !== null && now.text !== target.text) {
     // Typed after the click (#255): never replace those keystrokes. The host keeps the new read, so
     // another Reload still offers the file's text.
     report(`You edited ${target.name} while it reloaded. Your edits are kept; choose Reload again to replace them.`);
-  } else if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
-    refollowed.delete(target.binding.token);
-    if (target.owner === "reader") void render();
+  } else if (result?.outcome === "changed" && result.text !== null && docs.applyReload(now, { ...result, text: result.text })) {
+    refollowed.delete(token);
+    if (now.owner === "reader" && docs.reader.activeId === now.id) void render();
     report(`Reloaded ${target.name} from disk.`);
   } else if (result?.outcome === "unchanged") {
-    docs.markDisk(target.binding.token, "synced");
+    docs.markDisk(token, "synced");
     report(`${target.name} already matches the file on disk.`);
   } else if (result?.outcome === "missing") {
-    docs.markDisk(target.binding.token, "missing");
+    docs.markDisk(token, "missing");
     report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
   } else if (!result || result.outcome === "failed") {
     report(`Could not reload ${target.name} from disk. Try again.`);

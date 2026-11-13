@@ -268,6 +268,33 @@ describe("desktop live reload", () => {
     expect(boundary.read).toHaveBeenLastCalledWith(TOKEN, true, 0);
   });
 
+  it("a Reload completes for its document after a switch to another tab (Codex on #332)", async () => {
+    await openReader(bound("notes.md", "# One"));
+    const second = bound("other.md", "# Other");
+    second.documents[0]!.token = "d".repeat(32);
+    await openReader(second);
+    const app = { store: new DocStore(), settings: { viewMode: "split" }, exportState: { busy: false },
+      flushRender: vi.fn(async () => {}), captureDocumentPosition: vi.fn(), restoreDocumentPosition: vi.fn(),
+      focusEditor: vi.fn(), destroy: vi.fn(), updateSettings: vi.fn(), onExportStateChange: vi.fn(() => () => {}) };
+    boundary.start.mockReturnValueOnce({ app, detachShortcuts: vi.fn() });
+    document.getElementById("reader-workspace")!.click();
+    await vi.waitFor(() => expect(app.focusEditor).toHaveBeenCalledOnce());
+    const notes = app.store.openDocs.find(doc => doc.name === "notes.md")!;
+    const other = app.store.openDocs.find(doc => doc.name === "other.md")!;
+    app.store.setActive(notes.id);
+    app.store.updateText(notes.id, "# Mine");
+    boundary.read.mockResolvedValueOnce(changed(null));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(visibleBar()).toBeDefined());
+    let finish!: (result: ReadResult) => void;
+    boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="reload"]')!.click();
+    app.store.setActive(other.id); // switch tabs while the read runs
+    finish(changed("# Theirs", 1));
+    await vi.waitFor(() => expect(app.store.openDocs.find(doc => doc.id === notes.id)!.text).toBe("# Theirs"));
+    expect(app.store.openDocs.find(doc => doc.id === other.id)!.text).toBe("# Other");
+  });
+
   it("an explicit Reload that cannot read says so", async () => {
     const app = await workspace(bound("notes.md", "# One"));
     app.store.updateText(app.store.active!.id, "# Mine");
