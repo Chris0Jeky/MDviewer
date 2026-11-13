@@ -90,8 +90,13 @@ pub struct Store {
     pub restore_off: bool,
 }
 
+/// The case-folded identity of a path (Windows paths compare case-insensitively).
+pub fn seen_key(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase()
+}
+
 fn same(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    seen_key(a) == seen_key(b)
 }
 
 fn upsert(list: &mut Vec<Stamped>, path: &Path, at: u64, cap: usize) {
@@ -139,8 +144,12 @@ impl Store {
     pub fn mark_seen(&mut self, path: &Path, at: u64) {
         upsert(&mut self.seen, path, at, MAX_SEEN);
     }
-    pub fn seen_at(&self, path: &Path) -> Option<u64> {
-        self.seen.iter().find(|e| same(&e.path, path)).map(|e| e.at)
+    /// Every seen stamp by `seen_key`, built once so a scan looks files up in O(1).
+    pub fn seen_map(&self) -> HashMap<String, u64> {
+        self.seen
+            .iter()
+            .map(|e| (seen_key(&e.path), e.at))
+            .collect()
     }
     /// Forget every path; the reopen-on-launch preference is kept.
     pub fn clear(&mut self) {
@@ -502,6 +511,20 @@ mod tests {
         assert_eq!(load(&file), (store.clone().sanitize(), true));
         store.clear();
         assert_eq!(store, Store::default());
+    }
+
+    #[test]
+    fn seen_map_answers_like_a_case_folding_lookup_without_scanning() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::default();
+        store.mark_seen(&abs(&dir, "Notes.MD"), 7);
+        store.mark_seen(&abs(&dir, "b.md"), 9);
+        store.mark_seen(&abs(&dir, "notes.md"), 11); // Same file: the later stamp wins.
+        let seen = store.seen_map();
+        assert_eq!(seen.len(), 2);
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "NOTES.md"))), Some(&11));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "B.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "c.md"))), None);
     }
 
     #[test]

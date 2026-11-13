@@ -161,28 +161,31 @@ pub(crate) async fn library_scan(app: AppHandle, id: String) -> Result<ProjectSc
     let scan = tauri::async_runtime::spawn_blocking(move || library::scan(&root))
         .await
         .map_err(|_| "The project folder could not be listed.".to_string())?;
-    Ok(with_library(&app, |library| ProjectScan {
-        truncated: scan.truncated,
-        files: scan
-            .files
-            .into_iter()
-            .map(|file| ProjectFile {
-                unseen: library
-                    .store
-                    .seen_at(&file.path)
-                    .is_none_or(|seen| file.modified > seen),
-                id: library.ids.id(&file.path),
-                name: file
-                    .path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                path: file.path.to_string_lossy().into_owned(),
-                relative: file.relative,
-                modified: file.modified,
-                agent: file.agent,
-            })
-            .collect(),
+    Ok(with_library(&app, |library| {
+        // One case-folded map per scan, not a linear search per file under the lock.
+        let seen = library.store.seen_map();
+        ProjectScan {
+            truncated: scan.truncated,
+            files: scan
+                .files
+                .into_iter()
+                .map(|file| ProjectFile {
+                    unseen: seen
+                        .get(&library::seen_key(&file.path))
+                        .is_none_or(|seen| file.modified > *seen),
+                    id: library.ids.id(&file.path),
+                    name: file
+                        .path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    path: file.path.to_string_lossy().into_owned(),
+                    relative: file.relative,
+                    modified: file.modified,
+                    agent: file.agent,
+                })
+                .collect(),
+        }
     }))
 }
 
