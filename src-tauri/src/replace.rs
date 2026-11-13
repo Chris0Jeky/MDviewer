@@ -84,6 +84,18 @@ pub fn recover_journal(_: &Path) -> io::Result<Vec<PathBuf>> {
     Err(io::ErrorKind::Unsupported.into())
 }
 
+/// Before reading `path` (open, restore, re-read): when it is missing, finish or
+/// roll back a save that a crash interrupted in its folder, so a crash between the
+/// two renames does not make the document look deleted (#249). A present file
+/// needs nothing here: Save and line patches recover before they write.
+pub fn recover_if_missing(path: &Path) {
+    if !path.exists() {
+        if let Some(dir) = path.parent() {
+            let _ = recover_journal(dir);
+        }
+    }
+}
+
 // SHA-256 of the raw bytes (including BOM and line endings), matching the
 // registry's open-time digest.
 #[cfg(any(windows, test))]
@@ -1183,6 +1195,13 @@ mod win {
                 if stage == Stage::RenameIntoPlace {
                     assert!(!path.exists());
                     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 3);
+                    // #249: opening the document's own path recovers first.
+                    let batch = crate::file_policy::read_batch(
+                        [path.clone()],
+                        crate::registry::capture_revision,
+                    );
+                    assert!(batch.errors.is_empty(), "open after the crash failed");
+                    assert_eq!(batch.documents[0].text.as_bytes(), OLD);
                 } else {
                     assert_eq!(
                         fs::read(&path).unwrap(),
