@@ -113,6 +113,29 @@ th {
 }
 
 /* -----------------------------------------------------------------------------
+ * Wide tables (readable data: record tables of many columns). A table always reflows to
+ * the page width and is never zoomed (spec section 4), so it can neither clip nor split
+ * a row. Seven columns or more also get a smaller type size and tighter cells, so the
+ * columns share the width without every word breaking letter by letter. Scoped to the
+ * paged sheet, so the reader (which scrolls wide tables sideways) keeps its own size.
+ * -------------------------------------------------------------------------- */
+.pagedjs_page table:has(> thead > tr > :nth-child(7)) {
+  font-size: 0.82em;
+}
+
+.pagedjs_page table:has(> thead > tr > :nth-child(10)) {
+  font-size: 0.72em;
+}
+
+.pagedjs_page table:has(> thead > tr > :nth-child(14)) {
+  font-size: 0.64em;
+}
+
+.pagedjs_page table:has(> thead > tr > :nth-child(7)) :is(th, td) {
+  padding: 0.3em 0.4em;
+}
+
+/* -----------------------------------------------------------------------------
  * List items fragment like paragraphs. They were once `break-inside: avoid`, but
  * a long item (a checklist entry with several sentences of inline code) then
  * pushed itself WHOLE onto the next page whenever it did not fit in the
