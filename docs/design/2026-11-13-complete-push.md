@@ -34,9 +34,13 @@ and nowhere else. The 2026-11-11 companion push contract still governs everythin
 
 ## Named assumptions (reversible by the owner)
 
-- **Permissive licences only** for new runtime dependencies (MIT, BSD, Apache-2.0, OFL for fonts).
-  AGPL engines (MuPDF) are excluded even though they are GPL-compatible, because the project is
-  `GPL-3.0-only` and a hosted AGPL component adds network-use duties. Reversible: one decision.
+- **Permissive licences by preference** for new runtime dependencies (MIT, BSD, Apache-2.0, OFL for
+  fonts). **Owner decision 2026-11-13:** the owner accepts AGPL source-offer duties, so MuPDF.js
+  (`mupdf`, AGPL-3.0-or-later) is an allowed candidate wherever PDFium cannot do the job (most likely
+  P5 structured text and P6 raw content streams and object access). A permissive option that does
+  the job equally well is still preferred; MuPDF is adopted only on evidence of a real capability gain,
+  and the adopting PR carries the conditions in `PDF_WORKBENCH.md` ("Licence decision"). MDviewer's
+  own code stays `GPL-3.0-only`. The PDFium choice for P1 to P4 is not revisited.
 - **"Hard-to-read files"** means the list in track D below. Reversible: drop or add a kind.
 - **The web keeps working in every browser.** File System Access features light up where the
   browser has them (Chromium); elsewhere the app keeps the file-input and download behaviour and

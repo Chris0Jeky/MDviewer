@@ -44,7 +44,7 @@ Chromium's `page.pdf()`. No owner file was read.
 | E22 | No public API reads or writes a page's raw content-stream bytes or arbitrary object dictionaries | function table (no such export) | 2.15.1 | confirmed absence; affects P6 only |
 | E23 | `pdfjs-dist` reads every spike output (text, rotation, annotations, attachments, metadata) | spike | 6.5.438, Apache-2.0 | confirmed; chosen as the test-only second parser |
 | E24 | `pdf-lib` original is unmaintained (last publish 2022-05); maintained forks `@cantoo/pdf-lib` 2.11.1 (2026-09) and `@pdfme/pdf-lib` 6.2.8 (2026-10), MIT | npm registry | — | recorded; not needed for P1–P5 |
-| E25 | MuPDF (`mupdf` 1.28.6) is `AGPL-3.0-or-later` | npm registry | 1.28.6 | excluded by the permissive-licence assumption |
+| E25 | MuPDF (`mupdf` 1.28.6) is `AGPL-3.0-or-later` | npm registry | 1.28.6 | allowed by owner decision 2026-11-13 where PDFium cannot do the job, on evidence of a real capability gain (see "Licence decision") |
 
 Not yet measured (owed by the named slice): CSP compliance inside the real WebView2 with the bundled
 chunk (P1); a 1,000-page file's scroll memory with page release (P1); `FPDFPage_Delete` under
@@ -77,7 +77,8 @@ second engine only for a job the first cannot do.
    only (E9, E10, E13).
 
 **Rejected.** pdf.js as the runtime engine: rendering and writing would be two engines, and its
-editor writes annotations, not page content. MuPDF: AGPL (assumption). The original `pdf-lib`:
+editor writes annotations, not page content. MuPDF as the core engine: PDFium does P1 to P4 (owner
+decision: not revisited); MuPDF is a P5/P6 candidate only (see "Licence decision"). The original `pdf-lib`:
 unmaintained and no renderer. A pdf.js renderer plus a pdf-lib writer: two engines for the core path.
 
 **Consequences.** The PDF chunk costs about 2.2 MB compressed on first PDF open (E3); nothing loads
@@ -87,6 +88,44 @@ with sizes).
 
 **Reversible by** swapping the engine module behind `src/pdf/engine.ts`; nothing outside `src/pdf`
 calls PDFium.
+
+### Licence decision (owner, 2026-11-13)
+
+The owner accepts AGPL source-offer duties. MuPDF.js (`mupdf`, AGPL-3.0-or-later) may be adopted
+wherever PDFium cannot do the job, most likely P6 (raw content streams and object access, E22) and P5
+(structured text with font and size). A permissive option such as `@cantoo/pdf-lib` is preferred
+when it does the job equally well; the adopting PR names the capability gain that justifies MuPDF.
+P1 to P4 stay on PDFium.
+
+If MuPDF is adopted, that PR also:
+
+- keeps MuPDF behind one adapter in `src/pdf/**`, with no MuPDF types or calls elsewhere and a unit
+  guard that fails if any other module imports `mupdf`, so removing it means deleting the adapter
+  and the dependency;
+- uses it unmodified (a needed patch stops the work and goes to the owner first);
+- publishes one self-contained source archive per release as a source-only GitHub release asset on
+  this repository (this repository at the exact SHA, `package-lock.json`, MuPDF core and the mupdf.js
+  wrapper at the version matching the shipped WASM with their third-party submodule trees, and the
+  WASM build scripts; Artifex's official source tarball if it bundles the third-party trees), records
+  its URL, version and SHA-256 here, and states whether the upstream source reproduces the published
+  WASM. Unmodified forks of mupdf.js and MuPDF core on the owner's account are authorized for this. The
+  source release is not a deployment or an app release (AI-9 and #169 are untouched);
+- names the AGPL component and the archive in `SOURCE.txt` (`scripts/lib/revision.mjs`), puts the
+  AGPL text and MuPDF's `COPYING` into `dist/` and the Tauri resources through
+  `scripts/generate-license-bundle.mjs`, and carries the source archive beside the installer in the
+  Windows CI artifact;
+- adds one unobtrusive "About and licences" entry to the More menu and palette on web and Windows
+  (good practice, not described as a legal requirement);
+- updates the README licence section and `THIRD_PARTY_NOTICES.md`, adds a pointer only to
+  `RELICENSING.md`, and checks the Rust crate licences in the native notices and whether MuPDF's
+  `COPYING` adds terms.
+
+Independently of MuPDF, `THIRD_PARTY_NOTICES.md` now names the Unlicense component
+(`robust-predicates`, through Mermaid).
+
+**Question for the owner (open):** Artifex's site says attribution "ideally should" appear in PDF
+metadata. MDviewer never writes anything into users' PDF metadata on that basis; if wanted, it would
+be an explicit, visible setting, off by default.
 
 ## Code layout and seams
 
