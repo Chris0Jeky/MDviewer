@@ -147,7 +147,7 @@ test("the readable view of JSON saves as Markdown with its tables", async ({ pag
   const saved = await saving;
   expect(saved.suggestedFilename()).toBe("service.readable.md");
   const text = await readFile((await saved.path())!, "utf8");
-  expect(text).toContain("# service.json\n");
+  expect(text).toContain("# service\.json\n");
   expect(text).toContain("| name | demo\\-service |");
   expect(text).not.toContain('"owners"');
 });
