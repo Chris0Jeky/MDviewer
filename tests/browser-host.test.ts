@@ -73,8 +73,13 @@ async function open(handle: FakeHandle) {
 }
 
 describe("browser host: open and save", () => {
-  it("is available only with the picker API", () => {
+  it("is available only with the picker API", async () => {
     expect(host.available).toBe(true);
+    Object.assign(window, { showOpenFilePicker: undefined, showSaveFilePicker: undefined });
+    vi.resetModules();
+    const without = (await import("../src/desktop/hosts/browser")).browserHost;
+    expect(without.available).toBe(false);
+    expect(without.openDropped!([{ kind: "file", getAsFile: () => null, getAsFileSystemHandle: async () => null }] as unknown as DataTransferItemList)).toBeNull();
   });
 
   it("opens a picked file bound by token, with its encoding and line endings", async () => {
@@ -166,6 +171,40 @@ describe("browser host: open and save", () => {
     saveTo = null;
     expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toEqual({ outcome: "canceled" });
   });
+
+  it("Save As keeps the document's kind of extension, as the native dialog does", async () => {
+    saveTo = new FakeHandle("notes.json", new Uint8Array());
+    expect(await host.saveDocumentAs(null, "notes.md", "# A\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
+    const data = await open(new FakeHandle("rows.csv", utf8("a,b\n")));
+    saveTo = new FakeHandle("rows.md", new Uint8Array());
+    expect(await host.saveDocumentAs(data.token!, "rows.csv", "a,b\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
+    saveTo = new FakeHandle("rows.tsv", new Uint8Array());
+    expect(await host.saveDocumentAs(data.token!, "rows.csv", "a,b\n", false)).toMatchObject({ outcome: "saved", name: "rows.tsv" });
+  });
+
+  it("asks for write permission and keeps the text when the browser refuses", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    const asked: string[] = [];
+    Object.assign(handle, {
+      queryPermission: async ({ mode }: { mode: string }) => mode === "read" ? "granted" : "prompt",
+      requestPermission: async ({ mode }: { mode: string }) => { asked.push(mode); return "denied"; },
+    });
+    expect(await host.saveDocument(doc.token!, 0, "# Mine\n", false)).toEqual({ outcome: "failed", code: "permission-denied" });
+    expect(asked).toEqual(["readwrite"]);
+    expect(handle.writes).toBe(0);
+  });
+
+  it("binds dropped files by handle, and opens a drop with no file behind it as copies", async () => {
+    const file = (name: string) => new File(["# D\n"], name);
+    const item = (name: string, handle: FakeHandle | null) => ({ kind: "file", getAsFile: () => file(name), getAsFileSystemHandle: async () => handle });
+    const bound = await host.openDropped!([item("a.md", new FakeHandle("a.md", utf8("# A\n")))] as unknown as DataTransferItemList);
+    expect(bound).toMatchObject({ documents: [{ name: "a.md", text: "# A\n" }], errors: [] });
+    const copies = await host.openDropped!([item("a.md", new FakeHandle("a.md", utf8("# A\n"))), item("b.md", null)] as unknown as DataTransferItemList);
+    expect(copies && "copies" in copies ? copies.copies.map(copy => copy.name) : copies).toEqual(["a.md", "b.md"]);
+    // An engine without handles on drop items: the shell reads them itself.
+    expect(host.openDropped!([{ kind: "file", getAsFile: () => file("c.md") }] as unknown as DataTransferItemList)).toBeNull();
+  });
 });
 
 describe("browser host: re-read and line patches", () => {
@@ -216,6 +255,17 @@ describe("browser host: re-read and line patches", () => {
     };
     const result = await host.readDocument(doc.token!, true, 0);
     expect(result).toEqual({ outcome: "changed", text: "version B\n", generation: 1, encoding: "utf-8", eol: "lf" });
+  });
+
+  it("a patch on a mixed-ending file keeps it mixed, so a later Save still asks first", async () => {
+    const handle = new FakeHandle("tasks.md", utf8("# Tasks\r\n- [ ] One\n"));
+    const doc = await open(handle);
+    expect(doc.eol).toBe("mixed");
+    expect(await host.patchDocument(doc.token!, [{ line: 2, expect: "- [ ] One", replace: "- [x] One" }])).toMatchObject({ outcome: "saved" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Tasks\r\n- [x] One\n");
+    handle.outside(utf8("# Tasks\r\n- [x] One\n"), true); // same bytes, newer read
+    expect(await host.readDocument(doc.token!, true, 0)).toMatchObject({ outcome: "changed", eol: "mixed" });
+    expect(await host.saveDocument(doc.token!, 1, "# Tasks\n- [x] One\n", false)).toEqual({ outcome: "mixed-line-endings" });
   });
 
   it("a released token can no longer save or re-read", async () => {

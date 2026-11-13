@@ -9,7 +9,8 @@ const config = JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", im
 // `--mode webhost` builds the same shell on the browser host (src/desktop/native.ts); the Windows
 // build never uses that mode, so its bundle does not contain the browser host.
 export default defineConfig(({ mode }) => ({
-  define: mode === "webhost" ? { "import.meta.env.VITE_MDV_BROWSER_HOST": JSON.stringify("1") } : {},
+  // Defined in every mode, so an inherited environment variable can never change the Windows bundle.
+  define: { "import.meta.env.VITE_MDV_BROWSER_HOST": JSON.stringify(mode === "webhost" ? "1" : "0") },
   publicDir: false,
   plugins: [{
     name: "desktop-content-security-policy",

@@ -66,9 +66,10 @@ export interface Host {
   takePending(): Promise<OpenBatch>;
   /**
    * Open dropped files bound to their files, or null when this host cannot (the shell then reads
-   * them as unbound copies). Call synchronously inside the drop event: the items expire after it.
+   * them as unbound copies). `copies` hands back files that have no file behind them, to be
+   * read as copies. Call synchronously inside the drop event: the items expire after it.
    */
-  openDropped?(items: DataTransferItemList): Promise<OpenBatch> | null;
+  openDropped?(items: DataTransferItemList): Promise<OpenBatch | { copies: File[] }> | null;
   external(url: string): Promise<void>;
   /** Save an export (PDF, Markdown copy, data) to a destination the user picks. */
   save(blob: Blob, filename: string): Promise<{ canceled: boolean }>;

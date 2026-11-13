@@ -124,12 +124,21 @@ async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size"
   return { ok: true, snapshot: { size: written.size, modified: written.lastModified, bytes, digest: await digestOf(bytes) } };
 }
 
+/** Move the binding to the bytes just written; `eol` is what those bytes now use. */
 function adopt(binding: Binding, written: Snapshot, eol: Eol): void {
   binding.size = written.size;
   binding.modified = written.modified;
   binding.digest = written.digest;
-  binding.eol = eol === "mixed" ? "lf" : eol;
+  binding.eol = eol;
 }
+/** An untitled or Markdown name saves as Markdown; a data or text name stays in that family. */
+function familyOf(name: string): "markdown" | "data" {
+  const extension = documentExtension(name);
+  return extension === null || extension === "md" || extension === "markdown" ? "markdown" : "data";
+}
+
+/** A Save writes a mixed source as LF (after consent); every other style is kept. */
+const savedEol = (eol: Eol): Eol => eol === "mixed" ? "lf" : eol;
 
 function savedResult(token: string, binding: Binding): SaveResult {
   const { name } = binding.handle;
@@ -168,9 +177,15 @@ export const browserHost: Host = {
     type WithHandle = DataTransferItem & { getAsFileSystemHandle?(): Promise<FileSystemHandle | null> };
     const files = Array.from(items).filter(item => item.kind === "file") as WithHandle[];
     if (!browserHost.available || !files.length || !files.every(item => typeof item.getAsFileSystemHandle === "function")) return null;
-    // Every handle is requested now, inside the event; reading them can wait.
+    // Every handle (and the plain file, for an item without one) is taken now, inside the event.
+    const plain = files.map(item => item.getAsFile());
     const handles = Promise.all(files.map(item => item.getAsFileSystemHandle!()));
-    return handles.then(list => readHandles(list.filter((handle): handle is Handle => handle !== null)));
+    return handles.then(async list => {
+      if (list.every(handle => handle !== null)) return readHandles(list as Handle[]);
+      // Some item has no file behind it (from an archive or another app): open everything as a
+      // copy rather than silently dropping it. The shell's own reader applies the usual rules.
+      return { copies: plain.filter((file): file is File => file !== null) };
+    });
   },
 
   async external(url) {
@@ -232,7 +247,7 @@ export const browserHost: Host = {
       const written = await writeIfUnchanged(binding, binding, bytes);
       if (!written.ok) return written.result;
       if (bindings.get(token) !== binding || binding.generation !== generation) return { outcome: "failed", code: "revoked-after-write" };
-      adopt(binding, written.snapshot, eol);
+      adopt(binding, written.snapshot, savedEol(eol));
       binding.generation += 1;
       return savedResult(token, binding);
     });
@@ -247,9 +262,10 @@ export const browserHost: Host = {
       if ("refused" in encoded) return encoded.refused;
       const { bytes } = encoded;
       let handle: Handle;
-      try { handle = await picker().showSaveFilePicker!({ suggestedName: name, types: DOCUMENT_TYPES }); }
+      try { handle = await picker().showSaveFilePicker!({ suggestedName: name, types: [DOCUMENT_TYPES[familyOf(name) === "markdown" ? 0 : 1]!] }); }
       catch (error) { if (isAbort(error)) return { outcome: "canceled" }; throw error; }
-      if (!documentExtension(handle.name)) return { outcome: "failed", code: "invalid-destination" };
+      // Like `export_destination`: keep the document's kind of extension (Markdown, or data and text).
+      if (!documentExtension(handle.name) || familyOf(handle.name) !== familyOf(name)) return { outcome: "failed", code: "invalid-destination" };
       if (token && bindings.get(token) !== own) return { outcome: "failed", code: "revoked" };
       // This document's own file gets exactly Save's check; the picker's confirmation never bypasses it.
       const same = own ? await own.handle.isSameEntry(handle) : false;
@@ -272,7 +288,7 @@ export const browserHost: Host = {
       if (token) bindings.delete(token);
       const next = newToken();
       const binding: Binding = { ...target, handle, encoding: style.encoding, generation: 0 };
-      adopt(binding, written.snapshot, style.eol);
+      adopt(binding, written.snapshot, savedEol(style.eol));
       bindings.set(next, binding);
       return savedResult(next, binding);
     });

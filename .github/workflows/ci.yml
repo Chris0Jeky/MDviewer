@@ -105,6 +105,7 @@ jobs:
       - name: The Windows bundle never contains the browser host
         run: |
           npm run desktop:build:web
+          test -d dist-desktop/assets || { echo "::error::no Windows bundle was built"; exit 1; }
           if grep -rl "showOpenFilePicker" dist-desktop/assets; then echo "::error::the browser host leaked into the Windows bundle"; exit 1; fi
       - run: npm run webhost:build
       - name: Web host tests (real handles in Chromium, fallback in Firefox)

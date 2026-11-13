@@ -830,11 +830,14 @@ window.addEventListener("drop", event => {
   void readFiles(Array.from(event.dataTransfer.files));
 });
 
-async function openBound(batch: Promise<OpenBatch>): Promise<void> {
+async function openBound(dropped: Promise<OpenBatch | { copies: File[] }>): Promise<void> {
   const request = ++generation;
   report("");
-  try { commitBatch(await batch, request); }
-  catch (error) { report(`Could not open files: ${errorText(error)}`); }
+  try {
+    const batch = await dropped;
+    if ("copies" in batch) await readFiles(batch.copies);
+    else commitBatch(batch, request);
+  } catch (error) { report(`Could not open files: ${errorText(error)}`); }
 }
 
 const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
