@@ -516,8 +516,9 @@ pub(crate) async fn session_restore(
     let batch = tauri::async_runtime::spawn_blocking(move || read_batch(restore, capture_revision))
         .await
         .map_err(|_| "The last session could not be reopened.".to_string())?;
+    let reopened: Vec<PathBuf> = batch.documents.iter().map(|doc| doc.path.clone()).collect();
     with_library(&app, |library| {
-        library.store.settle_restore(&attempted, is_gone)
+        library.store.settle_restore(&attempted, &reopened, is_gone)
     });
     Ok(OpenBatch::from_read_batch(
         batch,

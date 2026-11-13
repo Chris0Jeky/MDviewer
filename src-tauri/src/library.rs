@@ -209,9 +209,17 @@ impl Store {
 
     /// After a reopen attempt: forget a carried file only when it is definitely gone (deleted
     /// from a folder that is still there). An unplugged drive or a locked file is kept.
-    pub fn settle_restore(&mut self, attempted: &[PathBuf], gone: impl Fn(&Path) -> bool) {
+    /// A file that did reopen is owned by the open set from now on: closing it before the next
+    /// record must forget it, not carry it back.
+    pub fn settle_restore(
+        &mut self,
+        attempted: &[PathBuf],
+        reopened: &[PathBuf],
+        gone: impl Fn(&Path) -> bool,
+    ) {
         self.unrestored.retain(|entry| {
-            !(attempted.iter().any(|path| same(path, &entry.path)) && gone(&entry.path))
+            !reopened.iter().any(|path| same(path, &entry.path))
+                && !(attempted.iter().any(|path| same(path, &entry.path)) && gone(&entry.path))
         });
     }
 
@@ -669,6 +677,35 @@ mod tests {
     }
 
     #[test]
+    fn a_reopened_file_closed_before_the_first_record_is_not_carried_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let [a, b] = ["a.md", "b.md"].map(|n| abs(&dir, n));
+        let stamped = |paths: &[&PathBuf]| -> Vec<Stamped> {
+            paths
+                .iter()
+                .map(|p| Stamped {
+                    path: (*p).clone(),
+                    at: 1,
+                })
+                .collect()
+        };
+        let mut store = Store {
+            session: stamped(&[&a, &b]),
+            unrestored: stamped(&[&a, &b]),
+            ..Store::default()
+        };
+        // Both reopen; the user closes a before the first (debounced) record lands.
+        store.settle_restore(&[a.clone(), b.clone()], &[a.clone(), b.clone()], |_| false);
+        store.record_session(std::slice::from_ref(&b), 5);
+        let paths: Vec<PathBuf> = store.session.iter().map(|e| e.path.clone()).collect();
+        assert_eq!(
+            paths,
+            std::slice::from_ref(&b),
+            "a was closed: it must not come back"
+        );
+    }
+
+    #[test]
     fn unrestored_session_files_are_carried_until_opened_gone_or_cleared() {
         let dir = tempfile::tempdir().unwrap();
         let [a, b, c] = ["a.md", "b.md", "c.md"].map(|n| abs(&dir, n));
@@ -700,20 +737,20 @@ mod tests {
         store.record_session(&[], 8);
         assert_eq!(paths(&store), std::slice::from_ref(&c));
         // Only a file that is definitely gone is dropped after a reopen attempt.
-        store.settle_restore(std::slice::from_ref(&c), |_| false);
+        store.settle_restore(std::slice::from_ref(&c), &[], |_| false);
         assert_eq!(
             paths(&store),
             std::slice::from_ref(&c),
             "unavailable, not gone: kept"
         );
-        store.settle_restore(std::slice::from_ref(&b), |_| true);
+        store.settle_restore(std::slice::from_ref(&b), &[], |_| true);
         store.record_session(&[], 9);
         assert_eq!(
             paths(&store),
             std::slice::from_ref(&c),
             "not attempted: kept"
         );
-        store.settle_restore(std::slice::from_ref(&c), |_| true);
+        store.settle_restore(std::slice::from_ref(&c), &[], |_| true);
         store.record_session(&[], 10);
         assert!(store.session.is_empty());
         // Open files take the cap; carried ones fill what is left.
