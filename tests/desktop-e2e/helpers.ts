@@ -72,10 +72,16 @@ export async function installPickers(page: Page): Promise<void> {
     const abort = () => new DOMException("The user aborted a request.", "AbortError");
     Object.assign(window, {
       showOpenFilePicker: async () => {
-        const names = window.__pick.splice(0);
-        if (!names.length) throw abort();
+        const paths = window.__pick.splice(0);
+        if (!paths.length) throw abort();
         const root = await navigator.storage.getDirectory();
-        return Promise.all(names.map(name => root.getFileHandle(name)));
+        // "folder/name.md" picks a file inside a folder of the private file system.
+        return Promise.all(paths.map(async path => {
+          const parts = path.split("/");
+          let dir = root;
+          for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part);
+          return dir.getFileHandle(parts.at(-1)!);
+        }));
       },
       showSaveFilePicker: async () => {
         if (!window.__saveAs) throw abort();
@@ -87,8 +93,8 @@ export async function installPickers(page: Page): Promise<void> {
 
 /**
  * Save a copy (a download). Without a file host Ctrl+S is Save Copy; where Ctrl+S saves the file in
- * place (the browser host) the copy is the explicit command: Save Markdown in the workspace, the
- * palette's "Save a copy…" in the reader. In-place Save is covered by `tests/webhost-e2e/save.spec.ts`.
+ * place (the browser host) the copy is the explicit command: Save Markdown in the workspace, More → "Save a copy…"
+ * in the reader. In-place Save is covered by `tests/webhost-e2e/save.spec.ts`.
  */
 export async function saveCopy(page: Page, from: import("@playwright/test").Locator): Promise<void> {
   if (!onBrowserHost()) { await from.press("Control+s"); return; }
@@ -96,18 +102,20 @@ export async function saveCopy(page: Page, from: import("@playwright/test").Loca
     await page.getByRole("button", { name: "Save Markdown", exact: true }).click();
     return;
   }
-  await page.keyboard.press("Control+K");
-  await page.getByRole("combobox", { name: "Search commands and files" }).fill("Save a copy");
-  await page.keyboard.press("Enter");
+  await moreMenu(page, "Save a copy…");
 }
 
 /** Write a file into the origin private file system (the browser host's "disk" in tests). */
-export const writeFile = (page: Page, name: string, bytes: Buffer): Promise<void> => page.evaluate(async ({ name, bytes }) => {
-  const handle = await (await navigator.storage.getDirectory()).getFileHandle(name, { create: true });
+export const writeFile = (page: Page, path: string, bytes: Buffer): Promise<void> => page.evaluate(async ({ path, base64 }) => {
+  const parts = path.split("/");
+  let dir = await navigator.storage.getDirectory();
+  for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part, { create: true });
+  const handle = await dir.getFileHandle(parts.at(-1)!, { create: true });
   const writable = await handle.createWritable();
-  await writable.write(new Uint8Array(bytes));
+  // Base64, not a number array: the session-limit fixtures are 12.6 MB.
+  await writable.write(Uint8Array.from(atob(base64), char => char.charCodeAt(0)));
   await writable.close();
-}, { name, bytes: [...bytes] });
+}, { path, base64: bytes.toString("base64") });
 
 export const readFile = async (page: Page, name: string): Promise<Buffer> => Buffer.from(await page.evaluate(async name => {
   const file = await (await (await navigator.storage.getDirectory()).getFileHandle(name)).getFile();
@@ -139,19 +147,29 @@ flowchart LR
 [^note]: This footnote stays with the document.
 `;
 
-export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
+let picks = 0;
+/**
+ * Open files the way a user picks them. `open` triggers the picker; Ctrl+O works from the empty
+ * state, the tabs and the document alike (S3 has no Open button in the bar).
+ */
+export async function openFiles(page: Page, files: Array<{ name: string; text: string } | { name: string; bytes: Buffer }>,
+  open: () => Promise<void> = () => page.keyboard.press("Control+O")): Promise<void> {
   if (onBrowserHost()) {
-    // The browser host opens the files themselves (bound, savable in place).
-    for (const file of files) await writeFile(page, file.name, Buffer.from(file.text));
-    await page.evaluate(names => { window.__pick = names; }, files.map(file => file.name));
-    await page.keyboard.press("Control+O");
+    // The browser host opens the files themselves (bound, savable in place). Each pick gets its own
+    // folder: two picks of "notes.md" are two files, as two copies are on the fallback path.
+    const folder = `pick-${++picks}`;
+    for (const file of files) await writeFile(page, `${folder}/${file.name}`, bytesOf(file));
+    await page.evaluate(paths => { window.__pick = paths; }, files.map(file => `${folder}/${file.name}`));
+    await open();
+    // Like the file chooser path: return once the picker has handed over the files.
+    await page.waitForFunction(() => window.__pick.length === 0);
     return;
   }
   const chooser = page.waitForEvent("filechooser");
-  // Ctrl+O works from the empty state, the tabs and the document alike (S3 has no Open button in the bar).
-  await page.keyboard.press("Control+O");
-  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
+  await open();
+  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: bytesOf(file) })));
 }
+const bytesOf = (file: { text: string } | { bytes: Buffer }): Buffer => "bytes" in file ? file.bytes : Buffer.from(file.text);
 
 /** A new blank document in the PDF workspace: New opens Edit (S5), then Export PDF…. */
 export async function newInWorkspace(page: Page, via: "keyboard" | "button" = "keyboard"): Promise<void> {

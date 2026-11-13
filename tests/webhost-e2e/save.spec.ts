@@ -86,6 +86,17 @@ test.describe("Chromium: the file the user picked", () => {
     expect((await readFile(page, "plan.md")).toString()).toBe("# Plan\n\nFirst.\nSecond.\n");
   });
 
+  test("a checkbox on a bound file is written back byte-exact at once, and Undo restores the bytes", async ({ page }) => {
+    const before = encode("# Tasks\n\n- [ ] Write the plan\n- [ ] Ship it\n", "utf-16le", "\r\n");
+    await writeFile(page, "tasks.md", before);
+    await openPicked(page, "tasks.md", "Tasks");
+    await page.locator("#reader-document").getByRole("checkbox", { name: /Write the plan/ }).click();
+    await expect.poll(async () => (await readFile(page, "tasks.md")).equals(encode("# Tasks\n\n- [x] Write the plan\n- [ ] Ship it\n", "utf-16le", "\r\n"))).toBe(true);
+    await expect(documentTabs(page)).toHaveText(["tasks.md"]); // written, not dirty
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect.poll(async () => (await readFile(page, "tasks.md")).equals(before)).toBe(true);
+  });
+
   test("a canceled picker opens nothing and reports nothing", async ({ page }) => {
     await page.keyboard.press("Control+O");
     await page.waitForTimeout(300); // nothing should happen; give it the chance to

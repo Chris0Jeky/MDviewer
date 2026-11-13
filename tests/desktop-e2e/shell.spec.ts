@@ -1,4 +1,4 @@
-import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN, openPdf, onBrowserHost } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, documentTabs, RICH_MARKDOWN, openPdf, onBrowserHost, installPickers } from "./helpers";
 
 const DOCS = [
   { name: "alpha.md", text: "# Alpha\n\nFirst document.\n\n## Second section\n\nMore." },
@@ -32,7 +32,8 @@ test("the first document paints before the panel or palette code loads", async (
   await page.keyboard.press("Escape");
   await page.keyboard.press("Control+b");
   await expect(page.locator("#shell-panel [role=tablist]")).toBeVisible();
-  expect(lazy().length).toBe(2); // palette, then panel
+  // Palette, then panel; with a file host the panel also loads its Library tab.
+  expect(lazy().length).toBe(onBrowserHost() ? 3 : 2);
 });
 
 test("every former reader control is a command in the palette", async ({ page }) => {
@@ -92,6 +93,8 @@ test("a keyboard-only walk reaches the bar, tabs, menu, panel and palette and re
   // Panel: Ctrl+B opens it; its tabs take focus by Tab; Ctrl+B closes it again.
   await page.keyboard.press("Control+b");
   await expect(page.locator("#shell-panel")).toBeVisible();
+  // With a file host the Library tab comes first (as on Windows); the next tab is the Outline.
+  if (onBrowserHost()) await page.keyboard.press("ArrowRight");
   await expect(page.locator("#reader-outline a")).toHaveCount(2);
   await page.locator("#shell-panel [role=tab]").first().focus();
   await page.keyboard.press("Control+b");
@@ -137,13 +140,16 @@ test("shell screenshots: three themes, a narrow window and forced colors", async
   await expect(page.locator("#shell-panel")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(760);
   await page.screenshot({ path: test.info().outputPath("shell-narrow-760-panel.png") });
+  if (onBrowserHost()) await page.locator("#shell-panel").getByRole("tab", { name: "Outline", exact: true }).click();
   await page.locator("#reader-outline a").first().focus();
   await page.keyboard.press("Escape");
   await expect(page.locator("#shell-panel")).toBeHidden();
 
   const forced = await browser.newContext({ forcedColors: "active", viewport: { width: 1120, height: 800 } });
   const forcedPage = await forced.newPage();
+  if (onBrowserHost()) await installPickers(forcedPage);
   await forcedPage.goto(page.url());
+  await expect(forcedPage.locator("html")).toHaveAttribute("data-shell", "ready");
   await openFiles(forcedPage, DOCS);
   await readyReader(forcedPage, "Alpha");
   await forcedPage.getByRole("button", { name: "More", exact: true }).click();

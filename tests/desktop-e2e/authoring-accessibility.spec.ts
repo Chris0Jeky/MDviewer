@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, newInWorkspace, readyWorkspace, saveCopy } from "./helpers";
+import { test, expect, newInWorkspace, openFiles, readyWorkspace, saveCopy } from "./helpers";
 
 test("keyboard New, layout, Find and Save expose usable names, states and focus", async ({ page, browser, browserName }, info) => {
   await info.attach("browser-runtime", { body: JSON.stringify({ engine: browserName, version: browser.version() }), contentType: "application/json" });
@@ -41,9 +41,7 @@ test("keyboard New, layout, Find and Save expose usable names, states and focus"
 });
 
 test("an invalid Open announces a recoverable error and keyboard retry opens the file", async ({ page }) => {
-  let choosing = page.waitForEvent("filechooser");
-  await page.keyboard.press("Control+o");
-  await (await choosing).setFiles({ name: "not-supported.xml", mimeType: "application/xml", buffer: Buffer.from("Rejected source") });
+  await openFiles(page, [{ name: "not-supported.xml", text: "Rejected source" }], () => page.keyboard.press("Control+o"));
   const notice = page.locator("#reader-notice");
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute("role", "status");
@@ -52,9 +50,7 @@ test("an invalid Open announces a recoverable error and keyboard retry opens the
   const snapshot = await page.locator("#reader-shell").ariaSnapshot();
   expect(snapshot).toContain("Markdown");
   await expect(page.getByRole("button", { name: "Open…", exact: true })).toBeEnabled();
-  choosing = page.waitForEvent("filechooser");
-  await page.keyboard.press("Control+o");
-  await (await choosing).setFiles({ name: "valid.md", mimeType: "text/markdown", buffer: Buffer.from("# Recovered note") });
+  await openFiles(page, [{ name: "valid.md", text: "# Recovered note" }], () => page.keyboard.press("Control+o"));
   await expect(page.locator("#reader-document h1")).toHaveText("Recovered note");
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-status")).toContainText(/ words? · /);
