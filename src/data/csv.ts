@@ -1,12 +1,18 @@
 import type { JsonValue } from "./json";
 import type { Problem } from "./types";
 
-export interface CsvResult { value: Extract<JsonValue, { kind: "array" }>; columns: number; keys: string[]; problems: Problem[] }
+/** `rows` counts every data row; `value` holds only the first `keep` of them. */
+export interface CsvResult { value: Extract<JsonValue, { kind: "array" }>; rows: number; columns: number; keys: string[]; problems: Problem[] }
 
-/** RFC 4180 fields, with all three common record terminators. No scalar coercion. */
-export function parseCsv(text: string, delimiter = ","): CsvResult {
+/**
+ * RFC 4180 fields, with all three common record terminators. No scalar coercion. Only the header
+ * and the first `keep` data rows are kept as cells; later rows are scanned and counted, so a huge
+ * file costs time but not an object per cell.
+ */
+export function parseCsv(text: string, delimiter = ",", keep = Infinity): CsvResult {
   type Cell = Extract<JsonValue, { kind: "string" }>;
   const rows: Cell[][] = [];
+  let seen = 0, widest = 0; // all records, the header included, and the longest of the data rows
   const problems: Problem[] = [];
   let at = 0, line = 1, column = 1;
   function next(): string {
@@ -46,12 +52,13 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
       if (text[at] !== delimiter) break;
       next();
     }
-    rows.push(row);
+    if (seen <= keep) rows.push(row); // the header is seen 0
+    if (seen++ > 0) widest = Math.max(widest, row.length);
     if (text[at] === "\r") { next(); if (text[at] === "\n") next(); }
     else if (text[at] === "\n") next();
   }
   const header = rows.shift() ?? [];
-  const columns = rows.reduce((n, row) => Math.max(n, row.length), header.length);
+  const columns = Math.max(widest, header.length);
   // Reserve names globally: literal headers such as "x (2)" or "column 3" must not collide.
   const used = new Set<string>();
   const nextSuffix = new Map<string, number>(); // per base name, so many duplicates stay linear
@@ -69,13 +76,13 @@ export function parseCsv(text: string, delimiter = ","): CsvResult {
   }));
   // A header column no row reaches would vanish from the table. Name it once, as a blank
   // cell on the first record (not on every row: a ragged file stays linear in its size).
-  const reached = rows.reduce((n, row) => Math.max(n, row.length), 0);
+  const reached = widest;
   if (items[0] && reached < keys.length) {
     const { line, column } = items[0];
     for (const key of keys.slice(reached)) items[0].entries.push({ key, value: { line, column, kind: "literal", raw: "" } });
   }
   return {
     value: { kind: "array", line: 1, column: 1, items },
-    columns, keys, problems,
+    rows: Math.max(0, seen - 1), columns, keys, problems,
   };
 }
