@@ -222,6 +222,32 @@ fn error_for(path: &Path, message: &str) -> FileError {
     }
 }
 
+/// True for a name Win32 maps to a device instead of a file: CON, PRN, AUX, NUL,
+/// CONIN$, CONOUT$, COM0-9 and LPT0-9 including the superscript forms (COM¹, LPT³),
+/// with or without an extension, and with spaces before the extension (`NUL .png`),
+/// which Win32 strips (#240). The one copy of this rule: open, export and replace use it.
+pub fn is_device_name(name: &str) -> bool {
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    if matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    let mut chars = stem.chars();
+    let port: String = chars.by_ref().take(3).collect();
+    (port == "COM" || port == "LPT")
+        && matches!(
+            (chars.next(), chars.next()),
+            (Some('0'..='9' | '¹' | '²' | '³'), None)
+        )
+}
+
 // Never turn a Markdown open into a device or UNC/network request. Ordinary local
 // absolute paths, including Windows' long-path disk prefix, remain supported.
 pub fn is_local_file_path(path: &Path) -> bool {
@@ -238,13 +264,13 @@ pub fn is_local_file_path(path: &Path) -> bool {
         if path.has_root() && !path.is_absolute() {
             return false;
         }
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
-            if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-                || (stem.len() == 4
-                    && (stem.starts_with("COM") || stem.starts_with("LPT"))
-                    && matches!(stem.as_bytes()[3], b'1'..=b'9'))
-            {
+        for part in path.components() {
+            let std::path::Component::Normal(name) = part else {
+                continue;
+            };
+            let name = name.to_string_lossy();
+            // `a.md:x.json` names an alternate data stream, not a file (#277).
+            if name.contains(':') || is_device_name(&name) {
                 return false;
             }
         }
@@ -412,16 +438,18 @@ fn decode_markdown(bytes: Vec<u8>) -> Result<String, &'static str> {
     let text = if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
         let little_endian = bytes[0] == 0xff;
         let payload = &bytes[2..];
-        if payload.len() % 2 != 0 {
+        if !payload.len().is_multiple_of(2) {
             return Err(ENCODING_ERROR);
         }
         let units = payload
-            .chunks_exact(2)
-            .map(|pair| {
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&pair| {
                 if little_endian {
-                    u16::from_le_bytes([pair[0], pair[1]])
+                    u16::from_le_bytes(pair)
                 } else {
-                    u16::from_be_bytes([pair[0], pair[1]])
+                    u16::from_be_bytes(pair)
                 }
             })
             .collect::<Vec<_>>();
@@ -806,6 +834,36 @@ mod tests {
         assert_eq!(queue.skipped, 0);
     }
 
+    #[test]
+    fn device_names_cover_win32_aliases() {
+        for name in [
+            "NUL",
+            "nul.md",
+            "NUL .png",
+            "COM1.md",
+            "com9",
+            "COM0.txt",
+            "LPT³.md",
+            "COM¹.png",
+            "CONIN$",
+            "conout$.json",
+            "AUX . md",
+        ] {
+            assert!(is_device_name(name), "{name:?}");
+        }
+        for name in [
+            "NULL.md",
+            "COM10.md",
+            "COM.md",
+            "LPT⁴.md",
+            "notes.md",
+            "CONSOLE.md",
+            "a NUL.md",
+        ] {
+            assert!(!is_device_name(name), "{name:?}");
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_paths_allow_local_disks_but_not_devices_or_unc_requests() {
@@ -819,8 +877,17 @@ mod tests {
             r"C:relative.md",
             r"C:\CON.md",
             r"C:\LPT1.md",
+            r"C:\x\a.md:evil.json",
+            r"C:\x\a.md:x.md",
+            r"C:\x:y\a.md",
+            r"C:\NUL .png",
+            r"C:\COM1 .md",
+            r"C:\COM¹.png",
+            r"C:\LPT³.md",
+            r"C:\CON\a.md",
+            r"C:\conout$.md",
         ] {
-            assert!(!is_local_file_path(Path::new(path)));
+            assert!(!is_local_file_path(Path::new(path)), "{path}");
         }
     }
 }

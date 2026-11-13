@@ -197,6 +197,20 @@ mod tests {
     }
 
     #[test]
+    fn encoded_separators_and_verbatim_documents_stay_inside_the_drive() {
+        assert_eq!(
+            resolve(&doc(), "..%5C..%5Cx.md"),
+            Some(PathBuf::from(r"C:\work\x.md"))
+        );
+        let verbatim = PathBuf::from(r"\\?\C:\work\repo\docs\guide.md");
+        assert_eq!(
+            resolve(&verbatim, "../other.md"),
+            Some(PathBuf::from(r"\\?\C:\work\repo\other.md"))
+        );
+        assert_eq!(resolve(&verbatim, "../../../../x.md"), None);
+    }
+
+    #[test]
     fn refuses_urls_absolute_paths_and_escapes() {
         for reference in [
             "https://example.com/a.md",
@@ -212,6 +226,10 @@ mod tests {
             "",
             "#only-a-fragment",
             "CON.md",
+            "NUL .png",
+            "img/COM1 .png",
+            "LPT³.md",
+            "a.md:evil.json",
         ] {
             assert_eq!(resolve(&doc(), reference), None, "{reference}");
         }
