@@ -84,6 +84,19 @@ pub fn recover_journal(_: &Path) -> io::Result<Vec<PathBuf>> {
     Err(io::ErrorKind::Unsupported.into())
 }
 
+/// Before reading `path` (open, restore, re-read): when it is missing, finish or
+/// roll back a save that a crash interrupted in its folder, so a crash between the
+/// two renames does not make the document look deleted (#249). A present file
+/// needs nothing here: Save and line patches recover before they write.
+pub fn recover_if_missing(path: &Path) {
+    // The path gate first: `exists()` on a UNC name would already reach the network.
+    if crate::file_policy::is_local_file_path(path) && !path.exists() {
+        if let Some(dir) = path.parent() {
+            let _ = recover_journal(dir);
+        }
+    }
+}
+
 // SHA-256 of the raw bytes (including BOM and line endings), matching the
 // registry's open-time digest.
 #[cfg(any(windows, test))]
@@ -1138,6 +1151,58 @@ mod win {
                 eprintln!("RACE {scenario}: iterations=8 saved={saved} refused={refused}");
             }
         }
+        #[test]
+        fn opening_or_rereading_a_path_a_crash_left_aside_recovers_the_original() {
+            use crate::commands::reload::{reread, ReadResult};
+            use crate::file_policy::read_batch;
+            use crate::registry::{capture_revision, Binding, Registry};
+            for reopen_by_reread in [false, true] {
+                let (dir, path) = fixture();
+                let registry = std::sync::Mutex::new(Registry::default());
+                let doc = read_batch([path.clone()], capture_revision)
+                    .documents
+                    .pop()
+                    .unwrap();
+                let token = registry
+                    .lock()
+                    .unwrap()
+                    .register(Binding {
+                        path: doc.path,
+                        identity: doc.identity,
+                        digest: doc.digest,
+                        len: doc.bytes,
+                        encoding: doc.encoding,
+                        eol: doc.eol,
+                        generation: 0,
+                    })
+                    .unwrap();
+                let status = Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "replace::win::tests::process_helper",
+                        "--nocapture",
+                    ])
+                    .env("MDV_REPLACE_HELPER", "crash")
+                    .env("MDV_REPLACE_DIR", dir.path())
+                    .env("MDV_REPLACE_CRASH", "RenameIntoPlace")
+                    .stdout(Stdio::null())
+                    .status()
+                    .unwrap();
+                assert_eq!(status.code(), Some(79));
+                assert!(!path.exists(), "the crash left the original aside");
+                // #249: the document's own path is recovered before it is read.
+                if reopen_by_reread {
+                    assert_eq!(reread(&registry, &token, true, 0), ReadResult::Unchanged);
+                } else {
+                    let batch = read_batch([path.clone()], capture_revision);
+                    assert!(batch.errors.is_empty(), "open after the crash failed");
+                    assert_eq!(batch.documents[0].text.as_bytes(), OLD);
+                }
+                assert_eq!(fs::read(&path).unwrap(), OLD);
+                assert_clean(path.parent().unwrap());
+            }
+        }
+
         #[test]
         fn injected_errors_and_process_exit_recover() {
             for stage in [
