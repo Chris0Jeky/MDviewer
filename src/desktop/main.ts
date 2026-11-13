@@ -1348,12 +1348,14 @@ if (native.available) {
       catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
-  setDownloadDestination(async (blob, filename) => {
+  // A host without an export dialog (the browser) keeps exports as ordinary downloads.
+  const exportTo = native.save?.bind(native);
+  if (exportTo) setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
     syncDocuments();
     try {
-      const result = await native.save(blob, filename);
+      const result = await exportTo(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;

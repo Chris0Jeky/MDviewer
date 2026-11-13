@@ -31,13 +31,25 @@ its file input, Save Copy download and in-memory documents.
 - **What this does not promise.** The native host holds the file open from the comparison to the
   commit. A browser cannot, so a write by another program in that window is not excluded. The UI
   therefore says Save "checks for outside changes before writing", never "conflict-safe".
-- **Save As** asks with `showSaveFilePicker`. Choosing the document's own file (`isSameEntry`) gets
-  exactly Save's check. Another existing file is compared against what it held when it was chosen.
-  A name MDviewer does not open is refused (`invalid-destination`). On success the document moves to
-  a new token and the old one is revoked. New documents are written as UTF-8 with LF.
+- **Save** compares bytes, as the native host does: the size first, then the digest. `lastModified`
+  is only a hint for following the file (W3), so a touched file with the same bytes saves normally.
+- **Save As** asks with `showSaveFilePicker`, offering only the document's kind of extension
+  (Markdown, or data and text, as `export_destination` requires; `excludeAcceptAllOption`). The
+  picker is the commit point. Chromium can create or empty the chosen file by the time the picker
+  returns, so a check after it could only leave an emptied file and a refusal. Every refusal
+  (unknown token, mixed endings without consent, size) therefore happens before the picker opens,
+  and the text is always written to the confirmed destination. The divergence from native: choosing
+  the document's own file after another program changed it replaces it (the user confirmed the
+  replacement in the picker), where native refuses. On success the document moves to a new token
+  and the old one is revoked; if the document closed while the picker was open, the text is
+  written and nothing is bound (`revoked-after-write`). New documents are written as UTF-8 with LF.
+- **Exports** (PDF, Save a copy, data copies) stay ordinary browser downloads, as on the web
+  today. The browser host has no `save`, so an export can never be written over a bound document.
 - **Line patches** (Actionable Markdown) read the current file, place the patches by line and
   expected text (`unplaced` otherwise), keep every line ending byte-for-byte, and write with the same
-  check. One retry on an outside change matches the native retry.
+  check. They follow `linepatch.rs`'s shape rules (1 to 256 patches, one per line, no NUL). One retry
+  on an outside change matches the native retry. A patched file keeps its mixed endings; only Save
+  converts them to LF, after consent.
 - **Re-read** (`readDocument`) follows `reload.rs`: same bytes are `unchanged`; a change is held
   without `adopt` (a later Save still conflicts) and adopted with it (new baseline, generation + 1).
 - Write permission is asked for (`requestPermission`), never assumed. A refusal reports
