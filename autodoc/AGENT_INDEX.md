@@ -406,7 +406,12 @@ Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md`
 - `src/desktop/pdfs.ts`: eager PDF tab store (`PdfTabs`, `isPdfFile`, `hasPdfSignature`, caps).
 - Shell wire-up in `src/desktop/main.ts`: `pdfShown`, `showPdf`, `closePdfView`, `openWebLink`, the
   PDF branches of `readFiles`, `activateDocument`, `closeDocumentById`, `resizeText`, `render`.
-- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`.
+- Native (P1b): `src-tauri/src/commands/pdf.rs` (`read_pdf`, `release_pdf`, the PDF token registry),
+  `file_policy.rs` (`PDF_EXTENSIONS`, `MAX_PDF_BYTES`, `is_pdf_name`, `has_pdf_signature`,
+  `Document.pdf`), `commands/open.rs` (`kind: "pdf"`, no watcher). `Host.readPdf` / `Host.releasePdf`
+  in `src/desktop/native.ts`, Tauri side in `src/desktop/hosts/tauri.ts`, `openNativePdfs` in `main.ts`.
+- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`,
+  `tests/desktop-e2e/pdf-native.spec.ts` (fake host: `pdfs` seed, `read_pdf`), Rust tests in `commands/pdf.rs`.
 
 ## Development dependency compatibility
 
