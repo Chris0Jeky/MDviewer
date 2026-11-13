@@ -68,6 +68,8 @@ fn from_replace(error: ReplaceError) -> SaveResult {
     }
 }
 
+// The Err is the IPC completion itself; boxing it would ripple through every caller.
+#[allow(clippy::result_large_err)]
 fn encode(
     text: &str,
     encoding: Encoding,
