@@ -1,80 +1,29 @@
 import type { Page } from "@playwright/test";
+import { installFakeHost, fakeEntry, fakeCalls } from "./fakeHost";
 import { test, expect, readyReader } from "./helpers";
 
 /**
- * The Library panel against a faked Windows host (S4 panel). The fake keeps the library in page
- * memory and answers the same commands as `src-tauri/src/commands/library.rs`; ids are opaque and
- * the webview never sends a path. Native bounds and the store live in the Rust tests.
+ * The Library panel against the shared faked Windows host (S4 panel; `fakeHost.ts`). The fake keeps
+ * the library in page memory and answers the same commands as `src-tauri/src/commands/library.rs`;
+ * ids are opaque and the webview never sends a path. Native bounds and the store live in the Rust tests.
  */
-interface Fake { calls: Array<[string, unknown]> }
-declare global { interface Window { __fake: Fake } }
-
 async function fakeHost(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const entry = (id: string, name: string, dir: string) => ({ id, name, dir, path: `${dir}\\${name}`, at: 1 });
-    const state = {
-      recent: [entry("r1", "notes.md", "C:\\work\\board"), entry("r2", "plan.md", "C:\\work\\board")],
-      pinned: [] as ReturnType<typeof entry>[],
-      projects: [{ ...entry("p1", "board", "C:\\work"), path: "C:\\work\\board" }, { ...entry("p2", "gone", "C:\\work"), path: "C:\\work\\gone" }],
-      seen: new Set<string>(),
-    };
-    const files = () => [
-      { id: "f1", name: "CLAUDE.md", relative: "CLAUDE.md", path: "C:\\work\\board\\CLAUDE.md", modified: 10, agent: true },
-      { id: "f2", name: "todo.md", relative: "docs\\todo.md", path: "C:\\work\\board\\docs\\todo.md", modified: 30, agent: false },
-      { id: "f3", name: "old.md", relative: "old.md", path: "C:\\work\\board\\old.md", modified: 5, agent: false },
-      { id: "t1", name: "Meeting notes.md", relative: "templates\\Meeting notes.md", path: "C:\\work\\board\\templates\\Meeting notes.md", modified: 1, agent: false },
-    ].map(file => ({ ...file, unseen: !["f3", "t1"].includes(file.id) && !state.seen.has(file.id) }));
-    const texts: Record<string, [string, string]> = {
-      r1: ["notes.md", "# Notes\n\nRecent file.\n"], r2: ["plan.md", "# Plan\n\nAnother.\n"], f2: ["todo.md", "# Todo\n\nChanged.\n"],
-    };
-    const fake: Fake = { calls: [] };
-    window.__fake = fake;
-    let callback = 0;
-    const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
-      take_pending_files: () => ({ documents: [], errors: [], canceled: false }),
-      session_restore: () => ({ documents: [], errors: [], canceled: false }),
-      library_list: () => ({ recent: state.recent, pinned: state.pinned, projects: state.projects }),
-      library_read_template: ({ id }) => {
-        if (id !== "t1") throw new Error("This library entry is no longer available.");
-        return { name: "Meeting notes.md", text: "# {{title}}\n\nOwner: {{owner}}\nOn {{date}}\n" };
-      },
-      library_scan: ({ id }) => {
-        if (id === "p2") throw new Error("The folder is missing.");
-        return { files: files(), truncated: false };
-      },
-      library_open: ({ id }) => {
-        const [name, text] = texts[id as string] ?? ["missing.md", "# Missing\n"];
-        state.seen.add(id as string);
-        return { documents: [{ name, text, bytes: text.length, token: `${id as string}`.padEnd(32, "0"), path: `C:\\work\\board\\${name}`, dir: "C:\\work\\board", encoding: "utf-8", eol: "lf" }], errors: [], canceled: false };
-      },
-      library_pin: ({ id }) => {
-        const found = state.recent.find(item => item.id === id);
-        if (!found) return false;
-        if (!state.pinned.some(item => item.id === id)) state.pinned.push(found);
-        return true;
-      },
-      library_unpin: ({ id }) => {
-        state.pinned = state.pinned.filter(item => item.id !== id);
-        state.projects = state.projects.filter(item => item.id !== id);
-      },
-      library_forget: ({ id }) => { state.recent = state.recent.filter(item => item.id !== id); },
-      library_mark_seen: ({ id }) => { state.seen.add(id as string); },
-      library_clear: () => { state.recent = []; state.pinned = []; state.projects = []; },
-      "plugin:event|listen": () => ++callback,
-    };
-    Object.assign(window, {
-      isTauri: true,
-      __TAURI_INTERNALS__: {
-        metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
-        transformCallback: () => ++callback,
-        convertFileSrc: (path: string) => path,
-        invoke: async (cmd: string, args: Record<string, unknown> = {}) => {
-          fake.calls.push([cmd, args]);
-          const handler = handlers[cmd];
-          return handler ? handler(args) : null;
-        },
-      },
-    });
+  await installFakeHost(page, {
+    recent: [fakeEntry("r1", "notes.md", "C:\\work\\board"), fakeEntry("r2", "plan.md", "C:\\work\\board")],
+    projects: [
+      { ...fakeEntry("p1", "board", "C:\\work"), path: "C:\\work\\board" },
+      { ...fakeEntry("p2", "gone", "C:\\work"), path: "C:\\work\\gone" },
+    ],
+    scans: {
+      p1: [
+        { id: "f1", name: "CLAUDE.md", relative: "CLAUDE.md", path: "C:\\work\\board\\CLAUDE.md", modified: 10, agent: true },
+        { id: "f2", name: "todo.md", relative: "docs\\todo.md", path: "C:\\work\\board\\docs\\todo.md", modified: 30, agent: false },
+        { id: "f3", name: "old.md", relative: "old.md", path: "C:\\work\\board\\old.md", modified: 5, agent: false, seen: true },
+        { id: "t1", name: "Meeting notes.md", relative: "templates\\Meeting notes.md", path: "C:\\work\\board\\templates\\Meeting notes.md", modified: 1, agent: false, seen: true },
+      ],
+    },
+    texts: { r1: ["notes.md", "# Notes\n\nRecent file.\n"], r2: ["plan.md", "# Plan\n\nAnother.\n"], f2: ["todo.md", "# Todo\n\nChanged.\n"] },
+    templates: { t1: ["Meeting notes.md", "# {{title}}\n\nOwner: {{owner}}\nOn {{date}}\n"] },
   });
 }
 
@@ -205,7 +154,7 @@ test("New from template reads the template without opening it and starts a fille
   await expect(page.locator("#reader-document h1")).toHaveText("Meeting notes");
   await expect(page.locator('#shell-tabs [role="tab"]')).toHaveText(["Untitled.md, unsaved changes"]);
   // Read-only: no open, no Recent entry, no seen mark.
-  const calls = await page.evaluate(() => window.__fake.calls.map(([cmd]) => cmd));
+  const calls = await fakeCalls(page);
   expect(calls).toContain("library_read_template");
   expect(calls).not.toContain("library_open");
   expect(calls).not.toContain("library_mark_seen");
