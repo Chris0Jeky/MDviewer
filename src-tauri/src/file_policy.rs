@@ -13,7 +13,8 @@ pub const MARKDOWN_EXTENSIONS: &[&str] = &["md", "markdown"];
 /// Data and plain-text documents (docs/design/READABLE_DATA.md, phases 1 and 2): read and saved as
 /// raw text under the same path, size and encoding rules; the webview derives their view.
 pub const DATA_EXTENSIONS: &[&str] = &[
-    "json", "jsonc", "jsonl", "ndjson", "txt", "log", "yaml", "yml", "toml", "csv", "tsv", "html", "htm",
+    "json", "jsonc", "jsonl", "ndjson", "txt", "log", "yaml", "yml", "toml", "csv", "tsv", "html",
+    "htm",
 ];
 
 /// The lower-case extension of `name` when it is one MDviewer opens, else None.
@@ -669,8 +670,8 @@ mod tests {
     fn opens_data_and_text_documents_under_the_same_rules() {
         let dir = TestDirectory::new();
         for name in [
-            "a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG", "g.yaml", "h.YML", "p.html", "q.HTM",
-            "i.toml", "j.csv", "k.TSV",
+            "a.json", "b.JSONC", "c.jsonl", "d.ndjson", "e.txt", "f.LOG", "g.yaml", "h.YML",
+            "p.html", "q.HTM", "i.toml", "j.csv", "k.TSV",
         ] {
             let path = dir.write(name, b"{\"k\": 1}\r\n");
             let document = read_markdown(&path, 25_000_000).unwrap();
