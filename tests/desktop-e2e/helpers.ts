@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type FileChooser, type Page } from "@playwright/test";
 
 interface Audit { requests: string[]; external: string[]; errors: string[]; allowedCsp: string[] }
 interface BrowserEvidence {
@@ -76,11 +76,23 @@ flowchart LR
 [^note]: This footnote stays with the document.
 `;
 
+/** A pick of the given files. Goes through the reader's file input, the element Ctrl+O clicks, so a lost key press cannot time a test out (#303). */
 export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
-  const chooser = page.waitForEvent("filechooser");
-  // Ctrl+O works from the empty state, the tabs and the document alike (S3 has no Open button in the bar).
-  await page.keyboard.press("Control+O");
-  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
+  await page.locator("#reader-file-input").setInputFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
+}
+
+/**
+ * Drive Ctrl+O itself and return the file chooser it opens. A key press can land
+ * before the page's shortcut handler is ready or while a mode change owns the
+ * window, and nothing observable says so, so the press is retried until a chooser
+ * opens (#303). Ctrl+O works from the empty state, the tabs and the document alike.
+ */
+export async function chooseWithShortcut(page: Page): Promise<FileChooser> {
+  let chooser: FileChooser | undefined;
+  await expect(async () => {
+    [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 5_000 }), page.keyboard.press("Control+o")]);
+  }).toPass({ timeout: 45_000 });
+  return chooser!;
 }
 
 /** A new blank document in the PDF workspace: New opens Edit (S5), then Export PDF…. */
