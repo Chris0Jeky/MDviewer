@@ -22,7 +22,7 @@ export interface MdviewerChangeDetail { patches: LinePatch[] }
 const STYLES = [katexCss, readerCss, documentCss, shikiCss].join("\n")
   .replace(/:root\[([^\]]+)\]/g, ":host($1)")
   .replace(/:root\b/g, ":host")
-  + `\n:host { display: block; }
+  + `\n:host { display: block; contain: paint; } /* document HTML (position: fixed) never paints over the host page */
 .desktop-reader { position: relative; font: 14px/1.5 system-ui, "Segoe UI", sans-serif; color: var(--reader-fg); }
 .desktop-reader * , .desktop-reader *::before, .desktop-reader *::after { box-sizing: border-box; }
 .desktop-reader .reader-document { max-width: none; margin: 0; }
