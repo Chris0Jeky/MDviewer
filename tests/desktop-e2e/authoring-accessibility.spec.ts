@@ -41,7 +41,7 @@ test("keyboard New, layout, Find and Save expose usable names, states and focus"
 });
 
 test("an invalid Open announces a recoverable error and keyboard retry opens the file", async ({ page }) => {
-  await openFiles(page, [{ name: "not-supported.xml", text: "Rejected source" }], () => page.keyboard.press("Control+o"));
+  await openFiles(page, [{ name: "not-supported.xml", text: "Rejected source" }], "shortcut");
   const notice = page.locator("#reader-notice");
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute("role", "status");
@@ -50,7 +50,7 @@ test("an invalid Open announces a recoverable error and keyboard retry opens the
   const snapshot = await page.locator("#reader-shell").ariaSnapshot();
   expect(snapshot).toContain("Markdown");
   await expect(page.getByRole("button", { name: "Open…", exact: true })).toBeEnabled();
-  await openFiles(page, [{ name: "valid.md", text: "# Recovered note" }], () => page.keyboard.press("Control+o"));
+  await openFiles(page, [{ name: "valid.md", text: "# Recovered note" }], "shortcut");
   await expect(page.locator("#reader-document h1")).toHaveText("Recovered note");
   await expect(page.locator("#reader-document")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#reader-status")).toContainText(/ words? · /);

@@ -199,3 +199,46 @@ describe("data cannot create structure (review of #270)", () => {
     expect(root.textContent).toContain("deep leaf");
   });
 });
+
+describe("generated text in YAML keys and tags, TOML strings and keys, CSV headers (#282)", () => {
+  const normalise = (s: string): string => s.replace(/\r\n|\r/g, "\n");
+  const clean = (root: HTMLElement): void => {
+    expect(root.querySelectorAll("img, script, input, a:not(.header-anchor)")).toHaveLength(0);
+  };
+
+  it("keeps every sample a key or a tagged scalar, with no element made from data", async () => {
+    await prepare("yaml");
+    for (const s of samples()) {
+      const plain = s.replace(/[^\r\n\t ]/g, "a");
+      const key = (text: string): HTMLElement => html(toReadable(`${JSON.stringify(text)}: plain`, "yaml").markdown);
+      const keyRoot = key(s);
+      expect(tags(keyRoot), JSON.stringify(s)).toEqual(tags(key(plain)));
+      expect(text(keyRoot.querySelector("tbody td")!), JSON.stringify(s)).toBe(normalise(s));
+      clean(keyRoot);
+      const tagged = html(toReadable(`k: !custom ${JSON.stringify(s)}`, "yaml").markdown);
+      expect(text(tagged.querySelector("tbody td:nth-child(2)")!), JSON.stringify(s)).toBe(`!custom ${normalise(s)}`);
+      clean(tagged);
+    }
+  }, 120_000);
+
+  it("keeps every sample a TOML string, a TOML key or a CSV header", () => {
+    for (const s of samples()) {
+      const plain = s.replace(/[^\r\n\t ]/g, "a");
+      const value = html(toReadable(`k = ${JSON.stringify(s)}`, "toml").markdown);
+      const target = valueTarget(value)!;
+      expect(text(target), JSON.stringify(s)).toBe(target.tagName === "TD" ? displayed(normalise(s)) : normalise(s));
+      clean(value);
+      const key = (text: string): HTMLElement => html(toReadable(`${JSON.stringify(text)} = 1`, "toml").markdown);
+      expect(tags(key(s)), JSON.stringify(s)).toEqual(tags(key(plain)));
+      expect(text(key(s).querySelector("tbody td")!), JSON.stringify(s)).toBe(normalise(s));
+      const header = html(toReadable(`"${s.replace(/"/g, '""')}",b` + String.fromCharCode(10) + "1,2", "csv").markdown);
+      expect(text(header.querySelector("thead th")!), JSON.stringify(s)).toBe(normalise(s));
+      clean(header);
+    }
+  }, 120_000);
+
+  it("names a CSV column without a header as column N", () => {
+    const view = html(toReadable(",b" + String.fromCharCode(10) + "1,2,3", "csv").markdown);
+    expect(Array.from(view.querySelectorAll("thead th"), th => th.textContent)).toEqual(["column 1", "b", "column 3"]);
+  });
+});

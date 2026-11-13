@@ -272,12 +272,12 @@ From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) and the open GitHub is
 | P0 Scaffolding | Done | Repo, Vite/Vitest/Playwright, pinned design specs |
 | P1 Core pipeline | Done | Render → paginate → both export paths; no-slice e2e; Gate 3 (manual Chrome PDF inspection) accepted |
 | P2 Desktop authoring and UX | In progress | New, Format, guarded undo, Find/Replace, session positions/navigation, visible PDF progress and second-engine/accessibility regressions are shipped. File ownership/recovery implementation and human acceptance remain in [Future work](docs/FUTURE_WORK.md). |
-| P3 Hardening and distribution | In progress | Windows reader/installer preview, sanitization, offline PDF qualification and performance tooling are shipped. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) retains native acceptance; [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)/[#202](https://github.com/Chris0Jeky/MDviewer/issues/202) track cancellation and measured responsiveness. Live/PWA and first automated promotion remain human gates. |
+| P3 Hardening and distribution | In progress | Windows reader/installer preview, sanitization, offline PDF qualification and performance tooling are shipped. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) retains native acceptance; [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)/[#202](https://github.com/Chris0Jeky/MDviewer/issues/202) track cancellation and measured responsiveness. Live/PWA acceptance is agent QA work ([acceptance](docs/qa/ACCEPTANCE.md)); the first automated promotion remains a human gate (AI-9). |
 | P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
 
 **Windows direction:** a simple, efficient desktop Markdown reader/editor with dependable local files and page-safe PDFs. The [future-work map](docs/FUTURE_WORK.md) separates delivered writing improvements, reviewed storage designs and remaining implementation gates. Native acceptance and measured memory work remain in [#169](https://github.com/Chris0Jeky/MDviewer/issues/169); the live [issue list](https://github.com/Chris0Jeky/MDviewer/issues) owns execution status.
 
-Operator-only live-site and deploy gates (split-workspace feel, PWA update toast, Beta-bar acceptance, first automated promotion) live in [`ACTION_ITEMS.md`](ACTION_ITEMS.md). They are not product gaps in the code path above.
+The operator-only deploy gate (first automated promotion, AI-9) lives in [`ACTION_ITEMS.md`](ACTION_ITEMS.md); live-site, split-workspace and Beta-bar acceptance are delegated to agent QA there ([acceptance](docs/qa/ACCEPTANCE.md)). They are not product gaps in the code path above.
 
 ## Security
 
