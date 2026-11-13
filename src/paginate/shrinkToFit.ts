@@ -116,6 +116,7 @@ function measureInContext(
   if (blocks.length === 0) return [];
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
+  host.setAttribute("data-mdv-measure", ""); // print.css sizes wide tables here as on the sheet
   Object.assign(host.style, {
     position: "absolute",
     visibility: "hidden",

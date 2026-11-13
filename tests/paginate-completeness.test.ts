@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ATTRS } from "../src/app/dom";
 import { withSplitWarning } from "../src/app/App";
 import { restoreDisplayedElements } from "../src/paginate/handler";
@@ -85,6 +85,28 @@ describe("auditPagination", () => {
     expect(
       auditPagination(source, html(twice + page('<p data-ref="9">x</p>') + twice))?.problem,
     ).toBe("content repeats on page 3");
+  });
+});
+
+describe("auditPagination and collapsed content", () => {
+  const page = (inner: string): string =>
+    `<div class="pagedjs_page"><div class="pagedjs_page_content">${inner}</div></div>`;
+  const overhang = (): void => {
+    // jsdom has no layout: the page box ends at 100, the table hangs to 150.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const bottom = this.tagName === "TABLE" ? 150 : 100;
+      return { left: 0, right: 50, top: 0, bottom, width: 50, height: bottom, x: 0, y: 0, toJSON: () => ({}) };
+    });
+  };
+
+  it("does not blame a block inside a closed <details>, but still blames one in an open <details>", () => {
+    overhang();
+    const body = (open: string): string =>
+      `<details${open}><summary>Tool call</summary><table data-ref="2"><tr><td>x</td></tr></table></details>`;
+    const source = html('<p data-ref="1">one</p>');
+    expect(auditPagination(source, html(page('<p data-ref="1">one</p>' + body(""))))).toBeNull();
+    expect(auditPagination(source, html(page('<p data-ref="1">one</p>' + body(" open"))))?.problem).toMatch(/lies outside the page/);
+    vi.restoreAllMocks();
   });
 });
 

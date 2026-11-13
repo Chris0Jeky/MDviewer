@@ -73,6 +73,7 @@ export async function renderReaderDocument(
   if (chips) document.prepend(chips);
   // Before Mermaid: a diagram replaces its <pre> inside the stamped wrapper, keeping copy.
   if (options.copy !== false) decorateCopy(document, source, fileName);
+  wrapTables(document);
   decorateControls(document, actionable, options.controls?.onAction ?? desktopControlHandler, options.controls?.menuHost ?? window.document.body);
   const warnings = result.warnings.map(warning => warning.message);
   if (!text.trim()) warnings.push("This document is empty. Press Ctrl+E to write in it.");
@@ -112,6 +113,21 @@ export async function renderReaderDocument(
 }
 
 const PENDING = "reader-pending";
+
+/**
+ * A table that is wider than the card scrolls sideways inside its own box; the card and the
+ * page never do. The wrapper keeps the table's source range, like a code block's wrapper.
+ */
+function wrapTables(root: HTMLElement): void {
+  for (const table of root.querySelectorAll("table")) {
+    const wrapper = window.document.createElement("div");
+    wrapper.className = "reader-table";
+    const range = table.getAttribute("data-src");
+    if (range) wrapper.setAttribute("data-src", range);
+    table.replaceWith(wrapper);
+    wrapper.append(table);
+  }
+}
 
 /** Replace each placeholder still inside `root` (a superseded render's root is emptied). */
 function upgradeCode(md: MarkdownIt, tokens: Token[], env: Parameters<MarkdownIt["parse"]>[1], root: HTMLElement): void {
