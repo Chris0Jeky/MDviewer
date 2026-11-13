@@ -347,15 +347,15 @@ fn is_markdown(path: &Path) -> bool {
 /// Never follows a junction, symlink or other reparse point; skips build/dependency folders and
 /// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
-    scan_with(root, SCAN_DIRS, Instant::now() + SCAN_TIME)
+    scan_with(root, SCAN_DIRS, Instant::now() + SCAN_TIME, Instant::now)
 }
 
-fn scan_with(root: &Path, max_dirs: usize, deadline: Instant) -> Scan {
+fn scan_with(root: &Path, max_dirs: usize, deadline: Instant, now: impl Fn() -> Instant) -> Scan {
     let mut scan = Scan::default();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
     let mut dirs = 0usize;
-    while let Some((dir, depth)) = stack.pop() {
-        if dirs >= max_dirs || Instant::now() >= deadline {
+    'walk: while let Some((dir, depth)) = stack.pop() {
+        if dirs >= max_dirs || now() >= deadline {
             scan.truncated = true;
             break;
         }
@@ -364,6 +364,11 @@ fn scan_with(root: &Path, max_dirs: usize, deadline: Instant) -> Scan {
             continue;
         };
         for entry in entries.flatten() {
+            // A huge flat folder must not outlast the deadline either (Codex on #320).
+            if now() >= deadline {
+                scan.truncated = true;
+                break 'walk;
+            }
             let path = entry.path();
             let Ok(metadata) = fs::symlink_metadata(&path) else {
                 continue;
@@ -754,12 +759,43 @@ mod tests {
         }
         fs::write(dir.path().join("a.md"), b"x").unwrap();
         let far = Instant::now() + Duration::from_secs(3_600);
-        let all = scan_with(dir.path(), usize::MAX, far);
+        let all = scan_with(dir.path(), usize::MAX, far, Instant::now);
         assert!(!all.truncated && all.files.len() == 1, "{all:?}");
-        let few = scan_with(dir.path(), 5, far);
+        let few = scan_with(dir.path(), 5, far, Instant::now);
         assert!(few.truncated, "the directory bound is reported");
-        let late = scan_with(dir.path(), usize::MAX, Instant::now());
+        let late = scan_with(dir.path(), usize::MAX, Instant::now(), Instant::now);
         assert!(late.truncated, "a passed deadline is reported");
+    }
+
+    #[test]
+    fn the_deadline_also_stops_a_walk_inside_one_large_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..50 {
+            fs::write(dir.path().join(format!("note{n}.md")), b"x").unwrap();
+        }
+        // The clock passes the deadline after the root is entered, while its entries are listed.
+        let start = Instant::now();
+        let calls = std::cell::Cell::new(0u32);
+        let clock = || {
+            calls.set(calls.get() + 1);
+            if calls.get() <= 3 {
+                start
+            } else {
+                start + Duration::from_secs(10)
+            }
+        };
+        let scan = scan_with(
+            dir.path(),
+            usize::MAX,
+            start + Duration::from_secs(5),
+            clock,
+        );
+        assert!(scan.truncated, "the deadline inside a folder is reported");
+        assert!(
+            scan.files.len() < 50,
+            "the walk stopped early: {}",
+            scan.files.len()
+        );
     }
 
     #[cfg(windows)]
