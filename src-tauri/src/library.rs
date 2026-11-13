@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ pub const MAX_PINS: usize = 64;
 pub const MAX_SEEN: usize = 5_000;
 pub const SCAN_DEPTH: usize = 8;
 pub const SCAN_FILES: usize = 5_000;
+/// Directories one scan may read, and how long it may run: a pinned drive root or a huge tree
+/// with few Markdown files stops here instead of walking on in a blocking task.
+pub const SCAN_DIRS: usize = 10_000;
+pub const SCAN_TIME: Duration = Duration::from_secs(5);
 const SKIPPED: [&str; 6] = ["node_modules", ".git", "target", "dist", "build", ".venv"];
 /// Folders whose data files the Library lists as agent data (D5).
 const AGENT_FOLDERS: [&str; 3] = [".claude", ".codex", ".agent-harness"];
@@ -283,7 +287,7 @@ pub struct ScannedFile {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Scan {
     pub files: Vec<ScannedFile>,
-    /// True when the depth or file bound stopped the walk early.
+    /// True when the depth, file, directory or time bound stopped the walk early.
     pub truncated: bool,
 }
 
@@ -304,13 +308,23 @@ fn is_markdown(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
 }
 
-/// Bounded walk of a project folder for Markdown files and agent data files (`is_agent_data`).
+/// Bounded walk (depth, files, directories, time) of a project folder for Markdown files and agent data files (`is_agent_data`).
 /// Never follows a junction, symlink or other reparse point; skips build/dependency folders and
 /// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
+    scan_with(root, SCAN_DIRS, Instant::now() + SCAN_TIME)
+}
+
+fn scan_with(root: &Path, max_dirs: usize, deadline: Instant) -> Scan {
     let mut scan = Scan::default();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
+    let mut dirs = 0usize;
     while let Some((dir, depth)) = stack.pop() {
+        if dirs >= max_dirs || Instant::now() >= deadline {
+            scan.truncated = true;
+            break;
+        }
+        dirs += 1;
         let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
@@ -613,6 +627,22 @@ mod tests {
         let scan = scan(dir.path());
         assert_eq!(scan.files.len(), SCAN_FILES);
         assert!(scan.truncated);
+    }
+
+    #[test]
+    fn scan_stops_at_the_directory_and_time_bounds_and_reports_it() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..20 {
+            fs::create_dir(dir.path().join(format!("empty{n}"))).unwrap();
+        }
+        fs::write(dir.path().join("a.md"), b"x").unwrap();
+        let far = Instant::now() + Duration::from_secs(3_600);
+        let all = scan_with(dir.path(), usize::MAX, far);
+        assert!(!all.truncated && all.files.len() == 1, "{all:?}");
+        let few = scan_with(dir.path(), 5, far);
+        assert!(few.truncated, "the directory bound is reported");
+        let late = scan_with(dir.path(), usize::MAX, Instant::now());
+        assert!(late.truncated, "a passed deadline is reported");
     }
 
     #[cfg(windows)]
