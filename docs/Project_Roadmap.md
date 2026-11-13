@@ -35,6 +35,11 @@ in slices A1–A5. A1 to A4 are merged on main (see P2); A5 ([#300](https://gith
 readable view derived on the device. D0 to D4 and the D6 readability pass are merged on main, and JSON,
 JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is next (see P2).
 
+[PDF workbench](design/PDF_WORKBENCH.md) (owner direction, 2026-11-13; contract
+[complete push](design/2026-11-13-complete-push.md), track P): P0 design and engine decision merged
+(#312, PDFium-WASM); P1a reading view in progress; P1b native open, then P2 pages, P3 annotate, P4
+edit on the page, P5 decompile to Markdown, P6 page source.
+
 **#169 and AI-6/AI-7/AI-8/AI-9 remain OPEN.** Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
 [optional recovery](design/RECOVERY.md) designs merged in #209; no in-place writes

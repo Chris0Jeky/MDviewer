@@ -397,6 +397,17 @@ embedded-language colors; that compatibility path is excluded from workspace pre
 Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/highlight-reader.test.ts`,
 `tests/desktop-e2e/startup.spec.ts`.
 
+## PDF workbench (`src/pdf/`, P1a)
+
+Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md` §16.
+
+- `src/pdf/engine.ts`: the only PDFium caller (`openPdf`, `PdfDocument`, `PdfOpenError`, `heap`).
+- `src/pdf/view.ts` + `pdf.css`: the reading view (`mountPdf`); `src/pdf/index.ts` is the lazy entry.
+- `src/desktop/pdfs.ts`: eager PDF tab store (`PdfTabs`, `isPdfFile`, `hasPdfSignature`, caps).
+- Shell wire-up in `src/desktop/main.ts`: `pdfShown`, `showPdf`, `closePdfView`, `openWebLink`, the
+  PDF branches of `readFiles`, `activateDocument`, `closeDocumentById`, `resizeText`, `render`.
+- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`.
+
 ## Development dependency compatibility
 
 Canonical dependency authority remains implementation spec section 2. Scoped
