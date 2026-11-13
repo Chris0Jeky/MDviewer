@@ -228,7 +228,9 @@ The original and every ancestor stay open without write/delete sharing through
 verification and commit. Existing writable handles or mapped views cause a
 `Locked` refusal, including a writable view retained after its file handle closes.
 The two no-clobber renames use `NtSetInformationFile` with a leaf name and NULL
-root, relative to the source handle's directory. This avoids reopening a locked
+root, relative to the source handle's directory. The new file takes the leaf the
+file system stores for the original (read from its handle), so a short (8.3) or
+differently cased input name never renames the document (#229). This avoids reopening a locked
 parent for writes. See Microsoft's [rename-information contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
 and [sharing contract](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
 
@@ -242,13 +244,20 @@ overwritten. `create_new` uses the same no-clobber commit without an original.
 `recover_journal` rolls the verified aside back when the name is empty and the save
 never committed. If an outside file took the name, or the committed file was later
 moved away, the original's bytes are kept as a visible `name (MDviewer recovered
-<id>).ext` sibling rather than deleted. Otherwise it preserves the existing
+<id>).ext` sibling rather than deleted; a long stem is shortened so that name fits
+255 UTF-16 units (#229). A `create_new` (Save As) that crashed after its journal
+owned the temporary but before commit keeps that temporary, the only on-disk copy
+of the text, as such a sibling instead of deleting it (#313); a failure the caller
+was told about still removes it, since the editor keeps the text. Otherwise it preserves the existing
 destination and cleans only verified transaction artifacts. Repeated recovery is
 harmless, and one stuck journal does not stop the rest of the folder. Modified
 artifacts, malformed journals or locked files are refused and retained. Once the
 new file is in place a save returns success even if cleanup failed; the leftover
-aside or journal is reconciled by the next recovery. New files inherit directory defaults; timestamps, custom
-ACLs, alternate streams and other metadata are not preserved by this byte API.
+aside or journal is reconciled by the next recovery. A replace copies the original's
+DACL (with its protection and auto-inheritance flags) to the temporary before commit
+and refuses the save if it cannot, so a file whose ACL is tighter than its folder's
+is not loosened (#229). Owner, SACL, timestamps, alternate streams and other
+metadata are not preserved; a `create_new` file inherits the folder's defaults.
 
 The release tests re-invoke their own executable as a separate OS process. Four
 forced interleavings (before open, after verification, between renames and after

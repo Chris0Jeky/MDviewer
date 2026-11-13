@@ -36,6 +36,31 @@ Identical input renders identical output under 11.17.2 and 12.0.0 with these pin
 
 Browser floor: mermaid 12 requires ES2024 / Safari 17.4+ / Node 22.12+. The application's supported Node range is `^24.15.0 || >=26`; production builds use Node 24. The retained Node 22 CI job is a legacy compatibility probe, not a supported installation target; see canonical specification section 2. The Safari floor is accepted as stated. AI-6 second-engine/manual-feel and AI-7 live/PWA checks remain open.
 
+## PDF engine: @embedpdf/pdfium 2.15.1 (runtime) and pdfjs-dist 6.5.438 (tests only)
+
+Decision and evidence: [PDF_WORKBENCH.md](PDF_WORKBENCH.md) (ADR-P0). Both are exact pins.
+`@embedpdf/pdfium` is PDFium compiled to WASM (wrapper MIT, PDFium BSD-3-Clause/Apache-2.0; the
+third-party libraries compiled into the wasm are listed with their texts in
+`docs/licenses/PDFIUM_THIRD_PARTY_NOTICES.txt`, appended to the production licence bundle). Only
+`src/pdf/engine.ts` imports it. The wasm is fetched from the app's own origin through Vite's `?url`
+import and instantiated under `'wasm-unsafe-eval'`; it runs on the main thread (no worker, desktop
+`worker-src 'none'` unchanged). The package's `HEAPU8` view is missing from its types; use `heap()`.
+`FPDF_GetLastError` codes map to `PdfOpenError` (2 file, 3 format, 4 password, 5 security).
+On upgrade: re-run `tests/pdf-engine.test.ts` and the desktop `pdf-read` suite, and recheck the
+third-party list in the wasm.
+
+Dependency review (2026-11-13, `dependency-auditor`): approved with notes. No advisories; no install
+scripts; one publisher and no npm provenance. The 2.x line lives on upstream branch `v2` (2.15.1 =
+commit `eb14d5ae4`); upstream `main` moved to 3.x, so a later move to 3.x is a planned migration, not
+a patch bump. The wasm contains FreeType 2.14.1 (FTL), libjpeg-turbo 3.1.0, OpenJPEG 2.5.4, Little
+CMS 2.15, libpng 1.6.43, zlib 1.3.1, AGG 2.3 (its own permissive licence), ICU 77.1, Abseil,
+fast_float and the Emscripten runtime (musl, libc++); texts in `docs/licenses/`. Not verified: that
+the published wasm reproduces from source.
+
+`pdfjs-dist` is the second parser that reopens every corpus file and, from P2, every saved output
+(`pdfjs-dist/legacy/build/pdf.mjs` in Node). It never ships. It pulls the optional native
+`@napi-rs/canvas` binaries, unused by the tests.
+
 ## Other integrations
 
 Unchanged render sequencing, strict TypeScript requirements and no-slice behavior remain governed by the canonical specification. Follow current `src/render/{markdown,math,highlight,mermaid,sanitize}.ts` and `src/paginate/*` rather than a dated illustrative recipe. In particular, sanitization precedes DOM insertion, height-affecting preparation precedes pagination, and PDF export consumes a captured input under the render-host lease.

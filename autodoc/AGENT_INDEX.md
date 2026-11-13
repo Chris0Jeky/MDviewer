@@ -60,6 +60,7 @@ Export click → capture document id/name/text and settings NOW
 | Actionable Markdown: native line-patch write-back (A2, #244; 1-based fix #268) | `src-tauri/src/linepatch.rs`, `src-tauri/src/commands/patch.rs` (`patch_document`), webview side `src/desktop/reader/writeback.ts` | Rust unit tests in both modules, shared fixtures `tests/fixtures/actionable/` (also read by `tests/actionable.test.ts` and `tests/desktop-e2e/actionable.spec.ts`), native smoke step in `scripts/desktop-smoke.ps1` (#275); `docs/design/ACTIONABLE_MARKDOWN.md` |
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
+| Embeddable reader element `<mdviewer-reader>` and its `change` event (A5, #300) | `src/embed/reader.ts`, `vite.embed.config.ts`, `src/desktop/reader/controls.ts` (`decorateControls(root, actionable, onAction, menuHost)`), `src/desktop/render.ts` (`options.controls`, `options.copy`) | `tests/embed-e2e/reader.spec.ts` (`npm run embed:test`; CI e2e job), `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Data copy menu (value, JSONPath, jq, subtree), data-document copy reference, Save readable view as Markdown (D5, #299) | `src/desktop/reader/dataCopy.ts` (`dataCopy`, `dataReference`, `readableCopy`, `pathAt`, `trackDataTarget`); commands `data.copy.*` and `document.saveReadable` in `src/desktop/main.ts`; `MenuEntry.hidden` in `src/desktop/shell/menu.ts` | `tests/desktop-data-copy.test.ts`, `tests/desktop-e2e/data-copy.spec.ts`, spec READABLE_DATA.md "Copy" |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
@@ -292,7 +293,7 @@ only where the cell cannot show the value well: JSON embedded in a string, clear
 `src/desktop/reader/dataCopy.ts`: the reader's selection resolves to a `data-src` line, `Readable.map` gives its path. The native half
 of D5, agent data files in the Library, is merged (#290; see the table above).
 
-## Actionable Markdown (A1 to A3)
+## Actionable Markdown (A1 to A5)
 
 Contract: `docs/design/ACTIONABLE_MARKDOWN.md`. The parser is pure; the reader and the native host
 share its 1-based line numbering and the fixtures in `tests/fixtures/actionable/` (`*.md` with
@@ -316,8 +317,12 @@ actionableGlyphs(md: MarkdownIt): void;                              // static g
 markFields(tokens, actionable, TokenCtor): void; chipRow(actionable): HTMLElement | null;
 
 // src/desktop/reader/controls.ts: DOM decoration, click/keyboard/menu gestures
-decorateControls(root: HTMLElement, actionable: ActionableDocument): void;
+decorateControls(root: HTMLElement, actionable: ActionableDocument, onAction: ControlHandler, menuHost: MenuHost): void; // MenuHost = HTMLElement | ShadowRoot
 setControlHandler(next: ControlHandler | null): void; controlHandler(): ControlHandler | null;
+desktopControlHandler: ControlHandler;                               // what the desktop entry passes: the handler above, read at gesture time
+
+// src/embed/reader.ts (A5): <mdviewer-reader>, a shadow-root host of the same reader
+class MdviewerReader extends HTMLElement { markdown: string /* also the attribute */ }  // event "change": CustomEvent<{ patches: LinePatch[] }>, trusted gestures only
 
 // src/desktop/reader/writeback.ts: A3 write-back and Undo notice
 createWriteback(deps: WritebackDeps): { change(control, action): Promise<void>; checkOverwritten(doc): void; forget(): void; settled(): Promise<void> };
@@ -396,6 +401,17 @@ Modules with optional embeds explicitly await the workspace gate to preserve exi
 embedded-language colors; that compatibility path is excluded from workspace preparation.
 Tests: `tests/desktop-lazy-highlight.test.ts`, `tests/highlight-reader.test.ts`,
 `tests/desktop-e2e/startup.spec.ts`.
+
+## PDF workbench (`src/pdf/`, P1a)
+
+Contract: `docs/design/PDF_WORKBENCH.md`; signatures in `IMPLEMENTATION_SPEC.md` §16.
+
+- `src/pdf/engine.ts`: the only PDFium caller (`openPdf`, `PdfDocument`, `PdfOpenError`, `heap`).
+- `src/pdf/view.ts` + `pdf.css`: the reading view (`mountPdf`); `src/pdf/index.ts` is the lazy entry.
+- `src/desktop/pdfs.ts`: eager PDF tab store (`PdfTabs`, `isPdfFile`, `hasPdfSignature`, caps).
+- Shell wire-up in `src/desktop/main.ts`: `pdfShown`, `showPdf`, `closePdfView`, `openWebLink`, the
+  PDF branches of `readFiles`, `activateDocument`, `closeDocumentById`, `resizeText`, `render`.
+- Tests: `tests/pdf-engine.test.ts`, `tests/helpers/pdfCorpus.ts`, `tests/desktop-e2e/pdf-read.spec.ts`.
 
 ## Development dependency compatibility
 

@@ -32,7 +32,7 @@
         <div id="reader-scroll" class="reader-scroll">
           <section id="reader-empty" class="reader-empty">
             <h1>Read and write Markdown.</h1>
-            <p>Start a note, or open a file. You can also drop a .md file anywhere in this window.</p>
+            <p>Start a note, or open a file. You can also drop a Markdown or PDF file anywhere in this window.</p>
             <div class="reader-empty-actions">
               <button id="reader-new-empty" class="reader-primary" type="button" title="New document (Ctrl+N)" aria-keyshortcuts="Control+N">New document</button>
               <button id="reader-open-empty" type="button" title="Open Markdown (Ctrl+O)" aria-keyshortcuts="Control+O">Open…</button>
@@ -43,6 +43,7 @@
           </section>
           <article id="reader-document" class="doc reader-document" aria-label="Markdown document" tabindex="-1" hidden></article>
         </div>
+        <div id="reader-pdf" class="reader-pdf" hidden></div>
         </div>
       </div>
       <footer class="reader-footer"><span id="reader-status" aria-live="polite">Local files · No uploads</span><span id="reader-save-state" class="reader-save-state"></span></footer>
@@ -52,8 +53,8 @@
       <p id="workspace-notice" class="reader-notice" role="status" aria-live="polite" hidden></p>
       <div id="app"></div>
     </div>
-    <input id="reader-file-input" type="file" accept=".md,.markdown,text/markdown,.json,.jsonc,.jsonl,.ndjson,.txt,.log,.yaml,.yml,.toml,.csv,.tsv" multiple hidden />
-    <input id="file-input" type="file" accept=".md,.markdown,text/markdown,.json,.jsonc,.jsonl,.ndjson,.txt,.log,.yaml,.yml,.toml,.csv,.tsv" multiple hidden />
+    <input id="reader-file-input" type="file" accept=".md,.markdown,text/markdown,.json,.jsonc,.jsonl,.ndjson,.txt,.log,.yaml,.yml,.toml,.csv,.tsv,.pdf,application/pdf" multiple hidden />
+    <input id="file-input" type="file" accept=".md,.markdown,text/markdown,.json,.jsonc,.jsonl,.ndjson,.txt,.log,.yaml,.yml,.toml,.csv,.tsv,.pdf,application/pdf" multiple hidden />
     <script type="module" src="/src/desktop/main.ts"></script>
   </body>
 </html>

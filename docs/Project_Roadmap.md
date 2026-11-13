@@ -35,6 +35,11 @@ in slices A1–A5. A1 to A4 are merged on main (see P2); A5 ([#300](https://gith
 readable view derived on the device. D0 to D4 and the D6 readability pass are merged on main, and JSON,
 JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is next (see P2).
 
+[PDF workbench](design/PDF_WORKBENCH.md) (owner direction, 2026-11-13; contract
+[complete push](design/2026-11-13-complete-push.md), track P): P0 design and engine decision merged
+(#312, PDFium-WASM); P1a reading view in progress; P1b native open, then P2 pages, P3 annotate, P4
+edit on the page, P5 decompile to Markdown, P6 page source.
+
 **#169 and AI-6/AI-7/AI-8/AI-9 remain open** (AI-6, AI-7, AI-8, AI-10 and the hands-on #169 boxes are delegated to agent QA by owner decision 2026-11-13, not accepted; AI-9 and the #169 signing decision stay with the owner). Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
 [optional recovery](design/RECOVERY.md) designs merged in #209; no in-place writes
@@ -176,7 +181,8 @@ export paths.
   [#285](https://github.com/Chris0Jeky/MDviewer/pull/285), the picker/command
   [#286](https://github.com/Chris0Jeky/MDviewer/pull/286) and its wiring
   [#295](https://github.com/Chris0Jeky/MDviewer/pull/295) are merged: New from template reads a pinned project's
-  `templates/` folder. **Later:** A5 embeddable element ([#300](https://github.com/Chris0Jeky/MDviewer/issues/300)).
+  `templates/` folder. **A5 embeddable element** ([#300](https://github.com/Chris0Jeky/MDviewer/issues/300)): `<mdviewer-reader>`
+  and its `change` event are implemented with a plain-page e2e in CI (in review).
   Open follow-ups: [#254](https://github.com/Chris0Jeky/MDviewer/issues/254).
 - **In progress (2026-11-12): Readable data, D0 to D4 and D6 merged** ([contract](design/READABLE_DATA.md)).
   Merged: D0 spec [#269](https://github.com/Chris0Jeky/MDviewer/pull/269); D1 JSON, JSON Lines and

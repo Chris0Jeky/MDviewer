@@ -10,6 +10,8 @@ import type { Doc } from "../app/state";
 import { native, type OpenBatch, type ReadResult, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
+import { PdfTabs, isPdfFile, MAX_PDF_BYTES } from "./pdfs";
+import type { PdfView } from "../pdf";
 import { installShortcuts, registerCommand } from "./commands";
 import { registerPanel } from "./panels";
 import { mountTabs } from "./shell/tabs";
@@ -43,6 +45,7 @@ const notice = element("reader-notice");
 const workspaceNotice = element("workspace-notice");
 const appRoot = element("app");
 const scroll = element("reader-scroll");
+const pdfHost = element("reader-pdf");
 const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
@@ -56,6 +59,12 @@ const returnButton = element<HTMLButtonElement>("reader-return");
 const settings = loadSettings();
 // The single owner of open documents across reading and the PDF workspace.
 const docs = new DesktopDocuments();
+// PDF tabs (PDF_WORKBENCH.md, P1). The view loads lazily; at most one is mounted at a time.
+const pdfs = new PdfTabs();
+let pdfView: { id: string; view: Promise<PdfView>; abort: AbortController } | null = null;
+/** A PDF is shown when one is active and no reader document is. */
+const pdfShown = (): boolean => !app && !!pdfs.active && !docs.reader.activeId;
+const isPdfTab = (id: string): boolean => pdfs.tabs.some(tab => tab.id === id);
 let app: App | null = null;
 let detachWorkspace: (() => void) | null = null;
 let changingMode = false;
@@ -224,7 +233,9 @@ async function flushSession(): Promise<void> {
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
-  tabs.render(open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), active?.id ?? null, changingMode);
+  const pdfItems = app ? [] : pdfs.tabs.map(tab => ({ id: tab.id, label: tab.name, dirty: false }));
+  tabs.render([...open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), ...pdfItems],
+    pdfShown() ? pdfs.activeId : active?.id ?? null, changingMode);
   const target = docs.saveTarget();
   const shown = !app && active && renderedReaderId === active.id ? docs.reader.active : null;
   if (shown) {
@@ -234,7 +245,7 @@ function syncDocuments(): void {
   saveState.textContent = target
     ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
     : "";
-  editToggle.disabled = !!app || changingMode;
+  editToggle.disabled = !!app || changingMode || pdfShown();
   editToggle.setAttribute("aria-pressed", String(editing));
   editHost.hidden = !editing;
   const divider = editHost.nextElementSibling;
@@ -248,7 +259,8 @@ function syncDocuments(): void {
   for (const button of appRoot.querySelectorAll<HTMLButtonElement>("button[data-desktop-command]")) {
     button.disabled = workspaceBusy || !active;
   }
-  document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  const titled = pdfShown() ? pdfs.active : active;
+  document.title = titled ? `${titled.name} — MDviewer` : "MDviewer";
   recordSession();
   const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
     && !dismissedConflicts.has(target.binding.token);
@@ -272,6 +284,9 @@ function rememberReaderPosition(): void {
  * replaces only changed blocks (S2c); anything else (another document, settings) is a full render.
  */
 function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
+  if (pdfShown()) { ++renderGeneration; syncDocuments(); showPdf(); return Promise.resolve(); }
+  pdfHost.hidden = true;
+  scroll.hidden = false;
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
   // A switch to another document may reuse that document's kept DOM; the one being left is kept.
   // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
@@ -379,11 +394,56 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   return renderChain;
 }
 
+/**
+ * Hand the view to the active PDF tab: flush and close Edit (its text stays with its document),
+ * remember the reader position, and leave no reader document active, so no reader command (Save,
+ * Edit, Export, copy) can act on a document that is not shown.
+ */
+function focusPdf(): void {
+  if (editing) { flushEdit(); editing = false; }
+  rememberReaderPosition();
+  docs.reader.activeId = null;
+}
+
+/** Show the active PDF tab, mounting its view (and loading the PDF chunk) when needed. */
+function showPdf(): void {
+  const tab = pdfs.active;
+  if (!tab) return;
+  scroll.hidden = true;
+  pdfHost.hidden = false;
+  if (pdfView?.id === tab.id) { void pdfView.view.then(view => view.showOutline(), () => undefined); return; }
+  closePdfView();
+  outline.replaceChildren();
+  status.textContent = `Opening ${tab.name}…`;
+  saveState.textContent = "";
+  const abort = new AbortController();
+  const view = import("../pdf").then(module => module.mountPdf(pdfHost, {
+    name: tab.name, bytes: tab.bytes, outline, openExternal: openWebLink, signal: abort.signal,
+    status: text => { if (pdfView?.id === tab.id && pdfShown()) status.textContent = text; },
+  }));
+  const current = { id: tab.id, view, abort };
+  pdfView = current;
+  view.catch(error => {
+    if (pdfView !== current) return;
+    pdfView = null; // the next activation retries
+    report(`Could not open ${tab.name}: ${errorText(error)}`);
+  });
+}
+
+function closePdfView(): void {
+  const current = pdfView;
+  pdfView = null;
+  current?.abort.abort();
+  void current?.view.then(view => view.destroy(), () => undefined);
+}
+
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
   const previousActiveId = docs.reader.activeId;
+  const keepPdf = pdfShown() && request !== generation;
   errors.push(...docs.addBatch(batch.documents, request === generation));
+  if (keepPdf) docs.reader.activeId = null;
   syncDocuments(); // The workspace's addBatch emits before the imported clean baselines are recorded.
   if (errors.length) report(errors.join(" "));
   // Capture the notices for this batch only, after publishing its immediate errors.
@@ -401,10 +461,20 @@ async function readFiles(files: File[]): Promise<void> {
   const request = ++generation;
   const batch: OpenBatch = { documents: [], errors: [], canceled: false };
   let total = 0;
+  let openedPdf = false;
+  const shownPdf = pdfs.activeId;
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
+      if (isPdfFile(file.name, file.type)) {
+        if (app || changingMode) throw new Error("Return to the reading view to open a PDF.");
+        if (file.size > MAX_PDF_BYTES) throw new Error("PDFs larger than 200 MB cannot be opened.");
+        const problem = pdfs.add(file.name, new Uint8Array(await file.arrayBuffer()));
+        if (problem) throw new Error(problem);
+        openedPdf = true;
+        continue;
+      }
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, PDF and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -422,7 +492,13 @@ async function readFiles(files: File[]): Promise<void> {
     }
   }
   if (files.length > 32) batch.errors.push({ name: "Extra files", message: "Open at most 32 files at once." });
+  // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
+  // Only the newest import may take the view (a slow PDF read must not override a later choice).
+  const showPdfNow = openedPdf && !batch.documents.length && request === generation && !app && !changingMode;
+  if (showPdfNow) focusPdf();
   commitBatch(batch, request);
+  if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
+  else if (openedPdf) { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); } // a stale import adds its tab without taking the active mark
 }
 
 async function open(): Promise<void> {
@@ -755,9 +831,21 @@ function finishMode(): void {
 
 function closeDocument(): void {
   if (docs.reader.activeId) closeDocumentById(docs.reader.activeId);
+  else if (pdfShown() && pdfs.activeId) closeDocumentById(pdfs.activeId);
 }
 
 function closeDocumentById(id: string): void {
+  if (isPdfTab(id)) {
+    if (changingMode) return;
+    const wasShown = pdfShown() && pdfs.activeId === id;
+    if (pdfView?.id === id) closePdfView();
+    pdfs.close(id);
+    report("");
+    if (!wasShown) { syncDocuments(); return; }
+    if (!pdfs.active && docs.reader.documents.length) docs.reader.activeId = docs.reader.documents.at(-1)!.id;
+    void render();
+    return;
+  }
   const doc = docs.reader.documents.find(candidate => candidate.id === id);
   if (!doc || changingMode) return;
   if (nativeSaveBusy) { report("Wait for the save to finish before closing this document."); return; }
@@ -771,6 +859,12 @@ function closeDocumentById(id: string): void {
 }
 
 function activateDocument(id: string): void {
+  if (isPdfTab(id)) {
+    if (changingMode || (pdfShown() && pdfs.activeId === id)) return;
+    focusPdf();
+    ++generation; pdfs.activeId = id; report(""); void render();
+    return;
+  }
   if (changingMode || docs.reader.activeId === id || !docs.reader.documents.some(doc => doc.id === id)) return;
   visit(id, docs.reader.activeId);
   ++generation; docs.reader.activeId = id; report(""); void render();
@@ -817,6 +911,7 @@ function openSample(): void {
 }
 element("reader-sample").addEventListener("click", openSample);
 function resizeText(delta: number): void {
+  if (pdfShown()) { void pdfView?.view.then(view => view.zoomBy(delta), () => undefined); return; }
   textSize = Math.min(26, Math.max(13, textSize + delta));
   content.style.setProperty("--reader-text-size", `${textSize}px`);
 }
@@ -1006,7 +1101,7 @@ if (native.available && readTemplate) {
 }
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
-registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
+registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode && !pdfShown(),
   run: () => setEditing(!editing) });
 registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !nativeSaveBusy && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
@@ -1230,13 +1325,18 @@ document.addEventListener("click", event => {
   if (href.startsWith("#")) return;
   event.preventDefault();
   if (isRelativeReference(href)) { void followRelativeLink(href); return; }
+  openWebLink(href);
+});
+
+/** The one path for web links, from Markdown documents and from PDFs. */
+function openWebLink(href: string): void {
   try {
     const url = new URL(href);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Only web links can open. Local resource links are disabled.");
     if (native.available) void native.external(url.href).catch(error => report(errorText(error)));
     else window.open(url.href, "_blank", "noopener,noreferrer");
   } catch (error) { report(errorText(error)); }
-});
+}
 
 /** A reference with no scheme and no root: resolved natively against the document's folder. */
 function isRelativeReference(reference: string): boolean {
