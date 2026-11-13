@@ -214,6 +214,7 @@ describe("copy fixture properties (read-only)", () => {
         "events-table.jsonl": ["$", "$[1]"],
         "embedded.json": ["$.payload.a", "$.payload.items"],
         "notes.txt": ["$", "line 1"],
+        "page.html": ["$"],
       };
       expect(view.map.size).toBeGreaterThan(0);
       for (const [line, path] of view.map) {

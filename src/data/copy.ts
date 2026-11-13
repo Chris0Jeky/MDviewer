@@ -43,7 +43,7 @@ function list(items: JsonValue[]): JsonValue {
  */
 export function valueAt(text: string, kind: DataKind, path: string, fileName = ""): JsonValue | undefined {
   const parts = pathParts(path);
-  if (!parts || kind === "text") return undefined;
+  if (!parts || kind === "text" || kind === "html") return undefined;
   let value: JsonValue | undefined;
   switch (kind) {
     case "json": value = parseJson(text).value ?? parseJson(text, true).value; break;
