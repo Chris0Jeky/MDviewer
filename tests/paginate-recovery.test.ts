@@ -183,6 +183,14 @@ describe("auditPagination unrendered text", () => {
   });
 });
 
+describe("auditPagination mid-word page breaks", () => {
+  it("ignores the hyphen glyph Paged.js appends to a word it splits across pages", () => {
+    const source = html('<p data-ref="1">alpha research notes</p>');
+    const host = html(page('<p data-ref="1">alpha res\u2011</p>') + page('<p data-ref="1">earch notes</p>'));
+    expect(auditPagination(source, host)).toBeNull();
+  });
+});
+
 describe("auditPagination notes-only pages", () => {
   const source = html('<p data-ref="1">closing</p>');
 

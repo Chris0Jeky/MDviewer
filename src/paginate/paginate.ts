@@ -265,13 +265,17 @@ function atomicIdOf(el: Element): string | null {
   return el.closest(`[${ATOMIC_ID_ATTR}]`)?.getAttribute(ATOMIC_ID_ATTR) ?? null;
 }
 
-/** The element's own text nodes (not its descendants'), whitespace removed. */
+/**
+ * The element's own text nodes (not its descendants'), without whitespace (a split reflows
+ * it) and without soft or non-breaking hyphens: Paged.js appends U+2011 to the first half of
+ * a word it breaks across pages, text that is in no source.
+ */
 function ownText(el: Element): string {
   let text = "";
   for (const child of el.childNodes) {
     if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? "";
   }
-  return text.replace(/\s+/g, "");
+  return text.replace(/[\s\u00AD\u2011]+/g, "");
 }
 
 function hasOwnText(el: Element): boolean {
