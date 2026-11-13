@@ -272,6 +272,14 @@ describe("conversation lens accuracy (#278)", () => {
     expect(withTokens("12345678901234567890", "1")).toContain("input\\_tokens: 12345678901234567891");
   });
 
+  it("a very long decimal is summed approximately, not digit by digit for every record (#326 review)", () => {
+    const long = "0." + "1".repeat(200_000);
+    const started = performance.now();
+    const markdown = withTokens(long, ...Array.from({ length: 2_000 }, () => "1"));
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(markdown).toContain("input\\_tokens: about 2000\\.1");
+  });
+
   it("recognises OpenAI tool-call turns whose content is null", () => {
     const call = (id: string): unknown => ({ role: "assistant", content: null, tool_calls: [{ id, type: "function", function: { name: "get_weather", arguments: "{}" } }] });
     const result = view([user, call("a"), call("b"), { role: "tool", tool_call_id: "a", content: "sunny" }]);

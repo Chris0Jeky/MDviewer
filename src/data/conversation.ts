@@ -99,10 +99,15 @@ function time(lens: Lens, value: JsonValue | undefined): string {
   return hint(value, "timestamp", lens.timeZone) || (value.kind === "string" ? value.value : value.kind === "number" ? value.raw : "");
 }
 
-/** Plain decimals add exactly; any other spelling (an exponent) is only "about", or not shown if not finite. */
+/**
+ * Plain decimals of ordinary length add exactly; any other spelling (an exponent, or a value longer
+ * than EXACT_DIGITS, whose exact sum would cost length × records) is only "about", or not shown if
+ * not finite.
+ */
+const EXACT_DIGITS = 40;
 function total(values: string[]): string {
   if (values.length === 1) return values[0]!;
-  if (values.every(v => /^-?\d+(?:\.\d+)?$/.test(v))) {
+  if (values.every(v => v.length <= EXACT_DIGITS && /^-?\d+(?:\.\d+)?$/.test(v))) {
     const scale = values.reduce((n, v) => Math.max(n, v.split(".")[1]?.length ?? 0), 0);
     const sum = values.reduce((n, v) => {
       const [whole, fraction = ""] = v.split(".");
