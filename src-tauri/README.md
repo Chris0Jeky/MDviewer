@@ -123,7 +123,7 @@ absolute paths and Unix-millisecond times only, written atomically. It is loaded
 library use; a corrupt file is renamed `library.json.corrupt-<ms>` and replaced by an empty
 library. Opens and Save As record recents. Commands take opaque per-process ids (`library_list`,
 `library_scan`, `library_open`, `library_pin` by token or id, `library_unpin`, `library_forget`,
-`library_mark_seen`, `library_mark_seen_many` (ids; one write), `library_add_project` via the native folder picker, `library_clear`); the
+`library_mark_seen`, `library_mark_seen_many` (ids; one write; the webview still marks one file per call until #292 wires it), `library_add_project` via the native folder picker, `library_clear`); the
 webview never supplies a path. `library_scan` walks a pinned project for `.md`/`.markdown` files
 and agent data files (Readable data D5: a data-extension file inside `.claude/`, `.codex/` or
 `.agent-harness/`, or the root `.mcp.json`, listed with `agent: true`; other data files stay out, and credential stores
