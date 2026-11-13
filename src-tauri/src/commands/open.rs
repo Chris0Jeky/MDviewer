@@ -4,8 +4,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::file_policy::{
-    is_pdf_name, read_batch, skipped_files_error, ReadBatch, DATA_EXTENSIONS,
-    MARKDOWN_EXTENSIONS, PDF_EXTENSIONS,
+    is_pdf_name, read_batch, skipped_files_error, ReadBatch, DATA_EXTENSIONS, MARKDOWN_EXTENSIONS,
+    PDF_EXTENSIONS,
 };
 use crate::registry::{capture_revision, Binding, Registry, Token};
 use crate::DesktopState;

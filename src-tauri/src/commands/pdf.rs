@@ -31,7 +31,8 @@ pub(crate) fn read(token: &str) -> Result<Vec<u8>, &'static str> {
         .get(&token)
         .map(|binding| (binding.path.clone(), binding.digest))
         .ok_or("revoked")?;
-    let document = read_markdown(&path, MAX_PDF_BYTES, capture_revision).map_err(|_| "unreadable")?;
+    let document =
+        read_markdown(&path, MAX_PDF_BYTES, capture_revision).map_err(|_| "unreadable")?;
     if document.digest != digest {
         return Err("changed");
     }
@@ -61,8 +62,9 @@ mod tests {
 
     struct Dir(std::path::PathBuf);
     impl Dir {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("mdv-pdf-{}", std::process::id()));
+        // One folder per test: the tests run in parallel and each removes its own on drop.
+        fn new(test: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("mdv-pdf-{}-{test}", std::process::id()));
             std::fs::create_dir_all(&path).unwrap();
             Self(path)
         }
@@ -73,10 +75,15 @@ mod tests {
         }
     }
 
-    const PDF: &[u8] = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
+    const PDF: &[u8] =
+        b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
 
     fn text(token: &Token) -> String {
-        serde_json::to_value(token).unwrap().as_str().unwrap().to_owned()
+        serde_json::to_value(token)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_owned()
     }
 
     fn binding(document: &crate::file_policy::Document) -> Binding {
@@ -93,14 +100,17 @@ mod tests {
 
     #[test]
     fn a_pdf_opens_as_bytes_outside_the_text_budget_and_reads_back_until_it_changes() {
-        let dir = Dir::new();
+        let dir = Dir::new("reads");
         let path = dir.0.join("Report.PDF");
         std::fs::write(&path, PDF).unwrap();
         let batch = read_batch([path.clone()], capture_revision);
         assert!(batch.errors.is_empty(), "{:?}", batch.errors);
         let document = &batch.documents[0];
         assert!(document.text.is_empty());
-        assert!(document.pdf.is_none(), "read_batch drops the bytes; read_pdf re-reads them");
+        assert!(
+            document.pdf.is_none(),
+            "read_batch drops the bytes; read_pdf re-reads them"
+        );
         let token = register(binding(document)).unwrap();
         assert_eq!(read(&text(&token)).unwrap(), PDF);
 
@@ -113,7 +123,7 @@ mod tests {
 
     #[test]
     fn a_file_named_pdf_without_the_signature_is_refused() {
-        let dir = Dir::new();
+        let dir = Dir::new("signature");
         let path = dir.0.join("fake.pdf");
         std::fs::write(&path, b"# not a pdf").unwrap();
         let batch = read_batch([path], capture_revision);
@@ -123,7 +133,7 @@ mod tests {
 
     #[test]
     fn a_pdf_is_admitted_beside_text_without_spending_the_text_limit() {
-        let dir = Dir::new();
+        let dir = Dir::new("budget");
         let pdf = dir.0.join("big.pdf");
         let mut bytes = PDF.to_vec();
         bytes.resize(MAX_FILE_BYTES as usize + 1, b' ');

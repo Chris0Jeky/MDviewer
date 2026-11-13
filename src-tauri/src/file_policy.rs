@@ -32,13 +32,16 @@ pub const PDF_EXTENSIONS: &[&str] = &["pdf"];
 pub const MAX_PDF_BYTES: u64 = 200_000_000;
 
 pub fn is_pdf_name(name: &str) -> bool {
-    name.rsplit_once('.')
-        .is_some_and(|(_, extension)| PDF_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()))
+    name.rsplit_once('.').is_some_and(|(_, extension)| {
+        PDF_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+    })
 }
 
 /// A PDF starts with `%PDF-` within its first 1,024 bytes.
 pub fn has_pdf_signature(bytes: &[u8]) -> bool {
-    bytes[..bytes.len().min(1024)].windows(5).any(|window| window == b"%PDF-")
+    bytes[..bytes.len().min(1024)]
+        .windows(5)
+        .any(|window| window == b"%PDF-")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
