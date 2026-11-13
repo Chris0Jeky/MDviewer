@@ -2,7 +2,7 @@
 
 Status: **specification drafted 2026-11-12 on the owner's request. D0 to D3 (including both halves of
 D3), D4 (parsers #281, native #284, webview #288), the D6 readability pass (#293) and D5's pure copy functions
-(#289) are merged; the D5 copy menu and Save readable view as Markdown (#299) are next.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
+(#289) and the D5 webview (copy menu and Save readable view as Markdown, #299) are done.** Owner direction: MDviewer should "take structured JSON and other similar difficult to read
 files" and create "structured more human readable versions".
 
 ## The idea
@@ -166,8 +166,19 @@ File paths inside data are shown as text, not links. Web links follow the existi
 
 ## Copy
 
-Copying a block gives its Markdown from day one, so a table pastes straight into an issue. Later
-(slice D5): copy a value, copy its path in JSONPath and `jq` form, copy a subtree as JSON.
+Copying a block gives its Markdown from day one, so a table pastes straight into an issue.
+
+Slice D5 adds, for JSON, JSON Lines, YAML, TOML and CSV (not plain text), four reader commands in the
+More menu and the palette: Copy value, Copy path (JSONPath), Copy path (jq) and Copy subtree as JSON.
+The target is the value the reader's last selection sits on: the stamped `data-src` line of its block (a
+table row is one line, and a cell takes its row's line) maps through `Readable.map` to a path, and
+`src/data/copy.ts` does the rest. A flattened table cell therefore names its row; a table header
+names the table; with no selection the target is the whole document. A path the parsed file does not
+hold (JSON expanded inside a string) copies nothing and says so. For JSON Lines the jq form indexes
+the slurped array, and the notice says `jq -s`. "Copy reference" for a data document appends the value
+path (`file.json#$.owners[1]`) instead of readable-view line numbers. "Save readable view as Markdown…"
+(any data kind) saves exactly the render text as `name.readable.md` through the Save a copy path; the open
+document, its binding and its dirty baseline do not change. Code: `src/desktop/reader/dataCopy.ts`.
 
 ## The seam
 
@@ -206,7 +217,7 @@ not make. No real file ever becomes a fixture.
 | D2 | The conversation lens | D1 |
 | D3 | Opening and showing data documents: native and web open, Read, Edit and PDF, errors, live reload, Save | D1; the shell (S3) on main |
 | D4 | YAML, TOML, CSV and TSV | D1, D3 |
-| D5 | Copy value, path and subtree; agent data files in the Library; save the readable view as Markdown | D3 |
+| D5 | Copy value, path and subtree; agent data files in the Library; save the readable view as Markdown (done: #289, #290, #299) | D3 |
 | D6 | Readability pass: one table per object, row-sized values inline, record tables with shallow nesting and for JSON Lines, typed strings quoted, literal blocks | D1 to D4 |
 
 ## Later, not in version 1
