@@ -121,7 +121,15 @@ mod win {
         path::{Component, Prefix},
         sync::atomic::{AtomicU64, Ordering},
     };
-    use windows_sys::Win32::{Foundation::*, Storage::FileSystem::*};
+    use windows_sys::Win32::{
+        Foundation::*,
+        Security::{
+            GetKernelObjectSecurity, GetSecurityDescriptorControl, SetKernelObjectSecurity,
+            SetSecurityDescriptorControl, DACL_SECURITY_INFORMATION, SE_DACL_AUTO_INHERITED,
+            SE_DACL_AUTO_INHERIT_REQ,
+        },
+        Storage::FileSystem::*,
+    };
     use windows_sys::{
         Wdk::Storage::FileSystem::{
             FileRenameInformation, NtSetInformationFile, FILE_RENAME_INFORMATION,
@@ -351,6 +359,58 @@ mod win {
         let leaf = units.rsplit(|&u| u == u16::from(b'\\')).next().unwrap();
         Ok(OsString::from_wide(leaf))
     }
+    /// The file's DACL as a self-relative security descriptor (words for alignment).
+    fn dacl(file: &File) -> io::Result<Vec<usize>> {
+        let mut needed = 0;
+        // SAFETY: a size query without a buffer; it fails and reports the size.
+        unsafe {
+            GetKernelObjectSecurity(
+                file.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                0,
+                &mut needed,
+            )
+        };
+        let mut sd = vec![0usize; (needed as usize).div_ceil(size_of::<usize>())];
+        // SAFETY: aligned writable buffer of at least `needed` bytes.
+        bool_result(unsafe {
+            GetKernelObjectSecurity(
+                file.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                sd.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        })?;
+        Ok(sd)
+    }
+    /// Set `from`'s DACL, protection and auto-inheritance state on `to`.
+    fn copy_dacl(from: &File, to: &File) -> io::Result<()> {
+        let mut sd = dacl(from)?;
+        let (mut control, mut revision) = (0, 0);
+        // SAFETY: `sd` holds a valid self-relative descriptor for these calls.
+        unsafe {
+            bool_result(GetSecurityDescriptorControl(
+                sd.as_mut_ptr().cast(),
+                &mut control,
+                &mut revision,
+            ))?;
+            // The kernel keeps SE_DACL_AUTO_INHERITED only when it is requested.
+            if control & SE_DACL_AUTO_INHERITED != 0 {
+                bool_result(SetSecurityDescriptorControl(
+                    sd.as_mut_ptr().cast(),
+                    SE_DACL_AUTO_INHERIT_REQ,
+                    SE_DACL_AUTO_INHERIT_REQ,
+                ))?;
+            }
+            bool_result(SetKernelObjectSecurity(
+                to.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                sd.as_mut_ptr().cast(),
+            ))
+        }
+    }
     fn read_handle(file: &mut File, max: u64) -> io::Result<(Snapshot, Vec<u8>)> {
         let (id, len) = identity(file)?;
         if len > max {
@@ -493,10 +553,10 @@ mod win {
     }
     // A newly created scratch file is delete-pending until a flushed journal owns
     // it. Process exit before publication cannot leave an unrecorded temporary.
-    fn scratch(path: &Path) -> io::Result<File> {
+    fn scratch(path: &Path, extra_access: u32) -> io::Result<File> {
         OpenOptions::new()
             .write(true)
-            .access_mode(GENERIC_READ | GENERIC_WRITE | DELETE)
+            .access_mode(GENERIC_READ | GENERIC_WRITE | DELETE | extra_access)
             .share_mode(FILE_SHARE_READ)
             .create_new(true)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_DELETE_ON_CLOSE)
@@ -629,7 +689,14 @@ mod win {
         let temp_path = base.with_extension("tmp");
         let aside_path = base.with_extension("old");
         let journal_path = base.with_extension("journal");
-        let mut temp = scratch(&temp_path).map_err(|e| err(e, Stage::WriteTemp))?;
+        let mut temp = scratch(&temp_path, if original.is_some() { WRITE_DAC } else { 0 })
+            .map_err(|e| err(e, Stage::WriteTemp))?;
+        if let Some(file) = &original {
+            // The temporary inherited the folder's default DACL. Give it the
+            // original's, so a save never loosens a tighter file ACL (#229).
+            // Refuse rather than commit when that copy fails.
+            copy_dacl(file, &temp).map_err(|e| err(e, Stage::WriteTemp))?;
+        }
         let split = bytes.len() / 2;
         temp.write_all(&bytes[..split])
             .map_err(|e| err(e, Stage::WriteTemp))?;
@@ -643,7 +710,7 @@ mod win {
         if new.len != bytes.len() as u64 || new.digest != digest(bytes) {
             return Err(ReplaceError::Io(io::ErrorKind::InvalidData, Stage::Verify));
         }
-        let mut journal = scratch(&journal_path).map_err(|e| err(e, Stage::WriteTemp))?;
+        let mut journal = scratch(&journal_path, 0).map_err(|e| err(e, Stage::WriteTemp))?;
         journal
             .write_all(&record(dest.file_name().unwrap(), expected, &new))
             .map_err(|e| err(e, Stage::WriteTemp))?;
@@ -1331,6 +1398,44 @@ mod win {
                 );
                 assert_eq!(fs::read(&path).unwrap(), NEW);
                 fs::write(&path, OLD).unwrap();
+            }
+        }
+
+        fn icacls(path: &Path, args: &[&str]) {
+            let out = Command::new("icacls")
+                .arg(path)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "icacls {args:?} failed");
+        }
+        fn dacl_of(path: &Path) -> Vec<usize> {
+            dacl(&File::open(path).unwrap()).unwrap()
+        }
+        #[test]
+        fn a_save_keeps_a_dacl_tighter_than_the_folder() {
+            // #229: a save must keep the file's own DACL, not take the folder's
+            // default: a protected file in a folder that grants Everyone read, and
+            // an inheriting file with an explicit extra ACE (Users read).
+            for file_acl in [&["/inheritance:d"][..], &["/grant", "*S-1-5-32-545:(R)"]] {
+                let (_dir, path) = fixture();
+                let parent = path.parent().unwrap();
+                icacls(&path, file_acl);
+                icacls(parent, &["/grant", "*S-1-1-0:(OI)(CI)(R)"]);
+                let before = dacl_of(&path);
+                let fresh = parent.join("fresh.md");
+                create_new(&fresh, NEW).unwrap();
+                assert_ne!(
+                    dacl_of(&fresh),
+                    before,
+                    "fixture: the folder default differs"
+                );
+                let (snap, _) = snapshot_read(&path, 100).unwrap();
+                replace_if_unchanged(&path, &snap, NEW).unwrap();
+                assert_eq!(fs::read(&path).unwrap(), NEW);
+                // Byte-equal descriptor: same ACEs, protection and inheritance flags.
+                assert_eq!(dacl_of(&path), before, "{file_acl:?}");
+                assert_clean(parent);
             }
         }
 

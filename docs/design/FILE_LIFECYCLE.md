@@ -177,6 +177,9 @@ Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
 - A save commits under the leaf the file system stores for the original, read from
   its held handle, so a short (8.3) or differently cased input name cannot rename
   the document.
+- A replace copies the original's DACL to the temporary before commit and refuses
+  the save when it cannot, so a file with a tighter ACL than its folder is not
+  loosened. Owner and SACL are not copied; Save As keeps the folder default.
 
 ## Implementation slices and qualification
 
