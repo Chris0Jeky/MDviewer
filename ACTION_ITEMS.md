@@ -6,14 +6,18 @@
 >
 > **Rules for agents.**
 > 1. **Read this file at session start.**
-> 2. **Flag every OPEN item** near the top of any summary, status report, or handoff.
+> 2. **Flag every OPEN item** near the top of any summary, status report, or handoff, and list the
+>    delegated items with their status ("delegated, not accepted" until their charters pass).
 > 3. **Clear an OPEN item only on explicit human confirmation** (e.g. "AI-9 is done"). Move it to the
 >    Completed log with the date and a one-line result. Never self-clear or assume completion.
 > 4. **Never give the owner a mechanical check.** Trying a build, browser and live-site checks,
 >    install, print, keyboard and screen-reader passes are agent QA work (owner decision 2026-11-13):
 >    add them to `docs/qa/ACCEPTANCE.md`, not here. A new OPEN item is only for what no agent can do.
 > 5. **Delegated is not accepted.** A delegated item's status changes only with evidence (a CI link,
->    a QA session report, an issue number); agents never mark one as accepted by the owner.
+>    a QA session report, an issue number); agents never mark one as accepted by the owner. A
+>    delegated item moves to the Completed log only when every row of its charter in
+>    `docs/qa/ACCEPTANCE.md` has passed or is recorded "not verified, accepted by owner decision
+>    2026-11-13", with the evidence linked; the matching #169 box is ticked the same way.
 > 6. **Keep the Current State snapshot accurate** when verified truth changes.
 
 ---
@@ -344,7 +348,10 @@ the web redesign.
 status: *not run*, *automated in CI* (with a link), *agent session run* (with evidence) or *defect
 filed* (with issue numbers). The QA lane owns them; charters and latest results live in
 `docs/qa/ACCEPTANCE.md`. Anything no agent can check is recorded as "not verified, accepted by owner
-decision 2026-11-13" and never sent back to the owner.
+decision 2026-11-13" and never sent back to the owner. In the former owner steps below, "you" and
+"your own files" now mean the QA agent working on invented files only (never the owner's documents),
+and the "Reply ... is done" and "only you can close this item" lines no longer apply: rule 5 above
+says when a delegated item closes.
 
 - **AI-10 — Try the Windows build on real files.** Delegated 2026-11-13.
   - **Status:** defect filed: the owner ran steps 1 to 4 on the CI portable build from `722cbbd` (run 43342508614) and found [#334](https://github.com/Chris0Jeky/MDviewer/issues/334) (a tick scrolls the reader) and [#335](https://github.com/Chris0Jeky/MDviewer/issues/335) (write-back Undo hard to find). Agent session: not run.

@@ -126,10 +126,11 @@ change is considered done:
   render/pagination/export change). Render order intact.
 - **CI/tests**: `npm run typecheck`, `npm run lint`, `npm run test` green; `npm run test:e2e`
   green for render/pagination/export/UI changes. New code has tests.
-- **Acceptance (agent QA)**: for UI/pagination/export changes, drag-drop → preview →
+- **Acceptance (agent QA, post-merge)**: for UI/pagination/export changes, drag-drop → preview →
   Print/Save-as-PDF and Download-PDF verified in a real browser by the QA lane on the next green
-  build, under its charter in `docs/qa/ACCEPTANCE.md`; findings become `qa` issues. Not an owner
-  task (owner decision 2026-11-13).
+  build after the merge, under its charter in `docs/qa/ACCEPTANCE.md`. It does not block the merge
+  (the automated gates above do); the PR names the charter, and a failure becomes a `qa` issue the
+  owning lane fixes. Not an owner task (owner decision 2026-11-13).
 - **Zero tech debt**: no TODO without a tracked follow-up; no skipped required tests; no silent workarounds. Report the existing opt-in performance-ladder skips separately; they do not replace required verification.
 - **Docs sync**: roadmap, `IMPLEMENTATION_SPEC.md`, and `AGENT_INDEX.md` updated if their truth changed.
 

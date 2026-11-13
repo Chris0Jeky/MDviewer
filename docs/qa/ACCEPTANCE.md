@@ -1,9 +1,10 @@
 # Acceptance by agent QA
 
 Owner decision 2026-11-13: mechanical acceptance checks are agent QA work, not owner tasks (see
-`ACTION_ITEMS.md`, "Delegated to agent QA"). This file maps every former human step to the
-strongest check that replaces it and records the latest result. Delegated is not accepted: a row
-passes only with evidence.
+`ACTION_ITEMS.md`, "Delegated to agent QA"). This file will map every former human step to the
+strongest check that replaces it and record the latest result; until the per-step charters land,
+the former owner steps in `ACTION_ITEMS.md` are the charter source. Delegated is not accepted: a
+row passes only with evidence.
 
 | Item | Status |
 | --- | --- |
