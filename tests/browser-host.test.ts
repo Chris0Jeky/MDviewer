@@ -1,0 +1,206 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Host } from "../src/desktop/native";
+
+/**
+ * The browser host (web parity W1) against in-memory file handles shaped like the File System
+ * Access API. The Playwright suite `tests/webhost-e2e/` repeats the save path on real Chromium
+ * handles; this file pins the decisions: what is compared before a write, what is refused, and
+ * that bytes round-trip exactly.
+ */
+class FakeHandle {
+  readonly kind = "file";
+  modified = 1_000;
+  exists = true;
+  writes = 0;
+  constructor(public name: string, public bytes: Uint8Array) {}
+  async getFile(): Promise<File> {
+    if (!this.exists) throw new DOMException("gone", "NotFoundError");
+    return new File([this.bytes as Uint8Array<ArrayBuffer>], this.name, { lastModified: this.modified });
+  }
+  async createWritable() {
+    const chunks: Uint8Array[] = [];
+    return {
+      write: async (data: Uint8Array) => { chunks.push(data); },
+      close: async () => {
+        this.bytes = new Uint8Array(chunks.flatMap(chunk => Array.from(chunk)));
+        this.exists = true;
+        this.modified += 1;
+        this.writes += 1;
+      },
+      abort: async () => undefined,
+    };
+  }
+  async isSameEntry(other: unknown): Promise<boolean> { return other === this; }
+  async queryPermission(): Promise<string> { return "granted"; }
+  /** Another program writes the file. */
+  outside(bytes: Uint8Array, keepTime = false): void { this.bytes = bytes; if (!keepTime) this.modified += 10; }
+}
+
+const utf16le = (text: string): Uint8Array => {
+  const out = new Uint8Array(2 + text.length * 2);
+  out.set([0xff, 0xfe]);
+  for (let index = 0; index < text.length; index++) new DataView(out.buffer).setUint16(2 + index * 2, text.charCodeAt(index), true);
+  return out;
+};
+const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+let host: Host;
+let pick: FakeHandle[];
+let saveTo: FakeHandle | null;
+
+beforeEach(async () => {
+  pick = [];
+  saveTo = null;
+  Object.assign(window, {
+    showOpenFilePicker: vi.fn(async () => {
+      if (!pick.length) throw new DOMException("canceled", "AbortError");
+      return pick;
+    }),
+    showSaveFilePicker: vi.fn(async () => {
+      if (!saveTo) throw new DOMException("canceled", "AbortError");
+      return saveTo;
+    }),
+  });
+  vi.resetModules();
+  host = (await import("../src/desktop/hosts/browser")).browserHost;
+});
+
+async function open(handle: FakeHandle) {
+  pick = [handle];
+  const batch = await host.open();
+  expect(batch.errors).toEqual([]);
+  return batch.documents[0]!;
+}
+
+describe("browser host: open and save", () => {
+  it("is available only with the picker API", () => {
+    expect(host.available).toBe(true);
+  });
+
+  it("opens a picked file bound by token, with its encoding and line endings", async () => {
+    const doc = await open(new FakeHandle("notes.md", utf16le("# Notes\r\n\r\nText.\r\n")));
+    expect(doc).toMatchObject({ name: "notes.md", text: "# Notes\r\n\r\nText.\r\n", encoding: "utf-16le", eol: "crlf", path: "notes.md" });
+    expect(doc.token).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it("a canceled picker opens nothing", async () => {
+    expect(await host.open()).toEqual({ documents: [], errors: [], canceled: true });
+  });
+
+  it("refuses unsupported types and over-limit files per file, opening the rest", async () => {
+    pick = [new FakeHandle("a.html", utf8("<p>")), new FakeHandle("b.md", utf8("# B\n")), new FakeHandle("c.md", new Uint8Array([0xc3, 0x28]))];
+    const batch = await host.open();
+    expect(batch.documents.map(doc => doc.name)).toEqual(["b.md"]);
+    expect(batch.errors.map(error => error.name)).toEqual(["a.html", "c.md"]);
+  });
+
+  it("Save writes the editor's LF text back in the file's encoding and endings, byte for byte", async () => {
+    const handle = new FakeHandle("notes.md", utf16le("# Notes\r\n\r\nText.\r\n"));
+    const doc = await open(handle);
+    const result = await host.saveDocument(doc.token!, 0, "# Notes\n\nText, edited.\n", false);
+    expect(result).toMatchObject({ outcome: "saved", token: doc.token, generation: 1, encoding: "utf-16le", eol: "crlf" });
+    expect(handle.bytes).toEqual(utf16le("# Notes\r\n\r\nText, edited.\r\n"));
+    // The new bytes are the baseline: a second save does not see its own write as an outside change.
+    expect(await host.saveDocument(doc.token!, 1, "# Notes\n", false)).toMatchObject({ outcome: "saved", generation: 2 });
+  });
+
+  it("refuses to write over an outside change, even one with the same size and time", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    handle.outside(utf8("# Other\n"), true); // same length, same last-modified time
+    expect(await host.saveDocument(doc.token!, 0, "# Mine\n", false)).toEqual({ outcome: "conflict", reason: "changed" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Other\n");
+    expect(handle.writes).toBe(0);
+  });
+
+  it("refuses a moved or deleted file and does not recreate it", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    handle.exists = false;
+    expect(await host.saveDocument(doc.token!, 0, "# Mine\n", false)).toEqual({ outcome: "conflict", reason: "missing" });
+    expect(handle.writes).toBe(0);
+  });
+
+  it("fences stale generations, unknown tokens, mixed endings and concurrent saves", async () => {
+    const handle = new FakeHandle("mixed.md", utf8("a\r\nb\n"));
+    const doc = await open(handle);
+    expect(await host.saveDocument(doc.token!, 5, "a\n", false)).toEqual({ outcome: "failed", code: "stale" });
+    expect(await host.saveDocument("0".repeat(32), 0, "a\n", false)).toEqual({ outcome: "failed", code: "revoked" });
+    expect(await host.saveDocument(doc.token!, 0, "a\nb\n", false)).toEqual({ outcome: "mixed-line-endings" });
+    const [first, second] = await Promise.all([host.saveDocument(doc.token!, 0, "a\nb\nc\n", true), host.saveDocument(doc.token!, 0, "x\n", true)]);
+    expect(first).toMatchObject({ outcome: "saved", eol: "lf" });
+    expect(second).toEqual({ outcome: "failed", code: "busy" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("a\nb\nc\n");
+  });
+
+  it("Save As binds the chosen file under a new token and revokes the old one", async () => {
+    const original = new FakeHandle("notes.md", utf8("# Notes\r\n"));
+    const doc = await open(original);
+    saveTo = new FakeHandle("copy.md", new Uint8Array());
+    saveTo.exists = false;
+    const result = await host.saveDocumentAs(doc.token!, "notes.md", "# Notes\nMore.\n", false);
+    expect(result).toMatchObject({ outcome: "saved", name: "copy.md", generation: 0, encoding: "utf-8", eol: "crlf" });
+    if (result.outcome !== "saved") return;
+    expect(result.token).not.toBe(doc.token);
+    expect(new TextDecoder().decode(saveTo.bytes)).toBe("# Notes\r\nMore.\r\n");
+    expect(new TextDecoder().decode(original.bytes)).toBe("# Notes\r\n");
+    expect(await host.saveDocument(doc.token!, 0, "x", false)).toEqual({ outcome: "failed", code: "revoked" });
+  });
+
+  it("Save As onto the document's own file gets Save's outside-change check", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    handle.outside(utf8("# Changed outside\n"));
+    saveTo = handle;
+    expect(await host.saveDocumentAs(doc.token!, "notes.md", "# Mine\n", false)).toEqual({ outcome: "conflict", reason: "changed" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Changed outside\n");
+  });
+
+  it("Save As of a new document writes UTF-8 with LF, and refuses a name MDviewer cannot open", async () => {
+    saveTo = new FakeHandle("page.html", new Uint8Array());
+    expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
+    expect(saveTo.writes).toBe(0);
+    saveTo = new FakeHandle("plan.md", new Uint8Array());
+    expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toMatchObject({ outcome: "saved", name: "plan.md", encoding: "utf-8", eol: "lf" });
+    expect(new TextDecoder().decode(saveTo.bytes)).toBe("# A\n");
+    saveTo = null;
+    expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toEqual({ outcome: "canceled" });
+  });
+});
+
+describe("browser host: re-read and line patches", () => {
+  it("reports unchanged, a held change and an adopted change like the native re-read", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    expect(await host.readDocument(doc.token!, true, 0)).toEqual({ outcome: "unchanged" });
+    handle.outside(utf8("# New\r\n"));
+    expect(await host.readDocument(doc.token!, false, 0)).toMatchObject({ outcome: "changed", text: null, generation: 0 });
+    // Held: Save still conflicts.
+    expect(await host.saveDocument(doc.token!, 0, "# Mine\n", false)).toEqual({ outcome: "conflict", reason: "changed" });
+    expect(await host.readDocument(doc.token!, true, 0)).toEqual({ outcome: "changed", text: "# New\r\n", generation: 1, encoding: "utf-8", eol: "crlf" });
+    expect(await host.saveDocument(doc.token!, 1, "# Mine\n", false)).toMatchObject({ outcome: "saved" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Mine\r\n");
+    handle.exists = false;
+    expect(await host.readDocument(doc.token!, true, 2)).toEqual({ outcome: "missing" });
+  });
+
+  it("patches lines byte-exact against the current file and reports an unplaced patch", async () => {
+    const handle = new FakeHandle("tasks.md", utf16le("# Tasks\r\n- [ ] One\r\n- [ ] Two"));
+    const doc = await open(handle);
+    const saved = await host.patchDocument(doc.token!, [{ line: 3, expect: "- [ ] Two", replace: "- [x] Two" }]);
+    expect(saved).toEqual({ outcome: "saved", generation: 1, text: "# Tasks\r\n- [ ] One\r\n- [x] Two" });
+    expect(handle.bytes).toEqual(utf16le("# Tasks\r\n- [ ] One\r\n- [x] Two"));
+    expect(await host.patchDocument(doc.token!, [{ line: 2, expect: "- [x] One", replace: "- [ ] One" }]))
+      .toEqual({ outcome: "unplaced", index: 0, text: "# Tasks\r\n- [ ] One\r\n- [x] Two" });
+    expect(await host.patchDocument(doc.token!, [{ line: 2, expect: "- [ ] One", replace: "a\nb" }])).toEqual({ outcome: "failed", code: "invalid" });
+    // The patch moved the baseline: Save at the new generation is not an outside change.
+    expect(await host.saveDocument(doc.token!, 1, "# Tasks\n", false)).toMatchObject({ outcome: "saved" });
+  });
+
+  it("a released token can no longer save or re-read", async () => {
+    const doc = await open(new FakeHandle("notes.md", utf8("# Notes\n")));
+    await host.releaseDocument(doc.token!);
+    expect(await host.readDocument(doc.token!, true, 0)).toEqual({ outcome: "failed", code: "revoked" });
+    expect(await host.saveDocument(doc.token!, 0, "x", false)).toEqual({ outcome: "failed", code: "revoked" });
+  });
+});

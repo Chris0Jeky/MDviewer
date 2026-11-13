@@ -41,6 +41,7 @@ export const test = base.extend<{ audit: Audit }>({
     });
     await page.goto("/desktop.html");
     await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
+    await expect(page.locator("html")).toHaveAttribute("data-shell", "ready");
     await use(audit);
     expect(audit.external, "desktop must not attempt remote requests").toEqual([]);
     expect(audit.errors, "no uncaught runtime errors").toEqual([]);

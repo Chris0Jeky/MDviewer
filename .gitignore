@@ -5,6 +5,7 @@ node_modules
 # Build output
 dist/
 dist-desktop/
+dist-webhost/
 src-tauri/target/
 src-tauri/gen/
 desktop-artifacts/

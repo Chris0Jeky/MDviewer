@@ -64,6 +64,11 @@ export interface Host {
   readonly available: boolean;
   open(): Promise<OpenBatch>;
   takePending(): Promise<OpenBatch>;
+  /**
+   * Open dropped files bound to their files, or null when this host cannot (the shell then reads
+   * them as unbound copies). Call synchronously inside the drop event: the items expire after it.
+   */
+  openDropped?(items: DataTransferItemList): Promise<OpenBatch> | null;
   external(url: string): Promise<void>;
   /** Save an export (PDF, Markdown copy, data) to a destination the user picks. */
   save(blob: Blob, filename: string): Promise<{ canceled: boolean }>;
@@ -108,4 +113,12 @@ export interface Host {
   onClose(canClose: () => boolean, beforeClose?: () => Promise<void>): Promise<() => void>;
 }
 
-export const native: Host = tauriHost;
+/**
+ * Windows runs `tauriHost`. Only a web-shell build (`VITE_MDV_BROWSER_HOST=1`) loads the browser
+ * host, and only outside Tauri; in the Windows build the condition folds to false and the browser
+ * host is not bundled. Where the browser host has no File System Access API its `available` is
+ * false and the shell keeps its file-input and download fallbacks.
+ */
+export const native: Host = !tauriHost.available && import.meta.env.VITE_MDV_BROWSER_HOST === "1"
+  ? (await import("./hosts/browser")).browserHost
+  : tauriHost;

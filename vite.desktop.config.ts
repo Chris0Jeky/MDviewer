@@ -6,7 +6,10 @@ const config = JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", im
 };
 
 // No service worker or telemetry script. The same CSP is exercised by browser QA.
-export default defineConfig({
+// `--mode webhost` builds the same shell on the browser host (src/desktop/native.ts); the Windows
+// build never uses that mode, so its bundle does not contain the browser host.
+export default defineConfig(({ mode }) => ({
+  define: mode === "webhost" ? { "import.meta.env.VITE_MDV_BROWSER_HOST": JSON.stringify("1") } : {},
   publicDir: false,
   plugins: [{
     name: "desktop-content-security-policy",
@@ -18,4 +21,4 @@ export default defineConfig({
   build: { outDir: "dist-desktop", target: "es2022", rollupOptions: { input: "desktop.html" } },
   server: { host: "127.0.0.1", port: 5182, strictPort: true },
   preview: { host: "127.0.0.1", port: 5183, strictPort: true },
-});
+}));
