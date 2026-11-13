@@ -3,7 +3,7 @@ JSON Lines · 54 B · 3 records, 1 not valid JSON
 
 | line | id | ctx\.ms | message |
 | ---: | ---: | ---: | --- |
-| 1 | 1 | 2 (0 s) |  |
+| 1 | 1 | 2 (2 ms) |  |
 | 3 | 2 |  | done |
 
 ## Record 2 (line 2)

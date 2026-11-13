@@ -58,7 +58,8 @@ export function valueAt(text: string, kind: DataKind, path: string, fileName = "
     }
     case "yaml": {
       const result = parseYaml(text);
-      if (!result.invalid) value = result.values.length === 1 ? result.values[0] : list(result.values);
+      // Documents past the compose cap are unread: a root list of them would claim to be all.
+      if (!result.invalid) value = result.values.length === 1 ? result.values[0] : result.unread && !parts.length ? undefined : list(result.values);
       break;
     }
     case "toml": value = parseToml(text).value; break;

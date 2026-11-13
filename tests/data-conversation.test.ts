@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { toReadable } from "../src/data";
+import { beforeAll, describe, expect, it } from "vitest";
+import { copyValue, prepare, toReadable, valueAt } from "../src/data";
 import { cellText } from "../src/data/escape";
 import { createMarkdown, renderMarkdown } from "../src/render/markdown";
 import { DEFAULT_SETTINGS } from "../src/app/settings";
@@ -230,5 +230,88 @@ describe("image data with duplicate keys (verification of #273)", () => {
     for (const secret of ["PARTDATA", "AAAA", "BBBB"]) expect(result.markdown).not.toContain(secret);
     expect(result.markdown).toContain("data not shown \\(16 characters\\)");
     expect(result.truncated).toBe(false);
+  });
+});
+
+describe("conversations inside multi-document YAML (#291)", () => {
+  beforeAll(() => prepare("yaml"));
+  const NL = String.fromCharCode(10);
+  const yaml = [
+    "- {role: user, content: first question}",
+    "- {role: assistant, content: first answer}",
+    "---",
+    "model: invented",
+    "messages:",
+    "  - {role: user, content: second question}",
+    "  - {role: assistant, content: second answer}",
+  ].join(NL);
+
+  it("maps each turn to a path inside its own document, and those paths resolve", () => {
+    const result = toReadable(yaml, "yaml");
+    const lines = result.markdown.split(NL);
+    const at = (text: string): string | undefined => result.map.get(lines.findIndex(l => l.includes(text)) + 1);
+    expect(at("first answer")).toBe("$[0][1].content");
+    expect(at("second answer")).toBe("$[1].messages[1].content");
+    expect(at("invented")).toBe("$[1].model");
+    for (const [text, expected] of [["first answer", "first answer"], ["second answer", "second answer"], ["invented", "invented"]] as const) {
+      expect(copyValue(valueAt(yaml, "yaml", at(text)!)!)).toBe(expected);
+    }
+    for (const path of new Set(result.map.values())) expect(valueAt(yaml, "yaml", path), path).toBeDefined();
+  });
+});
+
+describe("conversation lens accuracy (#278)", () => {
+  const withTokens = (...values: string[]): string =>
+    toReadable("[" + values.map((v, i) => `{"role":"${i % 2 ? "assistant" : "user"}","content":"x","usage":{"input_tokens":${v}}}`).join(",") + "]", "json").markdown;
+
+  it("sums decimals exactly and never shows Infinity", () => {
+    expect(withTokens("0.1", "0.2")).toContain("tokens: input\\_tokens: 0\\.3");
+    expect(withTokens("1", "0.50", "2")).toContain("input\\_tokens: 3\\.5");
+    expect(withTokens("1e999", "1")).not.toContain("Infinity");
+    expect(withTokens("1e3", "2")).toContain("input\\_tokens: about 1002");
+    expect(withTokens("12345678901234567890", "1")).toContain("input\\_tokens: 12345678901234567891");
+  });
+
+  it("a very long decimal is summed approximately, not digit by digit for every record (#326 review)", () => {
+    const long = "0." + "1".repeat(200_000);
+    const started = performance.now();
+    const markdown = withTokens(long, ...Array.from({ length: 2_000 }, () => "1"));
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(markdown).toContain("input\\_tokens: about 2000\\.1");
+  });
+
+  it("a turn with duplicate content keys is not taken for a tool-only turn (Codex on #326)", () => {
+    const text = '[{"role":"user","content":"hello"},{"role":"assistant","content":"firstdup","content":"seconddup","tool_calls":[{"id":"c1","type":"function","function":{"name":"x","arguments":"{}"}}]}]';
+    const markdown = toReadable(text, "json").markdown;
+    expect(markdown).toContain("firstdup");
+    expect(markdown).toContain("seconddup");
+  });
+
+  it("recognises OpenAI tool-call turns whose content is null", () => {
+    const call = (id: string): unknown => ({ role: "assistant", content: null, tool_calls: [{ id, type: "function", function: { name: "get_weather", arguments: "{}" } }] });
+    const result = view([user, call("a"), call("b"), { role: "tool", tool_call_id: "a", content: "sunny" }]);
+    expect(result.markdown).toContain("4 turns: 1 user, 2 assistant, 1 tool");
+    expect(result.markdown).toContain("tool calls: get\\_weather 2");
+    expect(result.markdown).not.toContain("not a message");
+    expect(result.truncated).toBe(false);
+  });
+
+  it("gives the earliest and latest time, not the first and last in file order", () => {
+    const at = (timestamp: string, role = "user"): unknown => ({ role, content: "x", timestamp });
+    const result = view([at("2026-01-02T00:00:00Z"), at("2026-01-03T00:00:00Z", "assistant"), at("2026-01-01T00:00:00Z")], { timeZone: "UTC" });
+    expect(result.markdown).toContain("time span: 2026\\-01\\-01 00\\:00 UTC – 2026\\-01\\-03 00\\:00 UTC");
+  });
+
+  it("does not count a JSON-looking role as an expansion that is never shown", () => {
+    const result = view([{ role: '{"a":1}', content: "x" }, assistant]);
+    expect(result.markdown).not.toContain("Showing");
+    expect(result.truncated).toBe(false);
+  });
+
+  it("counts thinking in characters, and names an empty role", () => {
+    const result = view([user, { role: "assistant", content: [{ type: "thinking", thinking: "\u{1F600}\u{1F600}" }] }, { role: "", content: "x" }]);
+    expect(result.markdown).toContain("Thinking · 2 characters");
+    expect(result.markdown).toContain("## \\(no role\\)");
+    expect(result.markdown).toContain("1 \\(no role\\)");
   });
 });
