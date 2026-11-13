@@ -24,9 +24,11 @@ Status values: *pass* (evidence linked), *fail* (issue linked), *not run*, *not 
   file) plus a rich file with local images, Mermaid and math above task lists
   ([make_corpus.py](make_corpus.py), [make_rich.py](evidence/2026-11-13/make_rich.py)). Never read, copy or screenshot the owner's documents.
 - **Owner state (Windows):** before a launch, stop if any `mdviewer` process runs (it is the
-  owner's); copy `%LOCALAPPDATA%\dev.chris0jeky.mdviewer\library.json` aside and put the exact bytes
-  back after the app closes (it also holds the owner's session). Crop the tab strip out of
-  screenshots: restored tabs can show the owner's file names.
+  owner's). `%LOCALAPPDATA%\dev.chris0jeky.mdviewer\library.json` also holds the owner's remembered
+  session, which the app reopens at start-up, so a copy alone is not enough: **move** it aside so the
+  app starts with no session, and put the exact bytes back after the app closes. (The 2026-11-13 pass
+  only copied it, so one owner tab was restored on screen; its contents were not read, and it is
+  cropped out of every screenshot.) Crop the tab strip out of screenshots anyway.
 - **Install, uninstall, file associations:** only in Windows Sandbox, a virtual machine or a separate
   Windows account, never on the owner's account; otherwise *not run*.
 - **Live site:** read-only, in a real visible browser session (the Pulseboard SDK is inert under
