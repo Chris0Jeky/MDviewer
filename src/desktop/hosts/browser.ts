@@ -354,7 +354,11 @@ export const browserHost: Host = {
     restore: async () => ({ documents: [], errors: [], canceled: false }),
     setting: async () => ({ restore: false, persisted: false }),
   },
-  onFilesChanged: async () => () => undefined,
+  async onFilesChanged(callback) {
+    changeListeners.add(callback);
+    watch();
+    return () => { changeListeners.delete(callback); watch(); };
+  },
   async onPending(callback) {
     pendingListeners.add(callback);
     return () => { pendingListeners.delete(callback); };
@@ -371,6 +375,55 @@ function patchFailure(result: SaveResult): string {
   if (result.outcome === "failed") return result.code;
   if (result.outcome === "conflict") return result.reason === "missing" ? "missing" : result.reason === "locked" ? "unreadable" : "conflict";
   return "conflict";
+}
+
+/**
+ * Follow the file (web parity W3). A browser has no file watcher, so while the tab is visible the
+ * host looks at each open bound document's size and last-modified time at most once a second and
+ * reports the tokens whose stamp moved; the shell then re-reads them through `readDocument`, exactly
+ * as it does for the native watcher. Only open documents, never a folder; nothing while hidden.
+ */
+const changeListeners = new Set<(tokens: string[]) => void>();
+const observed = new Map<string, string>();
+let timer: ReturnType<typeof setInterval> | null = null;
+let looking = false;
+const FOLLOW_INTERVAL_MS = 1000;
+
+function watch(): void {
+  if (changeListeners.size && !timer) {
+    timer = setInterval(() => { void look(); }, FOLLOW_INTERVAL_MS);
+    document.addEventListener("visibilitychange", look);
+  } else if (!changeListeners.size && timer) {
+    clearInterval(timer);
+    timer = null;
+    document.removeEventListener("visibilitychange", look);
+  }
+}
+
+async function look(): Promise<void> {
+  if (looking || document.visibilityState === "hidden") return;
+  looking = true;
+  try {
+    const changed: string[] = [];
+    for (const [token, binding] of [...bindings]) {
+      let stamp: string;
+      try {
+        const file = await binding.handle.getFile();
+        stamp = `${file.size}:${file.lastModified}`;
+      } catch (error) {
+        if (!isMissing(error)) continue; // unreadable now (permission, a lock): ask again next time
+        stamp = "missing";
+      }
+      // First sight compares with what the document read, so a change since opening is reported.
+      const before = observed.get(token) ?? `${binding.size}:${binding.modified}`;
+      observed.set(token, stamp);
+      if (stamp !== before && bindings.has(token)) changed.push(token);
+    }
+    for (const token of observed.keys()) if (!bindings.has(token)) observed.delete(token);
+    if (changed.length) for (const listener of changeListeners) listener(changed);
+  } finally {
+    looking = false;
+  }
 }
 
 function safeDecode(bytes: Uint8Array): string | null {

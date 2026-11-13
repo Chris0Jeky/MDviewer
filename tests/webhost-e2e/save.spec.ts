@@ -97,6 +97,27 @@ test.describe("Chromium: the file the user picked", () => {
     await expect.poll(async () => (await readFile(page, "tasks.md")).equals(before)).toBe(true);
   });
 
+  test("follows the file: an outside change appears in the reader, and with unsaved edits it asks first (W3)", async ({ page }) => {
+    await writeFile(page, "live.md", Buffer.from("# Live\n\nFirst version.\n"));
+    await openPicked(page, "live.md", "Live");
+    // Clean: another program's write is read and patched in, within a couple of seconds.
+    await writeFile(page, "live.md", Buffer.from("# Live\n\nSecond version.\n"));
+    await expect(page.locator("#reader-document p")).toHaveText("Second version.", { timeout: 5_000 });
+    await expect(documentTabs(page)).toHaveText(["live.md"]);
+    // Dirty: the edits are kept and the conflict bar asks; Reload takes the file.
+    await appendInEdit(page, "Typed.");
+    await writeFile(page, "live.md", Buffer.from("# Live\n\nThird version.\n"));
+    const bar = page.locator(".file-conflict").first();
+    await expect(bar).toContainText("live.md changed on disk. Your edits are kept until you choose.", { timeout: 5_000 });
+    await expect(page.locator("#reader-edit #editor-input")).toHaveValue("# Live\n\nSecond version.\nTyped.");
+    // Save refuses while the outside change is not taken.
+    await page.keyboard.press("Control+s");
+    expect((await readFile(page, "live.md")).toString()).toBe("# Live\n\nThird version.\n");
+    page.once("dialog", dialog => { void dialog.accept(); });
+    await bar.getByRole("button", { name: "Reload" }).click();
+    await expect(page.locator("#reader-document p")).toHaveText("Third version.");
+  });
+
   test("a canceled picker opens nothing and reports nothing", async ({ page }) => {
     await page.keyboard.press("Control+O");
     await page.waitForTimeout(300); // nothing should happen; give it the chance to

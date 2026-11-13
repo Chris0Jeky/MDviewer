@@ -1,6 +1,6 @@
 # The browser host (web parity)
 
-Status: **W0, W1 and W2a implemented; W2b to W5 open.** Contract: Track W in
+Status: **W0, W1, W2a and W3 implemented; W2b, W4 and W5 open.** Contract: Track W in
 [`2026-11-13-complete-push.md`](2026-11-13-complete-push.md). This note records how the browser host
 meets the native file rules in [`FILE_LIFECYCLE.md`](FILE_LIFECYCLE.md) and where it cannot.
 
@@ -56,6 +56,18 @@ its file input, Save Copy download and in-memory documents.
 - Write permission is asked for (`requestPermission`), never assumed. A refusal reports
   `permission-denied` and keeps the text open.
 
+## Following the file (W3)
+
+A browser has no file watcher. While the tab is visible and the shell listens (`onFilesChanged`),
+the browser host reads each open bound document's size and last-modified time at most once a second
+and reports the tokens whose stamp moved since it last looked (on first sight, since the document
+read the file). The shell then does exactly what it does for the native watcher: `readDocument`
+adopts the change into a clean document and patches the reader; a document with unsaved edits keeps
+them, shows the conflict bar and marks the file changed, and Save refuses until the change is taken.
+Nothing is read while the tab is hidden; returning to the tab looks at once. Only open documents are
+followed, never a folder; a deleted file is reported and the re-read answers `missing`. A file that
+cannot be read for a moment (a lock, a permission) is skipped and looked at again next time.
+
 ## The shell on the web (W2a)
 
 The web build serves the companion shell as a second entry, `/desktop.html`, on the browser host;
@@ -73,7 +85,7 @@ the editor in a small window (it now stays one line), and a dropped item with no
 the drop (it now opens as a copy).
 
 Not yet on the web shell: the Library, session restore, relative links, local images and templates
-(W4, W5), and following outside changes (W3). Until they land the browser host returns an empty
+(W4, W5). Until they land the browser host returns an empty
 library, no session and an "is not available in this browser yet" error for linked files, images
 and templates; the shell still shows the Library tab, so the default flip (W2b) must state or hide
 what is not built yet.

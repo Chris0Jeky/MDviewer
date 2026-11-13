@@ -338,3 +338,71 @@ describe("browser host: re-read and line patches", () => {
     expect(await host.saveDocument(doc.token!, 0, "x", false)).toEqual({ outcome: "failed", code: "revoked" });
   });
 });
+
+describe("browser host: following the file (W3)", () => {
+  const setVisibility = (state: "visible" | "hidden"): void => {
+    Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+  };
+
+  it("reports an outside change once, a deleted file, nothing while hidden, and catches up when shown", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    vi.useFakeTimers();
+    try {
+      setVisibility("visible");
+      const seen: string[][] = [];
+      const stop = await host.onFilesChanged(tokens => seen.push(tokens));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toEqual([]); // unchanged since it was read
+      handle.outside(utf8("# Theirs\n"));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toEqual([[doc.token]]);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(seen).toHaveLength(1); // one report per change, not one per second
+
+      setVisibility("hidden");
+      handle.outside(utf8("# Again\n"));
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(seen).toHaveLength(1); // nothing is read while the tab is hidden
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen).toEqual([[doc.token], [doc.token]]);
+
+      handle.exists = false;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toHaveLength(3); // a deleted file is reported too; the re-read says "missing"
+
+      stop();
+      handle.exists = true;
+      handle.outside(utf8("# After\n"));
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(seen).toHaveLength(3); // no listener, no polling
+    } finally {
+      vi.useRealTimers();
+      setVisibility("visible");
+    }
+  });
+
+  it("a change the document saved itself is not reported as an outside change (beyond one re-check)", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    vi.useFakeTimers();
+    try {
+      setVisibility("visible");
+      const seen: string[][] = [];
+      const stop = await host.onFilesChanged(tokens => seen.push(tokens));
+      await vi.advanceTimersByTimeAsync(1000);
+      await host.saveDocument(doc.token!, 0, "# Mine\n", false);
+      await vi.advanceTimersByTimeAsync(1000);
+      // At most one report, and the shell's re-read then finds its own bytes: "unchanged".
+      expect(seen.length).toBeLessThanOrEqual(1);
+      expect(await host.readDocument(doc.token!, true, 1)).toEqual({ outcome: "unchanged" });
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(seen.length).toBeLessThanOrEqual(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
