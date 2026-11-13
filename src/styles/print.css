@@ -117,21 +117,22 @@ th {
  * the page width and is never zoomed (spec section 4), so it can neither clip nor split
  * a row. Seven columns or more also get a smaller type size and tighter cells, so the
  * columns share the width without every word breaking letter by letter. Scoped to the
- * paged sheet, so the reader (which scrolls wide tables sideways) keeps its own size.
+ * paged sheet and to the pre-pagination measurement host (so keep-whole decisions use the
+ * same size), so the reader (which scrolls wide tables sideways) keeps its own size.
  * -------------------------------------------------------------------------- */
-.pagedjs_page table:has(> thead > tr > :nth-child(7)) {
+:is(.pagedjs_page, [data-mdv-measure]) table:has(> thead > tr > :nth-child(7)) {
   font-size: 0.82em;
 }
 
-.pagedjs_page table:has(> thead > tr > :nth-child(10)) {
+:is(.pagedjs_page, [data-mdv-measure]) table:has(> thead > tr > :nth-child(10)) {
   font-size: 0.72em;
 }
 
-.pagedjs_page table:has(> thead > tr > :nth-child(14)) {
+:is(.pagedjs_page, [data-mdv-measure]) table:has(> thead > tr > :nth-child(14)) {
   font-size: 0.64em;
 }
 
-.pagedjs_page table:has(> thead > tr > :nth-child(7)) :is(th, td) {
+:is(.pagedjs_page, [data-mdv-measure]) table:has(> thead > tr > :nth-child(7)) :is(th, td) {
   padding: 0.3em 0.4em;
 }
 
