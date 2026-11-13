@@ -17,6 +17,70 @@ use crate::registry::Token;
 /// becomes one notification once the folder has been quiet this long.
 pub const QUIET: Duration = Duration::from_millis(150);
 
+/// A file that never goes quiet (a log appended every 50 ms) still notifies this
+/// long after its first pending event. The webview's re-read is fenced, so an
+/// extra notification is safe.
+pub const MAX_WAIT: Duration = Duration::from_secs(1);
+
+/// The debounce rule as a pure, clock-injected unit: the thread feeds it
+/// `Instant`s, tests feed it made-up ones. Each file keeps its own window, so a
+/// busy sibling never postpones another file's notification.
+#[derive(Default)]
+struct Debounce {
+    /// File -> first and latest event time of its pending burst.
+    pending: HashMap<String, (Instant, Instant)>,
+}
+
+fn deadline((first, last): (Instant, Instant)) -> Instant {
+    (last + QUIET).min(first + MAX_WAIT)
+}
+
+impl Debounce {
+    fn touch(&mut self, file: String, now: Instant) {
+        self.pending.entry(file).or_insert((now, now)).1 = now;
+    }
+
+    fn next_due(&self) -> Option<Instant> {
+        self.pending.values().copied().map(deadline).min()
+    }
+
+    fn take_due(&mut self, now: Instant) -> Vec<String> {
+        let due: Vec<String> = self
+            .pending
+            .iter()
+            .filter(|(_, span)| deadline(**span) <= now)
+            .map(|(file, _)| file.clone())
+            .collect();
+        for file in &due {
+            self.pending.remove(file);
+        }
+        due
+    }
+}
+
+/// What the OS callback forwards to the debounce thread.
+enum Change {
+    Path(PathBuf),
+    /// A watcher error with no path (a buffer overflow can report none): any
+    /// watched file may have changed.
+    Everything,
+}
+
+fn changes_of(event: notify::Result<notify::Event>) -> Vec<Change> {
+    let (paths, rescan) = match event {
+        Ok(event) => (event.paths.clone(), event.need_rescan()),
+        Err(error) => (error.paths, true),
+    };
+    if paths.is_empty() {
+        return if rescan {
+            vec![Change::Everything]
+        } else {
+            Vec::new()
+        };
+    }
+    paths.into_iter().map(Change::Path).collect()
+}
+
 type Sink = Arc<dyn Fn(Vec<Token>) + Send + Sync>;
 
 #[derive(Default)]
@@ -29,7 +93,7 @@ struct Targets {
 
 struct Running {
     watcher: RecommendedWatcher,
-    changes: Sender<PathBuf>,
+    changes: Sender<Change>,
 }
 
 pub struct FileWatch {
@@ -59,17 +123,11 @@ impl FileWatch {
     }
 
     fn start(&self) -> notify::Result<Running> {
-        let (changes, received) = mpsc::channel::<PathBuf>();
+        let (changes, received) = mpsc::channel::<Change>();
         let forward = changes.clone();
         let watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-            // Errors (e.g. a buffer overflow) mean "something changed here".
-            match event {
-                Ok(event) => event.paths.into_iter().for_each(|path| {
-                    let _ = forward.send(path);
-                }),
-                Err(error) => error.paths.into_iter().for_each(|path| {
-                    let _ = forward.send(path);
-                }),
+            for change in changes_of(event) {
+                let _ = forward.send(change);
             }
         })?;
         let targets = self.targets.clone();
@@ -77,53 +135,60 @@ impl FileWatch {
         std::thread::Builder::new()
             .name("mdviewer-watch".into())
             .spawn(move || {
-                let mut pending: HashSet<String> = HashSet::new();
-                let mut last = Instant::now();
+                let mut debounce = Debounce::default();
                 loop {
-                    let wait = if pending.is_empty() {
-                        Duration::from_secs(3600)
-                    } else {
-                        QUIET.saturating_sub(last.elapsed())
-                    };
+                    let wait = debounce
+                        .next_due()
+                        .map_or(Duration::from_secs(3600), |due| {
+                            due.saturating_duration_since(Instant::now())
+                        });
                     match received.recv_timeout(wait) {
-                        Ok(path) => {
-                            let path_key = key(&path);
-                            // A folder event (overflow, folder renamed) touches every file in it.
+                        Ok(change) => {
                             let targets = lock(&targets);
-                            if targets.files.contains_key(&path_key) {
-                                pending.insert(path_key);
-                            } else {
-                                let folder = format!("{path_key}\\");
-                                pending.extend(
-                                    targets
-                                        .files
-                                        .keys()
-                                        .filter(|file| file.starts_with(&folder))
-                                        .cloned(),
-                                );
-                            }
-                            last = Instant::now();
-                        }
-                        Err(RecvTimeoutError::Timeout) if !pending.is_empty() => {
-                            let tokens: Vec<Token> = {
-                                let targets = lock(&targets);
-                                pending
-                                    .drain()
-                                    .filter_map(|file| targets.files.get(&file))
-                                    .flatten()
-                                    .cloned()
-                                    .collect()
-                            };
-                            if !tokens.is_empty() {
-                                sink(tokens);
+                            let now = Instant::now();
+                            match change {
+                                Change::Everything => {
+                                    for file in targets.files.keys() {
+                                        debounce.touch(file.clone(), now);
+                                    }
+                                }
+                                Change::Path(path) => {
+                                    let path_key = key(&path);
+                                    if targets.files.contains_key(&path_key) {
+                                        debounce.touch(path_key, now);
+                                    } else {
+                                        // A folder event (folder renamed) touches every file in it.
+                                        let folder = format!("{path_key}\\");
+                                        for file in
+                                            targets.files.keys().filter(|f| f.starts_with(&folder))
+                                        {
+                                            debounce.touch(file.clone(), now);
+                                        }
+                                    }
+                                }
                             }
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => return,
                     }
+                    // Checked after every event too: a constant stream never times out.
+                    let due = debounce.take_due(Instant::now());
+                    if !due.is_empty() {
+                        let tokens: Vec<Token> = {
+                            let targets = lock(&targets);
+                            due.iter()
+                                .filter_map(|file| targets.files.get(file))
+                                .flatten()
+                                .cloned()
+                                .collect()
+                        };
+                        if !tokens.is_empty() {
+                            sink(tokens);
+                        }
+                    }
                 }
             })
-            .map_err(|error| notify::Error::io(error))?;
+            .map_err(notify::Error::io)?;
         Ok(Running { watcher, changes })
     }
 
@@ -272,6 +337,46 @@ mod tests {
     }
 
     #[test]
+    fn a_file_appended_every_50ms_notifies_within_the_maximum_delay() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("busy.log");
+        std::fs::write(&path, b"start\n").unwrap();
+        let (watch, seen) = collect();
+        watch.add(&token(4), &path);
+        let started = Instant::now();
+        let writer = {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                // Starved, the first notification only comes after the 2 s of appends; the
+                // 1.6 s bound leaves headroom over MAX_WAIT for a loaded machine.
+                // Reopen per line, as a logger does: an open handle defers NTFS's
+                // directory-entry update, so the OS would report nothing.
+                for _ in 0..40 {
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .unwrap();
+                    file.write_all(b"line\n").unwrap();
+                    drop(file);
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            })
+        };
+        while lock(&seen).is_empty() && started.elapsed() < Duration::from_millis(1600) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let first = started.elapsed();
+        let notified = lock(&seen).len();
+        writer.join().unwrap();
+        assert!(
+            notified >= 1,
+            "no notification within 1.6 s of continuous appends"
+        );
+        assert!(first < Duration::from_millis(1600), "first at {first:?}");
+    }
+
+    #[test]
     fn rename_and_delete_notify_and_removal_unwatches_the_folder() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("a.md");
@@ -286,5 +391,82 @@ mod tests {
         std::fs::write(&path, b"back").unwrap();
         std::thread::sleep(QUIET * 4);
         assert_eq!(lock(&seen).len(), 1, "an unwatched file never notifies");
+    }
+}
+
+#[cfg(test)]
+mod debounce_tests {
+    use super::*;
+
+    fn at(base: Instant, ms: u64) -> Instant {
+        base + Duration::from_millis(ms)
+    }
+
+    #[test]
+    fn a_quiet_burst_notifies_once_after_the_quiet_window() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        d.touch("a".into(), at(t0, 0));
+        d.touch("a".into(), at(t0, 100));
+        assert!(d.take_due(at(t0, 249)).is_empty());
+        assert_eq!(d.take_due(at(t0, 250)), vec!["a".to_string()]);
+        assert!(d.take_due(at(t0, 5000)).is_empty());
+    }
+
+    #[test]
+    fn a_file_appended_every_50ms_notifies_by_the_maximum_delay() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        let mut first = None;
+        for step in 0..=40 {
+            let now = at(t0, step * 50);
+            d.touch("log".into(), now);
+            if first.is_none() && !d.take_due(now).is_empty() {
+                first = Some(step * 50);
+            }
+        }
+        assert_eq!(first, Some(1000));
+    }
+
+    #[test]
+    fn a_busy_sibling_does_not_postpone_another_file() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        d.touch("quiet".into(), at(t0, 0));
+        let mut notified = None;
+        for step in 0..=20 {
+            let now = at(t0, step * 50);
+            d.touch("busy".into(), now);
+            let due = d.take_due(now);
+            if due.contains(&"quiet".to_string()) {
+                notified = Some(step * 50);
+                break;
+            }
+        }
+        assert_eq!(notified, Some(150));
+    }
+
+    #[test]
+    fn a_path_less_watcher_error_means_every_file_changed() {
+        let error = notify::Error::generic("buffer overflow");
+        assert!(matches!(
+            changes_of(Err(error)).as_slice(),
+            [Change::Everything]
+        ));
+        let rescan =
+            notify::Event::new(notify::EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        assert!(matches!(
+            changes_of(Ok(rescan)).as_slice(),
+            [Change::Everything]
+        ));
+    }
+
+    #[test]
+    fn events_and_errors_with_paths_stay_per_path() {
+        let path = PathBuf::from(r"C:\notes\a.md");
+        let error = notify::Error::generic("x").add_path(path.clone());
+        assert!(matches!(changes_of(Err(error)).as_slice(), [Change::Path(p)] if *p == path));
+        let plain = notify::Event::new(notify::EventKind::Other);
+        assert!(changes_of(Ok(plain)).is_empty());
     }
 }

@@ -85,7 +85,7 @@ def _deny(reason: str, branch: str | None) -> int:
         f"BLOCKED by MDviewer pre_tool_use guard: {reason}{where}.\n"
         "Per CLAUDE.md, explain the operation and its risks in plain language and let "
         "the user run it themselves, or work on a feature branch. Recovery commands "
-        "(git rebase --abort, git merge --abort, git stash) are always allowed.\n"
+        "(git rebase --abort, git merge --abort, git stash push/apply) are always allowed.\n"
     )
     return 2
 

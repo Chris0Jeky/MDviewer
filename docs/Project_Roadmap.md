@@ -193,8 +193,8 @@ export paths.
   prose); the Library lists agent data files and skips `.claude/worktrees`
   [#290](https://github.com/Chris0Jeky/MDviewer/pull/290). The Windows app opens `.json`, `.jsonc`, `.jsonl`,
   `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`, `.txt` and `.log` as readable views. D5 pure copy
-  module [#289](https://github.com/Chris0Jeky/MDviewer/pull/289) is merged; **next:** the D5 webview copy menu
-  and Save readable view as Markdown [#299](https://github.com/Chris0Jeky/MDviewer/issues/299). Open
+  module [#289](https://github.com/Chris0Jeky/MDviewer/pull/289) is merged; the D5 webview copy menu
+  and Save readable view as Markdown [#299](https://github.com/Chris0Jeky/MDviewer/issues/299) are merged. Open
   issues: [#276](https://github.com/Chris0Jeky/MDviewer/issues/276), [#277](https://github.com/Chris0Jeky/MDviewer/issues/277),
   [#278](https://github.com/Chris0Jeky/MDviewer/issues/278), [#282](https://github.com/Chris0Jeky/MDviewer/issues/282),
   [#291](https://github.com/Chris0Jeky/MDviewer/issues/291), [#292](https://github.com/Chris0Jeky/MDviewer/issues/292)
