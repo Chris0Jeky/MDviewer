@@ -155,16 +155,16 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
   let invalid = false;
   const render = (value: import("./json").JsonValue, path = "$", level = 2): void => {
     const conversation = conversationList(value);
-    if (conversation) renderConversation(lens, value, conversation);
+    if (conversation) renderConversation(lens, value, conversation, path);
     else lens.render(value, path, level);
   };
   if (kind === "csv") {
     lens.csv = true;
-    const csv = parseCsv(text, format === "TSV" ? "\t" : ",");
+    const csv = parseCsv(text, format === "TSV" ? "\t" : ",", budget(options.maxValues, 20000));
     problems = csv.problems;
-    lens.line(`${format} · ${size(text)} · ${count(csv.value.items.length, "row")}, ${count(csv.columns, "column")}`); lens.line();
+    lens.line(`${format} · ${size(text)} · ${count(csv.rows, "row")}, ${count(csv.columns, "column")}`); lens.line();
     // A header with no rows (a template) still names its columns.
-    if (!csv.value.items.length && csv.keys.length) { lens.line(`Columns: ${csv.keys.map(cellText).join(", ")}`, "$"); lens.line(); }
+    if (!csv.rows && csv.keys.length) { lens.line(`Columns: ${csv.keys.map(cellText).join(", ")}`, "$"); lens.line(); }
     lens.total = lens.count(csv.value);
     // Charge whole rows to the values budget, including their containers and cells. No 500-row cap.
     let cost = 1, shown = 0;
@@ -175,19 +175,20 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
       shown++;
     }
     render({ ...csv.value, items: csv.value.items.slice(0, shown) });
-    if (shown < csv.value.items.length) {
+    if (shown < csv.rows) {
       lens.truncated = true;
-      lens.line(`Showing ${shown.toLocaleString("en-US")} of ${csv.value.items.length.toLocaleString("en-US")} rows.`); lens.line();
+      lens.line(`Showing ${shown.toLocaleString("en-US")} of ${csv.rows.toLocaleString("en-US")} rows.`); lens.line();
     }
   } else {
     const result = kind === "yaml" ? parseYaml(text) : (() => {
       const parsed = parseToml(text);
-      return { values: parsed.value ? [parsed.value] : [], problems: parsed.problem ? [parsed.problem] : [], invalid: !parsed.value };
+      return { values: parsed.value ? [parsed.value] : [], problems: parsed.problem ? [parsed.problem] : [], invalid: !parsed.value, unread: 0 };
     })();
     problems = result.problems;
     invalid = result.invalid;
     const values = result.values;
-    lens.line(`${format} · ${size(text)} · ${invalid ? "invalid document" : values.length > 1 ? count(values.length, "document") : cellText(shape(values[0]!))}`); lens.line();
+    const documents = values.length + result.unread;
+    lens.line(`${format} · ${size(text)} · ${invalid ? "invalid document" : documents > 1 ? count(documents, "document") : cellText(shape(values[0]!))}`); lens.line();
     if (invalid) {
       for (const line of problemLines(problems)) { lens.line(line); lens.line(); }
       lens.line(fence(text));
@@ -208,12 +209,13 @@ function structured(text: string, kind: "yaml" | "toml" | "csv", options: Readab
             render(value, `$[${index}]`, 3);
           }
         }
-        if (shown < values.length) {
+        if (shown < documents) {
           lens.truncated = true;
-          lens.line(`Showing ${shown.toLocaleString("en-US")} of ${values.length.toLocaleString("en-US")} documents.`); lens.line();
+          lens.line(`Showing ${shown.toLocaleString("en-US")} of ${documents.toLocaleString("en-US")} documents.`); lens.line();
         }
       }
-      if (lens.shown < lens.total) {
+      // With unread documents the total is a partial count, and the document line already says so.
+      if (lens.shown < lens.total && !result.unread) {
         lens.truncated = true;
         lens.line(`Showing ${lens.shown.toLocaleString("en-US")} of ${lens.total.toLocaleString("en-US")} values.`);
       }

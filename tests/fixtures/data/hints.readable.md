@@ -8,5 +8,5 @@ JSON · 157 B · object with 7 keys
 | updated | 1704164645000 (2024\-01\-02 03\:04 UTC) |
 | duration\_ms | 1500 (1\.5 s) |
 | wait\_seconds | 120 (2 min) |
-| size | 2048 (2 KiB) |
+| size | 2048 |
 | total\_bytes | 1048576 (1 MiB) |
