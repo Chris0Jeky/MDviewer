@@ -462,6 +462,7 @@ async function readFiles(files: File[]): Promise<void> {
   const batch: OpenBatch = { documents: [], errors: [], canceled: false };
   let total = 0;
   let openedPdf = false;
+  const shownPdf = pdfs.activeId;
   report("");
   for (const file of files.slice(0, 32)) {
     try {
@@ -497,7 +498,7 @@ async function readFiles(files: File[]): Promise<void> {
   if (showPdfNow) focusPdf();
   commitBatch(batch, request);
   if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
-  else if (openedPdf) syncDocuments();
+  else if (openedPdf) { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); } // a stale import adds its tab without taking the active mark
 }
 
 async function open(): Promise<void> {
