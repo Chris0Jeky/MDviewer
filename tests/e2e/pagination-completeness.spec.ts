@@ -327,6 +327,51 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     expect(await missingInOrder(page, markdown)).toEqual([]);
   });
 
+  // Both headings keep with the block, so the room a block has is the page minus BOTH. A fence
+  // that fit under the inner heading alone used to skip Tier 3 and split across two pages.
+  for (const lines of [45, 47]) {
+    test(`a ${lines}-line fence under two stacked headings stays whole, on their page`, async ({ page }) => {
+      const stalls = watchStalls(page);
+      const markdown = [
+        "Intro paragraph before the headings.",
+        "",
+        "## Outer heading",
+        "",
+        "### Inner heading",
+        "",
+        "```",
+        ...Array.from({ length: lines }, (_, index) => `n${index + 1} quiet harbor lantern meadow`),
+        "```",
+        "",
+        "Closing paragraph.",
+        "",
+      ].join("\n");
+      await page.goto("/");
+      await loadMarkdownIntoApp(page, markdown, "stacked-headings.md");
+      await waitForPagination(page);
+
+      // Precondition: the fence fits a page alone, but not under both headings.
+      const fit = await page.evaluate(() => {
+        const pre = document.querySelector<HTMLElement>("#paged-output pre")!;
+        const content = document.querySelector<HTMLElement>("#paged-output .pagedjs_page_content")!;
+        const h2 = document.querySelector<HTMLElement>("#paged-output h2")!;
+        // Page room the headings take, margins included (heading top to fence top).
+        return { source: Number(pre.dataset.mdvSourceHeight), page: content.offsetHeight, lead: pre.offsetTop - h2.offsetTop };
+      });
+      expect(fit.source).toBeLessThanOrEqual(fit.page);
+      expect(fit.source + fit.lead).toBeGreaterThan(fit.page);
+
+      const fence = Object.values(await pagesByRef(page, "pre"));
+      expect(fence, "the fence is laid out once, on one page").toEqual([[expect.any(Number)]]);
+      expect(Object.values(await pagesByRef(page, "h2"))).toEqual([fence[0]]);
+      expect(Object.values(await pagesByRef(page, "h3"))).toEqual([fence[0]]);
+      expect(stalls).toEqual([]);
+      expect((await layoutDefects(page)).outside).toEqual([]);
+      await expect(page.locator("#warning-banner")).not.toContainText(/Layout was retried/);
+      expect(await missingInOrder(page, markdown)).toEqual([]);
+    });
+  }
+
   test("a table that fits a page only without its heading is Tier 4 and starts under the heading", async ({ page }) => {
     const stalls = watchStalls(page);
     const markdown = [
