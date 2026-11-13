@@ -218,6 +218,9 @@ export function auditPagination(source: ParentNode, host: HTMLElement): Paginati
     }
     const box = content.getBoundingClientRect();
     for (const el of content.querySelectorAll<HTMLElement>(FLOW_BLOCKS)) {
+      // A block inside a closed <details> is not displayed: its rect is a layout guess that
+      // can hang below the page (a collapsed tool call at the foot of a conversation page).
+      if (el.parentElement?.closest("details:not([open])") && !el.closest("summary")) continue;
       const rect = el.getBoundingClientRect();
       if (rect.height === 0) continue;
       if (rect.left >= box.right - TOLERANCE_PX || rect.bottom > box.bottom + TOLERANCE_PX) {
