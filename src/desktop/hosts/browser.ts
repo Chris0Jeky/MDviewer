@@ -87,7 +87,7 @@ async function readHandles(handles: readonly Handle[]): Promise<OpenBatch> {
       bindings.set(token, { handle, size: read.size, modified: read.modified, digest: read.digest, encoding, eol, generation: 0 });
       batch.documents.push({ name: handle.name, text, bytes: read.size, token, path: handle.name, dir: "", encoding, eol });
     } catch (error) {
-      batch.errors.push({ name: handle.name, message: error instanceof Error ? error.message : String(error) });
+      batch.errors.push({ name: handle?.name ?? "Dropped file", message: error instanceof Error ? error.message : String(error) });
     }
   }
   if (handles.length > MAX_BATCH_FILES) {
@@ -181,9 +181,9 @@ export const browserHost: Host = {
     if (!browserHost.available || !files.length || !files.every(item => typeof item.getAsFileSystemHandle === "function")) return null;
     // Every handle (and the plain file, for an item without one) is taken now, inside the event.
     const plain = files.map(item => item.getAsFile());
-    const handles = Promise.all(files.map(item => item.getAsFileSystemHandle!()));
+    const handles = Promise.all(files.map(item => item.getAsFileSystemHandle!().catch(() => null)));
     return handles.then(async list => {
-      if (list.every(handle => handle !== null)) return readHandles(list as Handle[]);
+      if (list.every(handle => handle?.kind === "file" || handle?.kind === "directory")) return readHandles(list as Handle[]);
       // Some item has no file behind it (from an archive or another app): open everything as a
       // copy rather than silently dropping it. The shell's own reader applies the usual rules.
       return { copies: plain.filter((file): file is File => file !== null) };

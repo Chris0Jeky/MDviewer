@@ -228,6 +228,11 @@ describe("browser host: open and save", () => {
     expect(bound).toMatchObject({ documents: [{ name: "a.md", text: "# A\n" }], errors: [] });
     const copies = await host.openDropped!([item("a.md", new FakeHandle("a.md", utf8("# A\n"))), item("b.md", null)] as unknown as DataTransferItemList);
     expect(copies && "copies" in copies ? copies.copies.map(copy => copy.name) : copies).toEqual(["a.md", "b.md"]);
+    // Chromium resolves a synthetic or virtual item to undefined, and a request can reject: both are "no file".
+    for (const odd of [async () => undefined, async () => { throw new DOMException("no", "NotAllowedError"); }]) {
+      const dropped = await host.openDropped!([{ ...item("c.md", null), getAsFileSystemHandle: odd }] as unknown as DataTransferItemList);
+      expect(dropped && "copies" in dropped ? dropped.copies.map(copy => copy.name) : dropped).toEqual(["c.md"]);
+    }
     // An engine without handles on drop items: the shell reads them itself.
     expect(host.openDropped!([{ kind: "file", getAsFile: () => file("c.md") }] as unknown as DataTransferItemList)).toBeNull();
   });
