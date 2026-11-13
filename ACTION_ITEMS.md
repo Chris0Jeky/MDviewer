@@ -25,13 +25,21 @@
 
 ## Current State (snapshot)
 
+- **2026-11-13 (complete push paused by the owner)** — main
+  [`382938b`](https://github.com/Chris0Jeky/MDviewer/commit/382938b) (last CI-verified: CI and Windows Desktop success), then
+  #348 merged as `13af3de`. 27 PRs merged
+  that day (#309 to #352, then #348): PDFs open and read (#322, #344), the browser host (#323), many fixes. Not in the app yet:
+  PDF editing, the web shell, local pages, the weight table, D8, most of D7. Owner bugs #334/#335 are **not fixed yet**: the fix is in open
+  #345, which fails the Windows smoke. OPEN owner items: **AI-9** and the parked **#169 signing decision**. Delegated, not
+  accepted: AI-6, AI-7, AI-8, AI-10, #169 hands-on boxes (agent results in `docs/qa/ACCEPTANCE.md`, #348). Resume order: `ORCHESTRATOR.md`.
+
+### Earlier snapshots (historical)
+
 - **2026-11-13 (acceptance delegated to agent QA)** — main
   [`59d6c27`](https://github.com/Chris0Jeky/MDviewer/commit/59d6c27). During AI-10 on the CI build from `722cbbd`
   the owner found #334 and #335 and moved mechanical acceptance checks to agent QA. AI-6, AI-7, AI-8, AI-10 and
   the four hands-on boxes of #169 are now under "Delegated to agent QA"; AI-11 to AI-13 become QA charters. None
   was accepted. The only OPEN owner items are **AI-9** and the parked **#169 signing decision**.
-
-### Earlier snapshots (historical)
 
 - **2026-11-12 (Companion push close-out)** — main
   [`2544bc4`](https://github.com/Chris0Jeky/MDviewer/commit/2544bc4) (merge of #297). Its CI
