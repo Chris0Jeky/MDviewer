@@ -1160,7 +1160,7 @@ mod win {
                 "parent",
                 "ancestor",
             ] {
-                let (mut saved, mut refused) = (0, 0);
+                let (mut saved, mut refused, mut claimants) = (0, 0, 0);
                 for stage in [
                     Stage::Open,
                     Stage::Verify,
@@ -1175,9 +1175,13 @@ mod win {
                         HOOK.with_borrow_mut(|h| *h = Some((stage, dir.path().to_owned())));
                         let result = replace_if_unchanged(&path, &snap, NEW);
                         HOOK.with_borrow_mut(|h| *h = None);
+                        let hooked = dir.path().join("go").exists();
                         finish_trial(&mut proc, dir.path(), &result);
                         let changed = fs::read(dir.path().join("done")).unwrap() == b"ok";
                         let actual = fs::read(&path).unwrap();
+                        // In the live rename gap the name is empty, so a mutation that
+                        // succeeded there created a claimant beside our aside (#229).
+                        let gap_claimant = hooked && changed && stage == Stage::RenameIntoPlace;
                         if result.is_ok() {
                             saved += 1;
                             assert!(
@@ -1228,9 +1232,20 @@ mod win {
                             panic!("{scenario} {stage:?}: recovery failed: {e:?}; files {names:?}; result {result:?}");
                         }
                         assert_clean(path.parent().unwrap());
+                        // The claimant wins the name; the original survives as a sibling.
+                        assert_eq!(
+                            self::recovered(path.parent().unwrap()),
+                            if gap_claimant {
+                                vec![OLD.to_vec()]
+                            } else {
+                                vec![]
+                            },
+                            "{scenario} {stage:?}"
+                        );
+                        claimants += usize::from(gap_claimant);
                     }
                 }
-                eprintln!("RACE {scenario}: iterations=16 saved={saved} refused={refused}");
+                eprintln!("RACE {scenario}: iterations=16 saved={saved} refused={refused} gap-claimants={claimants}");
             }
         }
         #[test]
