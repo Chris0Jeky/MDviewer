@@ -96,9 +96,13 @@ async function readHandles(handles: readonly Handle[]): Promise<OpenBatch> {
   return batch;
 }
 
-/** Write `bytes` if the file still holds what `expected` describes; `null` expects no file yet. */
-async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size" | "modified" | "digest"> | null, bytes: Uint8Array):
-  Promise<{ ok: true; snapshot: Snapshot } | { ok: false; result: SaveResult }> {
+/**
+ * Write `bytes` if the file still holds `expected` (a value captured when the caller started; `null`
+ * expects no particular content) and `ours()` still holds right before the commit: a re-read or
+ * patch that moved the binding meanwhile makes this write stale, never a write over its change.
+ */
+async function writeIfUnchanged(binding: Binding, expected: Readonly<Pick<Binding, "size" | "digest">> | null, bytes: Uint8Array,
+  ours: () => boolean = () => true): Promise<{ ok: true; snapshot: Snapshot } | { ok: false; result: SaveResult }> {
   if (!await permitted(binding.handle, "readwrite")) return { ok: false, result: { outcome: "failed", code: "permission-denied" } };
   let current: File | null = null;
   try { current = await binding.handle.getFile(); }
@@ -113,6 +117,7 @@ async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size"
     || await digestOf(new Uint8Array(await current.arrayBuffer())) !== expected.digest)) {
     return { ok: false, result: { outcome: "conflict", reason: "changed" } };
   }
+  if (!ours()) return { ok: false, result: { outcome: "failed", code: "stale" } };
   try {
     // Chromium writes to a temporary file and swaps it in on close; an abort leaves the original.
     const writable = await binding.handle.createWritable({ keepExistingData: false });
@@ -207,6 +212,7 @@ export const browserHost: Host = {
     }
     const repeated = patches.findIndex((patch, index) => patches.findIndex(other => other.line === patch.line) !== index);
     for (let attempt = 0; attempt < 2; attempt++) {
+      const generationAtRead = binding.generation;
       let read: Snapshot;
       try { read = await snapshot(binding.handle); }
       catch (error) { return { outcome: "failed", code: isMissing(error) ? "missing" : "unreadable" }; }
@@ -223,9 +229,12 @@ export const browserHost: Host = {
       let bytes: Uint8Array;
       try { bytes = encodeRaw(text, decoded.encoding); } catch { return { outcome: "failed", code: "encoding" }; } // a lone surrogate
       if (bytes.length > MAX_FILE_BYTES) return { outcome: "failed", code: "too-large" };
-      const written = await writeIfUnchanged(binding, read, bytes);
+      const ours = () => bindings.get(token) === binding && binding.generation === generationAtRead;
+      const written = await writeIfUnchanged(binding, read, bytes, ours);
       if (!written.ok) {
-        if (written.result.outcome === "conflict" && written.result.reason === "changed" && attempt === 0) continue;
+        const overtaken = written.result.outcome === "conflict" ? written.result.reason === "changed"
+          : written.result.outcome === "failed" && written.result.code === "stale";
+        if (overtaken && attempt === 0) continue;
         return { outcome: "failed", code: patchFailure(written.result) };
       }
       if (bindings.get(token) !== binding) return { outcome: "failed", code: "revoked-after-write" };
@@ -246,7 +255,11 @@ export const browserHost: Host = {
       if ("refused" in encoded) return encoded.refused;
       const { bytes } = encoded;
       const eol = binding.eol;
-      const written = await writeIfUnchanged(binding, binding, bytes);
+      // The revision this text was edited from, by value: a re-read that adopts an outside change
+      // while this save waits must make the save stale, not become its baseline.
+      const expected = { size: binding.size, digest: binding.digest };
+      const ours = () => bindings.get(token) === binding && binding.generation === generation;
+      const written = await writeIfUnchanged(binding, expected, bytes, ours);
       if (!written.ok) return written.result;
       if (bindings.get(token) !== binding || binding.generation !== generation) return { outcome: "failed", code: "revoked-after-write" };
       adopt(binding, written.snapshot, savedEol(eol));
