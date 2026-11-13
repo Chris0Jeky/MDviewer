@@ -154,7 +154,7 @@ extended `tests/desktop-csp.test.ts`; it is not assumed now.
    `FORM_DoDocumentAAction` or `FORM_DoPageAAction`. Document-level JavaScript is listed in
    Properties as "contains scripts (not run)".
 2. **An allowlist of actions.** Only two actions act: an internal GoTo (a page jump) and a URI whose
-   scheme is `http`, `https` or `mailto`. Every other action (Launch, remote or embedded GoTo,
+   scheme is `http` or `https` (the shell's existing link policy, `external.rs`). Every other action (Launch, remote or embedded GoTo,
    JavaScript, SubmitForm, ImportData, ResetForm, Named, Rendition, Sound, Movie, a URI with any other
    scheme such as `javascript:` or `file:`) is shown with its kind and never followed. The document's
    OpenAction and additional actions are never run.
