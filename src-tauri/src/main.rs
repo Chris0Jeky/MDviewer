@@ -111,6 +111,8 @@ fn main() {
             commands::library::library_clear,
             commands::links::open_relative,
             commands::links::read_asset,
+            commands::pdf::read_pdf,
+            commands::pdf::release_pdf,
             commands::library::session_record,
             commands::library::session_restore,
             commands::library::session_setting

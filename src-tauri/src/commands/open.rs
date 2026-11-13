@@ -4,7 +4,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::file_policy::{
-    read_batch, skipped_files_error, ReadBatch, DATA_EXTENSIONS, MARKDOWN_EXTENSIONS,
+    is_pdf_name, read_batch, skipped_files_error, ReadBatch, DATA_EXTENSIONS,
+    MARKDOWN_EXTENSIONS, PDF_EXTENSIONS,
 };
 use crate::registry::{capture_revision, Binding, Registry, Token};
 use crate::DesktopState;
@@ -21,6 +22,10 @@ pub(crate) struct OpenDocument {
     dir: String,
     encoding: &'static str,
     eol: &'static str,
+    /// `"pdf"` for a PDF: its token belongs to the PDF registry (commands/pdf.rs) and its bytes
+    /// come from `read_pdf`; absent for text documents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -39,7 +44,7 @@ pub(crate) struct OpenBatch {
 impl OpenBatch {
     /// Start following every bound file in this batch.
     pub(crate) fn follow(self, state: &DesktopState) -> Self {
-        for doc in &self.documents {
+        for doc in self.documents.iter().filter(|doc| doc.kind.is_none()) {
             if let Some(token) = &doc.token {
                 state.follow(token, std::path::Path::new(&doc.path));
             }
@@ -71,17 +76,23 @@ impl OpenBatch {
                         .unwrap_or_else(|| std::path::Path::new(""))
                         .to_string_lossy()
                         .into_owned();
-                    let token = registry
-                        .register(Binding {
-                            path: doc.path,
-                            identity: doc.identity,
-                            digest: doc.digest,
-                            len: doc.bytes,
-                            encoding: doc.encoding,
-                            eol: doc.eol,
-                            generation: 0,
-                        })
-                        .ok();
+                    let pdf = is_pdf_name(&doc.name);
+                    let binding = Binding {
+                        path: doc.path,
+                        identity: doc.identity,
+                        digest: doc.digest,
+                        len: doc.bytes,
+                        encoding: doc.encoding,
+                        eol: doc.eol,
+                        generation: 0,
+                    };
+                    // A PDF's token lives in its own registry, so no text command
+                    // (save, patch, reload) can ever resolve it.
+                    let token = if pdf {
+                        crate::commands::pdf::register(binding)
+                    } else {
+                        registry.register(binding).ok()
+                    };
                     OpenDocument {
                         name: doc.name,
                         text: doc.text,
@@ -91,6 +102,7 @@ impl OpenBatch {
                         dir,
                         encoding: doc.encoding.as_str(),
                         eol: doc.eol.as_str(),
+                        kind: pdf.then_some("pdf"),
                     }
                 })
                 .collect(),
@@ -124,12 +136,14 @@ pub(crate) async fn open_files(
         let every: Vec<&str> = MARKDOWN_EXTENSIONS
             .iter()
             .chain(DATA_EXTENSIONS)
+            .chain(PDF_EXTENSIONS)
             .copied()
             .collect();
         let mut picker = rfd::FileDialog::new()
             .set_title("Open")
-            .add_filter("Markdown, data and text", &every)
+            .add_filter("Markdown, PDF, data and text", &every)
             .add_filter("Markdown documents", MARKDOWN_EXTENSIONS)
+            .add_filter("PDF documents", PDF_EXTENSIONS)
             .add_filter(
                 "Data and text (JSON, YAML, TOML, CSV, text)",
                 DATA_EXTENSIONS,
