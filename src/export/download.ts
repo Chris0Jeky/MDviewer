@@ -216,6 +216,10 @@ function prepareRasterClone(cloneDocument: Document, sheet: HTMLElement, sourceS
  * multi-column box, so that taller box would fragment into an unseen second column; the
  * page's column grows by the difference first (a negative margin keeps any footnote area in
  * place). Nothing below the block is on the page: Tier 3 shrinks it to fill the page.
+ *
+ * #262: a block nested in a quote or callout must not make that container taller than the
+ * preview paints it, so its bottom margin absorbs the same difference: the container still lays
+ * out around the zoomed height while the block itself paints at the scale transform.
  */
 function unzoomShrunkBlocks(sheet: HTMLElement): void {
   for (const block of sheet.querySelectorAll<HTMLElement>(`[${ATTRS.shrunk}]`)) {
@@ -235,6 +239,16 @@ function unzoomShrunkBlocks(sheet: HTMLElement): void {
     block.style.setProperty("box-sizing", "border-box", "important");
     block.style.setProperty("width", `${zoomed.width / zoom}px`, "important");
     block.style.setProperty("max-width", "none", "important");
+    // Without a bottom edge of its own, a container would let the negative margin collapse
+    // through it and keep its height; as a block formatting context it contains the margin.
+    const parent = block.parentElement;
+    if (parent && !parent.classList.contains("doc")) {
+      const view = block.ownerDocument.defaultView!;
+      const unscaled = block.getBoundingClientRect().height;
+      const margin = parseFloat(view.getComputedStyle(block).marginBottom) || 0;
+      if (view.getComputedStyle(parent).display === "block") parent.style.setProperty("display", "flow-root", "important");
+      block.style.setProperty("margin-bottom", `${margin + zoomed.height - unscaled}px`, "important");
+    }
     block.style.setProperty("transform-origin", "0 0", "important");
     block.style.setProperty("transform", `scale(${zoom})`, "important");
     // Unzoomed margins can move the block; put its top-left corner back.
