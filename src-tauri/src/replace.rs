@@ -832,16 +832,36 @@ mod win {
         Ok(touched)
     }
     /// `name (MDviewer recovered <id>).ext`, next to `dest`; never an existing name.
+    /// The stem is shortened so the leaf fits NTFS's 255 UTF-16 units (#229).
     fn recovered_name(dest: &Path) -> PathBuf {
-        let stem = dest.file_stem().unwrap_or_default().to_string_lossy();
-        let ext = dest
+        let stem: Vec<u16> = dest.file_stem().unwrap_or_default().encode_wide().collect();
+        let ext: Vec<u16> = dest
             .extension()
-            .map(|e| format!(".{}", e.to_string_lossy()))
-            .unwrap_or_default();
+            .map(|e| {
+                std::ffi::OsStr::new(".")
+                    .encode_wide()
+                    .chain(e.encode_wide())
+            })
+            .into_iter()
+            .flatten()
+            .collect();
         let id = unique(Path::new(""));
         let id = id.to_string_lossy();
         let id = id.trim_start_matches(".mdv-replace-");
-        dest.with_file_name(format!("{stem} (MDviewer recovered {id}){ext}"))
+        let marker: Vec<u16> = std::ffi::OsStr::new(&format!(" (MDviewer recovered {id})"))
+            .encode_wide()
+            .collect();
+        // ponytail: only the stem shrinks; an extension over ~190 units still fails
+        // the rename, and recovery then retains the artifacts (a refusal, not a loss).
+        let mut keep = stem
+            .len()
+            .min(255usize.saturating_sub(marker.len() + ext.len()));
+        if keep < stem.len() && keep > 0 && (0xD800..0xDC00).contains(&stem[keep - 1]) {
+            keep -= 1; // never split a surrogate pair
+        }
+        dest.with_file_name(OsString::from_wide(
+            &[&stem[..keep], &marker, &ext].concat(),
+        ))
     }
     pub fn recover_journal(dir: &Path) -> io::Result<Vec<PathBuf>> {
         let parents = Parents::hold(&dir.join("recovery-anchor")).map_err(as_io)?;
@@ -903,10 +923,13 @@ mod win {
             });
         }
         fn fixture() -> (tempfile::TempDir, PathBuf) {
+            fixture_at("résumé.md")
+        }
+        fn fixture_at(leaf: &str) -> (tempfile::TempDir, PathBuf) {
             let dir = tempfile::tempdir().unwrap();
             let parent = dir.path().join("ancestor").join("parent");
             fs::create_dir_all(&parent).unwrap();
-            let path = parent.join("résumé.md");
+            let path = parent.join(leaf);
             fs::write(&path, OLD).unwrap();
             (dir, path)
         }
@@ -1022,7 +1045,8 @@ mod win {
                 return;
             };
             let dir = PathBuf::from(std::env::var_os("MDV_REPLACE_DIR").unwrap());
-            let path = dir.join("ancestor/parent/résumé.md");
+            let leaf = std::env::var_os("MDV_REPLACE_LEAF").unwrap_or("résumé.md".into());
+            let path = dir.join("ancestor/parent").join(leaf);
             if scenario == "crash-create" {
                 fs::remove_file(&path).unwrap();
                 let _ = create_new(&path, NEW);
@@ -1632,7 +1656,10 @@ mod win {
         }
 
         fn crash_fixture(stage: Stage) -> (tempfile::TempDir, PathBuf) {
-            let (dir, path) = fixture();
+            crash_fixture_at(stage, "résumé.md")
+        }
+        fn crash_fixture_at(stage: Stage, leaf: &str) -> (tempfile::TempDir, PathBuf) {
+            let (dir, path) = fixture_at(leaf);
             let status = Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -1641,12 +1668,51 @@ mod win {
                 ])
                 .env("MDV_REPLACE_HELPER", "crash")
                 .env("MDV_REPLACE_DIR", dir.path())
+                .env("MDV_REPLACE_LEAF", leaf)
                 .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
                 .stdout(Stdio::null())
                 .status()
                 .unwrap();
             assert_eq!(status.code(), Some(79));
             (dir, path)
+        }
+        fn recovered(dir: &Path) -> Vec<Vec<u8>> {
+            fs::read_dir(dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .contains("(MDviewer recovered ")
+                })
+                .map(|e| fs::read(e.path()).unwrap())
+                .collect()
+        }
+        #[test]
+        fn recovered_names_fit_the_255_unit_leaf_limit() {
+            // #229: a leaf near 255 UTF-16 units must still get a usable sibling name.
+            let long = format!("{}.md", "a".repeat(250));
+            // Surrogate pairs at both even and odd unit offsets, so one cut lands mid-pair.
+            let emoji = format!("{}.md", "\u{1F600}".repeat(126));
+            let odd = format!("x{}.md", "\u{1F600}".repeat(125));
+            for leaf in [long.as_str(), &emoji, &odd, "résumé.md"] {
+                let kept = recovered_name(&Path::new(r"C:\docs").join(leaf));
+                let name = kept.file_name().unwrap();
+                let units: Vec<u16> = name.encode_wide().collect();
+                assert!(units.len() <= 255, "{} units", units.len());
+                // Never a split surrogate pair; the extension and marker survive.
+                let text = String::from_utf16(&units).unwrap();
+                assert!(text.ends_with(".md") && text.contains(" (MDviewer recovered "));
+                assert!(text.starts_with(leaf.chars().next().unwrap()));
+            }
+            // End to end: a claimant takes a long name in the rename gap.
+            let leaf = format!("{}.md", "b".repeat(240));
+            let (_dir, path) = crash_fixture_at(Stage::RenameIntoPlace, &leaf);
+            fs::write(&path, EXTERNAL).unwrap();
+            recover_journal(path.parent().unwrap()).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), EXTERNAL);
+            assert_eq!(recovered(path.parent().unwrap()), vec![OLD.to_vec()]);
+            assert_clean(path.parent().unwrap());
         }
         fn artifact(path: &Path, extension: &str) -> PathBuf {
             fs::read_dir(path.parent().unwrap())

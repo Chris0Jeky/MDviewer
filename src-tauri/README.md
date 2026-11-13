@@ -244,7 +244,8 @@ overwritten. `create_new` uses the same no-clobber commit without an original.
 `recover_journal` rolls the verified aside back when the name is empty and the save
 never committed. If an outside file took the name, or the committed file was later
 moved away, the original's bytes are kept as a visible `name (MDviewer recovered
-<id>).ext` sibling rather than deleted. Otherwise it preserves the existing
+<id>).ext` sibling rather than deleted; a long stem is shortened so that name fits
+255 UTF-16 units (#229). Otherwise it preserves the existing
 destination and cleans only verified transaction artifacts. Repeated recovery is
 harmless, and one stuck journal does not stop the rest of the folder. Modified
 artifacts, malformed journals or locked files are refused and retained. Once the

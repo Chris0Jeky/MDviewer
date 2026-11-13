@@ -180,6 +180,8 @@ Hardening after S1b (#229, #313), each with a Windows test in `replace.rs`:
 - A replace copies the original's DACL to the temporary before commit and refuses
   the save when it cannot, so a file with a tighter ACL than its folder is not
   loosened. Owner and SACL are not copied; Save As keeps the folder default.
+- A recovered sibling `name (MDviewer recovered <id>).ext` shortens a long stem so
+  the name fits 255 UTF-16 units, never splitting a surrogate pair.
 
 ## Implementation slices and qualification
 
