@@ -21,13 +21,12 @@ interface Handle extends FileSystemFileHandle {
 interface PickerType { description: string; accept: Record<string, string[]> }
 interface PickerWindow {
   showOpenFilePicker?(options: { multiple?: boolean; types?: PickerType[]; excludeAcceptAllOption?: boolean }): Promise<Handle[]>;
-  showSaveFilePicker?(options: { suggestedName?: string; types?: PickerType[] }): Promise<Handle>;
+  showSaveFilePicker?(options: { suggestedName?: string; types?: PickerType[]; excludeAcceptAllOption?: boolean }): Promise<Handle>;
   launchQueue?: { setConsumer(consumer: (params: { files: readonly Handle[] }) => void): void };
 }
 const picker = (): PickerWindow => window as unknown as PickerWindow;
 
 const MAX_BATCH_FILES = 32;
-const SAVE_EXPORT_LIMIT = 128 * 1024 * 1024;
 const DOCUMENT_TYPES: PickerType[] = [
   { description: "Markdown", accept: { "text/markdown": [".md", ".markdown"] } },
   { description: "Data and text", accept: { "text/plain": [".json", ".jsonc", ".jsonl", ".ndjson", ".txt", ".log", ".yaml", ".yml", ".toml", ".csv", ".tsv"] } },
@@ -107,8 +106,9 @@ async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size"
     if (!isMissing(error)) return { ok: false, result: { outcome: "conflict", reason: "locked" } };
     if (expected) return { ok: false, result: { outcome: "conflict", reason: "missing" } };
   }
-  // Size and time first (cheap); the digest catches an equal-size edit with a restored time.
-  if (current && (!expected || current.size !== expected.size || current.lastModified !== expected.modified
+  // The bytes decide, as natively: size first (cheap), then the digest, which catches an
+  // equal-size edit with a restored time. A touched file with the same bytes is not a change.
+  if (current && expected && (current.size !== expected.size
     || await digestOf(new Uint8Array(await current.arrayBuffer())) !== expected.digest)) {
     return { ok: false, result: { outcome: "conflict", reason: "changed" } };
   }
@@ -120,8 +120,9 @@ async function writeIfUnchanged(binding: Binding, expected: Pick<Binding, "size"
   } catch (error) {
     return { ok: false, result: isMissing(error) ? { outcome: "conflict", reason: "missing" } : { outcome: "failed", code: "write-failed" } };
   }
-  const written = await binding.handle.getFile();
-  return { ok: true, snapshot: { size: written.size, modified: written.lastModified, bytes, digest: await digestOf(bytes) } };
+  // The bytes are on disk; the time is only a hint for following the file, so a failed stat is not a failed save.
+  const modified = await binding.handle.getFile().then(file => file.lastModified, () => 0);
+  return { ok: true, snapshot: { size: bytes.length, modified, bytes, digest: await digestOf(bytes) } };
 }
 
 /** Move the binding to the bytes just written; `eol` is what those bytes now use. */
@@ -192,20 +193,18 @@ export const browserHost: Host = {
     window.open(url, "_blank", "noopener,noreferrer");
   },
 
-  async save(blob, filename) {
-    if (blob.size > SAVE_EXPORT_LIMIT) throw new Error("This export exceeds 128 MiB. Use Print / Save as PDF for a smaller file.");
-    let handle: Handle;
-    try { handle = await picker().showSaveFilePicker!({ suggestedName: filename }); }
-    catch (error) { if (isAbort(error)) return { canceled: true }; throw error; }
-    const writable = await handle.createWritable({ keepExistingData: false });
-    try { await writable.write(blob); await writable.close(); }
-    catch (error) { await writable.abort().catch(() => undefined); throw error; }
-    return { canceled: false };
-  },
+  // No `save`: exports (PDF, Save a copy) stay ordinary browser downloads, as on the web today,
+  // so an export can never be written over a bound document.
 
   async patchDocument(token, patches: LinePatch[]): Promise<PatchResult> {
     const binding = bindings.get(token);
     if (!binding) return { outcome: "failed", code: "revoked" };
+    // The native shape rules (`linepatch.rs`): 1 to 256 patches, distinct lines, no NUL.
+    if (!patches.length || patches.length > 256
+      || patches.some(patch => !Number.isInteger(patch.line) || patch.line < 1 || /\0/.test(patch.expect + patch.replace))) {
+      return { outcome: "failed", code: "invalid" };
+    }
+    const repeated = patches.findIndex((patch, index) => patches.findIndex(other => other.line === patch.line) !== index);
     for (let attempt = 0; attempt < 2; attempt++) {
       let read: Snapshot;
       try { read = await snapshot(binding.handle); }
@@ -213,7 +212,8 @@ export const browserHost: Host = {
       let decoded: ReturnType<typeof decodeText>;
       try { decoded = decodeText(read.bytes); } catch { return { outcome: "failed", code: "encoding" }; }
       const lines = decoded.text.split(/\r\n|\r|\n/);
-      const index = patches.findIndex(patch => /[\r\n]/.test(patch.replace) || lines[patch.line - 1] !== patch.expect);
+      const misplaced = patches.findIndex(patch => /[\r\n]/.test(patch.replace) || lines[patch.line - 1] !== patch.expect);
+      const index = misplaced >= 0 && (repeated < 0 || misplaced < repeated) ? misplaced : repeated;
       if (index >= 0) {
         if (/[\r\n]/.test(patches[index]!.replace)) return { outcome: "failed", code: "invalid" };
         return { outcome: "unplaced", index, text: decoded.text };
@@ -261,34 +261,25 @@ export const browserHost: Host = {
       const encoded = encodeFor(style, text, acceptLf);
       if ("refused" in encoded) return encoded.refused;
       const { bytes } = encoded;
+      // Like `export_destination`, the picker offers only the document's kind of extension.
       let handle: Handle;
-      try { handle = await picker().showSaveFilePicker!({ suggestedName: name, types: [DOCUMENT_TYPES[familyOf(name) === "markdown" ? 0 : 1]!] }); }
-      catch (error) { if (isAbort(error)) return { outcome: "canceled" }; throw error; }
-      // Like `export_destination`: keep the document's kind of extension (Markdown, or data and text).
-      if (!documentExtension(handle.name) || familyOf(handle.name) !== familyOf(name)) return { outcome: "failed", code: "invalid-destination" };
-      if (token && bindings.get(token) !== own) return { outcome: "failed", code: "revoked" };
-      // This document's own file gets exactly Save's check; the picker's confirmation never bypasses it.
-      const same = own ? await own.handle.isSameEntry(handle) : false;
-      const target: Binding = same && own ? { ...own } : {
-        handle, size: 0, modified: 0, digest: "", encoding: style.encoding, eol: style.eol, generation: 0,
-      };
-      let expected: Binding | null = target;
-      if (!same) {
-        // Another file: compare against what it held when it was chosen (nothing, if it is new).
-        try {
-          const chosen = await snapshot(handle);
-          Object.assign(target, { size: chosen.size, modified: chosen.modified, digest: chosen.digest });
-        } catch (error) {
-          if (!isMissing(error)) return { outcome: "conflict", reason: "locked" };
-          expected = null;
-        }
-      }
-      const written = await writeIfUnchanged(target, expected, bytes);
+      try {
+        handle = await picker().showSaveFilePicker!({
+          suggestedName: name, types: [DOCUMENT_TYPES[familyOf(name) === "markdown" ? 0 : 1]!], excludeAcceptAllOption: true,
+        });
+      } catch (error) { if (isAbort(error)) return { outcome: "canceled" }; throw error; }
+      // The picker is the commit point. Chromium may already have created or emptied the chosen
+      // file when it returns, so refusing now could leave an empty file where the user confirmed
+      // a replacement: every refusal happens before the picker, and from here the text is written.
+      // (Natively, Save As onto the document's own changed file is refused; here it replaces it.)
+      const binding: Binding = { handle, size: 0, modified: 0, digest: "", encoding: style.encoding, eol: style.eol, generation: 0 };
+      const written = await writeIfUnchanged(binding, null, bytes);
       if (!written.ok) return written.result;
+      adopt(binding, written.snapshot, savedEol(style.eol));
+      // The document closed while the picker was open: the text is on disk, nothing is bound.
+      if (token && bindings.get(token) !== own) return { outcome: "failed", code: "revoked-after-write" };
       if (token) bindings.delete(token);
       const next = newToken();
-      const binding: Binding = { ...target, handle, encoding: style.encoding, generation: 0 };
-      adopt(binding, written.snapshot, savedEol(style.eol));
       bindings.set(next, binding);
       return savedResult(next, binding);
     });

@@ -152,19 +152,18 @@ describe("browser host: open and save", () => {
     expect(await host.saveDocument(doc.token!, 0, "x", false)).toEqual({ outcome: "failed", code: "revoked" });
   });
 
-  it("Save As onto the document's own file gets Save's outside-change check", async () => {
+  it("Save As commits at the picker: the chosen file gets the text, never an emptied file and a refusal", async () => {
+    // Chromium may have emptied the chosen file by the time the picker returns, so a check after
+    // it could only leave the user with nothing. The confirmed destination gets the text.
     const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
     const doc = await open(handle);
-    handle.outside(utf8("# Changed outside\n"));
+    handle.outside(new Uint8Array()); // the picker emptied it
     saveTo = handle;
-    expect(await host.saveDocumentAs(doc.token!, "notes.md", "# Mine\n", false)).toEqual({ outcome: "conflict", reason: "changed" });
-    expect(new TextDecoder().decode(handle.bytes)).toBe("# Changed outside\n");
+    expect(await host.saveDocumentAs(doc.token!, "notes.md", "# Mine\n", false)).toMatchObject({ outcome: "saved", name: "notes.md" });
+    expect(new TextDecoder().decode(handle.bytes)).toBe("# Mine\n");
   });
 
-  it("Save As of a new document writes UTF-8 with LF, and refuses a name MDviewer cannot open", async () => {
-    saveTo = new FakeHandle("page.html", new Uint8Array());
-    expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
-    expect(saveTo.writes).toBe(0);
+  it("Save As of a new document writes UTF-8 with LF; a canceled picker writes nothing", async () => {
     saveTo = new FakeHandle("plan.md", new Uint8Array());
     expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toMatchObject({ outcome: "saved", name: "plan.md", encoding: "utf-8", eol: "lf" });
     expect(new TextDecoder().decode(saveTo.bytes)).toBe("# A\n");
@@ -172,14 +171,32 @@ describe("browser host: open and save", () => {
     expect(await host.saveDocumentAs(null, "Untitled.md", "# A\n", false)).toEqual({ outcome: "canceled" });
   });
 
-  it("Save As keeps the document's kind of extension, as the native dialog does", async () => {
-    saveTo = new FakeHandle("notes.json", new Uint8Array());
-    expect(await host.saveDocumentAs(null, "notes.md", "# A\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
+  it("Save As offers only the document's kind of extension, as the native dialog does", async () => {
+    const offered = () => (window as unknown as { showSaveFilePicker: ReturnType<typeof vi.fn> }).showSaveFilePicker.mock.lastCall![0];
+    saveTo = new FakeHandle("notes.md", new Uint8Array());
+    await host.saveDocumentAs(null, "Untitled.md", "# A\n", false);
+    expect(offered()).toMatchObject({ suggestedName: "Untitled.md", excludeAcceptAllOption: true, types: [{ accept: { "text/markdown": [".md", ".markdown"] } }] });
     const data = await open(new FakeHandle("rows.csv", utf8("a,b\n")));
-    saveTo = new FakeHandle("rows.md", new Uint8Array());
-    expect(await host.saveDocumentAs(data.token!, "rows.csv", "a,b\n", false)).toEqual({ outcome: "failed", code: "invalid-destination" });
     saveTo = new FakeHandle("rows.tsv", new Uint8Array());
     expect(await host.saveDocumentAs(data.token!, "rows.csv", "a,b\n", false)).toMatchObject({ outcome: "saved", name: "rows.tsv" });
+    expect(offered().types).toHaveLength(1);
+    expect(offered().types[0].accept["text/plain"]).toContain(".tsv");
+  });
+
+  it("refuses everything it can before the picker opens, so a refusal never follows a pick", async () => {
+    const doc = await open(new FakeHandle("mixed.md", utf8("a\r\nb\n")));
+    saveTo = new FakeHandle("other.md", utf8("keep\n"));
+    expect(await host.saveDocumentAs(doc.token!, "mixed.md", "a\nb\n", false)).toEqual({ outcome: "mixed-line-endings" });
+    expect(await host.saveDocumentAs("0".repeat(32), "x.md", "a\n", false)).toEqual({ outcome: "failed", code: "revoked" });
+    expect((window as unknown as { showSaveFilePicker: ReturnType<typeof vi.fn> }).showSaveFilePicker).not.toHaveBeenCalled();
+    expect(new TextDecoder().decode(saveTo.bytes)).toBe("keep\n");
+  });
+
+  it("a touched file with the same bytes is not an outside change", async () => {
+    const handle = new FakeHandle("notes.md", utf8("# Notes\n"));
+    const doc = await open(handle);
+    handle.modified += 500; // touched, same content
+    expect(await host.saveDocument(doc.token!, 0, "# Mine\n", false)).toMatchObject({ outcome: "saved" });
   });
 
   it("asks for write permission and keeps the text when the browser refuses", async () => {
@@ -255,6 +272,17 @@ describe("browser host: re-read and line patches", () => {
     };
     const result = await host.readDocument(doc.token!, true, 0);
     expect(result).toEqual({ outcome: "changed", text: "version B\n", generation: 1, encoding: "utf-8", eol: "lf" });
+  });
+
+  it("refuses patches the native host refuses: none, too many, NUL, and two on one line", async () => {
+    const handle = new FakeHandle("tasks.md", utf8("- [ ] One\n- [ ] Two\n"));
+    const doc = await open(handle);
+    const one = { line: 1, expect: "- [ ] One", replace: "- [x] One" };
+    expect(await host.patchDocument(doc.token!, [])).toEqual({ outcome: "failed", code: "invalid" });
+    expect(await host.patchDocument(doc.token!, Array.from({ length: 257 }, () => one))).toEqual({ outcome: "failed", code: "invalid" });
+    expect(await host.patchDocument(doc.token!, [{ ...one, replace: "- [x] O\0ne" }])).toEqual({ outcome: "failed", code: "invalid" });
+    expect(await host.patchDocument(doc.token!, [one, { ...one, replace: "- [-] One" }])).toMatchObject({ outcome: "unplaced", index: 1 });
+    expect(handle.writes).toBe(0);
   });
 
   it("a patch on a mixed-ending file keeps it mixed, so a later Save still asks first", async () => {

@@ -71,8 +71,8 @@ export interface Host {
    */
   openDropped?(items: DataTransferItemList): Promise<OpenBatch | { copies: File[] }> | null;
   external(url: string): Promise<void>;
-  /** Save an export (PDF, Markdown copy, data) to a destination the user picks. */
-  save(blob: Blob, filename: string): Promise<{ canceled: boolean }>;
+  /** Save an export (PDF, Markdown copy, data) to a destination the user picks; without it, exports download. */
+  save?(blob: Blob, filename: string): Promise<{ canceled: boolean }>;
   /** Apply line patches to the bound document `token` as one conflict-checked change. */
   patchDocument(token: string, patches: LinePatch[]): Promise<PatchResult>;
   /** Save in place through the document's capability; never sends a path. */
