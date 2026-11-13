@@ -301,6 +301,68 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     expect(await missingInOrder(page, markdown)).toEqual([]);
   });
 
+  test("a tall fence nested in a quote or callout splits at line boundaries and loses nothing", async ({ page }) => {
+    const rows = (tag: string): string[] =>
+      Array.from({ length: 80 }, (_, index) => `${tag}${index + 1} quiet harbor lantern meadow orchard`);
+    const markdown = [
+      "## Quote",
+      "",
+      "> A lead-in sentence for the quote.",
+      ">",
+      "> ```",
+      ...rows("q").map((line) => `> ${line}`),
+      "> ```",
+      "",
+      "## Callout",
+      "",
+      "::: note",
+      "A lead-in sentence for the callout.",
+      "",
+      "```",
+      ...rows("c"),
+      "```",
+      ":::",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "tall-nested-fences.md");
+    await waitForPagination(page);
+
+    const fences = await pagesByRef(page, "blockquote > pre, div.callout > pre");
+    expect(Object.keys(fences).length).toBe(2);
+    for (const [, pages] of Object.entries(fences)) expect(pages.length, "each tall fence spans pages").toBeGreaterThan(1);
+    expect(await missingInOrder(page, markdown)).toEqual([]);
+    const defects = await layoutDefects(page);
+    expect(defects.empty).toEqual([]);
+    expect(defects.outside).toEqual([]);
+  });
+
+  test("a tall code figure splits its own fence instead of stranding the caption", async ({ page }) => {
+    const rows = Array.from({ length: 80 }, (_, index) => `f${index + 1} quiet harbor lantern meadow orchard`);
+    const markdown = [
+      "## Listing",
+      "",
+      `<figure class="code-figure"><figcaption>Listing 1</figcaption><pre><code>${rows.join("\n")}</code></pre></figure>`,
+      "",
+      "Closing paragraph.",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "tall-code-figure.md");
+    await waitForPagination(page);
+
+    // Every fragment of the figure carries part of its fence: `break-inside: avoid` on the
+    // fence would push it whole past the caption and leave a page holding only the caption.
+    const fragments = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("#paged-output figure.code-figure")).map(
+        (figure) => !!figure.querySelector(":scope > pre"),
+      ),
+    );
+    expect(fragments.length, "the figure is taller than a page").toBeGreaterThan(1);
+    expect(fragments.every(Boolean), "no fragment is a bare caption").toBe(true);
+    expect(await missingInOrder(page, rows.join("\n"))).toEqual([]);
+  });
+
   test("a heading and a fence that fit a page only without the heading stay together and whole", async ({ page }) => {
     const stalls = watchStalls(page);
     const markdown = [
