@@ -54,7 +54,7 @@ pub(crate) fn reread(
 }
 
 /// Reads happen outside the registry lock, so another re-read or a Save can move
-/// the binding while ours is in flight. A read that started before the binding
+/// the binding (its generation) while ours is in flight. A read that started before the binding
 /// moved may hold older bytes; adopting it would install stale text as newer
 /// (#256). Such a read is retried; after `READ_ATTEMPTS` it reports `busy` and
 /// changes nothing (the next file event asks again).
@@ -70,7 +70,7 @@ fn reread_with(
     for _ in 0..READ_ATTEMPTS {
         let Some((path, before)) = lock(registry)
             .get(token)
-            .map(|binding| (binding.path.clone(), binding.digest))
+            .map(|binding| (binding.path.clone(), binding.generation))
         else {
             return ReadResult::Failed { code: "revoked" };
         };
@@ -87,7 +87,7 @@ fn reread_with(
         let Some(binding) = registry.get_mut(token) else {
             return ReadResult::Failed { code: "revoked" };
         };
-        if binding.digest != before && doc.digest != binding.digest {
+        if binding.generation != before && doc.digest != binding.digest {
             continue;
         }
         return settle(binding, doc, adopt, seen);
