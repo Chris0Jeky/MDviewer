@@ -136,6 +136,7 @@ const writeback = createWriteback({
   // to the same control so keyboard users keep their place.
   rerender: () => {
     const key = (document.activeElement as HTMLElement | null)?.dataset?.amKey;
+    syncEditor(); // a patch render leaves Edit's text alone; the write changed the source it shows
     void render([], true).then(() => {
       if (key && !document.querySelector(".am-menu")) content.querySelector<HTMLElement>(`[data-am-key="${key}"]`)?.focus({ preventScroll: true });
     });
