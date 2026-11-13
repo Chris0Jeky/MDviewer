@@ -164,3 +164,26 @@ test.describe("no atomic block straddles a page boundary", () => {
     }
   });
 });
+
+/** #301: record tables of many columns keep every cell inside the page width (reflow, never clipped). */
+test("a 16-column record table stays inside the page's content box", async ({ page }) => {
+  const columns = Array.from({ length: 16 }, (_, index) => `metric_${String(index + 1).padStart(2, "0")}`);
+  const rows = Array.from({ length: 8 }, (_, row) =>
+    `| ${columns.map((_, index) => (index === 3 ? "https://example.test/" + "path".repeat(8) : `${row * 7 + index}.25 units`)).join(" | ")} |`);
+  const table = [`| ${columns.join(" | ")} |`, `| ${columns.map(() => "---").join(" | ")} |`, ...rows].join("\n");
+  await page.goto("/");
+  await loadMarkdownIntoApp(page, `# Wide records\n\n${table}\n`);
+  await waitForPagination(page);
+  const bad = await page.evaluate(() => {
+    const out: string[] = [];
+    const cells = Array.from(document.querySelectorAll<HTMLElement>("#paged-output td, #paged-output th"));
+    for (const cell of cells) {
+      const box = cell.closest(".pagedjs_page")!.querySelector(".pagedjs_page_content")!.getBoundingClientRect();
+      const rect = cell.getBoundingClientRect();
+      if (rect.left < box.left - 2 || rect.right > box.right + 2 || cell.scrollWidth > cell.clientWidth + 2) out.push(cell.textContent ?? "");
+    }
+    return { out, count: cells.length };
+  });
+  expect(bad.count).toBe(16 * 9);
+  expect(bad.out).toEqual([]);
+});

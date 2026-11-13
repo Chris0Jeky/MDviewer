@@ -149,3 +149,87 @@ test("YAML, TOML and CSV open as readable views (D4)", async ({ page }) => {
   await expect(doc(page).locator("table").first()).toContainText("ops");
   await expect(page.locator("#reader-status")).toContainText("CSV ·");
 });
+
+/** Invented wide records: 14 columns, long prose, one 64-character token (#301). */
+function wideRecords(): string {
+  return Array.from({ length: 6 }, (_, index) => JSON.stringify({
+    id: `rec-${1000 + index}`, customer_name: "Maria Gonzalez-Fernandez", email_address: `person${index}@example.test`,
+    region: "north-west", status: "pending review", plan_tier: "enterprise", created_at: "2026-01-10T08:30:00Z",
+    seats: 3 + index, monthly_total: "19.50", currency: "EUR",
+    notes: "Requested an invoice copy and asked about the upcoming change to the billing cycle; follow up next week.",
+    checksum: "ab12cd34ef56".repeat(5) + "ab12", tags: ["alpha", "beta"], owner: "ops",
+  })).join("\n") + "\n";
+}
+
+for (const width of [1280, 600]) {
+  test(`a wide record table scrolls inside its own box at ${width} px; the card and the page do not (#301)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFiles(page, [{ name: "wide.jsonl", text: wideRecords() }]);
+    await ready(page);
+    const box = doc(page).locator(".reader-table").first();
+    const measure = await box.evaluate(wrapper => {
+      const table = wrapper.querySelector("table")!;
+      const card = document.getElementById("reader-document")!.getBoundingClientRect();
+      const scroller = document.querySelector<HTMLElement>(".reader-scroll")!;
+      const root = document.scrollingElement!;
+      return {
+        columns: table.querySelectorAll("thead th").length,
+        scrolls: wrapper.scrollWidth > wrapper.clientWidth + 1,
+        boxRight: wrapper.getBoundingClientRect().right, cardRight: card.right,
+        pageOverflow: root.scrollWidth - root.clientWidth,
+        readerOverflow: scroller.scrollWidth - scroller.clientWidth,
+        narrowestHeader: Math.min(...[...table.querySelectorAll("thead th")].map(cell => cell.getBoundingClientRect().width)),
+      };
+    });
+    expect(measure.columns).toBeGreaterThanOrEqual(14);
+    expect(measure.scrolls, "the table is wider than its box, so the box scrolls").toBe(true);
+    expect(measure.boxRight).toBeLessThanOrEqual(measure.cardRight);
+    expect(measure.pageOverflow).toBeLessThanOrEqual(0);
+    expect(measure.readerOverflow).toBeLessThanOrEqual(0);
+    // Columns keep a readable width: no header is squeezed into a few letters per line.
+    expect(measure.narrowestHeader).toBeGreaterThan(40);
+    // Every column can be reached by scrolling the box.
+    await box.evaluate(wrapper => { wrapper.scrollLeft = wrapper.scrollWidth; });
+    await expect(box.locator("thead th").last()).toBeInViewport();
+  });
+}
+
+test("a wide record table exports to PDF whole and inside the page width (#301)", async ({ page }) => {
+  const text = wideRecords();
+  await openFiles(page, [{ name: "wide.jsonl", text }]);
+  await ready(page);
+  await openPdf(page);
+  await readyWorkspace(page, text);
+  const fit = await page.locator("#paged-output").evaluate(host => {
+    const bad: string[] = [];
+    let cells = 0;
+    for (const cell of host.querySelectorAll<HTMLElement>("td, th")) {
+      const area = cell.closest(".pagedjs_page")!.querySelector(".pagedjs_page_content")!.getBoundingClientRect();
+      const rect = cell.getBoundingClientRect();
+      cells += 1;
+      if (rect.left < area.left - 2 || rect.right > area.right + 2 || cell.scrollWidth > cell.clientWidth + 2) bad.push(cell.textContent ?? "");
+    }
+    return { bad, cells, rows: host.querySelectorAll("tbody tr").length };
+  });
+  expect(fit.cells).toBeGreaterThan(14 * 6);
+  expect(fit.bad).toEqual([]);
+  expect(fit.rows).toBe(6);
+});
+
+test("a conversation with collapsed tool calls exports to PDF (#301)", async ({ page }) => {
+  // A closed <details> at the foot of the page used to fail the pagination audit.
+  const chat = [
+    { role: "user", timestamp: "2026-11-10T09:00:00Z", content: "Please summarise the **quarterly** report and list the three biggest risks." },
+    { role: "assistant", timestamp: "2026-11-10T09:00:04Z", content: [
+      { type: "text", text: "Here is the summary.\n\n| Risk | Likelihood | Impact |\n| --- | --- | --- |\n| Supplier delay | high | medium |\n| Currency swing | medium | high |" },
+      { type: "tool_use", id: "t1", name: "read_file", input: { path: "reports/q3.txt", limit: 200 } }] },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "Q3 revenue grew by 12 percent; supplier delays were noted in the August review." }] },
+    { role: "assistant", content: "Done. Three risks: supply, currency, staffing." },
+  ].map(record => JSON.stringify(record)).join("\n") + "\n";
+  await openFiles(page, [{ name: "chat.jsonl", text: chat }]);
+  await ready(page);
+  await openPdf(page);
+  await readyWorkspace(page, chat);
+  await expect(page.locator("#paged-output")).toContainText("Done. Three risks");
+  await expect(page.getByText("Something went wrong")).toBeHidden();
+});
