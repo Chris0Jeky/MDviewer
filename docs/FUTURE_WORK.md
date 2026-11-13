@@ -30,8 +30,9 @@ No new editor or Markdown-parser dependency was added.
 
 Today, document/session content stays in memory. Explicit Markdown/PDF saving is
 available; **Save Markdown saves a copy and does not clear the original-source
-dirty baseline**. There is no automatic document storage, crash recovery, in-place
-save, file watcher or persistent recent-file list. The reader already has an
+dirty baseline**. There is no automatic document storage or crash recovery. On Windows, Save/Save
+As write in place (#231), open files follow changes on disk (#233) and the Library keeps
+recent paths (#235). The reader already has an
 outline, and PDF progress remains visible even when the preview is hidden. Future issues
 must not misdescribe those shipped capabilities as missing.
 
@@ -56,7 +57,7 @@ identifies a dependency; **Deferred** is deliberately lower priority.
 
 | Priority / stage | Issue | Completion target and dependency |
 | --- | --- | --- |
-| Next · Design merged; native proof required | [#196 — Save / Save As and file ownership](https://github.com/Chris0Jeky/MDviewer/issues/196) | Implement the reviewed [file-lifecycle contract](design/FILE_LIFECYCLE.md) after proving conflict-safe Windows compare/replace. A hash check followed by atomic replacement alone is insufficient; current Save Copy remains available. |
+| Shipped on Windows (#226, #231) | [#196 — Save / Save As and file ownership](https://github.com/Chris0Jeky/MDviewer/issues/196) | Implement the reviewed [file-lifecycle contract](design/FILE_LIFECYCLE.md) after proving conflict-safe Windows compare/replace. A hash check followed by atomic replacement alone is insufficient; current Save Copy remains available. |
 | Next · Design merged; depends on #196 | [#197 — Optional crash/session recovery](https://github.com/Chris0Jeky/MDviewer/issues/197) | Implement the reviewed [recovery contract](design/RECOVERY.md) after identity agreement, bounded-write measurements and Windows fault/restart/deletion evidence. Default remains off and no recovery storage has shipped. |
 | Done · closed | [#201 — Bounded raster cancellation](https://github.com/Chris0Jeky/MDviewer/issues/201) | Cooperative cancel and a per-page progress bound shipped on #200's status row; a hard bound for the renderer's uninterruptible waits would need isolation (see `RASTER_OFFLINE_CAPTURE.md`). |
 | Soon · Measure first | [#202 — Measured authoring responsiveness](https://github.com/Chris0Jeky/MDviewer/issues/202) | Refresh workloads and profile actual bottlenecks before choosing an optimization; preserve output/ownership and demonstrate improvement against the same baseline. Native comparisons stay in #169. |
@@ -64,7 +65,7 @@ identifies a dependency; **Deferred** is deliberately lower priority.
 | Later · Waiting on upstream | [#206 — Preview engagement accounting](https://github.com/Chris0Jeky/MDviewer/issues/206) | Fix the marked-pane scroll latch upstream and import a regenerated locked SDK with behavioral/consent controls. No manual vendored edit. |
 | Next · A1–A4 merged | [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) | Owner-confirmed 2026-11-11 as part of the [companion push](design/2026-11-11-companion-push.md). A1 parser and static controls (#252), A2 native line patch (#244) and A3 interaction (#263) are merged; A4 templates (native read #285, picker and command #286, wiring #295) are merged; A5 embeddable element is merged (#318). The grammar is fixed for generators that build to it. |
 | Next · D0–D6 merged; D7 `.html` open (#347); rest of D7, D8 not started | [Readable data v1](design/READABLE_DATA.md) | Owner-requested 2026-11-12: JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text open as a readable view derived as Markdown by a pure function and shown by the existing reader. D0 to D4 (parsers #281, native #284, webview #288), the D6 readability pass (#293) and agent data files in the Library (#290) are merged. D5: the pure copy module (#289) and the webview copy menu and Save readable view as Markdown (#316, issue #299) are merged. More kinds (D7, D8) follow the [complete push](design/2026-11-13-complete-push.md). |
-| Paused 2026-11-13 | [Complete push](design/2026-11-13-complete-push.md) | Owner direction 2026-11-13: finish this queue (Track F), web parity with the Windows shell (Track W), more readable kinds (Track D) and a local PDF workbench (Track P). The contract states seams, limits and proof per slice. Paused by the owner on 2026-11-13 with 26 PRs merged; open PRs and the resume order are in `ORCHESTRATOR.md`. |
+| Paused 2026-11-13 | [Complete push](design/2026-11-13-complete-push.md) | Owner direction 2026-11-13: finish this queue (Track F), web parity with the Windows shell (Track W), more readable kinds (Track D) and a local PDF workbench (Track P). The contract states seams, limits and proof per slice. Paused by the owner on 2026-11-13 with 27 PRs merged; open PRs and the resume order are in `ORCHESTRATOR.md`. |
 | Deferred · Research | [#205 — Pagination whitespace](https://github.com/Chris0Jeky/MDviewer/issues/205) | Distinguish unavoidable keep-whole space from avoidable layout; retain the trade-off unless an improvement preserves no-slice and legibility. |
 
 The two persistence issues require coordinated operating-contract, native-capability

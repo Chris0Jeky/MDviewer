@@ -26,10 +26,11 @@
 ## Current State (snapshot)
 
 - **2026-11-13 (complete push paused by the owner)** — main
-  [`382938b`](https://github.com/Chris0Jeky/MDviewer/commit/382938b); CI and Windows Desktop success. 27 PRs merged
+  [`382938b`](https://github.com/Chris0Jeky/MDviewer/commit/382938b) (last CI-verified: CI and Windows Desktop success), then
+  #348 merged as `13af3de`. 27 PRs merged
   that day (#309 to #352, then #348): PDFs open and read (#322, #344), the browser host (#323), many fixes. Not in the app yet:
-  PDF editing, the web shell, local pages, the weight table, D8, most of D7. Owner bugs #334/#335 are fixed in open
-  #345 (fails the Windows smoke). OPEN owner items: **AI-9** and the parked **#169 signing decision**. Delegated, not
+  PDF editing, the web shell, local pages, the weight table, D8, most of D7. Owner bugs #334/#335 are **not fixed yet**: the fix is in open
+  #345, which fails the Windows smoke. OPEN owner items: **AI-9** and the parked **#169 signing decision**. Delegated, not
   accepted: AI-6, AI-7, AI-8, AI-10, #169 hands-on boxes (agent results in `docs/qa/ACCEPTANCE.md`, #348). Resume order: `ORCHESTRATOR.md`.
 
 ### Earlier snapshots (historical)

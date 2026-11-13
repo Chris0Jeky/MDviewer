@@ -4,7 +4,7 @@
 > (use the `mdv-roadmap-sync` skill). Companion docs: [`PRODUCT_VISION.md`](./PRODUCT_VISION.md),
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`design/IMPLEMENTATION_SPEC.md`](./design/IMPLEMENTATION_SPEC.md).
 >
-> Last updated: 2026-11-12 (Readable data and Actionable Markdown status; other sections as of 2026-11-05).
+> Last updated: 2026-11-13 (complete push paused; Readable data, Actionable Markdown and PDF status; other sections as of 2026-11-05).
 
 ## Status legend
 
@@ -22,10 +22,9 @@ site retains its separate deployment record.
 Use [Future work](FUTURE_WORK.md) / [#195](https://github.com/Chris0Jeky/MDviewer/issues/195)
 for the next implementation work. Windows Save/Save As (#196) shipped with the conflict-safe
 replace (S1a #226) and owned Save/Save As (S1b #231); the optional recovery contract #197 stays
-parked; design bounded raster
-cancellation #201 and profile measured authoring bottlenecks #202. Unicode heading
-identity #204, upstream engagement accounting #206 and pagination whitespace
-research #205 remain separate.
+parked; bounded raster cancellation #201 (#352) and Unicode heading identity #204 (#351)
+are done; measured authoring bottlenecks #202, upstream engagement accounting #206 and
+pagination whitespace research #205 remain separate.
 
 [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) joined the companion push on 2026-11-11
 (owner: "Yes, add it"): clickable marks, choices, fields and status chips written back byte-exact,
