@@ -467,6 +467,7 @@ async function savePdfCopy(bytes: Uint8Array, filename: string): Promise<void> {
 function openPdfBytes(name: string, bytes: Uint8Array): void {
   const problem = pdfs.add(name, bytes);
   if (problem) { report(`${name}: ${problem}`); return; }
+  pdfs.activeId = pdfs.lastAdded;
   pdfs.active!.dirty = true;
   ++generation;
   focusPdf();
