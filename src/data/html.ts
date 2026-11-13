@@ -8,37 +8,34 @@ import type { Readable } from "./types";
  * scripts, styles, frames, forms or remote resources; relative images load as local ones do for
  * Markdown. This function only frames it: a title, an overview line that names what will not run,
  * and the body as one Markdown HTML block. Edit shows the raw text, which Save writes unchanged.
+ *
+ * The file is read with DOMParser: one linear parse (no regular expression scans, so a hostile file
+ * cannot make this quadratic), into an inert document where nothing runs or loads.
  */
-
-const BLOCKS = /<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
-
-function count(text: string, pattern: RegExp): number {
-  return text.match(pattern)?.length ?? 0;
-}
 
 function plural(n: number, word: string): string {
   return `${n.toLocaleString("en-US")} ${word}${n === 1 ? "" : "s"}`;
 }
 
-function decodeTitle(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim()
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&");
-}
+/** Counted, then removed here; the sanitizer would remove them anyway. */
+const DROPPED = "script, style, template, noscript";
+const REMOTE = /^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i;
 
 export function htmlView(text: string, size: string, lens: Lens): Readable {
-  const title = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(text)?.[1];
-  const body = /<body\b[^>]*>([\s\S]*?)(?:<\/body\s*>|$)/i.exec(text)?.[1]
-    ?? text.replace(/<!doctype[^>]*>/i, "").replace(/<head\b[^>]*>[\s\S]*?<\/head\s*>/i, "").replace(/<\/?html\b[^>]*>/gi, "");
-  const scripts = count(text, /<script\b/gi);
-  const styles = count(text, /<style\b/gi) + count(text, /<link\b[^>]*rel\s*=\s*["']?stylesheet/gi);
-  const frames = count(body, /<(?:iframe|frame|object|embed)\b/gi);
-  const forms = count(body, /<form\b/gi);
-  const remote = count(body, /<(?:img|video|audio|source)\b[^>]*\ssrc\s*=\s*["']?(?:https?:)?\/\//gi);
-  const links = count(body, /<a\b[^>]*\shref\s*=/gi);
-  const images = count(body, /<img\b/gi);
+  const page = new DOMParser().parseFromString(text, "text/html");
+  const count = (selector: string, root: ParentNode = page): number => root.querySelectorAll(selector).length;
+  const scripts = count("script");
+  const styles = count("style") + count('link[rel~="stylesheet" i]');
+  const frames = count("iframe, frame, object, embed", page.body);
+  const forms = count("form", page.body);
+  const remote = [...page.body.querySelectorAll("img[src], video[src], audio[src], source[src]")]
+    .filter(node => REMOTE.test(node.getAttribute("src") ?? "")).length;
+  const links = count("a[href]", page.body);
+  const images = count("img", page.body);
+  const title = page.title.replace(/\s+/g, " ").trim();
 
   const facts = [`HTML · ${size}`];
-  if (title && decodeTitle(title)) facts.push(`title “${cellText(decodeTitle(title))}”`);
+  if (title) facts.push(`title “${cellText(title)}”`);
   if (links) facts.push(plural(links, "link"));
   if (images) facts.push(plural(images, "image"));
   lens.line(facts.join(" · ")); lens.line();
@@ -50,9 +47,10 @@ export function htmlView(text: string, size: string, lens: Lens): Readable {
     lens.line(`Shown without its ${blocked.join(", ")}: MDviewer never runs a page's code or loads anything from the network. Edit shows the source.`);
     lens.line();
   }
+  for (const node of page.body.querySelectorAll(DROPPED)) node.remove();
   // One Markdown HTML block: it ends at the first blank line, so blank lines become empty comments
-  // (invisible, also inside <pre>). Scripts and styles are dropped here; the sanitizer would anyway.
-  const content = body.replace(BLOCKS, "").split(/\r\n|\r|\n/).map(line => (line.trim() ? line : "<!---->"));
+  // (invisible, also inside <pre>). The serialized body has every comment and element closed.
+  const content = page.body.innerHTML.split(/\r\n|\r|\n/).map(line => (line.trim() ? line : "<!---->"));
   lens.line(["<div class=\"readable-html\">", ...content, "</div>"].join("\n"));
   return { markdown: lens.finish(), problems: [], truncated: false, map: lens.map };
 }

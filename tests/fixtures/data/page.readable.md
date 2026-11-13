@@ -17,6 +17,8 @@ line three</pre>
   <iframe src="https://example.invalid/embed"></iframe>
   <form action="https://example.invalid/post"><input name="q"></form>
 <!---->
-  <table><tr><th>Key</th><td>Value</td></tr></table>
+  <table><tbody><tr><th>Key</th><td>Value</td></tr></tbody></table>
+<!---->
+<!---->
 <!---->
 </div>
