@@ -8,7 +8,8 @@ export const MAX_PDF_BYTES = 200_000_000;
 export const MAX_HELD_PDF_BYTES = 400_000_000;
 export const MAX_PDF_TABS = 16;
 
-export interface PdfTab { id: string; name: string; bytes: Uint8Array }
+/** `token` is the host's PDF capability for a natively opened file (released on close). */
+export interface PdfTab { id: string; name: string; bytes: Uint8Array; token?: string }
 
 export function isPdfFile(name: string, mime = ""): boolean {
   return /\.pdf$/i.test(name) || mime === "application/pdf";
@@ -28,14 +29,14 @@ export class PdfTabs {
   get active(): PdfTab | undefined { return this.tabs.find(tab => tab.id === this.activeId); }
 
   /** Add an opened PDF and make it the active PDF; returns an error message instead when a cap is hit. */
-  add(name: string, bytes: Uint8Array): string | null {
+  add(name: string, bytes: Uint8Array, token?: string): string | null {
     if (this.tabs.length >= MAX_PDF_TABS) return `Close a PDF first — at most ${MAX_PDF_TABS} PDFs can be open.`;
     if (bytes.length > MAX_PDF_BYTES) return `PDFs larger than 200 MB cannot be opened.`;
     const held = this.tabs.reduce((total, tab) => total + tab.bytes.length, 0);
     if (held + bytes.length > MAX_HELD_PDF_BYTES) return `The open PDFs would exceed 400 MB. Close a PDF first.`;
     if (!hasPdfSignature(bytes)) return "This file is not a PDF.";
     const id = `pdf-${++this.sequence}`;
-    this.tabs.push({ id, name, bytes });
+    this.tabs.push({ id, name, bytes, ...(token ? { token } : {}) });
     this.activeId = id;
     return null;
   }

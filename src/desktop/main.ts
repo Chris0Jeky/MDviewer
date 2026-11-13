@@ -417,8 +417,33 @@ function closePdfView(): void {
   void current?.view.then(view => view.destroy(), () => undefined);
 }
 
+/** Fetch natively opened PDFs' bytes and add them as tabs; the last one shows unless Markdown came too. */
+async function openNativePdfs(documents: OpenBatch["documents"], showLast: boolean): Promise<void> {
+  const problems: string[] = [];
+  let opened = false;
+  for (const doc of documents) {
+    if (!doc.token) { problems.push(`${doc.name}: this PDF is not linked to its file.`); continue; }
+    try {
+      const problem = pdfs.add(doc.name, await native.readPdf(doc.token), doc.token);
+      if (problem) { problems.push(`${doc.name}: ${problem}`); void native.releasePdf(doc.token); } else opened = true;
+    } catch (error) {
+      problems.push(`${doc.name}: ${errorText(error) === "changed" ? "the file changed after it was chosen. Open it again." : errorText(error)}`);
+      void native.releasePdf(doc.token);
+    }
+  }
+  if (problems.length) report(problems.join(" "));
+  if (!opened) return;
+  if (showLast && !app && !changingMode) { rememberReaderPosition(); docs.reader.activeId = null; void render(); }
+  else syncDocuments();
+}
+
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
+  const pdfDocuments = batch.documents.filter(doc => doc.kind === "pdf");
+  if (pdfDocuments.length) {
+    batch = { ...batch, documents: batch.documents.filter(doc => doc.kind !== "pdf") };
+    void openNativePdfs(pdfDocuments, !batch.documents.length && request === generation);
+  }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
   const previousActiveId = docs.reader.activeId;
   errors.push(...docs.addBatch(batch.documents, request === generation));
@@ -815,6 +840,8 @@ function closeDocumentById(id: string): void {
     if (changingMode) return;
     const wasShown = pdfShown() && pdfs.activeId === id;
     if (pdfView?.id === id) closePdfView();
+    const token = pdfs.tabs.find(tab => tab.id === id)?.token;
+    if (token) void native.releasePdf(token).catch(() => undefined);
     pdfs.close(id);
     report("");
     if (!wasShown) { syncDocuments(); return; }
