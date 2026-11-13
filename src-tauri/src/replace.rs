@@ -121,7 +121,15 @@ mod win {
         path::{Component, Prefix},
         sync::atomic::{AtomicU64, Ordering},
     };
-    use windows_sys::Win32::{Foundation::*, Storage::FileSystem::*};
+    use windows_sys::Win32::{
+        Foundation::*,
+        Security::{
+            GetKernelObjectSecurity, GetSecurityDescriptorControl, SetKernelObjectSecurity,
+            SetSecurityDescriptorControl, DACL_SECURITY_INFORMATION, SE_DACL_AUTO_INHERITED,
+            SE_DACL_AUTO_INHERIT_REQ,
+        },
+        Storage::FileSystem::*,
+    };
     use windows_sys::{
         Wdk::Storage::FileSystem::{
             FileRenameInformation, NtSetInformationFile, FILE_RENAME_INFORMATION,
@@ -322,6 +330,80 @@ mod win {
         }
         Ok((id, len))
     }
+    /// The leaf name the file system stores for `file`. A short (8.3) or
+    /// differently cased input opens the same file under another spelling (#229).
+    fn real_leaf(file: &File) -> io::Result<OsString> {
+        // FILE_NAME_INFO: a u32 byte length, then up to 32767 UTF-16 units.
+        let mut buf = vec![0u32; 1 + 16384];
+        // SAFETY: u32-aligned writable buffer of the stated size.
+        bool_result(unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileNormalizedNameInfo,
+                buf.as_mut_ptr().cast(),
+                (buf.len() * 4) as u32,
+            )
+        })?;
+        let units: Vec<u16> = buf[1..]
+            .iter()
+            .flat_map(|w| [*w as u16, (*w >> 16) as u16])
+            .take(buf[0] as usize / 2)
+            .collect();
+        let leaf = units.rsplit(|&u| u == u16::from(b'\\')).next().unwrap();
+        Ok(OsString::from_wide(leaf))
+    }
+    /// The file's DACL as a self-relative security descriptor (words for alignment).
+    fn dacl(file: &File) -> io::Result<Vec<usize>> {
+        let mut needed = 0;
+        // SAFETY: a size query without a buffer; it fails and reports the size.
+        unsafe {
+            GetKernelObjectSecurity(
+                file.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                0,
+                &mut needed,
+            )
+        };
+        let mut sd = vec![0usize; (needed as usize).div_ceil(size_of::<usize>())];
+        // SAFETY: aligned writable buffer of at least `needed` bytes.
+        bool_result(unsafe {
+            GetKernelObjectSecurity(
+                file.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                sd.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        })?;
+        Ok(sd)
+    }
+    /// Set `from`'s DACL, protection and auto-inheritance state on `to`.
+    fn copy_dacl(from: &File, to: &File) -> io::Result<()> {
+        let mut sd = dacl(from)?;
+        let (mut control, mut revision) = (0, 0);
+        // SAFETY: `sd` holds a valid self-relative descriptor for these calls.
+        unsafe {
+            bool_result(GetSecurityDescriptorControl(
+                sd.as_mut_ptr().cast(),
+                &mut control,
+                &mut revision,
+            ))?;
+            // The kernel keeps SE_DACL_AUTO_INHERITED only when it is requested.
+            if control & SE_DACL_AUTO_INHERITED != 0 {
+                bool_result(SetSecurityDescriptorControl(
+                    sd.as_mut_ptr().cast(),
+                    SE_DACL_AUTO_INHERIT_REQ,
+                    SE_DACL_AUTO_INHERIT_REQ,
+                ))?;
+            }
+            bool_result(SetKernelObjectSecurity(
+                to.as_raw_handle(),
+                DACL_SECURITY_INFORMATION,
+                sd.as_mut_ptr().cast(),
+            ))
+        }
+    }
     fn read_handle(file: &mut File, max: u64) -> io::Result<(Snapshot, Vec<u8>)> {
         let (id, len) = identity(file)?;
         if len > max {
@@ -464,10 +546,10 @@ mod win {
     }
     // A newly created scratch file is delete-pending until a flushed journal owns
     // it. Process exit before publication cannot leave an unrecorded temporary.
-    fn scratch(path: &Path) -> io::Result<File> {
+    fn scratch(path: &Path, extra_access: u32) -> io::Result<File> {
         OpenOptions::new()
             .write(true)
-            .access_mode(GENERIC_READ | GENERIC_WRITE | DELETE)
+            .access_mode(GENERIC_READ | GENERIC_WRITE | DELETE | extra_access)
             .share_mode(FILE_SHARE_READ)
             .create_new(true)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_DELETE_ON_CLOSE)
@@ -573,13 +655,19 @@ mod win {
     ) -> Result<ReplaceOutcome, ReplaceError> {
         point(Stage::Open)?;
         let parents = Parents::hold(path)?;
-        let dest = &parents.path;
+        let mut dest = parents.path.clone();
         let mut original = if let Some(snap) = expected {
-            let mut file = open(dest).map_err(|e| err(e, Stage::Open))?;
+            let mut file = open(&dest).map_err(|e| err(e, Stage::Open))?;
             verify(&mut file, snap)?;
+            // Commit under the stored leaf, never the caller's short or
+            // differently cased spelling; the stored leaf is validated too.
+            let leaf = real_leaf(&file).map_err(|e| err(e, Stage::Verify))?;
+            if dest.file_name() != Some(leaf.as_os_str()) {
+                dest = checked_path(&path.with_file_name(&leaf))?;
+            }
             Some(file)
         } else {
-            match open(dest) {
+            match open(&dest) {
                 Ok(file) => {
                     regular(&file)?;
                     return Err(ReplaceError::Conflict(ConflictKind::Replaced));
@@ -594,7 +682,14 @@ mod win {
         let temp_path = base.with_extension("tmp");
         let aside_path = base.with_extension("old");
         let journal_path = base.with_extension("journal");
-        let mut temp = scratch(&temp_path).map_err(|e| err(e, Stage::WriteTemp))?;
+        let mut temp = scratch(&temp_path, if original.is_some() { WRITE_DAC } else { 0 })
+            .map_err(|e| err(e, Stage::WriteTemp))?;
+        if let Some(file) = &original {
+            // The temporary inherited the folder's default DACL. Give it the
+            // original's, so a save never loosens a tighter file ACL (#229).
+            // Refuse rather than commit when that copy fails.
+            copy_dacl(file, &temp).map_err(|e| err(e, Stage::WriteTemp))?;
+        }
         let split = bytes.len() / 2;
         temp.write_all(&bytes[..split])
             .map_err(|e| err(e, Stage::WriteTemp))?;
@@ -608,7 +703,7 @@ mod win {
         if new.len != bytes.len() as u64 || new.digest != digest(bytes) {
             return Err(ReplaceError::Io(io::ErrorKind::InvalidData, Stage::Verify));
         }
-        let mut journal = scratch(&journal_path).map_err(|e| err(e, Stage::WriteTemp))?;
+        let mut journal = scratch(&journal_path, 0).map_err(|e| err(e, Stage::WriteTemp))?;
         journal
             .write_all(&record(dest.file_name().unwrap(), expected, &new))
             .map_err(|e| err(e, Stage::WriteTemp))?;
@@ -622,7 +717,7 @@ mod win {
                 rename(file, &aside_path).map_err(|e| err(e, Stage::RenameAside))?;
             }
             point(Stage::RenameIntoPlace)?;
-            rename(&temp, dest).map_err(|e| err(e, Stage::RenameIntoPlace))
+            rename(&temp, &dest).map_err(|e| err(e, Stage::RenameIntoPlace))
         })();
         // Past the commit point the save happened: report it. Cleanup is best
         // effort; a leftover aside/journal is reconciled by recover_one.
@@ -635,6 +730,11 @@ mod win {
                 disposition(&journal, true).map_err(|e| err(e, Stage::Cleanup))
             })()
             .is_ok();
+        if committed.is_err() && original.is_none() {
+            // A reported Save As failure: the caller still holds the text, so
+            // the rollback below must not keep this temp as a recovered sibling.
+            let _ = disposition(&temp, true);
+        }
         drop(original);
         drop(temp);
         drop(journal);
@@ -717,6 +817,15 @@ mod win {
             // Otherwise the save committed and its file was moved away later:
             // nothing remains to reconcile but the journal itself.
         }
+        // A Save As (no original) that never committed: the verified temp is the
+        // only on-disk copy of the text, so keep it as a visible sibling (#313).
+        if old.is_none() {
+            if let Some(f) = temp.take() {
+                let kept = recovered_name(&dest);
+                rename(&f, &kept)?;
+                touched.extend([temp_path.clone(), kept]);
+            }
+        }
         if let Some(f) = aside {
             disposition(&f, true)?;
             touched.push(aside_path);
@@ -730,16 +839,36 @@ mod win {
         Ok(touched)
     }
     /// `name (MDviewer recovered <id>).ext`, next to `dest`; never an existing name.
+    /// The stem is shortened so the leaf fits NTFS's 255 UTF-16 units (#229).
     fn recovered_name(dest: &Path) -> PathBuf {
-        let stem = dest.file_stem().unwrap_or_default().to_string_lossy();
-        let ext = dest
+        let stem: Vec<u16> = dest.file_stem().unwrap_or_default().encode_wide().collect();
+        let ext: Vec<u16> = dest
             .extension()
-            .map(|e| format!(".{}", e.to_string_lossy()))
-            .unwrap_or_default();
+            .map(|e| {
+                std::ffi::OsStr::new(".")
+                    .encode_wide()
+                    .chain(e.encode_wide())
+            })
+            .into_iter()
+            .flatten()
+            .collect();
         let id = unique(Path::new(""));
         let id = id.to_string_lossy();
         let id = id.trim_start_matches(".mdv-replace-");
-        dest.with_file_name(format!("{stem} (MDviewer recovered {id}){ext}"))
+        let marker: Vec<u16> = std::ffi::OsStr::new(&format!(" (MDviewer recovered {id})"))
+            .encode_wide()
+            .collect();
+        // ponytail: only the stem shrinks; an extension over ~190 units still fails
+        // the rename, and recovery then retains the artifacts (a refusal, not a loss).
+        let mut keep = stem
+            .len()
+            .min(255usize.saturating_sub(marker.len() + ext.len()));
+        if keep < stem.len() && keep > 0 && (0xD800..0xDC00).contains(&stem[keep - 1]) {
+            keep -= 1; // never split a surrogate pair
+        }
+        dest.with_file_name(OsString::from_wide(
+            &[&stem[..keep], &marker, &ext].concat(),
+        ))
     }
     pub fn recover_journal(dir: &Path) -> io::Result<Vec<PathBuf>> {
         let parents = Parents::hold(&dir.join("recovery-anchor")).map_err(as_io)?;
@@ -801,10 +930,13 @@ mod win {
             });
         }
         fn fixture() -> (tempfile::TempDir, PathBuf) {
+            fixture_at("résumé.md")
+        }
+        fn fixture_at(leaf: &str) -> (tempfile::TempDir, PathBuf) {
             let dir = tempfile::tempdir().unwrap();
             let parent = dir.path().join("ancestor").join("parent");
             fs::create_dir_all(&parent).unwrap();
-            let path = parent.join("résumé.md");
+            let path = parent.join(leaf);
             fs::write(&path, OLD).unwrap();
             (dir, path)
         }
@@ -920,7 +1052,8 @@ mod win {
                 return;
             };
             let dir = PathBuf::from(std::env::var_os("MDV_REPLACE_DIR").unwrap());
-            let path = dir.join("ancestor/parent/résumé.md");
+            let leaf = std::env::var_os("MDV_REPLACE_LEAF").unwrap_or("résumé.md".into());
+            let path = dir.join("ancestor/parent").join(leaf);
             if scenario == "crash-create" {
                 fs::remove_file(&path).unwrap();
                 let _ = create_new(&path, NEW);
@@ -1034,7 +1167,7 @@ mod win {
                 "parent",
                 "ancestor",
             ] {
-                let (mut saved, mut refused) = (0, 0);
+                let (mut saved, mut refused, mut claimants) = (0, 0, 0);
                 for stage in [
                     Stage::Open,
                     Stage::Verify,
@@ -1049,9 +1182,13 @@ mod win {
                         HOOK.with_borrow_mut(|h| *h = Some((stage, dir.path().to_owned())));
                         let result = replace_if_unchanged(&path, &snap, NEW);
                         HOOK.with_borrow_mut(|h| *h = None);
+                        let hooked = dir.path().join("go").exists();
                         finish_trial(&mut proc, dir.path(), &result);
                         let changed = fs::read(dir.path().join("done")).unwrap() == b"ok";
                         let actual = fs::read(&path).unwrap();
+                        // In the live rename gap the name is empty, so a mutation that
+                        // succeeded there created a claimant beside our aside (#229).
+                        let gap_claimant = hooked && changed && stage == Stage::RenameIntoPlace;
                         if result.is_ok() {
                             saved += 1;
                             assert!(
@@ -1102,9 +1239,20 @@ mod win {
                             panic!("{scenario} {stage:?}: recovery failed: {e:?}; files {names:?}; result {result:?}");
                         }
                         assert_clean(path.parent().unwrap());
+                        // The claimant wins the name; the original survives as a sibling.
+                        assert_eq!(
+                            self::recovered(path.parent().unwrap()),
+                            if gap_claimant {
+                                vec![OLD.to_vec()]
+                            } else {
+                                vec![]
+                            },
+                            "{scenario} {stage:?}"
+                        );
+                        claimants += usize::from(gap_claimant);
                     }
                 }
-                eprintln!("RACE {scenario}: iterations=16 saved={saved} refused={refused}");
+                eprintln!("RACE {scenario}: iterations=16 saved={saved} refused={refused} gap-claimants={claimants}");
             }
         }
         #[test]
@@ -1257,6 +1405,86 @@ mod win {
                 eprintln!("FAULT {stage:?}: injected=1 crash=1 recovered=2");
             }
         }
+        fn names(dir: &Path) -> Vec<OsString> {
+            fs::read_dir(dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .map(|e| e.file_name())
+                .collect()
+        }
+        fn short_path(path: &Path) -> Option<PathBuf> {
+            let long = wide(path);
+            let mut buf = vec![0u16; 1024];
+            // SAFETY: terminated input, writable buffer of the stated length.
+            let n = unsafe { GetShortPathNameW(long.as_ptr(), buf.as_mut_ptr(), 1024) } as usize;
+            let short = PathBuf::from(OsString::from_wide(&buf[..n.min(1024)]));
+            (n > 0 && n < 1024 && short.file_name() != path.file_name()).then_some(short)
+        }
+        #[test]
+        fn short_or_differently_cased_input_names_keep_the_stored_name() {
+            // #229: the commit rename must use the stored leaf, not the caller's spelling.
+            // The case variant is the proving input: NTFS name tunneling can restore
+            // the long name after a rename to a just-freed 8.3 name, masking that one.
+            let (_dir, path) = fixture();
+            let upper = path.with_file_name("RÉSUMÉ.MD");
+            let mut inputs = vec![upper];
+            match short_path(&path) {
+                Some(short) => inputs.push(short),
+                None => {
+                    eprintln!("SCOPE 8.3 input name NOT VERIFIED (no short name on this volume)")
+                }
+            }
+            for input in inputs {
+                let (snap, _) = snapshot_read(&input, 100).unwrap();
+                replace_if_unchanged(&input, &snap, NEW).unwrap();
+                assert_eq!(
+                    names(path.parent().unwrap()),
+                    vec![OsString::from("résumé.md")],
+                    "{input:?}"
+                );
+                assert_eq!(fs::read(&path).unwrap(), NEW);
+                fs::write(&path, OLD).unwrap();
+            }
+        }
+
+        fn icacls(path: &Path, args: &[&str]) {
+            let out = Command::new("icacls")
+                .arg(path)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "icacls {args:?} failed");
+        }
+        fn dacl_of(path: &Path) -> Vec<usize> {
+            dacl(&File::open(path).unwrap()).unwrap()
+        }
+        #[test]
+        fn a_save_keeps_a_dacl_tighter_than_the_folder() {
+            // #229: a save must keep the file's own DACL, not take the folder's
+            // default: a protected file in a folder that grants Everyone read, and
+            // an inheriting file with an explicit extra ACE (Users read).
+            for file_acl in [&["/inheritance:d"][..], &["/grant", "*S-1-5-32-545:(R)"]] {
+                let (_dir, path) = fixture();
+                let parent = path.parent().unwrap();
+                icacls(&path, file_acl);
+                icacls(parent, &["/grant", "*S-1-1-0:(OI)(CI)(R)"]);
+                let before = dacl_of(&path);
+                let fresh = parent.join("fresh.md");
+                create_new(&fresh, NEW).unwrap();
+                assert_ne!(
+                    dacl_of(&fresh),
+                    before,
+                    "fixture: the folder default differs"
+                );
+                let (snap, _) = snapshot_read(&path, 100).unwrap();
+                replace_if_unchanged(&path, &snap, NEW).unwrap();
+                assert_eq!(fs::read(&path).unwrap(), NEW);
+                // Byte-equal descriptor: same ACEs, protection and inheritance flags.
+                assert_eq!(dacl_of(&path), before, "{file_acl:?}");
+                assert_clean(parent);
+            }
+        }
+
         #[test]
         fn read_only_originals_are_refused_and_left_untouched() {
             let (_dir, path) = fixture();
@@ -1423,34 +1651,56 @@ mod win {
                 }
                 assert_eq!(path.exists(), stage == Stage::Cleanup);
                 assert_clean(path.parent().unwrap());
+                // The caller still holds the text after a reported failure: no sibling.
+                assert!(recovered(path.parent().unwrap()).is_empty(), "{stage:?}");
 
-                let (dir, path) = fixture();
-                let status = Command::new(std::env::current_exe().unwrap())
-                    .args([
-                        "--exact",
-                        "replace::win::tests::process_helper",
-                        "--nocapture",
-                    ])
-                    .env("MDV_REPLACE_HELPER", "crash-create")
-                    .env("MDV_REPLACE_DIR", dir.path())
-                    .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
-                    .stdout(Stdio::null())
-                    .status()
-                    .unwrap();
-                assert_eq!(status.code(), Some(79));
-                recover_journal(path.parent().unwrap()).unwrap();
-                assert!(recover_journal(path.parent().unwrap()).unwrap().is_empty());
-                if path.exists() {
-                    assert_eq!(fs::read(&path).unwrap(), NEW);
+                // #313: once the journal owns the temp, a crash before commit leaves
+                // the only on-disk copy of the text; recovery keeps it as a sibling,
+                // also when another file has since taken the name.
+                let durable = matches!(stage, Stage::RenameAside | Stage::RenameIntoPlace);
+                for claimant in [false, true] {
+                    let (dir, path) = fixture();
+                    let status = Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            "replace::win::tests::process_helper",
+                            "--nocapture",
+                        ])
+                        .env("MDV_REPLACE_HELPER", "crash-create")
+                        .env("MDV_REPLACE_DIR", dir.path())
+                        .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
+                        .stdout(Stdio::null())
+                        .status()
+                        .unwrap();
+                    assert_eq!(status.code(), Some(79));
+                    if claimant && !path.exists() {
+                        fs::write(&path, EXTERNAL).unwrap();
+                    }
+                    recover_journal(path.parent().unwrap()).unwrap();
+                    assert!(recover_journal(path.parent().unwrap()).unwrap().is_empty());
+                    let expected: &[u8] = match (stage, claimant) {
+                        (Stage::Cleanup, _) => NEW,
+                        (_, true) => EXTERNAL,
+                        _ => b"",
+                    };
+                    assert_eq!(fs::read(&path).unwrap_or_default(), expected);
+                    assert_eq!(path.exists(), stage == Stage::Cleanup || claimant);
+                    assert_eq!(
+                        recovered(path.parent().unwrap()),
+                        if durable { vec![NEW.to_vec()] } else { vec![] },
+                        "{stage:?} claimant={claimant}"
+                    );
+                    assert_clean(path.parent().unwrap());
                 }
-                assert_eq!(path.exists(), stage == Stage::Cleanup);
-                assert_clean(path.parent().unwrap());
-                eprintln!("FAULT create-new {stage:?}: injected=1 crash=1 recovered=2");
+                eprintln!("FAULT create-new {stage:?}: injected=1 crash=2 recovered=3");
             }
         }
 
         fn crash_fixture(stage: Stage) -> (tempfile::TempDir, PathBuf) {
-            let (dir, path) = fixture();
+            crash_fixture_at(stage, "résumé.md")
+        }
+        fn crash_fixture_at(stage: Stage, leaf: &str) -> (tempfile::TempDir, PathBuf) {
+            let (dir, path) = fixture_at(leaf);
             let status = Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -1459,12 +1709,51 @@ mod win {
                 ])
                 .env("MDV_REPLACE_HELPER", "crash")
                 .env("MDV_REPLACE_DIR", dir.path())
+                .env("MDV_REPLACE_LEAF", leaf)
                 .env("MDV_REPLACE_CRASH", format!("{stage:?}"))
                 .stdout(Stdio::null())
                 .status()
                 .unwrap();
             assert_eq!(status.code(), Some(79));
             (dir, path)
+        }
+        fn recovered(dir: &Path) -> Vec<Vec<u8>> {
+            fs::read_dir(dir)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .contains("(MDviewer recovered ")
+                })
+                .map(|e| fs::read(e.path()).unwrap())
+                .collect()
+        }
+        #[test]
+        fn recovered_names_fit_the_255_unit_leaf_limit() {
+            // #229: a leaf near 255 UTF-16 units must still get a usable sibling name.
+            let long = format!("{}.md", "a".repeat(250));
+            // Surrogate pairs at both even and odd unit offsets, so one cut lands mid-pair.
+            let emoji = format!("{}.md", "\u{1F600}".repeat(126));
+            let odd = format!("x{}.md", "\u{1F600}".repeat(125));
+            for leaf in [long.as_str(), &emoji, &odd, "résumé.md"] {
+                let kept = recovered_name(&Path::new(r"C:\docs").join(leaf));
+                let name = kept.file_name().unwrap();
+                let units: Vec<u16> = name.encode_wide().collect();
+                assert!(units.len() <= 255, "{} units", units.len());
+                // Never a split surrogate pair; the extension and marker survive.
+                let text = String::from_utf16(&units).unwrap();
+                assert!(text.ends_with(".md") && text.contains(" (MDviewer recovered "));
+                assert!(text.starts_with(leaf.chars().next().unwrap()));
+            }
+            // End to end: a claimant takes a long name in the rename gap.
+            let leaf = format!("{}.md", "b".repeat(240));
+            let (_dir, path) = crash_fixture_at(Stage::RenameIntoPlace, &leaf);
+            fs::write(&path, EXTERNAL).unwrap();
+            recover_journal(path.parent().unwrap()).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), EXTERNAL);
+            assert_eq!(recovered(path.parent().unwrap()), vec![OLD.to_vec()]);
+            assert_clean(path.parent().unwrap());
         }
         fn artifact(path: &Path, extension: &str) -> PathBuf {
             fs::read_dir(path.parent().unwrap())

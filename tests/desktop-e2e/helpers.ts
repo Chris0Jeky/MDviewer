@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type FileChooser, type Page } from "@playwright/test";
 
 interface Audit { requests: string[]; external: string[]; errors: string[]; allowedCsp: string[] }
 interface BrowserEvidence {
@@ -149,25 +149,44 @@ flowchart LR
 
 let picks = 0;
 /**
- * Open files the way a user picks them. `open` triggers the picker; Ctrl+O works from the empty
- * state, the tabs and the document alike (S3 has no Open button in the bar).
+ * Open files the way a user picks them. On the browser host the picker hands over real files
+ * (bound, savable in place). Otherwise the pick goes through the reader's file input, the element
+ * Ctrl+O clicks, so a lost key press cannot time a test out (#303). `open` instead drives a
+ * specific trigger (a button, the workspace's Open) and waits for its file chooser; "shortcut"
+ * presses Ctrl+O itself, retried until a chooser opens (`chooseWithShortcut`).
  */
 export async function openFiles(page: Page, files: Array<{ name: string; text: string } | { name: string; bytes: Buffer }>,
-  open: () => Promise<void> = () => page.keyboard.press("Control+O")): Promise<void> {
+  open?: (() => Promise<void>) | "shortcut"): Promise<void> {
   if (onBrowserHost()) {
-    // The browser host opens the files themselves (bound, savable in place). Each pick gets its own
-    // folder: two picks of "notes.md" are two files, as two copies are on the fallback path.
+    // Each pick gets its own folder: two picks of "notes.md" are two files, as two copies are on the fallback path.
     const folder = `pick-${++picks}`;
     for (const file of files) await writeFile(page, `${folder}/${file.name}`, bytesOf(file));
     await page.evaluate(paths => { window.__pick = paths; }, files.map(file => `${folder}/${file.name}`));
-    await open();
+    await (typeof open === "function" ? open() : page.keyboard.press("Control+O"));
     // Like the file chooser path: return once the picker has handed over the files.
     await page.waitForFunction(() => window.__pick.length === 0);
     return;
   }
+  const picked = files.map(file => ({ name: file.name, mimeType: mimeOf(file.name), buffer: bytesOf(file) }));
+  if (!open) { await page.locator("#reader-file-input").setInputFiles(picked); return; }
+  if (open === "shortcut") { await (await chooseWithShortcut(page)).setFiles(picked); return; }
   const chooser = page.waitForEvent("filechooser");
   await open();
-  await (await chooser).setFiles(files.map(file => ({ name: file.name, mimeType: mimeOf(file.name), buffer: bytesOf(file) })));
+  await (await chooser).setFiles(picked);
+}
+
+/**
+ * Drive Ctrl+O itself and return the file chooser it opens. A key press can land
+ * before the page's shortcut handler is ready or while a mode change owns the
+ * window, and nothing observable says so, so the press is retried until a chooser
+ * opens (#303). Ctrl+O works from the empty state, the tabs and the document alike.
+ */
+export async function chooseWithShortcut(page: Page): Promise<FileChooser> {
+  let chooser: FileChooser | undefined;
+  await expect(async () => {
+    [chooser] = await Promise.all([page.waitForEvent("filechooser", { timeout: 5_000 }), page.keyboard.press("Control+o")]);
+  }).toPass({ timeout: 45_000 });
+  return chooser!;
 }
 /** What a browser reports for the file: Markdown by its extension, anything else as opaque bytes. */
 const mimeOf = (name: string): string => /\.(?:md|markdown)$/i.test(name) ? "text/markdown" : "application/octet-stream";

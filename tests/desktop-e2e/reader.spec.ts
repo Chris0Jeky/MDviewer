@@ -340,7 +340,7 @@ test("workspace teardown releases global listeners and later input fires once", 
   await openPdf(page);
   await readyWorkspace(page, "# One");
   // Native and File API paths must share BOM-aware decoding in the workspace.
-  await openFiles(page, [{ name: "two.md", bytes: Buffer.from("\ufeff# Two", "utf16le") }], () => page.keyboard.press("Control+o"));
+  await openFiles(page, [{ name: "two.md", bytes: Buffer.from("\ufeff# Two", "utf16le") }], "shortcut");
   await readyWorkspace(page, "# Two");
   await expect(page.getByRole("combobox", { name: "Active document" }).locator("option")).toHaveText(["one.md", "two.md"]);
   await dropFiles(page, [{ name: "three.md", text: "# Three" }], "#desktop-workspace");

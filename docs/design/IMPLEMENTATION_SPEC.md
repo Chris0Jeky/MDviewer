@@ -300,7 +300,7 @@ decorative backdrop hidden, and an actual outline for Find because forced colors
 can suppress translucent fills and shadows. The rule is screen-only. The lane
 records actual browser versions and retains failures without retries. Synthetic
 composition/paste payloads exercise application guards, not operating-system IME
-or clipboard UI. See `AUTHORING_QUALITY.md`; AI-6 and #169 remain human gates.
+or clipboard UI. See `AUTHORING_QUALITY.md`; AI-6 and #169 remain open acceptance gates, run by agent QA (owner decision 2026-11-13).
 
 Offline capture also has real resource-loss controls: `raster-styles-ready.spec.ts` deletes the exact cached app stylesheet after the source is styled; `raster-fonts-ready.spec.ts` deletes the cached KaTeX Main-Regular woff2 after the source's corresponding font face is loaded. Each requires two no-save failures with complete iframe cleanup, restores the original cached response, and parses the actual PDF saved on retry. HTTP/memory cache is disabled so it cannot conceal the missing CacheStorage entry. The extra CDP session agrees with the context's offline emulation; the source offline hint and controller, a failed uncached request, controlled-frame resource errors, and worker-served recovery are asserted. No route supplies CSS or fonts. `raster-offline-frame.spec.ts` separately checks controller inheritance through adoption, CSS/font worker responses and a missing-cache error. That primitive proof does not replace saved-PDF pixels and damaged controls. Unit coverage in `tests/raster-offline-capture.test.ts` checks cascade order, generated styles, controller refusal, bounded navigation, inactive links and cleanup/retry. Exact-head evidence and limits are recorded in `docs/design/RASTER_OFFLINE_CAPTURE.md`.
 
@@ -310,7 +310,7 @@ An isolated component probe is not a production-app test. A local dependency-ins
 
 All foundation section 11 Paged.js, main-thread, oversize-block, fallback-raster and editor-tokenizing risks remain. The source archive provenance part of #62 is closed by the `MDVIEWER_SOURCE_ID` build labelling (a supplied release tag or archive checksum names the archive in `dist/SOURCE.txt`; runtime export fixes alone never could). #59's historical deployment-evidence inconsistency is closed; its reconciled header evidence does not close the separate AI-7 live/PWA acceptance work. Preserve the dated deployment and failure-ledger records.
 
-**AI-6 second-engine/manual-feel, AI-7 live/PWA verification, AI-8 live Pulseboard acceptance, AI-9 production promotion, and Windows acceptance/performance #169 remain OPEN.** Hosted Chromium success does not close them. This specification makes no new deployment, Safari/Firefox acceptance, live cache-header, installed-PWA or operator-sign-off claim.
+**AI-6 second-engine/manual-feel, AI-7 live/PWA verification, AI-8 live Pulseboard acceptance, AI-9 production promotion, and Windows acceptance/performance #169 remain OPEN.** Hosted Chromium success does not close them. By owner decision 2026-11-13 the mechanical checks among them (AI-6, AI-7, AI-8 and the hands-on #169 boxes) are agent QA charters in `docs/qa/ACCEPTANCE.md`; AI-9 and the #169 signing decision stay with the owner. This specification makes no new deployment, Safari/Firefox acceptance, live cache-header, installed-PWA or operator-sign-off claim.
 
 ## 12. Split workspace and preview geometry
 

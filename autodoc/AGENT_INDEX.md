@@ -170,7 +170,7 @@ UpdatePrompt readiness is not reload consent. `onNeedReload` suppresses the plug
 
 Run `npm run typecheck`, `npm run lint`, `npm run test`, `npm run agent:observatory:check`, `npm run build`, then production Playwright (`E2E_TARGET=preview`). The required workflow verifies supported Node 24 with strict engine checks and runs production Chromium on Node 24. The existing Node 22 required-check context remains a legacy compatibility probe until branch protection is updated. Inspect exact-head job results and actual failure artifacts. Independent review findings require evidence-backed fixes, not just green CI.
 
-Required tests must pass; report existing opt-in performance-ladder skips separately. No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain OPEN. #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's historical deployment-evidence inconsistency is closed, while AI-7's separate live/PWA acceptance remains open. Preserve historical receipts and record actual commit/run identifiers in handoffs.
+Required tests must pass; report existing opt-in performance-ladder skips separately. No-slice, vector/raster export, source-download bytes, phone layout and print reset are real-browser assertions. An isolated stub-App/placeholder-sheet probe is only component evidence. AI-6/AI-7/AI-8/AI-9 and Windows acceptance/performance #169 remain OPEN; the mechanical checks among them are agent QA charters (`docs/qa/ACCEPTANCE.md`, owner decision 2026-11-13). #62 archive provenance is closed by the `MDVIEWER_SOURCE_ID` build labelling; runtime fixes alone never closed it. #59's historical deployment-evidence inconsistency is closed, while AI-7's separate live/PWA acceptance remains open. Preserve historical receipts and record actual commit/run identifiers in handoffs.
 
 ## Latest-close recovery seam
 
@@ -245,18 +245,18 @@ class Lens { line(text?, path?); render(value, path?, level?, indent?, key?); co
 Lens.recordTable(items): RecordTable | undefined;       // D6: one schema pass; columns, `flatten` for one level of nested objects
 Lens.renderTable(rows, plan, path?, level?, indent?, lineColumn?, charged?): void; // record table; `lineColumn` adds a Line column (JSON Lines)
 childPath(path: string, key: string): string;           // JSONPath-style child path
-hint(value: JsonValue, key: string, timeZone: string): string; shape(value: JsonValue): string;
+hint(value: JsonValue, key: string, timeZone: string): string; epoch(value: JsonValue): number | undefined; shape(value: JsonValue): string;
 budget(value: number | undefined, fallback: number): number; count(n: number, noun: string): string;
 
 // src/data/conversation.ts: the conversation lens for chat and agent transcripts (D2)
 isConversation(records): boolean; conversationList(value): ArrayValue | undefined;
 conversationOverview(lens, records): void; conversationRecord(lens, value, path, index, bad?): void;
-renderConversation(lens, root, list): void;
+renderConversation(lens, root, list, base?): void;   // `base`: the root's own path (`$`, or `$[i]` in a YAML stream)
 
 // src/data/{yaml,toml,csv}.ts (D4): parse to JsonValue plus problems
-prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared
+prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared; composes at most MAX_YAML_DOCUMENTS (rest: `unread`)
 parseToml(text: string): ParseResult;
-parseCsv(text: string, delimiter?: string): CsvResult;               // RFC 4180; TSV passes "\t"
+parseCsv(text: string, delimiter?: string, keep?: number): CsvResult; // RFC 4180; cells kept for `keep` rows, `rows` counts all; TSV passes "\t"
 
 // src/data/escape.ts: keep data from becoming Markdown or HTML
 escapeText(text: string): string; cellText(text: string): string; fence(text: string): string;
