@@ -5,7 +5,7 @@ YAML · 300 B · object with 14 keys
 | --- | --- |
 | enabled | true |
 | defaults | retries: \+12 · note: invented \| text |
-| copy | alias of &amp;defaults |
+| copy | alias of &amp;defaults \(anchor at line 6\) |
 | hex | 0x1F |
 | separated | 1\_000 |
 | decimal | 1\.0 |

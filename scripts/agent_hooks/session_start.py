@@ -19,7 +19,8 @@ CONTEXT = (
     "markdown -> Shiki -> KaTeX -> Mermaid (await) -> Paged.js.\n"
     "Before handoff on agentic-tooling changes, run `npm run agent:hooks:smoke` "
     "and `npm run agent:skills:validate`.\n"
-    "Flag every OPEN ACTION_ITEMS.md item in any status summary."
+    "Flag every OPEN ACTION_ITEMS.md item in any status summary. Acceptance checks "
+    "are agent QA work (docs/qa/ACCEPTANCE.md), never owner tasks."
 )
 
 
