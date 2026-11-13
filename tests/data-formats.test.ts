@@ -72,7 +72,7 @@ describe("YAML source nodes", () => {
     expect(view.problems).toEqual([]);
     expect(view.markdown.length).toBeLessThan(12000);
     expect(view.markdown).toContain("alias of &amp;");
-    expect(parseYaml("a: &a [*a]").values[0]).toMatchObject({ entries: [{ value: { items: [{ kind: "literal", raw: "alias of &a" }] } }] });
+    expect(parseYaml("a: &a [*a]").values[0]).toMatchObject({ entries: [{ value: { items: [{ kind: "literal", raw: "alias of &a (anchor at line 1)" }] } }] });
   });
 
   it("preserves root/collection tag spelling and respects explicitly tagged strings", () => {
@@ -316,4 +316,81 @@ describe("ragged CSV stays linear (verification of #281)", () => {
     expect(view.markdown).toContain("5,001 columns");
     expect(performance.now() - started).toBeLessThan(15_000);
   }, 60_000);
+});
+
+describe("memory before the display budget, and YAML/CSV fidelity (#282)", () => {
+  beforeAll(() => prepare("yaml"));
+  const NL = String.fromCharCode(10);
+
+  it("composes at most 10,000 YAML documents and counts the rest", () => {
+    const text = "---" + NL + "a: 1" + NL;
+    const result = parseYaml(text.repeat(12_000));
+    expect(result.values).toHaveLength(10_000);
+    expect(result.unread).toBe(2_000);
+    expect(parseYaml(text.repeat(10_000))).toMatchObject({ unread: 0 });
+    expect(parseYaml(text.repeat(10_001))).toMatchObject({ unread: 1 });
+    const view = toReadable(text.repeat(12_000), "yaml");
+    expect(view.markdown).toContain("12,000 documents");
+    expect(view.markdown).toContain("Showing 500 of 12,000 documents.");
+    expect(view.truncated).toBe(true);
+  });
+
+  it("counts a stream of bare document markers in bounded time", () => {
+    const started = performance.now();
+    const result = parseYaml("---" + NL + "a: 1" + NL + ("---" + NL).repeat(200_001));
+    expect(result.values.length + result.unread).toBe(200_002);
+    expect(performance.now() - started).toBeLessThan(15_000);
+  }, 60_000);
+
+  it("reads stream-level errors and warnings that belong to no document", () => {
+    const bad = toReadable("%YAML abc" + NL, "yaml");
+    expect(bad.markdown).toContain("invalid document");
+    expect(bad.problems).toEqual([{ message: "Unsupported YAML version abc", line: 1, column: 7 }]);
+    const warn = toReadable("%FOO bar" + NL, "yaml");
+    expect(warn.problems[0]?.message).toBe("Unknown directive %FOO");
+    expect(warn.markdown).toContain("## Problems");
+  });
+
+  it("flags an alias with no anchor before it and names where a real anchor is", () => {
+    const missing = toReadable("a: 1" + NL + "b: *nope" + NL, "yaml");
+    expect(missing.problems).toEqual([{ message: "Alias *nope has no anchor before it", line: 2, column: 4 }]);
+    expect(missing.markdown).toContain("alias of &amp;nope");
+    const good = toReadable("a: &x 1" + NL + "b: *x" + NL, "yaml");
+    expect(good.problems).toEqual([]);
+    expect(good.markdown).toContain("anchor at line 1");
+    expect(toReadable("a: &a [*a]", "yaml").problems).toEqual([]);
+    // A second document starts with no anchors of the first.
+    expect(toReadable("a: &x 1" + NL + "---" + NL + "b: *x" + NL, "yaml").problems).toHaveLength(1);
+  });
+
+  it("retains CSV rows only up to the cap yet counts every row, column and problem", () => {
+    const text = "a,b" + NL + "1,2" + NL + "3,4" + NL + "5,6,7" + NL + '8,"9' + NL;
+    const full = parseCsv(text);
+    const capped = parseCsv(text, ",", 2);
+    expect(capped.value.items).toHaveLength(2);
+    expect(capped.rows).toBe(full.rows);
+    expect(capped.rows).toBe(4);
+    expect(capped.columns).toBe(3);
+    expect(capped.keys).toEqual(full.keys);
+    expect(capped.problems).toEqual(full.problems);
+    const view = toReadable(text, "csv", { maxValues: 4 });
+    expect(view.markdown).toContain("4 rows, 3 columns");
+    expect(view.markdown).toContain("Showing 1 of 4 rows.");
+    expect(toReadable("a,b" + NL + "1,2" + NL, "csv", { maxValues: 0 }).markdown).not.toContain("Columns:");
+  });
+});
+
+describe("columns are UTF-16 code units in every parser (#282)", () => {
+  beforeAll(() => prepare("yaml"));
+  const NL = String.fromCharCode(10);
+  // An emoji is two code units, so an error after it sits where it would after two ASCII letters.
+  it("counts an emoji as two columns in JSON, TOML, CSV and YAML", () => {
+    const column = (template: string, kind: "json" | "toml" | "csv" | "yaml", fill: string): number | undefined =>
+      toReadable(template.replace("@", fill) + NL, kind).problems[0]?.column;
+    for (const [template, kind] of [['["@" x]', "json"], ['a = "@" x', "toml"], ['"@"x,1', "csv"], ['a: "@" x', "yaml"]] as const) {
+      const ascii = column(template, kind, "ab");
+      expect(ascii, kind).toBeDefined();
+      expect(column(template, kind, "\u{1F600}"), kind).toBe(ascii);
+    }
+  });
 });

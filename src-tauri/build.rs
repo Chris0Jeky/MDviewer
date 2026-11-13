@@ -18,6 +18,7 @@ fn main() {
             "library_unpin",
             "library_forget",
             "library_mark_seen",
+            "library_mark_seen_many",
             "library_add_project",
             "library_clear",
             "open_relative",

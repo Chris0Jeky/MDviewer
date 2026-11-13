@@ -1,5 +1,13 @@
 # Development dependency advisory handling
 
+## pdfjs-dist 6.5.438 as the PDF second parser — 2026-11-13
+
+Added as an exact-pinned development dependency for the PDF workbench tests
+([PDF_WORKBENCH.md](design/PDF_WORKBENCH.md), ADR-P0): it reopens every synthetic corpus file and
+every saved output in a second, independent parser. It is Apache-2.0, never imported by `src/`, and
+never shipped. It brings the optional `@napi-rs/canvas` platform binaries, which the tests do not
+use. Re-run `tests/pdf-engine.test.ts` after any upgrade.
+
 ## Shiki 4.6 and jsdom byte streams — 2026-11-05
 
 Shiki 4.6 keeps its Oniguruma WASM bytes inside the bundled JavaScript module,
