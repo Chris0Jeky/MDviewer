@@ -287,6 +287,7 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   if (pdfShown()) { ++renderGeneration; syncDocuments(); showPdf(); return Promise.resolve(); }
   pdfHost.hidden = true;
   scroll.hidden = false;
+  suspendHiddenPdf();
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
   // A switch to another document may reuse that document's kept DOM; the one being left is kept.
   // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
@@ -405,8 +406,21 @@ function focusPdf(): void {
   docs.reader.activeId = null;
 }
 
+/** A hidden PDF view gives its page bitmaps back after this long (weight: background tabs). */
+const PDF_SUSPEND_MS = 10_000;
+let suspendTimer = 0;
+function suspendHiddenPdf(): void {
+  window.clearTimeout(suspendTimer);
+  const current = pdfView;
+  if (!current) return;
+  suspendTimer = window.setTimeout(() => {
+    if (pdfView === current && !pdfShown()) void current.view.then(view => view.suspend(), () => undefined);
+  }, PDF_SUSPEND_MS);
+}
+
 /** Show the active PDF tab, mounting its view (and loading the PDF chunk) when needed. */
 function showPdf(): void {
+  window.clearTimeout(suspendTimer);
   const tab = pdfs.active;
   if (!tab) return;
   scroll.hidden = true;
@@ -434,7 +448,10 @@ function closePdfView(): void {
   const current = pdfView;
   pdfView = null;
   current?.abort.abort();
-  void current?.view.then(view => view.destroy(), () => undefined);
+  void current?.view.then(view => view.destroy(), () => undefined).then(() => {
+    // The last PDF closed: drop the engine so its memory can be reclaimed (weight requirement 3).
+    if (!pdfs.tabs.length && !pdfView) void import("../pdf").then(module => module.unloadEngine());
+  });
 }
 
 /** Fetch natively opened PDFs' bytes and add them as tabs; the last one shows unless Markdown came too. */

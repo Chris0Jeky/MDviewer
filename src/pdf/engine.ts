@@ -41,6 +41,19 @@ const FPDF_ANNOT = 0x01;
 const FPDF_REVERSE_BYTE_ORDER = 0x10;
 
 let engine: Promise<WrappedPdfiumModule> | null = null;
+/** Documents open on the current engine instance. */
+let openDocuments = 0;
+
+/**
+ * Drop the engine when no document is open, so its WASM memory (which a running instance can never
+ * shrink) becomes garbage and the next PDF starts a fresh, small instance (PDF_WORKBENCH.md, weight).
+ * Returns whether it was dropped.
+ */
+export function unloadEngine(): boolean {
+  if (openDocuments > 0 || !engine) return false;
+  engine = null;
+  return true;
+}
 
 /** The module's byte view of WASM memory (present at runtime, missing from the package's types). */
 export function heap(P: WrappedPdfiumModule): Uint8Array {
@@ -89,6 +102,7 @@ export class PdfDocument {
       throw new PdfOpenError(code);
     }
     this.pageCount = P.FPDF_GetPageCount(this.doc);
+    openDocuments += 1;
   }
 
   /** Displayed page size in points (the page's own rotation applied). */
@@ -241,6 +255,7 @@ export class PdfDocument {
     P.FPDF_CloseDocument(this.doc);
     P.pdfium.wasmExports.free(this.memory);
     this.doc = 0;
+    openDocuments -= 1;
   }
 
   /** Release a page's handles (the view calls this for pages scrolled far away). */
