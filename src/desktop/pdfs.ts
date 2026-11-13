@@ -24,11 +24,16 @@ export function hasPdfSignature(bytes: Uint8Array): boolean {
 export class PdfTabs {
   readonly tabs: PdfTab[] = [];
   activeId: string | null = null;
+  /** The most recently added tab, for callers that show what they just opened. */
+  lastAdded: string | null = null;
   private sequence = 0;
 
   get active(): PdfTab | undefined { return this.tabs.find(tab => tab.id === this.activeId); }
 
-  /** Add an opened PDF and make it the active PDF; returns an error message instead when a cap is hit. */
+  /**
+   * Add an opened PDF; returns an error message instead when a cap is hit. The new tab becomes the
+   * active PDF only when the caller shows it (`show`), so a slow read never moves the active mark.
+   */
   add(name: string, bytes: Uint8Array, token?: string): string | null {
     if (this.tabs.length >= MAX_PDF_TABS) return `Close a PDF first — at most ${MAX_PDF_TABS} PDFs can be open.`;
     if (bytes.length > MAX_PDF_BYTES) return `PDFs larger than 200 MB cannot be opened.`;
@@ -37,7 +42,7 @@ export class PdfTabs {
     if (!hasPdfSignature(bytes)) return "This file is not a PDF.";
     const id = `pdf-${++this.sequence}`;
     this.tabs.push({ id, name, bytes, ...(token ? { token } : {}) });
-    this.activeId = id;
+    this.lastAdded = id;
     return null;
   }
 

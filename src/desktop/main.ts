@@ -446,7 +446,6 @@ async function openNativePdfs(documents: OpenBatch["documents"], showLast: boole
 }
 async function addNativePdfs(documents: OpenBatch["documents"], showLast: boolean, request: number): Promise<void> {
   const problems: string[] = [];
-  const shownPdf = pdfs.activeId;
   let opened = false;
   for (const doc of documents) {
     if (!doc.token) { problems.push(`${doc.name}: this PDF is not linked to its file.`); continue; }
@@ -462,8 +461,8 @@ async function addNativePdfs(documents: OpenBatch["documents"], showLast: boolea
   if (!opened) return;
   // Reading bytes takes time: only the newest open may still take the view.
   if (app && showLast) report("The PDF opened in a tab. Return to the reading view to see it.");
-  if (showLast && request === generation && !app && !changingMode) { focusPdf(); void render(); }
-  else { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); }
+  if (showLast && request === generation && !app && !changingMode) { pdfs.activeId = pdfs.lastAdded; focusPdf(); void render(); }
+  else { pdfs.activeId ??= pdfs.lastAdded; syncDocuments(); } // a stale read adds its tab without taking the active mark
 }
 
 function commitBatch(batch: OpenBatch, request: number): void {
@@ -496,7 +495,6 @@ async function readFiles(files: File[]): Promise<void> {
   const batch: OpenBatch = { documents: [], errors: [], canceled: false };
   let total = 0;
   let openedPdf = false;
-  const shownPdf = pdfs.activeId;
   report("");
   for (const file of files.slice(0, 32)) {
     try {
@@ -529,10 +527,10 @@ async function readFiles(files: File[]): Promise<void> {
   // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
   // Only the newest import may take the view (a slow PDF read must not override a later choice).
   const showPdfNow = openedPdf && !batch.documents.length && request === generation && !app && !changingMode;
-  if (showPdfNow) focusPdf();
+  if (showPdfNow) { pdfs.activeId = pdfs.lastAdded; focusPdf(); }
   commitBatch(batch, request);
   if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
-  else if (openedPdf) { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); } // a stale import adds its tab without taking the active mark
+  else if (openedPdf) { pdfs.activeId ??= pdfs.lastAdded; syncDocuments(); } // a stale import adds its tab without taking the active mark
 }
 
 async function open(): Promise<void> {
