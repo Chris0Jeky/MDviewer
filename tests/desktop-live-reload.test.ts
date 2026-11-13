@@ -198,6 +198,88 @@ describe("desktop live reload", () => {
     expect(shown()).toBe("# One");
   });
 
+  it("#255: edits typed after clicking Reload are not replaced by the file's text", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    const doc = app.store.active!;
+    app.store.updateText(doc.id, "# Mine");
+    boundary.read.mockResolvedValueOnce(changed(null));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(visibleBar()).toBeDefined());
+    let finish!: (result: ReadResult) => void;
+    boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="reload"]')!.click();
+    app.store.updateText(doc.id, "# Mine, typed after the click");
+    finish(changed("# Theirs", 1));
+    await vi.waitFor(() => expect(document.getElementById("workspace-notice")!.textContent).toContain("edited"));
+    expect(app.store.active!.text).toBe("# Mine, typed after the click");
+    expect(visibleBar(), "the conflict is still offered").toBeDefined();
+  });
+
+  it("#248: a re-read that a Save overtakes does not mark the saved document changed", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    app.store.updateText(app.store.active!.id, "# Saved now");
+    let finish!: (result: ReadResult) => void;
+    boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    boundary.changed!([TOKEN]);
+    expect(boundary.read).toHaveBeenCalledWith(TOKEN, false, 0);
+    boundary.saveDocument.mockResolvedValueOnce({ outcome: "saved", token: TOKEN, generation: 1, name: "notes.md",
+      path: "C:\\notes\\notes.md", dir: "C:\\notes", encoding: "utf-8", eol: "lf" });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(option()).toBe("notes.md"));
+    boundary.read.mockResolvedValueOnce({ outcome: "unchanged" });
+    finish(changed(null, 1)); // read before the save landed: describes the old state
+    await vi.waitFor(() => expect(boundary.read).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(boundary.read).toHaveBeenLastCalledWith(TOKEN, true, 1));
+    await Promise.resolve();
+    expect(visibleBar()).toBeUndefined();
+  });
+
+  it("#257, #234: a re-read finishing across entering Edit & PDF, and an event during the change, are followed", async () => {
+    await openReader(bound("notes.md", "# One"));
+    const app = { store: new DocStore(), settings: { viewMode: "split" }, exportState: { busy: false },
+      flushRender: vi.fn(async () => {}), captureDocumentPosition: vi.fn(), restoreDocumentPosition: vi.fn(),
+      focusEditor: vi.fn(), destroy: vi.fn(), updateSettings: vi.fn(), onExportStateChange: vi.fn(() => () => {}) };
+    boundary.start.mockReturnValueOnce({ app, detachShortcuts: vi.fn() });
+    let finish!: (result: ReadResult) => void;
+    boundary.read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    boundary.changed!([TOKEN]); // read starts in the reader
+    document.getElementById("reader-workspace")!.click();
+    await vi.waitFor(() => expect(app.focusEditor).toHaveBeenCalledOnce());
+    boundary.read.mockResolvedValueOnce(changed("# Theirs", 1));
+    finish(changed("# Theirs", 1)); // adopted natively, finished after the owner changed
+    await vi.waitFor(() => expect(app.store.active!.text).toBe("# Theirs"));
+    // A later notification follows into the workspace document too.
+    boundary.read.mockResolvedValueOnce(changed("# Again", 2));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(app.store.active!.text).toBe("# Again"));
+  });
+
+  it("#234: after Keep mine and an undo back to the saved text, the clean document follows its file", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    const doc = app.store.active!;
+    app.store.updateText(doc.id, "# Mine");
+    boundary.read.mockResolvedValueOnce(changed(null));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(visibleBar()).toBeDefined());
+    visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="keep"]')!.click();
+    boundary.read.mockResolvedValueOnce(changed("# Theirs", 1));
+    app.store.updateText(doc.id, "# One"); // undo back to the saved text
+    await vi.waitFor(() => expect(app.store.active!.text).toBe("# Theirs"));
+    expect(boundary.read).toHaveBeenLastCalledWith(TOKEN, true, 0);
+  });
+
+  it("an explicit Reload that cannot read says so", async () => {
+    const app = await workspace(bound("notes.md", "# One"));
+    app.store.updateText(app.store.active!.id, "# Mine");
+    boundary.read.mockResolvedValueOnce(changed(null));
+    boundary.changed!([TOKEN]);
+    await vi.waitFor(() => expect(visibleBar()).toBeDefined());
+    boundary.read.mockResolvedValueOnce({ outcome: "failed", code: "busy" });
+    visibleBar()!.querySelector<HTMLButtonElement>('[data-conflict-action="reload"]')!.click();
+    await vi.waitFor(() => expect(document.getElementById("workspace-notice")!.textContent).toContain("Could not reload"));
+    expect(app.store.active!.text).toBe("# Mine");
+  });
+
   it("ignores tokens no open document holds", async () => {
     await openReader(bound("notes.md", "# One"));
     boundary.changed!(["f".repeat(32)]);
