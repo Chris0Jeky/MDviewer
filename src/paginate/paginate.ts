@@ -50,6 +50,7 @@ export interface PaginationProblem {
 
 const ATOMIC_ID_ATTR = "data-mdv-atomic-id";
 const PAGE_CONTENT_SELECTOR = ".pagedjs_page_content";
+const FOOTNOTE_AREA_SELECTOR = ".pagedjs_footnote_area";
 const BLANK_PAGE_CLASS = "pagedjs_blank_page";
 /** Flow blocks whose geometry must stay inside their page's content box. */
 const FLOW_BLOCKS =
@@ -187,10 +188,15 @@ function splitByRecovery(host: HTMLElement, marked: Map<string, string>): string
  * hidden overflow columns to its right.
  */
 export function auditPagination(source: ParentNode, host: HTMLElement): PaginationProblem | null {
-  const rendered = new Set<string>();
-  for (const el of host.querySelectorAll<HTMLElement>("[data-ref]")) rendered.add(el.dataset.ref!);
+  // Own text per source ref, across every fragment Paged.js made of it, in page order.
+  // Whitespace is dropped because a split reflows it; a lost tail is not.
+  const rendered = new Map<string, string>();
+  for (const el of host.querySelectorAll<HTMLElement>("[data-ref]")) {
+    rendered.set(el.dataset.ref!, (rendered.get(el.dataset.ref!) ?? "") + ownText(el));
+  }
   for (const el of source.querySelectorAll<HTMLElement>("[data-ref]")) {
-    if (rendered.has(el.dataset.ref!) || !hasOwnText(el)) continue;
+    const text = ownText(el);
+    if (!text || rendered.get(el.dataset.ref!)?.includes(text)) continue;
     return { problem: "content was left unrendered", atomicId: atomicIdOf(el) };
   }
 
@@ -204,7 +210,7 @@ export function auditPagination(source: ParentNode, host: HTMLElement): Paginati
     // Paged.js inserts an intentional blank page for a left/right (recto/verso) break.
     if (!content || page.classList.contains(BLANK_PAGE_CLASS)) continue;
     contentPage += 1;
-    if (pages.length > 1 && isEmptyPage(content)) {
+    if (pages.length > 1 && isEmptyPage(page, content)) {
       const next = pages[index + 1]?.querySelector<HTMLElement>(`[${ATOMIC_ID_ATTR}]`);
       return { problem: `page ${index + 1} is empty`, atomicId: next ? atomicIdOf(next) : null };
     }
@@ -259,13 +265,29 @@ function atomicIdOf(el: Element): string | null {
   return el.closest(`[${ATOMIC_ID_ATTR}]`)?.getAttribute(ATOMIC_ID_ATTR) ?? null;
 }
 
-function hasOwnText(el: Element): boolean {
+/**
+ * The element's own text nodes (not its descendants'), without whitespace (a split reflows
+ * it) and without soft or non-breaking hyphens: Paged.js appends U+2011 to the first half of
+ * a word it breaks across pages, text that is in no source.
+ */
+function ownText(el: Element): string {
+  let text = "";
   for (const child of el.childNodes) {
-    if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) return true;
+    if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? "";
   }
-  return false;
+  return text.replace(/[\s\u00AD\u2011]+/g, "");
 }
 
-function isEmptyPage(content: HTMLElement): boolean {
-  return !content.textContent?.trim() && !content.querySelector("img, svg, hr, table, canvas");
+function hasOwnText(el: Element): boolean {
+  return ownText(el) !== "";
+}
+
+/** No body content, and no notes in the page's footnote area (a notes-only last page). */
+function isEmptyPage(sheet: HTMLElement, content: HTMLElement): boolean {
+  const notes = sheet.querySelector<HTMLElement>(FOOTNOTE_AREA_SELECTOR);
+  return (
+    !content.textContent?.trim() &&
+    !content.querySelector("img, svg, hr, table, canvas") &&
+    !notes?.textContent?.trim()
+  );
 }

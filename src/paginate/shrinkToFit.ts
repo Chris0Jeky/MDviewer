@@ -7,7 +7,7 @@
  *   recordSourceHeights   measure every keep-whole block IN CONTEXT (same `.doc` styles,
  *                         same ancestor insets, the printable width) and record it.
  *   shrinkToFit (Tier 3)  a code block or diagram that overflows one page only modestly
- *                         (≤ SHRINK_LIMIT, counting a keep-with-next heading above it) is
+ *                         (≤ SHRINK_LIMIT, counting the keep-with-next headings above it) is
  *                         zoomed onto a single page.
  *   markOverTallSplittable (Tier 4)  a splittable family (code, table, quote, callout) that
  *                         still cannot fit one page is marked `data-mdv-splittable`, which
@@ -54,9 +54,9 @@ export function recordSourceHeights(content: ParentNode, area: PageArea): void {
 }
 
 /**
- * Space a keep-with-next heading directly above a block takes on the block's page
- * (heading top to block top). Tier 3 must fit heading + shrunk block on one page, or the
- * fragmenter splits the shrunk block to honour the heading.
+ * Space the keep-with-next headings directly above a block take on the block's page
+ * (first heading top to block top; stacked headings all count). Tier 3 must fit headings
+ * + shrunk block on one page, or the fragmenter splits the shrunk block to honour them.
  */
 const headingLead = new WeakMap<HTMLElement, number>();
 
@@ -85,7 +85,7 @@ export function shrinkToFit(content: ParentNode, area: PageArea): void {
 
 /**
  * Tier 4: mark splittable families that cannot fit one page, under the keep-with-next
- * heading above them, even after Tier 3.
+ * headings above them, even after Tier 3.
  */
 export function markOverTallSplittable(content: ParentNode, area: PageArea): void {
   for (const el of content.querySelectorAll<HTMLElement>(ATOMIC_SELECTOR)) {
@@ -125,23 +125,26 @@ function measureInContext(
   });
   const probes = blocks.map((el) => {
     const probe = el.cloneNode(true) as HTMLElement;
-    const previous = el.previousElementSibling;
-    const heading = previous && /^H[1-6]$/.test(previous.tagName) ? (previous.cloneNode(true) as HTMLElement) : null;
+    // Every heading stacked directly above keeps with the block, not only the nearest one.
+    const headings: HTMLElement[] = [];
+    for (let prev = el.previousElementSibling; prev && /^H[1-6]$/.test(prev.tagName); prev = prev.previousElementSibling) {
+      headings.unshift(prev.cloneNode(true) as HTMLElement);
+    }
     let wrapped: HTMLElement | null = null;
     for (let ancestor = el.parentElement; ancestor; ancestor = ancestor.parentElement) {
       const shell = ancestor.cloneNode(false) as HTMLElement;
       if (wrapped) shell.appendChild(wrapped);
-      else shell.append(...(heading ? [heading, probe] : [probe]));
+      else shell.append(...headings, probe);
       wrapped = shell;
     }
     host.appendChild(wrapped ?? probe);
-    return { probe, heading: wrapped ? heading : null };
+    return { probe, first: wrapped ? headings[0] : undefined };
   });
   document.body.appendChild(host);
   try {
-    return probes.map(({ probe, heading }) => {
+    return probes.map(({ probe, first }) => {
       const rect = probe.getBoundingClientRect();
-      return { height: rect.height, lead: heading ? rect.top - heading.getBoundingClientRect().top : 0 };
+      return { height: rect.height, lead: first ? rect.top - first.getBoundingClientRect().top : 0 };
     });
   } finally {
     host.remove();

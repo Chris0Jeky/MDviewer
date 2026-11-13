@@ -229,6 +229,15 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
     await loadMarkdownIntoApp(page, NOCUTOFF);
     await waitForPagination(page);
     await expect(page.locator("#page-chip")).not.toHaveAttribute("data-count", "0");
+    // Under a reduced zoom the failing re-render hides the stack while it lays out at scale 1.
+    await page.evaluate(() => window.__mdviewer!.updateSettings({ viewMode: "preview", zoom: 0.5 }));
+    await expect(page.locator("#canvas")).toHaveAttribute("data-zoom", "0.5");
+    await page.evaluate(() => {
+      const host = document.getElementById("paged-output")!;
+      const seen: string[] = [];
+      (window as unknown as { __hostVisibility: string[] }).__hostVisibility = seen;
+      new MutationObserver(() => seen.push(host.style.visibility)).observe(host, { attributes: true, attributeFilter: ["style"] });
+    });
     await loadMarkdownIntoApp(page, forcedStall("image"), "forced-fatal.md");
 
     const error = page.locator("#error-card");
@@ -237,6 +246,8 @@ test.describe("a stalled layout is recovered or refused, never truncated", () =>
     expect(await page.locator("#paged-output .pagedjs_page").count()).toBe(0);
     await expect(page.locator("#page-chip")).toHaveAttribute("data-count", "0");
     // A failed layout under a reduced zoom must not leave the (empty) stack hidden.
+    const seen = await page.evaluate(() => (window as unknown as { __hostVisibility: string[] }).__hostVisibility);
+    expect(seen, "the failing layout really ran hidden").toContain("hidden");
     await expect(page.locator("#paged-output")).toHaveCSS("visibility", "visible");
 
     await page.evaluate(() => window.__mdviewer?.exportPdf());
@@ -290,6 +301,68 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     expect(await missingInOrder(page, markdown)).toEqual([]);
   });
 
+  test("a tall fence nested in a quote or callout splits at line boundaries and loses nothing", async ({ page }) => {
+    const rows = (tag: string): string[] =>
+      Array.from({ length: 80 }, (_, index) => `${tag}${index + 1} quiet harbor lantern meadow orchard`);
+    const markdown = [
+      "## Quote",
+      "",
+      "> A lead-in sentence for the quote.",
+      ">",
+      "> ```",
+      ...rows("q").map((line) => `> ${line}`),
+      "> ```",
+      "",
+      "## Callout",
+      "",
+      "::: note",
+      "A lead-in sentence for the callout.",
+      "",
+      "```",
+      ...rows("c"),
+      "```",
+      ":::",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "tall-nested-fences.md");
+    await waitForPagination(page);
+
+    const fences = await pagesByRef(page, "blockquote > pre, div.callout > pre");
+    expect(Object.keys(fences).length).toBe(2);
+    for (const [, pages] of Object.entries(fences)) expect(pages.length, "each tall fence spans pages").toBeGreaterThan(1);
+    expect(await missingInOrder(page, markdown)).toEqual([]);
+    const defects = await layoutDefects(page);
+    expect(defects.empty).toEqual([]);
+    expect(defects.outside).toEqual([]);
+  });
+
+  test("a tall code figure splits its own fence instead of stranding the caption", async ({ page }) => {
+    const rows = Array.from({ length: 80 }, (_, index) => `f${index + 1} quiet harbor lantern meadow orchard`);
+    const markdown = [
+      "## Listing",
+      "",
+      `<figure class="code-figure"><figcaption>Listing 1</figcaption><pre><code>${rows.join("\n")}</code></pre></figure>`,
+      "",
+      "Closing paragraph.",
+      "",
+    ].join("\n");
+    await page.goto("/");
+    await loadMarkdownIntoApp(page, markdown, "tall-code-figure.md");
+    await waitForPagination(page);
+
+    // Every fragment of the figure carries part of its fence: `break-inside: avoid` on the
+    // fence would push it whole past the caption and leave a page holding only the caption.
+    const fragments = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("#paged-output figure.code-figure")).map(
+        (figure) => !!figure.querySelector(":scope > pre"),
+      ),
+    );
+    expect(fragments.length, "the figure is taller than a page").toBeGreaterThan(1);
+    expect(fragments.every(Boolean), "no fragment is a bare caption").toBe(true);
+    expect(await missingInOrder(page, rows.join("\n"))).toEqual([]);
+  });
+
   test("a heading and a fence that fit a page only without the heading stay together and whole", async ({ page }) => {
     const stalls = watchStalls(page);
     const markdown = [
@@ -326,6 +399,51 @@ test.describe("keep-whole edges around Tier 3 and Tier 4", () => {
     await expect(page.locator("#warning-banner")).not.toContainText(/Layout was retried/);
     expect(await missingInOrder(page, markdown)).toEqual([]);
   });
+
+  // Both headings keep with the block, so the room a block has is the page minus BOTH. A fence
+  // that fit under the inner heading alone used to skip Tier 3 and split across two pages.
+  for (const lines of [45, 47]) {
+    test(`a ${lines}-line fence under two stacked headings stays whole, on their page`, async ({ page }) => {
+      const stalls = watchStalls(page);
+      const markdown = [
+        "Intro paragraph before the headings.",
+        "",
+        "## Outer heading",
+        "",
+        "### Inner heading",
+        "",
+        "```",
+        ...Array.from({ length: lines }, (_, index) => `n${index + 1} quiet harbor lantern meadow`),
+        "```",
+        "",
+        "Closing paragraph.",
+        "",
+      ].join("\n");
+      await page.goto("/");
+      await loadMarkdownIntoApp(page, markdown, "stacked-headings.md");
+      await waitForPagination(page);
+
+      // Precondition: the fence fits a page alone, but not under both headings.
+      const fit = await page.evaluate(() => {
+        const pre = document.querySelector<HTMLElement>("#paged-output pre")!;
+        const content = document.querySelector<HTMLElement>("#paged-output .pagedjs_page_content")!;
+        const h2 = document.querySelector<HTMLElement>("#paged-output h2")!;
+        // Page room the headings take, margins included (heading top to fence top).
+        return { source: Number(pre.dataset.mdvSourceHeight), page: content.offsetHeight, lead: pre.offsetTop - h2.offsetTop };
+      });
+      expect(fit.source).toBeLessThanOrEqual(fit.page);
+      expect(fit.source + fit.lead).toBeGreaterThan(fit.page);
+
+      const fence = Object.values(await pagesByRef(page, "pre"));
+      expect(fence, "the fence is laid out once, on one page").toEqual([[expect.any(Number)]]);
+      expect(Object.values(await pagesByRef(page, "h2"))).toEqual([fence[0]]);
+      expect(Object.values(await pagesByRef(page, "h3"))).toEqual([fence[0]]);
+      expect(stalls).toEqual([]);
+      expect((await layoutDefects(page)).outside).toEqual([]);
+      await expect(page.locator("#warning-banner")).not.toContainText(/Layout was retried/);
+      expect(await missingInOrder(page, markdown)).toEqual([]);
+    });
+  }
 
   test("a table that fits a page only without its heading is Tier 4 and starts under the heading", async ({ page }) => {
     const stalls = watchStalls(page);
