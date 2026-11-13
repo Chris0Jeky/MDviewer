@@ -44,7 +44,7 @@ copies and keeps open documents in memory.
 
 MDviewer is a **local-first Markdown editor and paginated PDF preview**. Write in the source pane, drop a `.md` / `.markdown` file, paste Markdown, or use the file picker. JSON, JSON Lines, YAML, TOML, CSV/TSV and plain text files (`.json`, `.jsonc`, `.jsonl`, `.ndjson`, `.yaml`, `.yml`, `.toml`, `.csv`, `.tsv`, `.txt`, `.log`) open as a **readable view**: tables, sections and an overview derived on the device, while Edit and Save keep the raw text ([Readable data](docs/design/READABLE_DATA.md)). The preview is the real page geometry — A4 or US Letter, with the breaks you will get in the PDF.
 
-The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. Apart from explicit user-requested Markdown/PDF saves, app-managed user state consists of a small settings object in `localStorage` (`mdviewer.settings.v1`) and the public-site SDK keys described below. The PWA separately caches application assets for offline use. There is no conversion API, no automatic document storage, and no account.
+The web app runs entirely in the browser; the experimental Windows distribution uses a local WebView2 window. Document text, file names, headings, URLs and exports never leave the device. PDFs you open are read and drawn on the device by a bundled PDF engine (PDFium, loaded from the app itself only when you open a PDF); scripts and launch actions inside a PDF never run. Apart from explicit user-requested Markdown/PDF saves, app-managed user state consists of a small settings object in `localStorage` (`mdviewer.settings.v1`) and the public-site SDK keys described below. The PWA separately caches application assets for offline use. There is no conversion API, no automatic document storage, and no account.
 
 The public site also sends pseudonymous, content-free usage data to the owner's first-party Pulseboard collector — never document text, file names or exports. See [Privacy and usage data](#privacy-and-usage-data) for exactly what, and how to turn it off.
 
@@ -117,6 +117,7 @@ Only what the code actually does:
 - **Templates on Windows.** **New from template…** (More menu and command palette) lists the Markdown files in the `templates/` folder of your pinned projects, asks once for each `{{name}}` placeholder (`{{date}}`, `{{time}}` and `{{title}}` fill themselves), and opens the result as an untitled note in **Edit**; **Save As** chooses where it goes. A typed value is inserted as written, and a placeholder you leave empty stays as written. The template file is only read.
 - **Library on Windows.** Recent files, pinned files and pinned project folders, with the Markdown files of a project listed newest first. Data files (JSON, YAML, TOML, CSV and the like) inside a `.claude`, `.codex` or `.agent-harness` folder anywhere in a project, and its root `.mcp.json`, are listed with the agent files; credential files such as `auth.json` are never listed, and checkouts under `.claude/worktrees` are not scanned.
 - **No-slice pagination.** Code blocks, figures, tables and callouts stay on one page when they fit. Oversize blocks shrink slightly (≤ 1.15×) or split cleanly; tables repeat their header. List items fragment like paragraphs so a long checklist does not leave half-blank sheets.
+- **Read PDFs.** Drop a PDF (or pick one in the browser) to read it in its own tab: pages drawn on demand, selectable and copyable text, Find (`Ctrl+F`), bookmarks in the outline panel, page thumbnails, zoom, page jumps, and a password prompt for protected files (the password stays in memory). Links to web pages open through the same confirm path as Markdown links; other PDF actions are shown and never run. Editing PDFs is being built in slices ([PDF workbench](docs/design/PDF_WORKBENCH.md)).
 - **Live split workspace.** Markdown / Split / Preview. A syntax-coloured source pane (`textarea` over a Shiki backdrop) beside the paginated pages. The divider is draggable and keyboard-operable; the ratio persists. Switching views does not re-render or re-paginate. The editing surface is stripped out of the printed PDF.
 - **New documents on Windows.** **New** (`Ctrl+N`) opens a blank note in **Edit**, beside its live preview, with an available `Untitled.md` name, and keeps existing documents open. **Export PDF…** loads the paginated workspace on demand; **Reading view** returns with your open documents and edits preserved.
 - **Find and Replace.** Choose **Find** or press `Ctrl/Cmd+F` in the source workspace. Search literal text, match case, see result counts and wrap through matches; the current match stays visibly marked while Find keeps keyboard focus. `Ctrl/Cmd+H` opens replacement controls. In the Find field, `Enter` / `Shift+Enter` moves forward / backward and `Escape` returns to the source. Replace all is one undoable edit. Reader and Preview-only modes keep the host's normal Find.
@@ -214,6 +215,27 @@ npm run test          # Vitest
 npm run build         # production dist/, which the preview e2e target serves
 E2E_TARGET=preview npm run test:e2e  # Playwright Chromium against the production bundle, incl. tests/e2e/nocutoff.spec.ts
 npm run agent:check   # typecheck + lint + unit + serve tests + observatory guard
+```
+
+### Embedding the reader
+
+`npm run embed:build` writes `dist-embed/` with a `<mdviewer-reader>` element: the reading view with its
+clickable marks, choices, fields and chips, for another page or tool. It never writes anywhere. A real
+click dispatches `change` with `detail.patches` (the same line patches the app saves); the host applies
+them and sets `markdown` again. See [`docs/design/ACTIONABLE_MARKDOWN.md`](docs/design/ACTIONABLE_MARKDOWN.md).
+
+```html
+<script type="module" src="/mdviewer-reader.js"></script>
+<mdviewer-reader id="doc"></mdviewer-reader>
+<script>
+  const doc = document.getElementById("doc");
+  doc.markdown = text;
+  doc.addEventListener("change", event => {
+    // Per patch: check lines[patch.line - 1] === patch.expect, set it to patch.replace, then save.
+    text = applyPatches(text, event.detail.patches); // your few lines, or src/render/actionable.ts
+    doc.markdown = text;
+  });
+</script>
 ```
 
 ## How export works

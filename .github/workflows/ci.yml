@@ -154,6 +154,12 @@ jobs:
         run: npm run test:e2e
         env:
           E2E_TARGET: preview
+      # The embeddable <mdviewer-reader> (Actionable Markdown A5): its bundle loaded into a plain page,
+      # a real click, exactly one change event, the host applies the patches, two elements apart.
+      - name: Build the embeddable reader
+        run: npm run embed:build
+      - name: Embed E2E (real Chromium, plain host page)
+        run: npm run embed:test
       - name: Upload Playwright browser evidence
         if: always()
         uses: actions/upload-artifact@v7
