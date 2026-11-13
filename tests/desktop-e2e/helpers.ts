@@ -39,6 +39,7 @@ export const test = base.extend<{ audit: Audit }>({
         window.__desktopEvidence.prints.push({ text: host?.innerText ?? "", sheets: host?.querySelectorAll(".pagedjs_page").length ?? 0 });
       };
     });
+    if (onBrowserHost()) await installPickers(page);
     await page.goto("/desktop.html");
     await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
     await expect(page.locator("html")).toHaveAttribute("data-shell", "ready");
@@ -51,6 +52,75 @@ export const test = base.extend<{ audit: Audit }>({
 });
 
 export { expect };
+
+/**
+ * The suite also runs on the browser host (project `webhost-desktop`, web parity W2a): the same
+ * shell, with files opened as real handles from the origin private file system. The OS pickers
+ * cannot be driven headless, so a test-only override hands the app those handles; `window.__pick`
+ * names the files Open returns and `window.__saveAs` the file Save As returns (abort when unset).
+ */
+export const onBrowserHost = (): boolean => ["webhost-desktop", "webhost-chromium"].includes(test.info().project.name);
+
+declare global {
+  interface Window { __pick: string[]; __saveAs: string | null }
+}
+
+export async function installPickers(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.__pick = [];
+    window.__saveAs = null;
+    const abort = () => new DOMException("The user aborted a request.", "AbortError");
+    Object.assign(window, {
+      showOpenFilePicker: async () => {
+        const paths = window.__pick.splice(0);
+        if (!paths.length) throw abort();
+        const root = await navigator.storage.getDirectory();
+        // "folder/name.md" picks a file inside a folder of the private file system.
+        return Promise.all(paths.map(async path => {
+          const parts = path.split("/");
+          let dir = root;
+          for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part);
+          return dir.getFileHandle(parts.at(-1)!);
+        }));
+      },
+      showSaveFilePicker: async () => {
+        if (!window.__saveAs) throw abort();
+        return (await navigator.storage.getDirectory()).getFileHandle(window.__saveAs, { create: true });
+      },
+    });
+  });
+}
+
+/**
+ * Save a copy (a download). Without a file host Ctrl+S is Save Copy; where Ctrl+S saves the file in
+ * place (the browser host) the copy is the explicit command: Save Markdown in the workspace, More → "Save a copy…"
+ * in the reader. In-place Save is covered by `tests/webhost-e2e/save.spec.ts`.
+ */
+export async function saveCopy(page: Page, from: import("@playwright/test").Locator): Promise<void> {
+  if (!onBrowserHost()) { await from.press("Control+s"); return; }
+  if (await page.locator("#desktop-workspace").isVisible()) {
+    await page.getByRole("button", { name: "Save Markdown", exact: true }).click();
+    return;
+  }
+  await moreMenu(page, "Save a copy…");
+}
+
+/** Write a file into the origin private file system (the browser host's "disk" in tests). */
+export const writeFile = (page: Page, path: string, bytes: Buffer): Promise<void> => page.evaluate(async ({ path, base64 }) => {
+  const parts = path.split("/");
+  let dir = await navigator.storage.getDirectory();
+  for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part, { create: true });
+  const handle = await dir.getFileHandle(parts.at(-1)!, { create: true });
+  const writable = await handle.createWritable();
+  // Base64, not a number array: the session-limit fixtures are 12.6 MB.
+  await writable.write(Uint8Array.from(atob(base64), char => char.charCodeAt(0)));
+  await writable.close();
+}, { path, base64: bytes.toString("base64") });
+
+export const readFile = async (page: Page, name: string): Promise<Buffer> => Buffer.from(await page.evaluate(async name => {
+  const file = await (await (await navigator.storage.getDirectory()).getFileHandle(name)).getFile();
+  return [...new Uint8Array(await file.arrayBuffer())];
+}, name));
 
 export const RICH_MARKDOWN = `# Desktop field notes
 
@@ -77,9 +147,32 @@ flowchart LR
 [^note]: This footnote stays with the document.
 `;
 
-/** A pick of the given files. Goes through the reader's file input, the element Ctrl+O clicks, so a lost key press cannot time a test out (#303). */
-export async function openFiles(page: Page, files: Array<{ name: string; text: string }>): Promise<void> {
-  await page.locator("#reader-file-input").setInputFiles(files.map(file => ({ name: file.name, mimeType: "text/markdown", buffer: Buffer.from(file.text) })));
+let picks = 0;
+/**
+ * Open files the way a user picks them. On the browser host the picker hands over real files
+ * (bound, savable in place). Otherwise the pick goes through the reader's file input, the element
+ * Ctrl+O clicks, so a lost key press cannot time a test out (#303). `open` instead drives a
+ * specific trigger (a button, the workspace's Open) and waits for its file chooser; "shortcut"
+ * presses Ctrl+O itself, retried until a chooser opens (`chooseWithShortcut`).
+ */
+export async function openFiles(page: Page, files: Array<{ name: string; text: string } | { name: string; bytes: Buffer }>,
+  open?: (() => Promise<void>) | "shortcut"): Promise<void> {
+  if (onBrowserHost()) {
+    // Each pick gets its own folder: two picks of "notes.md" are two files, as two copies are on the fallback path.
+    const folder = `pick-${++picks}`;
+    for (const file of files) await writeFile(page, `${folder}/${file.name}`, bytesOf(file));
+    await page.evaluate(paths => { window.__pick = paths; }, files.map(file => `${folder}/${file.name}`));
+    await (typeof open === "function" ? open() : page.keyboard.press("Control+O"));
+    // Like the file chooser path: return once the picker has handed over the files.
+    await page.waitForFunction(() => window.__pick.length === 0);
+    return;
+  }
+  const picked = files.map(file => ({ name: file.name, mimeType: mimeOf(file.name), buffer: bytesOf(file) }));
+  if (!open) { await page.locator("#reader-file-input").setInputFiles(picked); return; }
+  if (open === "shortcut") { await (await chooseWithShortcut(page)).setFiles(picked); return; }
+  const chooser = page.waitForEvent("filechooser");
+  await open();
+  await (await chooser).setFiles(picked);
 }
 
 /**
@@ -95,6 +188,9 @@ export async function chooseWithShortcut(page: Page): Promise<FileChooser> {
   }).toPass({ timeout: 45_000 });
   return chooser!;
 }
+/** What a browser reports for the file: Markdown by its extension, anything else as opaque bytes. */
+const mimeOf = (name: string): string => /\.(?:md|markdown)$/i.test(name) ? "text/markdown" : "application/octet-stream";
+const bytesOf = (file: { text: string } | { bytes: Buffer }): Buffer => "bytes" in file ? file.bytes : Buffer.from(file.text);
 
 /** A new blank document in the PDF workspace: New opens Edit (S5), then Export PDF…. */
 export async function newInWorkspace(page: Page, via: "keyboard" | "button" = "keyboard"): Promise<void> {

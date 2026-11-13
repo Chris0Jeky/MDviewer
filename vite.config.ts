@@ -88,10 +88,14 @@ export default defineConfig({
       },
     }),
   ],
+  // The companion shell (desktop.html) is a second entry on the web, on the browser host
+  // (src/desktop/native.ts; web parity W2a). index.html stays the default until W2b.
+  define: { "import.meta.env.VITE_MDV_BROWSER_HOST": JSON.stringify("1") },
   build: {
     outDir: "dist",
     emptyOutDir: true,
     target: "es2022",
+    rollupOptions: { input: { main: "index.html", shell: "desktop.html" } },
     // Public deployments should not publish the full source tree. Opt in when a
     // debugging build specifically needs source maps.
     sourcemap: process.env.SOURCE_MAPS === "true",

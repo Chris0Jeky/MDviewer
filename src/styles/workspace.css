@@ -138,3 +138,11 @@
 .document-recovery-action:hover { background: var(--bg-hover); }
 .document-recovery-action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 @media print { .document-recovery { display: none !important; } }
+
+/* With Save and Save As (a file host: Windows, or the browser host) the session strip stays one
+   line in a small window: the shortcut hint truncates instead of wrapping over the editor. */
+@media screen and (max-width: 760px), screen and (max-height: 600px) {
+  .workspace-session:has(> [data-desktop-command]) { flex-wrap: nowrap; }
+  .workspace-session:has(> [data-desktop-command]) .workspace-privacy { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .workspace-session:has(> [data-desktop-command]) .workspace-session-status { display: none; }
+}

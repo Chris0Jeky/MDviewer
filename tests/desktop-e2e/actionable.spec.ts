@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { test, expect, openFiles, readyReader, readyWorkspace, openPdf } from "./helpers";
+import { test, expect, openFiles, readyReader, readyWorkspace, openPdf, dropFiles, onBrowserHost } from "./helpers";
 
 const fixture = (name: string): string => readFileSync(resolve("tests/fixtures/actionable", `${name}.md`), "utf8");
 
@@ -66,7 +66,9 @@ test("actionable controls render as named controls in the reader", async ({ page
 });
 
 test("in memory (web build), gestures change exactly the span, by pointer and keyboard", async ({ page }) => {
-  await openFiles(page, [{ name: "board.md", text: DOC }]);
+  // A dropped copy is in memory on every host; a bound file writes back (tests/webhost-e2e/save.spec.ts).
+  if (onBrowserHost()) await dropFiles(page, [{ name: "board.md", text: DOC }]);
+  else await openFiles(page, [{ name: "board.md", text: DOC }]);
   await readyReader(page, "Board");
   const doc = page.locator("#reader-document");
   // Click steps the declared cycle " " -> "/" -> "x"; the tab shows unsaved changes.
