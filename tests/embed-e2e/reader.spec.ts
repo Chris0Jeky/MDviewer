@@ -93,12 +93,9 @@ test("document HTML cannot cover the host page: fixed positioning stays inside t
   const cover = "<div style=\"position:fixed;top:0;left:0;width:100vw;height:100vh;background:red\">cover</div>";
   await page.evaluate(text => { (document.getElementById("b") as HTMLElement & { markdown: string }).markdown = text; }, cover);
   const b = page.locator("#b");
-  const inner = b.locator("div[style*='fixed']");
-  await expect(inner).toHaveCount(1);
-  const host = (await b.boundingBox())!;
-  const box = (await inner.boundingBox())!;
-  // Painted (and clipped) within the element's own box, never over the host page's UI.
-  expect(box.y).toBeGreaterThanOrEqual(host.y - 1);
+  // The sanitizer drops fixed positioning (#347); the element's contain: paint stays as a second wall.
+  await expect(b.getByText("cover")).toHaveCount(1);
+  await expect(b.locator("[style*='fixed']")).toHaveCount(0);
   expect(await page.evaluate(() => document.elementFromPoint(5, 5)?.id ?? "")).not.toBe("b");
 });
 

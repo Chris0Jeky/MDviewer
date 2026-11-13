@@ -219,6 +219,7 @@ not make. No real file ever becomes a fixture.
 | D4 | YAML, TOML, CSV and TSV | D1, D3 |
 | D5 | Copy value, path and subtree; agent data files in the Library; save the readable view as Markdown (done: #289, #290, #299) | D3 |
 | D6 | Readability pass: one table per object, row-sized values inline, record tables with shallow nesting and for JSON Lines, typed strings quoted, literal blocks | D1 to D4 |
+| D7 | More text-shaped kinds ([complete push](2026-11-13-complete-push.md), Track D). **HTML (`.html`, `.htm`):** the body is shown as HTML through the reader's own pipeline, so the one sanitizer decides what survives (no scripts, styles, frames, forms, autoloading or remote resources; relative images load as for Markdown; authored inputs stay inert). The view is a title, an overview line naming the title, links and images, a line naming what was not run or loaded, and the body as one HTML block (blank lines become empty comments so the block cannot end early, also inside `<pre>`). Edit shows the source, which Save writes unchanged; no copy menu (no values). | D3 |
 
 ## Later, not in version 1
 
