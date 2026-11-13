@@ -39,6 +39,11 @@ describe("SLUGIFY: Unicode heading ids (#204)", () => {
     expect(SLUGIFY("Party 🎉")).toBe("party-");
     expect(SLUGIFY("Ünïcödé Report 🎉")).toBe("ünïcödé-report-");
     expect(SLUGIFY("🎉")).toBe("sec-");
+    // Variation selectors and the keycap mark leave with their emoji (#351 review).
+    expect(SLUGIFY("⚠️ Warning")).toBe("sec--warning");
+    expect(SLUGIFY("⚠️ Warning")).toBe(SLUGIFY("⚠ Warning"));
+    expect(SLUGIFY("❤️ Love")).toBe("sec--love");
+    expect(SLUGIFY("1️⃣ Step")).toBe("sec-1-step");
   });
 
   it("gives a heading that is all punctuation a query-safe id", () => {

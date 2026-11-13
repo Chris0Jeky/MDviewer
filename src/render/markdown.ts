@@ -58,6 +58,8 @@ export const SLUGIFY: (s: string) => string = (s: string): string => {
     .toLowerCase()
     .normalize("NFC")
     .replace(/\s+/g, "-")
+    // Emoji presentation selectors and the keycap mark are marks (\p{M}) but belong to the emoji.
+    .replace(/[︎️⃣]/gu, "")
     .replace(/[^\p{L}\p{M}\p{N}_-]/gu, "");
   // A CSS id selector (used by Paged.js `target-counter` for the TOC and by our own
   // resolvers) must not start with a digit or hyphen. Numbered headings like
