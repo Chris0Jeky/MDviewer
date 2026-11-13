@@ -369,7 +369,16 @@ pub fn read_markdown(
     if opened.len() > limit {
         return Err(error_for(path, too_large));
     }
-    let raw = read_bounded(&file, limit).map_err(|message| error_for(path, message))?;
+    let raw = read_bounded(&file, limit).map_err(|message| {
+        error_for(
+            path,
+            if pdf && message.contains("25 MB") {
+                too_large
+            } else {
+                message
+            },
+        )
+    })?;
     let bytes = raw.len() as u64;
     let revision = capture(&file, &raw);
     if pdf {

@@ -86,10 +86,9 @@ for (const [packagePath, metadata] of Object.entries(lock.packages ?? {}).sort((
 }
 
 // Libraries compiled into a dependency's binary (PDFium's wasm) ship no notice files of their own.
+// A missing file fails the build: PDFium must not ship without these notices.
 const compiledNotices = join(repoRoot, "docs", "licenses", "PDFIUM_THIRD_PARTY_NOTICES.txt");
-if (existsSync(compiledNotices)) {
-  sections.push(["## Compiled into @embedpdf/pdfium (pdfium.wasm)", readFileSync(compiledNotices, "utf8").trim(), ""].join("\n\n"));
-}
+sections.push(["## Compiled into @embedpdf/pdfium (pdfium.wasm)", readFileSync(compiledNotices, "utf8").trim(), ""].join("\n\n"));
 
 writeFileSync(
   join(outDir, "THIRD_PARTY_LICENSES.txt"),

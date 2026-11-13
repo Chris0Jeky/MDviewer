@@ -466,7 +466,13 @@ function closePdfView(): void {
 }
 
 /** Fetch natively opened PDFs' bytes and add them as tabs; the last one shows unless Markdown came too. */
+/** Natively opened PDFs whose bytes are still being read (session restore must not take the view). */
+let pendingPdfOpens = 0;
 async function openNativePdfs(documents: OpenBatch["documents"], showLast: boolean, request: number): Promise<void> {
+  pendingPdfOpens += 1;
+  try { await addNativePdfs(documents, showLast, request); } finally { pendingPdfOpens -= 1; }
+}
+async function addNativePdfs(documents: OpenBatch["documents"], showLast: boolean, request: number): Promise<void> {
   const problems: string[] = [];
   const shownPdf = pdfs.activeId;
   let opened = false;
@@ -483,6 +489,7 @@ async function openNativePdfs(documents: OpenBatch["documents"], showLast: boole
   if (problems.length) report(problems.join(" "));
   if (!opened) return;
   // Reading bytes takes time: only the newest open may still take the view.
+  if (app && showLast) report("The PDF opened in a tab. Return to the reading view to see it.");
   if (showLast && request === generation && !app && !changingMode) { focusPdf(); void render(); }
   else { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); }
 }
@@ -1568,7 +1575,8 @@ if (native.available) {
       const restored = await native.session.restore();
       if (restored.documents.length || restored.errors.length) {
         // Like a forwarded batch: a newer user action (an Open click) keeps ownership.
-        const owns = startedAt === generation && !docs.reader.activeId && !app;
+        // A launched PDF (shown, or its bytes still being read) keeps the view too.
+        const owns = startedAt === generation && !docs.reader.activeId && !pdfs.tabs.length && !pendingPdfOpens && !app;
         commitBatch({ ...restored, errors: restored.errors.length
           ? [{ name: "Last session", message: `${restored.errors.length} file(s) could not be reopened.` }] : [] },
         owns ? ++generation : -1);

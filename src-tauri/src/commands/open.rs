@@ -215,6 +215,43 @@ mod tests {
     use crate::file_policy::MAX_BATCH_FILES;
 
     #[test]
+    fn a_pdf_gets_a_pdf_token_no_text_command_can_resolve_and_kind_pdf_on_the_wire() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("report.pdf");
+        let bytes = b"%PDF-1.7
+1 0 obj
+<< >>
+endobj
+%%EOF
+";
+        std::fs::write(&path, bytes).unwrap();
+        let mut registry = Registry::default();
+        let batch = OpenBatch::from_read_batch(read_batch([path], capture_revision), &mut registry);
+        assert!(batch.errors.is_empty());
+        let doc = &batch.documents[0];
+        assert_eq!(doc.kind, Some("pdf"));
+        assert!(doc.text.is_empty());
+        let token = doc.token.as_ref().unwrap();
+        // Save, patch and reload look tokens up in this registry: a PDF token is never in it.
+        assert!(registry.get(token).is_none());
+        assert_eq!(registry.len(), 0);
+        #[derive(serde::Deserialize)]
+        struct Wire {
+            kind: Option<String>,
+            token: Option<String>,
+        }
+        let wire = tauri::ipc::IpcResponse::body(doc)
+            .unwrap()
+            .deserialize::<Wire>()
+            .unwrap();
+        assert_eq!(wire.kind.as_deref(), Some("pdf"));
+        assert_eq!(
+            crate::commands::pdf::read(&wire.token.unwrap()).unwrap(),
+            bytes
+        );
+    }
+
+    #[test]
     fn opened_documents_carry_display_metadata_and_matching_native_bindings() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("a.md");

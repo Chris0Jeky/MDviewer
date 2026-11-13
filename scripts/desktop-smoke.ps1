@@ -239,12 +239,14 @@ public static class SmokeWindow {
                 Write-ProbePhase 'save-button-invoked'
                 exit 0
             }
-            # 'pdf:<text>' looks for a text run in the PDF view's text layer (PDF_WORKBENCH.md, P1-4).
+            # 'pdf:<name>' looks for a PDF page region (role=region, "Page N") anywhere in the window:
+            # the view creates pages only after the engine's wasm loaded and opened the file (P1-4).
+            # The PDF host div itself is not exposed to UI Automation, so the window is the container.
             $pdfText = $ExpectedHeading.StartsWith('pdf:')
             if ($pdfText) { $ExpectedHeading = $ExpectedHeading.Substring(4) }
             $containerCondition = if ($pdfText) {
                 [System.Windows.Automation.PropertyCondition]::new(
-                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-pdf')
+                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $OwnerProcessId)
             } else {
                 [System.Windows.Automation.OrCondition]::new(
                     [System.Windows.Automation.PropertyCondition]::new(
@@ -253,7 +255,7 @@ public static class SmokeWindow {
                         [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'reader-document'))
             }
             Write-ProbePhase 'finding-reader-document'
-            $document = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition)
+            $document = if ($pdfText) { $window } else { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $containerCondition) }
             if ($null -eq $document) {
                 $result.reason = 'The reader document is not present in the accessibility tree.'
             } else {
@@ -880,8 +882,8 @@ try {
     if (-not $sixth.WaitForExit([Math]::Min(15000, $TimeoutSeconds * 1000))) {
         throw 'The PDF launch stayed alive instead of forwarding to the existing instance.'
     }
-    [void](Wait-ForHeading 'pdf:Native PDF smoke' 'pdf-document.png')
-    $metrics.pdf = [ordered]@{ forwardedPdfTextLayerVerified = $true }
+    [void](Wait-ForHeading 'pdf:Page 1' 'pdf-document.png')
+    $metrics.pdf = [ordered]@{ forwardedPdfPageRegionVerified = $true }
     $metrics.data = [ordered]@{
         csvHeadingVerified = $true; csvSaveAsExactRawBytes = $true; csvSaveAs = $csvSaveAsEvidence
         readableHeadingVerified = $true
