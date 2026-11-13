@@ -85,8 +85,8 @@ other origins and while the page is hidden); a fresh profile for the GPC pair. N
 | 4 | No bar or Beta button in print | e2e/pulseboard-bar.spec (emulated print) | partial | pass on CSS: the live `@media print` rule hides `[data-pulseboard-bar]` and `#toolbar` (which holds the button); a real print preview was not inspected |
 | 5 | GPC on: no bar, no request | `tests/pulse-egress.test.ts` privacy cases | full at SDK level | pass: fresh Firefox profile with GPC (`Sec-GPC: 1` sent), 384 site requests and 0 to the collector, no top bar; control profile without GPC: bar shown and 3 collector requests |
 
-Observation (not filed): with GPC on, the small "Beta" privacy-choices button still shows in the
-toolbar; it sends nothing.
+With GPC on, the small "Beta" privacy-choices button still shows in the toolbar; it sends nothing.
+Filed upstream-bound as #353 (the button comes from the Pulseboard SDK).
 
 Not verified (no agent can check it; owner decision 2026-11-13 not to be asked): whether
 Pulseboard stores the events (a Pulseboard-side setting).
