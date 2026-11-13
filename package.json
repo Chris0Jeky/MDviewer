@@ -31,6 +31,8 @@
     "agent:check": "npm run typecheck && npm run lint && npm run test && npm run test:serve && npm run agent:observatory:check",
     "desktop:dev:web": "vite --config vite.desktop.config.ts --port 5182 --strictPort",
     "desktop:build:web": "tsc --noEmit && vite build --config vite.desktop.config.ts && node scripts/generate-license-bundle.mjs dist-desktop",
+    "embed:build": "tsc --noEmit && vite build --config vite.embed.config.ts",
+    "embed:test": "playwright test --config playwright.embed.config.ts",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build --ci -- --locked",
     "desktop:test": "playwright test --config playwright.desktop.config.ts",
