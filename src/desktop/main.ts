@@ -921,8 +921,21 @@ window.addEventListener("dragover", event => {
 window.addEventListener("drop", event => {
   if (!event.dataTransfer?.types.includes("Files")) return;
   event.preventDefault();
+  // A host that can bind dropped files (the browser host) opens them as their files.
+  const bound = changingMode ? null : native.openDropped?.(event.dataTransfer.items);
+  if (bound) { void openBound(bound); return; }
   void readFiles(Array.from(event.dataTransfer.files));
 });
+
+async function openBound(dropped: Promise<OpenBatch | { copies: File[] }>): Promise<void> {
+  const request = ++generation;
+  report("");
+  try {
+    const batch = await dropped;
+    if ("copies" in batch) await readFiles(batch.copies);
+    else commitBatch(batch, request);
+  } catch (error) { report(`Could not open files: ${errorText(error)}`); }
+}
 
 const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
 function conflictText(name: string, reason: Extract<SaveResult, { outcome: "conflict" }>["reason"]): string {
@@ -940,6 +953,7 @@ const FAILURES: Record<string, string> = {
   "too-large": "is larger than the 25 MB save limit.",
   "invalid-destination": "needs a .md or .markdown file name.",
   "revoked-after-write": "was saved, but it was closed while saving.",
+  "permission-denied": "could not be written because the browser did not allow it.",
 };
 
 /** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
@@ -1465,12 +1479,14 @@ if (native.available) {
       catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
-  setDownloadDestination(async (blob, filename) => {
+  // A host without an export dialog (the browser) keeps exports as ordinary downloads.
+  const exportTo = native.save?.bind(native);
+  if (exportTo) setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
     syncDocuments();
     try {
-      const result = await native.save(blob, filename);
+      const result = await exportTo(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;
@@ -1520,3 +1536,5 @@ if (native.available) {
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));
 }
 syncDocuments();
+// Every command and shortcut is installed: keys pressed from here on reach the shell.
+document.documentElement.dataset.shell = "ready";

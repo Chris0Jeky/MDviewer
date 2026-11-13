@@ -83,6 +83,42 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  webhost:
+    name: Web host (Playwright · Chromium · Firefox)
+    # The companion shell on the browser host (web parity): Save through the File System Access
+    # API in Chromium, the file-input and download fallback in Firefox.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+        env:
+          npm_config_engine_strict: 'true'
+      - name: Install Playwright Chromium and Firefox (+ OS deps)
+        run: bash scripts/ci/install-playwright.sh chromium firefox
+      - name: The Windows bundle never contains the browser host
+        run: |
+          npm run desktop:build:web
+          test -d dist-desktop/assets || { echo "::error::no Windows bundle was built"; exit 1; }
+          if grep -rl "showOpenFilePicker" dist-desktop/assets; then echo "::error::the browser host leaked into the Windows bundle"; exit 1; fi
+      - run: npm run webhost:build
+      - name: Web host tests (real handles in Chromium, fallback in Firefox)
+        run: npm run webhost:test
+      - name: Upload web host evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: webhost-evidence
+          path: test-results/webhost/
+          if-no-files-found: ignore
+          retention-days: 7
+
   e2e:
     name: E2E (Playwright · Chromium · production build)
     runs-on: ubuntu-latest
