@@ -3,13 +3,30 @@
 > Single source of truth for the autonomous engineering loop. Resumable: a fresh session can
 > read this file alone and continue. Keep entries terse and factual. Update at every checkpoint.
 
-> **ACTIVE PUSH — 2026-11-13 (complete push):** the owner asked to finish the queue, make the web as capable as
-> Windows, add more readable kinds and modify PDFs. Contract: [2026-11-13-complete-push.md](docs/design/2026-11-13-complete-push.md).
-> Three lanes run in parallel: **Finish** (Track F queue, then readable kinds D7 and D8), **Web** (W0 typed `Host`
-> contract, then the browser host and the shell on the web) and **PDF** (P0 spike and `PDF_WORKBENCH.md`, then P1 to P6).
-> The checkpoint below is the baseline the push started from; each lane updates its own rows here as it merges.
+> **CURRENT CHECKPOINT — 2026-11-13 (complete push PAUSED: the owner paused the push).** Read from GitHub and git on
+> 2026-11-13. Contract: [2026-11-13-complete-push.md](docs/design/2026-11-13-complete-push.md). Lane briefs and the four
+> handoff files are in `C:/Users/jekyt/source/mdv-coordinator/` (`finish.md`, `web.md`, `pdf.md`, `qa.md`, `handoff-*.md`).
+> Coordinator-to-lane messages were **not delivered** during this push: put briefs in files or the starting prompt.
+>
+> **Main** [`382938b`](https://github.com/Chris0Jeky/MDviewer/commit/382938b) (merge of #349): CI
+> [43357709711](https://github.com/Chris0Jeky/MDviewer/actions/runs/43357709711) and Windows Desktop
+> [43357709910](https://github.com/Chris0Jeky/MDviewer/actions/runs/43357709910) success. 26 PRs merged on 2026-11-13 (#309 to #352).
+> **Merged by track.** Finish: #311, #314, #315, #316 (D5 copy), #317, #318 (A5 embed), #319, #320, #326, #330, #331, #332,
+> #333, #336, #349, #350, #351, #352. Web: #310 (W0 `Host`), #323 (W1 browser host). PDF: #312 (P0 design), #321 (AGPL note),
+> #322 (P1a reading), #344 (P1b native open). QA: #337 (acceptance delegated to agent QA). Contract: #309.
+> **Not in the app yet:** PDF editing (only open and read merged), the web shell (W2a to W5; `index.html` is still the old
+> app), local HTML pages, the context-aware weight table, D8 containers and most of D7 (`.html` is #347, open).
+>
+> **Resume in this order.** (1) #345 owner bugs #334/#335: fails only the Windows native smoke (view resets after a
+> workspace round trip with `tasks.md` as a second tab); fix at the root, then QA re-checks #334/#335. (2) #348 QA charters.
+> (3) #347 D7 `.html` (reviewed; 7/7 green at `ea55f0e`; merge). (4) #355 W2a (fix its two MEDIUMs), then #357 W3 and #359 W4 draft after merging
+> main (both conflict since #344). (5) #356 P2 pages (reviewer + deep-reviewer), then #354 P1c draft (fails the smoke).
+> (6) Dependabot #216, #218, #340. (7) Never started: local pages (`LOCAL_PAGES.md`, spike notes on `spike/local-pages`),
+> weight table, rest of D7, D8, W5, W2b default flip, P2b to P6, QA charters for #169 A to D, AI-6 proxies, W1 and PDF
+> passes; `qa` issues #341, #342, #343 (default: render GitHub alerts), #353 (upstream Pulseboard); `run-all.ps1` must
+> move `library.json` aside before a launch.
 
-> **CURRENT CHECKPOINT — 2026-11-12 (Companion push close-out):**
+> **PREVIOUS CHECKPOINT — 2026-11-12 (Companion push close-out):**
 > Every number below was read from GitHub (`gh pr list/view`, `gh issue list`) on 2026-11-12. Merged PRs are
 > listed by area; open ones are marked **open**. Re-read GitHub before starting work.
 >

@@ -29,16 +29,22 @@ research #205 remain separate.
 
 [Actionable Markdown v1](design/ACTIONABLE_MARKDOWN.md) joined the companion push on 2026-11-11
 (owner: "Yes, add it"): clickable marks, choices, fields and status chips written back byte-exact,
-in slices A1–A5. A1 to A4 are merged on main (see P2); A5 ([#300](https://github.com/Chris0Jeky/MDviewer/issues/300)) is later.
+in slices A1–A5. A1 to A5 are merged on main (A5, the embeddable element, in #318).
 
 [Readable data v1](design/READABLE_DATA.md) (owner request, 2026-11-12) opens data files as a
 readable view derived on the device. D0 to D4 and the D6 readability pass are merged on main, and JSON,
-JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is next (see P2).
+JSON Lines, YAML, TOML, CSV, TSV and plain text open as readable views; D5 (copy) is merged (#316). D7 `.html` is
+open (#347); the rest of D7 and D8 containers are not started.
 
 [PDF workbench](design/PDF_WORKBENCH.md) (owner direction, 2026-11-13; contract
 [complete push](design/2026-11-13-complete-push.md), track P): P0 design and engine decision merged
-(#312, PDFium-WASM); P1a reading view in progress; P1b native open, then P2 pages, P3 annotate, P4
-edit on the page, P5 decompile to Markdown, P6 page source.
+(#312, PDFium-WASM); P1a reading view (#322) and P1b native open (#344) merged, so PDFs open and read; P2 pages (#356)
+and P1c weight (#354, draft) are open; P2b, P3 annotate, P4 edit on the page, P5 decompile to Markdown and P6 page
+source are not started. **PDF editing is not in the app yet.**
+
+**Complete push paused 2026-11-13** (the owner paused the push). Not in the app yet: PDF editing, the web shell (W1
+browser host #323 is merged; W2a to W5 are open or not started, and `index.html` is still the old app), local HTML
+pages, the context-aware weight table, D8 and most of D7. Resume order: `ORCHESTRATOR.md` current checkpoint.
 
 **#169 and AI-6/AI-7/AI-8/AI-9 remain open** (AI-6, AI-7, AI-8, AI-10 and the hands-on #169 boxes are delegated to agent QA by owner decision 2026-11-13, not accepted; AI-9 and the #169 signing decision stay with the owner). Documents remain in memory except
 explicit user-requested saves. [Save / Save As](design/FILE_LIFECYCLE.md) and
