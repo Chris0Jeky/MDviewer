@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ pub const MAX_PINS: usize = 64;
 pub const MAX_SEEN: usize = 5_000;
 pub const SCAN_DEPTH: usize = 8;
 pub const SCAN_FILES: usize = 5_000;
+/// Directories one scan may read, and how long it may run: a pinned drive root or a huge tree
+/// with few Markdown files stops here instead of walking on in a blocking task.
+pub const SCAN_DIRS: usize = 10_000;
+pub const SCAN_TIME: Duration = Duration::from_secs(5);
 const SKIPPED: [&str; 6] = ["node_modules", ".git", "target", "dist", "build", ".venv"];
 /// Folders whose data files the Library lists as agent data (D5).
 const AGENT_FOLDERS: [&str; 3] = [".claude", ".codex", ".agent-harness"];
@@ -92,11 +96,25 @@ pub struct Store {
     pub unrestored: Vec<Stamped>,
 }
 
+/// The case-folded identity of a path (Windows paths compare case-insensitively).
+pub fn seen_key(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase()
+}
+
 fn same(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    seen_key(a) == seen_key(b)
+}
+
+/// `serde_json` refuses a path that is not valid Unicode (an unpaired UTF-16 surrogate in a
+/// Windows name), which would fail every save. Such a path is never stored.
+fn storable(path: &Path) -> bool {
+    path.to_str().is_some()
 }
 
 fn upsert(list: &mut Vec<Stamped>, path: &Path, at: u64, cap: usize) {
+    if !storable(path) {
+        return;
+    }
     list.retain(|entry| !same(&entry.path, path));
     list.insert(
         0,
@@ -113,8 +131,9 @@ impl Store {
         upsert(&mut self.recent, path, at, MAX_RECENT);
     }
     pub fn pin_file(&mut self, path: &Path, at: u64) -> bool {
-        if self.pinned_files.len() >= MAX_PINS
-            && !self.pinned_files.iter().any(|e| same(&e.path, path))
+        if !storable(path)
+            || (self.pinned_files.len() >= MAX_PINS
+                && !self.pinned_files.iter().any(|e| same(&e.path, path)))
         {
             return false;
         }
@@ -122,7 +141,7 @@ impl Store {
         true
     }
     pub fn pin_project(&mut self, path: &Path, at: u64) -> bool {
-        if !crate::file_policy::is_local_file_path(path) {
+        if !storable(path) || !crate::file_policy::is_local_file_path(path) {
             return false;
         }
         if self.projects.len() >= MAX_PINS && !self.projects.iter().any(|e| same(&e.path, path)) {
@@ -141,8 +160,27 @@ impl Store {
     pub fn mark_seen(&mut self, path: &Path, at: u64) {
         upsert(&mut self.seen, path, at, MAX_SEEN);
     }
-    pub fn seen_at(&self, path: &Path) -> Option<u64> {
-        self.seen.iter().find(|e| same(&e.path, path)).map(|e| e.at)
+    /// Stamp every path as seen at `at`; the same as `mark_seen` for each, in one pass.
+    pub fn mark_seen_many(&mut self, paths: &[PathBuf], at: u64) {
+        let mut unique = HashSet::new();
+        let fresh: Vec<Stamped> = paths
+            .iter()
+            .filter(|path| storable(path) && unique.insert(seen_key(path)))
+            .map(|path| Stamped {
+                path: path.clone(),
+                at,
+            })
+            .collect();
+        self.seen.retain(|e| !unique.contains(&seen_key(&e.path)));
+        self.seen.splice(0..0, fresh);
+        self.seen.truncate(MAX_SEEN);
+    }
+    /// Every seen stamp by `seen_key`, built once so a scan looks files up in O(1).
+    pub fn seen_map(&self) -> HashMap<String, u64> {
+        self.seen
+            .iter()
+            .map(|e| (seen_key(&e.path), e.at))
+            .collect()
     }
     /// Forget every path; the reopen-on-launch preference is kept.
     pub fn clear(&mut self) {
@@ -164,7 +202,7 @@ impl Store {
         let mut unique = HashSet::new();
         self.session = open
             .chain(self.unrestored.iter().cloned())
-            .filter(|entry| unique.insert(entry.path.to_string_lossy().to_lowercase()))
+            .filter(|entry| storable(&entry.path) && unique.insert(seen_key(&entry.path)))
             .take(crate::file_policy::MAX_BATCH_FILES)
             .collect();
     }
@@ -191,7 +229,8 @@ impl Store {
 
     /// Drop anything that is not an absolute local drive path, and re-apply caps.
     fn sanitize(mut self) -> Self {
-        let keep = |e: &Stamped| crate::file_policy::is_local_file_path(&e.path);
+        let keep =
+            |e: &Stamped| storable(&e.path) && crate::file_policy::is_local_file_path(&e.path);
         for (list, cap) in [
             (&mut self.recent, MAX_RECENT),
             (&mut self.pinned_files, MAX_PINS),
@@ -300,7 +339,7 @@ pub struct ScannedFile {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Scan {
     pub files: Vec<ScannedFile>,
-    /// True when the depth or file bound stopped the walk early.
+    /// True when the depth, file, directory or time bound stopped the walk early.
     pub truncated: bool,
 }
 
@@ -318,17 +357,32 @@ fn is_markdown(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
 }
 
-/// Bounded walk of a project folder for Markdown files and agent data files (`is_agent_data`).
+/// Bounded walk (depth, files, directories, time) of a project folder for Markdown files and agent data files (`is_agent_data`).
 /// Never follows a junction, symlink or other redirecting reparse point; skips build/dependency folders and
 /// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
+    scan_with(root, SCAN_DIRS, Instant::now() + SCAN_TIME, Instant::now)
+}
+
+fn scan_with(root: &Path, max_dirs: usize, deadline: Instant, now: impl Fn() -> Instant) -> Scan {
     let mut scan = Scan::default();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
-    while let Some((dir, depth)) = stack.pop() {
+    let mut dirs = 0usize;
+    'walk: while let Some((dir, depth)) = stack.pop() {
+        if dirs >= max_dirs || now() >= deadline {
+            scan.truncated = true;
+            break;
+        }
+        dirs += 1;
         let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
         for entry in entries.flatten() {
+            // A huge flat folder must not outlast the deadline either (Codex on #320).
+            if now() >= deadline {
+                scan.truncated = true;
+                break 'walk;
+            }
             let path = entry.path();
             let Ok(metadata) = fs::symlink_metadata(&path) else {
                 continue;
@@ -503,6 +557,88 @@ mod tests {
         assert_eq!(load(&file), (store.clone().sanitize(), true));
         store.clear();
         assert_eq!(store, Store::default());
+    }
+
+    /// A path `serde_json` cannot write: an unpaired UTF-16 surrogate (Windows) or invalid UTF-8.
+    fn unwritable(dir: &tempfile::TempDir) -> PathBuf {
+        #[cfg(windows)]
+        let name = {
+            use std::os::windows::ffi::OsStringExt;
+            std::ffi::OsString::from_wide(&[0x61, 0xD800, 0x2E, 0x6D, 0x64])
+        };
+        #[cfg(unix)]
+        let name = {
+            use std::os::unix::ffi::OsStringExt;
+            std::ffi::OsString::from_vec(vec![0x61, 0xFF, 0x2E, 0x6D, 0x64])
+        };
+        dir.path().join(name)
+    }
+
+    #[test]
+    fn a_path_json_cannot_write_is_never_stored_so_saving_keeps_working() {
+        let dir = tempfile::tempdir().unwrap();
+        let (bad, good) = (unwritable(&dir), abs(&dir, "good.md"));
+        assert!(bad.to_str().is_none());
+        let mut store = Store::default();
+        store.opened(&bad, 1);
+        store.mark_seen(&bad, 1);
+        assert!(!store.pin_file(&bad, 1));
+        assert!(!store.pin_project(&bad, 1));
+        store.record_session(&[bad.clone(), good.clone()], 1);
+        store.opened(&good, 2);
+        let file = dir.path().join("library.json");
+        save(&file, &store).expect("the library still persists");
+        assert_eq!(load(&file).0.recent.len(), 1);
+        assert_eq!(store.session.len(), 1);
+        assert!(store.seen.is_empty() && store.pinned_files.is_empty());
+        // A store that somehow holds one (an old build) is cleaned on load, not left unsavable.
+        store.recent.push(Stamped { path: bad, at: 3 });
+        assert!(store
+            .sanitize()
+            .recent
+            .iter()
+            .all(|e| e.path.to_str().is_some()));
+    }
+
+    #[test]
+    fn mark_seen_many_stamps_every_path_once_dedupes_and_keeps_the_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::default();
+        store.mark_seen(&abs(&dir, "old.md"), 1);
+        store.mark_seen(&abs(&dir, "keep.md"), 2);
+        store.mark_seen_many(
+            &[
+                abs(&dir, "a.md"),
+                abs(&dir, "OLD.md"),
+                abs(&dir, "A.MD"),
+                unwritable(&dir),
+            ],
+            9,
+        );
+        let seen = store.seen_map();
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "a.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "old.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "keep.md"))), Some(&2));
+        let many: Vec<_> = (0..MAX_SEEN + 5)
+            .map(|n| abs(&dir, &format!("{n}.md")))
+            .collect();
+        store.mark_seen_many(&many, 10);
+        assert_eq!(store.seen.len(), MAX_SEEN);
+    }
+
+    #[test]
+    fn seen_map_answers_like_a_case_folding_lookup_without_scanning() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::default();
+        store.mark_seen(&abs(&dir, "Notes.MD"), 7);
+        store.mark_seen(&abs(&dir, "b.md"), 9);
+        store.mark_seen(&abs(&dir, "notes.md"), 11); // Same file: the later stamp wins.
+        let seen = store.seen_map();
+        assert_eq!(seen.len(), 2);
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "NOTES.md"))), Some(&11));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "B.md"))), Some(&9));
+        assert_eq!(seen.get(&seen_key(&abs(&dir, "c.md"))), None);
     }
 
     #[test]
@@ -694,6 +830,53 @@ mod tests {
         let scan = scan(dir.path());
         assert_eq!(scan.files.len(), SCAN_FILES);
         assert!(scan.truncated);
+    }
+
+    #[test]
+    fn scan_stops_at_the_directory_and_time_bounds_and_reports_it() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..20 {
+            fs::create_dir(dir.path().join(format!("empty{n}"))).unwrap();
+        }
+        fs::write(dir.path().join("a.md"), b"x").unwrap();
+        let far = Instant::now() + Duration::from_secs(3_600);
+        let all = scan_with(dir.path(), usize::MAX, far, Instant::now);
+        assert!(!all.truncated && all.files.len() == 1, "{all:?}");
+        let few = scan_with(dir.path(), 5, far, Instant::now);
+        assert!(few.truncated, "the directory bound is reported");
+        let late = scan_with(dir.path(), usize::MAX, Instant::now(), Instant::now);
+        assert!(late.truncated, "a passed deadline is reported");
+    }
+
+    #[test]
+    fn the_deadline_also_stops_a_walk_inside_one_large_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 0..50 {
+            fs::write(dir.path().join(format!("note{n}.md")), b"x").unwrap();
+        }
+        // The clock passes the deadline after the root is entered, while its entries are listed.
+        let start = Instant::now();
+        let calls = std::cell::Cell::new(0u32);
+        let clock = || {
+            calls.set(calls.get() + 1);
+            if calls.get() <= 3 {
+                start
+            } else {
+                start + Duration::from_secs(10)
+            }
+        };
+        let scan = scan_with(
+            dir.path(),
+            usize::MAX,
+            start + Duration::from_secs(5),
+            clock,
+        );
+        assert!(scan.truncated, "the deadline inside a folder is reported");
+        assert!(
+            scan.files.len() < 50,
+            "the walk stopped early: {}",
+            scan.files.len()
+        );
     }
 
     #[cfg(windows)]

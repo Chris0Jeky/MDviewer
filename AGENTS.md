@@ -104,8 +104,9 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
 - Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
-- Review/merge gates: correctness (no-slice holds), CI/tests green, manual browser check for
-  UI/pagination/export, zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
+- Review/merge gates: correctness (no-slice holds), CI/tests green, a post-merge agent QA acceptance
+  check for UI/pagination/export on the next green build (`docs/qa/ACCEPTANCE.md`; mechanical acceptance is agent work by owner
+  decision 2026-11-13, never an owner task), zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
 
 ## Security / Privacy Guardrails
 
@@ -120,6 +121,12 @@ page breaks and breaks the no-slice guarantee. This is the single most important
   titles, headings, document URLs, or export contents (`tests/pulse.test.ts` proves it).
   It stores only its own `pulseboard:*` consent/visit/region/session keys. No other
   fetch/XHR/WebSocket at runtime, and no other telemetry.
+- PDFs (`src/pdf/**`, docs/design/PDF_WORKBENCH.md) are parsed and drawn on the device by PDFium
+  compiled to WASM (`@embedpdf/pdfium`, lazy chunk, wasm fetched from the app's own origin; nothing
+  from `src/pdf` loads before a PDF is opened). A PDF never goes through the Markdown pipeline. PDF
+  JavaScript, OpenAction, Launch, SubmitForm and every action other than an internal page jump or an
+  http(s) link are shown, never run; web links go through the shell's one `openWebLink` path. A PDF
+  password stays in memory for that tab only. Only `src/pdf/engine.ts` calls PDFium.
 - `markdown-it` runs with `html: true`, so every rendered fragment is sanitized with DOMPurify
   before DOM insertion. Automatic remote-resource references are stripped; only embedded raster
   image data URLs are allowed. A relative image `src` is kept only as an inert `data-local-src`;

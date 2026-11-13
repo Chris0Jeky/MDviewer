@@ -250,7 +250,8 @@ Find/Replace, keyboard New/Open/Save, layout/focus, source scrolling, short-wind
 reflow and accessibility states. The CI `firefox-authoring-evidence` artifact
 records screenshots, failure traces and actual browser versions. This is separate
 from native WebView2, real Narrator, operating-system IME and Windows contrast-theme
-acceptance. Those human checks remain in #169 and AI-6. See
+acceptance. Those checks remain open in #169 and AI-6, now as agent QA charters
+(`docs/qa/ACCEPTANCE.md`, owner decision 2026-11-13). See
 [the coverage and limits](design/AUTHORING_QUALITY.md).
 
 Memory figures from a hosted runner are diagnostic observations. A useful comparison
@@ -263,7 +264,9 @@ Explorer associations, install/uninstall, SmartScreen experience, keyboard/Narra
 behavior and your preferred print driver still need acceptance on a normal Windows
 desktop. [Issue #169](https://github.com/Chris0Jeky/MDviewer/issues/169) tracks those
 checks, representative performance measurements and the signing/distribution decision.
-Existing web human acceptance items AI-6/AI-7/AI-8/AI-9 remain separate and open.
+The hands-on checks are agent QA work (owner decision 2026-11-13, `docs/qa/ACCEPTANCE.md`);
+only the signing decision stays with the owner. Web items AI-6/AI-7/AI-8 are delegated the same
+way and AI-9 stays with the owner; all remain open.
 
 ## Local Windows builds and native checks
 

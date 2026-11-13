@@ -218,28 +218,31 @@ pub(crate) async fn library_scan(app: AppHandle, id: String) -> Result<ProjectSc
     let scan = tauri::async_runtime::spawn_blocking(move || library::scan(&root))
         .await
         .map_err(|_| "The project folder could not be listed.".to_string())?;
-    Ok(with_library(&app, |library| ProjectScan {
-        truncated: scan.truncated,
-        files: scan
-            .files
-            .into_iter()
-            .map(|file| ProjectFile {
-                unseen: library
-                    .store
-                    .seen_at(&file.path)
-                    .is_none_or(|seen| file.modified > seen),
-                id: library.ids.id(&file.path),
-                name: file
-                    .path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                path: file.path.to_string_lossy().into_owned(),
-                relative: file.relative,
-                modified: file.modified,
-                agent: file.agent,
-            })
-            .collect(),
+    Ok(with_library(&app, |library| {
+        // One case-folded map per scan, not a linear search per file under the lock.
+        let seen = library.store.seen_map();
+        ProjectScan {
+            truncated: scan.truncated,
+            files: scan
+                .files
+                .into_iter()
+                .map(|file| ProjectFile {
+                    unseen: seen
+                        .get(&library::seen_key(&file.path))
+                        .is_none_or(|seen| file.modified > *seen),
+                    id: library.ids.id(&file.path),
+                    name: file
+                        .path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    path: file.path.to_string_lossy().into_owned(),
+                    relative: file.relative,
+                    modified: file.modified,
+                    agent: file.agent,
+                })
+                .collect(),
+        }
     }))
 }
 
@@ -373,6 +376,25 @@ pub(crate) fn library_mark_seen(app: AppHandle, id: String) {
 fn folder_refusal(folder: &Path) -> Option<&'static str> {
     (!crate::file_policy::is_local_file_path(folder))
         .then_some("Network folders cannot be pinned. Choose a folder on a local drive.")
+}
+
+/// Mark every listed entry seen and persist once (`library_mark_seen` writes per call).
+/// Unknown ids are skipped; at most `MAX_SEEN` are read.
+#[tauri::command]
+pub(crate) fn library_mark_seen_many(app: AppHandle, ids: Vec<String>) {
+    let paths: Vec<PathBuf> = with_library(&app, |l| {
+        ids.iter()
+            .take(library::MAX_SEEN)
+            .filter_map(|id| l.ids.path(id).map(Path::to_path_buf))
+            .collect()
+    });
+    if !paths.is_empty() {
+        // A failed write is ignored, as for `library_mark_seen`: seen marks are a convenience.
+        let _ = mutate(&app, |store, at| {
+            store.mark_seen_many(&paths, at);
+            true
+        });
+    }
 }
 
 /// Pin a project folder chosen in the native folder picker.

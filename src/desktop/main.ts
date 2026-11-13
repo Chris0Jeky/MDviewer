@@ -10,6 +10,8 @@ import type { Doc } from "../app/state";
 import { native, type OpenBatch, type ReadResult, type SaveResult } from "./native";
 import { decodeMarkdown, drainSerially, nextUntitledName } from "./session";
 import { DesktopDocuments, type SaveTarget } from "./documents";
+import { PdfTabs, isPdfFile, MAX_PDF_BYTES } from "./pdfs";
+import type { PdfView } from "../pdf";
 import { installShortcuts, registerCommand } from "./commands";
 import { registerPanel } from "./panels";
 import { mountTabs } from "./shell/tabs";
@@ -43,6 +45,7 @@ const notice = element("reader-notice");
 const workspaceNotice = element("workspace-notice");
 const appRoot = element("app");
 const scroll = element("reader-scroll");
+const pdfHost = element("reader-pdf");
 const status = element("reader-status");
 const fileInput = element<HTMLInputElement>("reader-file-input");
 const workspace = element("desktop-workspace");
@@ -56,6 +59,12 @@ const returnButton = element<HTMLButtonElement>("reader-return");
 const settings = loadSettings();
 // The single owner of open documents across reading and the PDF workspace.
 const docs = new DesktopDocuments();
+// PDF tabs (PDF_WORKBENCH.md, P1). The view loads lazily; at most one is mounted at a time.
+const pdfs = new PdfTabs();
+let pdfView: { id: string; view: Promise<PdfView>; abort: AbortController } | null = null;
+/** A PDF is shown when one is active and no reader document is. */
+const pdfShown = (): boolean => !app && !!pdfs.active && !docs.reader.activeId;
+const isPdfTab = (id: string): boolean => pdfs.tabs.some(tab => tab.id === id);
 let app: App | null = null;
 let detachWorkspace: (() => void) | null = null;
 let changingMode = false;
@@ -161,6 +170,12 @@ function setTheme(choice: "light" | "dark" | "sepia" | "system"): void {
 // Live reload (S1c): a dirty document whose file changed on disk gets a
 // non-modal bar. Nothing is discarded without a click.
 const dismissedConflicts = new Set<string>();
+// File events that arrived while the document owner was changing; finishMode replays them (#234).
+const pendingFollow = new Set<string>();
+// Bumped when a mode change starts: a re-read that spans one answers for the previous owner (#257).
+let modeEpoch = 0;
+// Clean documents still marked changed on disk that were asked to follow their file again (#234).
+const refollowed = new Set<string>();
 function conflictBar(after: HTMLElement): { bar: HTMLElement; text: HTMLElement } {
   const bar = document.createElement("div");
   bar.className = "reader-notice file-conflict";
@@ -232,10 +247,20 @@ async function flushSession(): Promise<void> {
   clearTimeout(timer);
 }
 
+/** Back to clean while the file changed (Keep mine, then undo): follow the file, once per change (#234). */
+function followIfClean(target = docs.saveTarget()): void {
+  if (target?.binding?.disk === "changed" && !target.dirty && !changingMode && !refollowed.has(target.binding.token)) {
+    refollowed.add(target.binding.token);
+    void followChange(target.binding.token);
+  }
+}
+
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
-  tabs.render(open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), active?.id ?? null, changingMode);
+  const pdfItems = app ? [] : pdfs.tabs.map(tab => ({ id: tab.id, label: tab.name, dirty: false }));
+  tabs.render([...open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), ...pdfItems],
+    pdfShown() ? pdfs.activeId : active?.id ?? null, changingMode);
   const target = docs.saveTarget();
   const shown = !app && active && renderedReaderId === active.id ? docs.reader.active : null;
   if (shown) {
@@ -245,7 +270,7 @@ function syncDocuments(): void {
   saveState.textContent = target
     ? statusParts({ name: target.name, path: target.binding?.path, text: "", dirty: target.dirty, disk: target.binding?.disk }).state
     : "";
-  editToggle.disabled = !!app || changingMode;
+  editToggle.disabled = !!app || changingMode || pdfShown();
   editToggle.setAttribute("aria-pressed", String(editing));
   editHost.hidden = !editing;
   const divider = editHost.nextElementSibling;
@@ -259,8 +284,10 @@ function syncDocuments(): void {
   for (const button of appRoot.querySelectorAll<HTMLButtonElement>("button[data-desktop-command]")) {
     button.disabled = workspaceBusy || !active;
   }
-  document.title = active ? `${active.name} — MDviewer` : "MDviewer";
+  const titled = pdfShown() ? pdfs.active : active;
+  document.title = titled ? `${titled.name} — MDviewer` : "MDviewer";
   recordSession();
+  followIfClean(target);
   const conflicted = !!target?.binding && target.binding.disk === "changed" && target.dirty
     && !dismissedConflicts.has(target.binding.token);
   for (const { bar, text } of conflictBars) {
@@ -283,6 +310,9 @@ function rememberReaderPosition(): void {
  * replaces only changed blocks (S2c); anything else (another document, settings) is a full render.
  */
 function render(importErrors: readonly string[] = [], patch = false): Promise<void> {
+  if (pdfShown()) { ++renderGeneration; syncDocuments(); showPdf(); return Promise.resolve(); }
+  pdfHost.hidden = true;
+  scroll.hidden = false;
   const patching = patch && !!docs.reader.active && renderedReaderId === docs.reader.active.id;
   // A switch to another document may reuse that document's kept DOM; the one being left is kept.
   // Re-rendering the shown document (new text, settings, warnings) never reuses anything.
@@ -390,11 +420,56 @@ function render(importErrors: readonly string[] = [], patch = false): Promise<vo
   return renderChain;
 }
 
+/**
+ * Hand the view to the active PDF tab: flush and close Edit (its text stays with its document),
+ * remember the reader position, and leave no reader document active, so no reader command (Save,
+ * Edit, Export, copy) can act on a document that is not shown.
+ */
+function focusPdf(): void {
+  if (editing) { flushEdit(); editing = false; }
+  rememberReaderPosition();
+  docs.reader.activeId = null;
+}
+
+/** Show the active PDF tab, mounting its view (and loading the PDF chunk) when needed. */
+function showPdf(): void {
+  const tab = pdfs.active;
+  if (!tab) return;
+  scroll.hidden = true;
+  pdfHost.hidden = false;
+  if (pdfView?.id === tab.id) { void pdfView.view.then(view => view.showOutline(), () => undefined); return; }
+  closePdfView();
+  outline.replaceChildren();
+  status.textContent = `Opening ${tab.name}…`;
+  saveState.textContent = "";
+  const abort = new AbortController();
+  const view = import("../pdf").then(module => module.mountPdf(pdfHost, {
+    name: tab.name, bytes: tab.bytes, outline, openExternal: openWebLink, signal: abort.signal,
+    status: text => { if (pdfView?.id === tab.id && pdfShown()) status.textContent = text; },
+  }));
+  const current = { id: tab.id, view, abort };
+  pdfView = current;
+  view.catch(error => {
+    if (pdfView !== current) return;
+    pdfView = null; // the next activation retries
+    report(`Could not open ${tab.name}: ${errorText(error)}`);
+  });
+}
+
+function closePdfView(): void {
+  const current = pdfView;
+  pdfView = null;
+  current?.abort.abort();
+  void current?.view.then(view => view.destroy(), () => undefined);
+}
+
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
   const previousActiveId = docs.reader.activeId;
+  const keepPdf = pdfShown() && request !== generation;
   errors.push(...docs.addBatch(batch.documents, request === generation));
+  if (keepPdf) docs.reader.activeId = null;
   syncDocuments(); // The workspace's addBatch emits before the imported clean baselines are recorded.
   if (errors.length) report(errors.join(" "));
   // Capture the notices for this batch only, after publishing its immediate errors.
@@ -412,10 +487,20 @@ async function readFiles(files: File[]): Promise<void> {
   const request = ++generation;
   const batch: OpenBatch = { documents: [], errors: [], canceled: false };
   let total = 0;
+  let openedPdf = false;
+  const shownPdf = pdfs.activeId;
   report("");
   for (const file of files.slice(0, 32)) {
     try {
-      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
+      if (isPdfFile(file.name, file.type)) {
+        if (app || changingMode) throw new Error("Return to the reading view to open a PDF.");
+        if (file.size > MAX_PDF_BYTES) throw new Error("PDFs larger than 200 MB cannot be opened.");
+        const problem = pdfs.add(file.name, new Uint8Array(await file.arrayBuffer()));
+        if (problem) throw new Error(problem);
+        openedPdf = true;
+        continue;
+      }
+      if (!isMarkdownFile(file.name, file.type)) throw new Error("Only Markdown, PDF and data files (JSON, JSON Lines, YAML, TOML, CSV, TSV, plain text) are supported.");
       if (file.size > SIZE_HARD_BYTES || total + file.size > SIZE_HARD_BYTES) throw new Error("This batch exceeds the 25 MB limit.");
       if (file.size > SIZE_SOFT_BYTES && !window.confirm(`Open ${file.name}? Large documents can take longer to render.`)) continue;
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -433,7 +518,13 @@ async function readFiles(files: File[]): Promise<void> {
     }
   }
   if (files.length > 32) batch.errors.push({ name: "Extra files", message: "Open at most 32 files at once." });
+  // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
+  // Only the newest import may take the view (a slow PDF read must not override a later choice).
+  const showPdfNow = openedPdf && !batch.documents.length && request === generation && !app && !changingMode;
+  if (showPdfNow) focusPdf();
   commitBatch(batch, request);
+  if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
+  else if (openedPdf) { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); } // a stale import adds its tab without taking the active mark
 }
 
 async function open(): Promise<void> {
@@ -658,7 +749,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
   editHost.replaceChildren();
   rememberReaderPosition();
   themeAtEntry = settings.screenTheme;
-  changingMode = true; ++generation; ++renderGeneration;
+  changingMode = true; ++generation; ++renderGeneration; ++modeEpoch;
   // Layout needs a visible workspace, but its controls must not accept input
   // until the initial render and source handoff have finished.
   appRoot.inert = true;
@@ -678,7 +769,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
     app = mounted.app;
     docs.adoptReaderInto(app);
     if (revealEditor && app.settings.viewMode === "preview") app.updateSettings({ viewMode: "editor" });
-    const offText = app.store.on("text", () => { generation += 1; });
+    const offText = app.store.on("text", () => { generation += 1; followIfClean(); });
     let activeId = app.store.activeId;
     const offChange = app.store.on("change", () => {
       if (!app) return;
@@ -710,7 +801,7 @@ async function enterWorkspace(revealEditor = false): Promise<void> {
 
 async function returnToReader(): Promise<void> {
   if (!app || changingMode || app.exportState.busy || nativeSaveBusy) return;
-  changingMode = true; ++generation;
+  changingMode = true; ++generation; ++modeEpoch;
   appRoot.inert = true; // No edits or sample actions may race the ownership snapshot.
   syncDocuments();
   try {
@@ -761,14 +852,27 @@ async function returnToReader(): Promise<void> {
 function finishMode(): void {
   changingMode = false;
   for (const { batch, request } of queuedBatches.splice(0)) commitBatch(batch, request);
+  for (const token of [...pendingFollow]) { pendingFollow.delete(token); void followChange(token); }
   syncDocuments();
 }
 
 function closeDocument(): void {
   if (docs.reader.activeId) closeDocumentById(docs.reader.activeId);
+  else if (pdfShown() && pdfs.activeId) closeDocumentById(pdfs.activeId);
 }
 
 function closeDocumentById(id: string): void {
+  if (isPdfTab(id)) {
+    if (changingMode) return;
+    const wasShown = pdfShown() && pdfs.activeId === id;
+    if (pdfView?.id === id) closePdfView();
+    pdfs.close(id);
+    report("");
+    if (!wasShown) { syncDocuments(); return; }
+    if (!pdfs.active && docs.reader.documents.length) docs.reader.activeId = docs.reader.documents.at(-1)!.id;
+    void render();
+    return;
+  }
   const doc = docs.reader.documents.find(candidate => candidate.id === id);
   if (!doc || changingMode) return;
   if (nativeSaveBusy) { report("Wait for the save to finish before closing this document."); return; }
@@ -782,6 +886,12 @@ function closeDocumentById(id: string): void {
 }
 
 function activateDocument(id: string): void {
+  if (isPdfTab(id)) {
+    if (changingMode || (pdfShown() && pdfs.activeId === id)) return;
+    focusPdf();
+    ++generation; pdfs.activeId = id; report(""); void render();
+    return;
+  }
   if (changingMode || docs.reader.activeId === id || !docs.reader.documents.some(doc => doc.id === id)) return;
   visit(id, docs.reader.activeId);
   ++generation; docs.reader.activeId = id; report(""); void render();
@@ -828,6 +938,7 @@ function openSample(): void {
 }
 element("reader-sample").addEventListener("click", openSample);
 function resizeText(delta: number): void {
+  if (pdfShown()) { void pdfView?.view.then(view => view.zoomBy(delta), () => undefined); return; }
   textSize = Math.min(26, Math.max(13, textSize + delta));
   content.style.setProperty("--reader-text-size", `${textSize}px`);
 }
@@ -837,8 +948,21 @@ window.addEventListener("dragover", event => {
 window.addEventListener("drop", event => {
   if (!event.dataTransfer?.types.includes("Files")) return;
   event.preventDefault();
+  // A host that can bind dropped files (the browser host) opens them as their files.
+  const bound = changingMode ? null : native.openDropped?.(event.dataTransfer.items);
+  if (bound) { void openBound(bound); return; }
   void readFiles(Array.from(event.dataTransfer.files));
 });
+
+async function openBound(dropped: Promise<OpenBatch | { copies: File[] }>): Promise<void> {
+  const request = ++generation;
+  report("");
+  try {
+    const batch = await dropped;
+    if ("copies" in batch) await readFiles(batch.copies);
+    else commitBatch(batch, request);
+  } catch (error) { report(`Could not open files: ${errorText(error)}`); }
+}
 
 const SAVE_AS_HINT = "Use Save As (Ctrl+Shift+S) to keep your text in another file.";
 function conflictText(name: string, reason: Extract<SaveResult, { outcome: "conflict" }>["reason"]): string {
@@ -856,6 +980,7 @@ const FAILURES: Record<string, string> = {
   "too-large": "is larger than the 25 MB save limit.",
   "invalid-destination": "needs a .md or .markdown file name.",
   "revoked-after-write": "was saved, but it was closed while saving.",
+  "permission-denied": "could not be written because the browser did not allow it.",
 };
 
 /** Owned Save / Save As (docs/design/FILE_LIFECYCLE.md); Save Copy stays the export path. */
@@ -923,14 +1048,23 @@ function saveCopy(): void {
 
 /** Handle one changed file reported by the host watcher. */
 async function followChange(token: string): Promise<void> {
+  if (changingMode) { pendingFollow.add(token); return; }
   const target = docs.byToken(token);
   if (!target) return;
+  const epoch = modeEpoch;
+  const sent = target.binding?.generation ?? 0;
   let result: ReadResult;
-  try { result = await native.readDocument(token, !target.dirty, target.binding?.generation ?? 0); }
+  try { result = await native.readDocument(token, !target.dirty, sent); }
   catch { return; } // A failed re-read changes nothing; the next notification retries.
+  if (changingMode) { pendingFollow.add(token); return; }
   const current = docs.byToken(token);
-  if (!current || current.id !== target.id) return;
+  if (!current) return;
+  // The owner changed (#257) or a Save or Reload moved the binding (#248) while this read ran, so
+  // its answer describes an older state. Ask again: the host gives adopted text to a webview behind it.
+  if (epoch !== modeEpoch || (current.binding?.generation ?? 0) !== sent) { void followChange(token); return; }
+  if (current.id !== target.id) return;
   if (result.outcome === "unchanged") {
+    refollowed.delete(token);
     if (current.binding?.disk !== "synced") { docs.markDisk(token, "synced"); syncDocuments(); }
     return;
   }
@@ -944,11 +1078,13 @@ async function followChange(token: string): Promise<void> {
   if (result.text === null || current.dirty) {
     // Dirty: keep the edits and the old read, so Save conflicts instead of overwriting.
     dismissedConflicts.delete(token);
+    refollowed.delete(token);
     docs.markDisk(token, "changed");
     syncDocuments();
     return;
   }
   if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  refollowed.delete(token);
   if (current.owner === "reader") {
     const doc = docs.reader.documents.find(open => open.id === current.id);
     if (doc) writeback.checkOverwritten(doc);
@@ -957,19 +1093,42 @@ async function followChange(token: string): Promise<void> {
   syncDocuments();
 }
 
+// Tokens with an explicit Reload in flight: a second click waits for the first.
+const reloading = new Set<string>();
 async function reloadFromDisk(): Promise<void> {
   const target = docs.saveTarget();
-  if (!target?.binding || changingMode || nativeSaveBusy) return;
-  const result = await native.readDocument(target.binding.token, true, target.binding.generation).catch(() => null);
-  if (result?.outcome === "changed" && result.text !== null && docs.applyReload(target, { ...result, text: result.text })) {
-    if (target.owner === "reader") void render();
+  if (!target?.binding || changingMode || nativeSaveBusy || reloading.has(target.binding.token)) return;
+  const token = target.binding.token;
+  const epoch = modeEpoch;
+  reloading.add(token);
+  let result: ReadResult | null;
+  try { result = await native.readDocument(token, true, target.binding.generation).catch(() => null); }
+  finally { reloading.delete(token); }
+  if (changingMode || epoch !== modeEpoch) {
+    // The owner changed while this read ran: the watcher path follows it under the new owner.
+    if (changingMode) pendingFollow.add(token); else void followChange(token);
+    report(`Reloading ${target.name} was interrupted by the mode change. Choose Reload again if it still differs.`);
+    return;
+  }
+  // The same document, found by its binding: switching tabs meanwhile must not drop the reload.
+  const now = docs.byToken(token);
+  if (!now || now.id !== target.id) { syncDocuments(); return; }
+  if (result?.outcome === "changed" && result.text !== null && now.text !== target.text) {
+    // Typed after the click (#255): never replace those keystrokes. The host keeps the new read, so
+    // another Reload still offers the file's text.
+    report(`You edited ${target.name} while it reloaded. Your edits are kept; choose Reload again to replace them.`);
+  } else if (result?.outcome === "changed" && result.text !== null && docs.applyReload(now, { ...result, text: result.text })) {
+    refollowed.delete(token);
+    if (now.owner === "reader" && docs.reader.activeId === now.id) void render();
     report(`Reloaded ${target.name} from disk.`);
   } else if (result?.outcome === "unchanged") {
-    docs.markDisk(target.binding.token, "synced");
+    docs.markDisk(token, "synced");
     report(`${target.name} already matches the file on disk.`);
   } else if (result?.outcome === "missing") {
-    docs.markDisk(target.binding.token, "missing");
+    docs.markDisk(token, "missing");
     report(`${target.name} was moved or deleted. Your text is still open. ${SAVE_AS_HINT}`);
+  } else if (!result || result.outcome === "failed") {
+    report(`Could not reload ${target.name} from disk. Try again.`);
   }
   syncDocuments();
 }
@@ -1017,7 +1176,7 @@ if (native.available && readTemplate) {
 }
 registerCommand({ id: "document.open", title: "Open files…", keys: ["Mod+O"], enabled: reading, run: open });
 registerCommand({ id: "document.close", title: "Close document", keys: ["Mod+W"], enabled: reading, run: closeDocument });
-registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode,
+registerCommand({ id: "edit.toggle", title: "Edit the source beside the document", keys: ["Mod+E"], enabled: () => !app && !changingMode && !pdfShown(),
   run: () => setEditing(!editing) });
 registerCommand({ id: "workspace.enter", title: "Export PDF…", keys: ["Mod+Shift+E"], enabled: () => !app && !changingMode && !nativeSaveBusy && !!docs.reader.active, run: () => enterWorkspace() });
 registerCommand({ id: "workspace.return", title: "Return to reading", enabled: () => !!app && !changingMode, run: returnToReader });
@@ -1241,13 +1400,18 @@ document.addEventListener("click", event => {
   if (href.startsWith("#")) return;
   event.preventDefault();
   if (isRelativeReference(href)) { void followRelativeLink(href); return; }
+  openWebLink(href);
+});
+
+/** The one path for web links, from Markdown documents and from PDFs. */
+function openWebLink(href: string): void {
   try {
     const url = new URL(href);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Only web links can open. Local resource links are disabled.");
     if (native.available) void native.external(url.href).catch(error => report(errorText(error)));
     else window.open(url.href, "_blank", "noopener,noreferrer");
   } catch (error) { report(errorText(error)); }
-});
+}
 
 /** A reference with no scheme and no root: resolved natively against the document's folder. */
 function isRelativeReference(reference: string): boolean {
@@ -1380,12 +1544,14 @@ if (native.available) {
       catch (error) { report(errorText(error)); }
     } });
   docs.onRelease = token => { void native.releaseDocument(token).catch(() => undefined); };
-  setDownloadDestination(async (blob, filename) => {
+  // A host without an export dialog (the browser) keeps exports as ordinary downloads.
+  const exportTo = native.save?.bind(native);
+  if (exportTo) setDownloadDestination(async (blob, filename) => {
     if (nativeSaveBusy) throw new Error("A save dialog is already open.");
     nativeSaveBusy = true;
     syncDocuments();
     try {
-      const result = await native.save(blob, filename);
+      const result = await exportTo(blob, filename);
       if (result.canceled) throw new SaveCanceled();
     } finally {
       nativeSaveBusy = false;
@@ -1436,3 +1602,5 @@ if (native.available) {
   })().catch(error => report(`Desktop integration failed: ${errorText(error)}`));
 }
 syncDocuments();
+// Every command and shortcut is installed: keys pressed from here on reach the shell.
+document.documentElement.dataset.shell = "ready";
