@@ -55,8 +55,9 @@ export function hint(value: JsonValue, key: string, timeZone: string): string {
   const n = Number(text);
   if (!Number.isFinite(n)) return "";
   const human = (amount: number): string => String(Number(amount.toFixed(2)));
-  // Only when the key names bytes (`bytes`, `total_bytes`, `sizeBytes`, `size`), not `max_megabytes`.
-  if (/(^|_)bytes$|[a-z]Bytes$|^size$/i.test(key) && !/(kilo|mega|giga)bytes$/i.test(key) && n >= 0) {
+  // Only when the key names bytes (`bytes`, `total_bytes`, `outBytes`), not `max_megabytes`,
+  // `kbytes` or `maxMBytes`; a bare `size` is as often a font or a shirt.
+  if ((/(^|_)bytes$/i.test(key) || /[a-z]Bytes$/.test(key)) && !/(kilo|mega|giga|tera|peta)bytes$/i.test(key) && !/[a-z][KMGTP]Bytes$/.test(key) && n >= 0) {
     if (n >= 1024 ** 3) return `${human(n / 1024 ** 3)} GiB`;
     if (n >= 1024 ** 2) return `${human(n / 1024 ** 2)} MiB`;
     if (n >= 1024) return `${human(n / 1024)} KiB`;
@@ -68,7 +69,7 @@ export function hint(value: JsonValue, key: string, timeZone: string): string {
     const seconds = ms ? n / 1000 : n;
     if (Math.abs(seconds) >= 3600) return `${human(seconds / 3600)} h`;
     if (Math.abs(seconds) >= 60) return `${human(seconds / 60)} min`;
-    return `${human(seconds)} s`;
+    return Math.abs(seconds) < 1 ? `${human(seconds * 1000)} ms` : `${human(seconds)} s`;
   }
   return "";
 }
