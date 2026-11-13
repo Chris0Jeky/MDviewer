@@ -218,9 +218,12 @@ function recordSession(): void {
   }, 500);
 }
 
-/** On window close: send the current open set now, after any record still in flight. */
+/**
+ * On window close: send the current open set now, after any record still in flight. Safe before the
+ * last session is restored: the host keeps every entry that has not been reopened yet (#305).
+ */
 async function flushSession(): Promise<void> {
-  if (!native.available || !sessionReady) return;
+  if (!native.available) return;
   clearTimeout(sessionTimer);
   await sendSession(docs.boundTokens());
 }
@@ -1396,8 +1399,7 @@ if (native.available) {
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }
   });
   void (async () => {
-    await native.onPending(() => { void drain(); });
-    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
+    // First, before any other awaited step: a close during startup still checks unsaved work and flushes (#305).
     await native.onClose(() => {
       if (changingMode || nativeSaveBusy || app?.exportState.busy) {
         report("Please wait for the current operation to finish before closing MDviewer.");
@@ -1405,6 +1407,8 @@ if (native.available) {
       }
       return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
     }, flushSession);
+    await native.onPending(() => { void drain(); });
+    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
     await drain();
     // Reopen the last session's files after launch files, without taking focus
     // from them (paths only; the preference is on by default).

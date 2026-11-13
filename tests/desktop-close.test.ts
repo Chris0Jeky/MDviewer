@@ -22,6 +22,7 @@ const token = (n: number) => n.toString(16).padStart(32, "0");
 const empty: OpenBatch = { documents: [], errors: [], canceled: false };
 const launched: OpenBatch = { documents: [{ name: "a.md", text: "# a", bytes: 3, token: token(1),
   path: "C:\\n\\a.md", dir: "C:\\n", encoding: "utf-8", eol: "lf" }], errors: [], canceled: false };
+const never = () => new Promise<never>(() => {});
 type Close = [() => boolean, () => Promise<void>];
 const closeHandlers = (): Close => boundary.onClose.mock.calls[0] as Close;
 
@@ -50,6 +51,31 @@ afterEach(async () => {
   await new Promise(resolve => setTimeout(resolve, 600));
   removeListeners.splice(0).forEach(remove => remove());
   document.body.replaceChildren();
+});
+
+describe("desktop close while starting (#305)", () => {
+  it("registers the close handler before any other startup step resolves", async () => {
+    boundary.onPending.mockReturnValue(never());
+    boundary.onFilesChanged.mockReturnValue(never());
+    await import("../src/desktop/main");
+    await vi.waitFor(() => expect(boundary.onPending).toHaveBeenCalled());
+    expect(boundary.onClose).toHaveBeenCalledOnce();
+    expect(boundary.onClose.mock.invocationCallOrder[0]!).toBeLessThan(boundary.onPending.mock.invocationCallOrder[0]!);
+    expect(boundary.onFilesChanged).not.toHaveBeenCalled();
+    const [canClose, flush] = closeHandlers();
+    expect(canClose(), "nothing is loaded yet, so nothing can be lost").toBe(true);
+    await expect(flush()).resolves.toBeUndefined();
+  });
+
+  it("a close before the last session is restored still records the launch files", async () => {
+    boundary.pending.mockResolvedValueOnce(launched).mockResolvedValue(empty);
+    boundary.restore.mockReturnValue(never());
+    await import("../src/desktop/main");
+    await vi.waitFor(() => expect(boundary.restore).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(document.getElementById("reader-document")!.textContent).toBe("# a"));
+    await closeHandlers()[1]();
+    expect(boundary.record).toHaveBeenCalledExactlyOnceWith([token(1)]);
+  });
 });
 
 describe("desktop session flush ordering (#250)", () => {
