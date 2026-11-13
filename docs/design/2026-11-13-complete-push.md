@@ -130,7 +130,7 @@ Goal: the web serves the same shell as Windows, with a browser host behind the `
   PWA, the Pulseboard bar and its print exclusion, the sample document, the 250 kB confirm gate,
   the phone toolbar strip and every existing export test. Ship in two steps: the shell behind a
   second entry with the full desktop e2e suite running against the browser host, then the default
-  flip in its own PR with a new human acceptance item. Shortcuts that browsers own (`Ctrl+P`,
+  flip in its own PR, accepted under its QA charter (AI-11), not an owner item. Shortcuts that browsers own (`Ctrl+P`,
   `Ctrl+K` in some, `Ctrl+T`, `Ctrl+W`) get web-safe alternatives listed in the palette.
 - **W3, follow the file.** Visible-tab re-read of open bound documents; the same reader patch,
   conflict bar and "changed since you looked" mark as Windows.
@@ -255,4 +255,5 @@ with the owner. The planned owner items become **QA charters** in `docs/qa/ACCEP
 the QA lane on the first green build after a lane reports the feature merged: **AI-11** the web
 shell before the default flip is deployed (W2); **AI-12** PDF editing on copies of invented PDFs
 (P2 to P4); **AI-13** the new readable kinds (D7, D8). Lanes tell the QA lane when a user-visible
-feature merges; they add no owner task.
+feature merges; they add no owner task. QA charters use invented files only, never the
+owner's documents.

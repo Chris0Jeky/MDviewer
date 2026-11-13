@@ -53,13 +53,14 @@ live-site passes, install, print, keyboard and Narrator) are **agent QA work** b
 2026-11-13: they sit under "Delegated to agent QA" with charters in `docs/qa/ACCEPTANCE.md`. Rules:
 
 1. **Read it at session start.**
-2. **Flag every OPEN / BLOCKED item** near the top of any status report, summary, or handoff. Never let an open item go unmentioned.
-3. **Clear an item only on explicit user confirmation.** Move it to the Completed log with date + one-line result.
+2. **Flag every OPEN / BLOCKED item** near the top of any status report, summary, or handoff, and list the delegated items with their status ("delegated, not accepted" until their charters pass). Never let an open item go unmentioned.
+3. **Clear an OPEN item only on explicit user confirmation.** Move it to the Completed log with date + one-line result.
 4. **Keep the current-state snapshot accurate** when verified truth changes.
 5. When you discover a new human-only task, add an `AI-N` item with a step-by-step guide and tell the user.
    A check an agent can run is never a human-only task: add it to `docs/qa/ACCEPTANCE.md` instead.
 6. **Delegated is not accepted.** A delegated item's status changes only with evidence (CI link, QA
-   session report, issue); never record a delegated item as accepted by the owner.
+   session report, issue); never record a delegated item as accepted by the owner. It closes only
+   under `ACTION_ITEMS.md` rule 5.
 
 ## Git Workflow
 

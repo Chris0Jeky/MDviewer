@@ -16,8 +16,9 @@
 > 5. **Delegated is not accepted.** A delegated item's status changes only with evidence (a CI link,
 >    a QA session report, an issue number); agents never mark one as accepted by the owner. A
 >    delegated item moves to the Completed log only when every row of its charter in
->    `docs/qa/ACCEPTANCE.md` has passed or is recorded "not verified, accepted by owner decision
->    2026-11-13", with the evidence linked; the matching #169 box is ticked the same way.
+>    `docs/qa/ACCEPTANCE.md` has passed or is recorded "not verified (no agent can check it; owner decision 2026-11-13 not to be asked)", with the
+>    evidence linked, and its Completed entry names every not-verified row. A not-verified row is
+>    never acceptance: a #169 box is ticked only when every one of its rows passed.
 > 6. **Keep the Current State snapshot accurate** when verified truth changes.
 
 ---
@@ -347,13 +348,12 @@ the web redesign.
 **Delegated is not accepted.** These items left the owner's list; they did not pass. Each shows its
 status: *not run*, *automated in CI* (with a link), *agent session run* (with evidence) or *defect
 filed* (with issue numbers). The QA lane owns them; charters and latest results live in
-`docs/qa/ACCEPTANCE.md`. Anything no agent can check is recorded as "not verified, accepted by owner
-decision 2026-11-13" and never sent back to the owner. In the former owner steps below, "you" and
+`docs/qa/ACCEPTANCE.md`. Anything no agent can check is recorded as "not verified (no agent can check it; owner decision 2026-11-13 not to be asked)" and never sent back to the owner. In the former owner steps below, "you" and
 "your own files" now mean the QA agent working on invented files only (never the owner's documents),
 and the "Reply ... is done" and "only you can close this item" lines no longer apply: rule 5 above
 says when a delegated item closes.
 
-- **AI-10 — Try the Windows build on real files.** Delegated 2026-11-13.
+- **AI-10 — Try the Windows build on realistic (invented) files.** Delegated 2026-11-13.
   - **Status:** defect filed: the owner ran steps 1 to 4 on the CI portable build from `722cbbd` (run 43342508614) and found [#334](https://github.com/Chris0Jeky/MDviewer/issues/334) (a tick scrolls the reader) and [#335](https://github.com/Chris0Jeky/MDviewer/issues/335) (write-back Undo hard to find). Agent session: not run.
   - **Not verifiable by an agent:** the owner's own documents stay private, so agents use an invented corpus modelled on agent-written Markdown; "confusing or missing" is judged by the agent, not the owner.
   - **Former owner steps** (charter source; no owner reply is expected any more):
@@ -510,7 +510,10 @@ says when a delegated item closes.
   Reply "AI-6 is done" (or report what looked wrong) and it moves to the Completed log.
 
 - **[#169](https://github.com/Chris0Jeky/MDviewer/issues/169) hands-on boxes — Windows install and uninstall, Explorer associations, keyboard and Narrator, printing.** Delegated 2026-11-13.
-  The boxes stay unticked in #169 until agent evidence is recorded there.
+  The boxes stay unticked in #169 until agent evidence is recorded there. Install, uninstall and
+  Explorer-association checks run only in Windows Sandbox, a virtual machine or a separate Windows
+  account, never on the owner's account: the installer registers file associations and can replace
+  the owner's installed copy and its app data. Where no such place is available they stay not run.
   - **Status:** not run. The native Windows smoke in hosted CI covers launch, Unicode paths, second-instance forwarding and saves ([WINDOWS_SMOKE.md](docs/design/WINDOWS_SMOKE.md)).
   - **Not verifiable by an agent:** a physical printer; the quality of real speech output; first-run behaviour on a separate ordinary Windows account (agents run on the owner's account and must not change the owner's file associations).
   - The #169 performance boxes were never owner steps: they are agent measurement work tracked in #169 and #202.
