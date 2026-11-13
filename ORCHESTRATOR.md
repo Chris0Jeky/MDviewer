@@ -10,20 +10,20 @@
 >
 > **Main** [`382938b`](https://github.com/Chris0Jeky/MDviewer/commit/382938b) (merge of #349): CI
 > [43357709711](https://github.com/Chris0Jeky/MDviewer/actions/runs/43357709711) and Windows Desktop
-> [43357709910](https://github.com/Chris0Jeky/MDviewer/actions/runs/43357709910) success. 26 PRs merged on 2026-11-13 (#309 to #352).
+> [43357709910](https://github.com/Chris0Jeky/MDviewer/actions/runs/43357709910) success. 26 PRs merged on 2026-11-13 (#309 to #352); then #348 (`13af3de`).
 > **Merged by track.** Finish: #311, #314, #315, #316 (D5 copy), #317, #318 (A5 embed), #319, #320, #326, #330, #331, #332,
 > #333, #336, #349, #350, #351, #352. Web: #310 (W0 `Host`), #323 (W1 browser host). PDF: #312 (P0 design), #321 (AGPL note),
-> #322 (P1a reading), #344 (P1b native open). QA: #337 (acceptance delegated to agent QA). Contract: #309.
+> #322 (P1a reading), #344 (P1b native open). QA: #337 (acceptance delegated to agent QA), #348 (charters and results, `docs/qa/ACCEPTANCE.md`). Contract: #309.
 > **Not in the app yet:** PDF editing (only open and read merged), the web shell (W2a to W5; `index.html` is still the old
 > app), local HTML pages, the context-aware weight table, D8 containers and most of D7 (`.html` is #347, open).
 >
 > **Resume in this order.** (1) #345 owner bugs #334/#335: fails only the Windows native smoke (view resets after a
-> workspace round trip with `tasks.md` as a second tab); fix at the root, then QA re-checks #334/#335. (2) #348 QA charters.
-> (3) #347 D7 `.html` (reviewed; 7/7 green at `ea55f0e`; merge). (4) #355 W2a (fix its two MEDIUMs), then #357 W3 and #359 W4 draft after merging
-> main (both conflict since #344). (5) #356 P2 pages (reviewer + deep-reviewer), then #354 P1c draft (fails the smoke).
-> (6) Dependabot #216, #218, #340. (7) Never started: local pages (`LOCAL_PAGES.md`, spike notes on `spike/local-pages`),
+> workspace round trip with `tasks.md` as a second tab); fix at the root, then QA re-checks #334/#335.
+> (2) #347 D7 `.html` (reviewed; 7/7 green at `ea55f0e`; merge). (3) #355 W2a (fix its two MEDIUMs), then #357 W3 and #359 W4 draft after merging
+> main (both conflict since #344). (4) #356 P2 pages (reviewer + deep-reviewer), then #354 P1c draft (fails the smoke).
+> (5) Dependabot #216, #218, #340. (6) Never started: local pages (`LOCAL_PAGES.md`, spike notes on `spike/local-pages`),
 > weight table, rest of D7, D8, W5, W2b default flip, P2b to P6, QA charters for #169 A to D, AI-6 proxies, W1 and PDF
-> passes; `qa` issues #341, #342, #343 (default: render GitHub alerts), #353 (upstream Pulseboard); `run-all.ps1` must
+> passes, #360 charter follow-ups; `qa` issues #341, #342, #343 (default: render GitHub alerts), #353 (upstream Pulseboard); `run-all.ps1` must
 > move `library.json` aside before a launch.
 
 > **PREVIOUS CHECKPOINT — 2026-11-12 (Companion push close-out):**
