@@ -174,3 +174,18 @@ it("bounds srcdoc navigation and removes it when no load event arrives", async (
   expect(document.querySelector("iframe.html2canvas-container")).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it("stops srcdoc navigation on cancel before the renderer starts, then removes the frame and its timer (#201)", async () => {
+  vi.useFakeTimers();
+  finishNavigation = false;
+  const stop = new AbortController();
+  const failure = expect(exportPaginatedToPdf(sourcePage(), DEFAULT_SETTINGS, { signal: stop.signal })).rejects.toThrow("stopped");
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(document.querySelector("iframe.html2canvas-container")).not.toBeNull();
+  stop.abort(new Error("stopped"));
+  await failure;
+  expect(capture).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  expect(document.querySelector("iframe.html2canvas-container")).toBeNull();
+  expect(vi.getTimerCount()).toBe(0);
+});

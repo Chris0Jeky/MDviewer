@@ -98,7 +98,7 @@ Paged.js replaces a floated note's ID and retains its source identity in `data-i
 Raster progress and outcomes live in the direct `#app > #export-status` shell row,
 outside the hidden preview and scrolling toolbar. `ExportState.pdf` exposes
 Preparing, completed-page Rendering, native Saving, browser Downloading and
-Saved/Download requested/Canceled/Failed outcomes. The mounted polite atomic
+Canceling/Saved/Download requested/Canceled/Export canceled/Failed outcomes. The mounted polite atomic
 `#export-status-live` announces the first page and quarter milestones (at most five
 progress messages); the visible count updates for every completed capture. A native
 save is successful only after its destination settles; jsPDF browser handoff says
@@ -106,9 +106,12 @@ save is successful only after its destination settles; jsPDF browser handoff say
 reason is text-only and capped at 180 characters; the existing fatal card keeps its
 full detail. Status updates do not change focus, source selection/scroll or page
 identity. The strip is excluded from print/capture, and selectors are scoped to the
-shell so an authored `#export-status` heading remains printable. No Cancel control
-or overall capture timeout is introduced. See `EXPORT_STATUS.md` and
-`tests/e2e/export-status.spec.ts`; #201 remains separate.
+shell so an authored `#export-status` heading remains printable. A Cancel control
+(`App.cancelPdfExport`) is offered only while Preparing or Rendering; it keeps the lease until the
+renderer settles (`cancel-requested`), then reports `export-canceled`, never a failure. A per-page
+progress budget (`PDF_PAGE_STALL_MS`) stops a stalled capture and points to Print. See
+`RASTER_OFFLINE_CAPTURE.md` "Bounded cancellation", `EXPORT_STATUS.md`,
+`tests/e2e/export-status.spec.ts` and `tests/e2e/export-cancel.spec.ts`.
 
 Vector `exportViaPrint` remains primary. Raster `exportPaginatedToPdf` remains a best-effort fallback, one canvas per existing page. Keep print sheets dark-on-white, html2canvas logging disabled, and task checkbox pseudo-elements off form controls. Foundation section 5's rendering constraints still apply.
 
@@ -173,6 +176,9 @@ export function repairFootnoteLinks(host: ParentNode): void;
 export type PdfExportResult = "saved" | "download-requested";
 // FallbackPdfOptions additionally accepts onSaving?(destination: "native" | "browser"): void;
 // exportPaginatedToPdf now returns Promise<PdfExportResult>; native cancellation rejects SaveCanceled.
+// FallbackPdfOptions additionally accepts signal?: AbortSignal (#201): checked before each page, before
+// assembly and before the save handoff; it rejects with signal.reason, only after the renderer settles.
+// src/export/destination.ts: ExportCanceled is the user-cancel abort reason (distinct from SaveCanceled).
 
 // src/export/markdown.ts
 export function markdownFilename(name: string): string;

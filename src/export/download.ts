@@ -22,6 +22,13 @@ import { captureLifecycleError, createOfflineCapture, offlineCaptureController }
 export interface FallbackPdfOptions {
   scale?: number;
   fileName?: string;
+  /**
+   * Cooperative cancellation (#201). Checked before each page, before PDF assembly and before
+   * the save handoff, and passed to the renderer. Once the save is handed off it is ignored.
+   * Aborting never makes the call settle early: it returns when every reader of `host` has
+   * settled, so the caller may keep its lease until then. `signal.reason` is what it throws.
+   */
+  signal?: AbortSignal;
   /** Called once per rasterized page with the 1-based page and the total. */
   onProgress?(done: number, total: number): void;
   /** Capture is complete; the native save or browser download is about to start. */
@@ -99,22 +106,35 @@ function observeClonedStyles(container: HTMLElement, frame = container.querySele
   };
 }
 
-async function waitForClonedFonts(document: Document, deadline: number): Promise<void> {
+/** Reject with the signal's reason as soon as it aborts; `work` stays observed either way. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+async function waitForClonedFonts(document: Document, deadline: number, signal: AbortSignal): Promise<void> {
   const fonts = document.fonts;
   if (!fonts) return;
   await new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      reject(new Error("The PDF capture fonts did not finish loading. Try Print / Save as PDF."));
-    }, Math.max(0, deadline - Date.now()));
-    fonts.ready.then(() => {
+    const settle = (finish: () => void) => {
       window.clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      finish();
+    };
+    const onAbort = () => settle(() => reject(signal.reason));
+    const timeout = window.setTimeout(() => {
+      settle(() => reject(new Error("The PDF capture fonts did not finish loading. Try Print / Save as PDF.")));
+    }, Math.max(0, deadline - Date.now()));
+    signal.addEventListener("abort", onAbort, { once: true });
+    fonts.ready.then(() => settle(() => {
       if (Array.from(fonts).some(font => font.status === "error")) {
         reject(new Error("The PDF capture fonts could not load. Try Print / Save as PDF."));
       } else resolve();
-    }, error => {
-      window.clearTimeout(timeout);
-      reject(error);
-    });
+    }), error => settle(() => reject(error)));
   });
 }
 
@@ -259,7 +279,8 @@ function unzoomShrunkBlocks(sheet: HTMLElement): void {
   }
 }
 
-async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvasElement> {
+async function capturePage(page: HTMLElement, scale: number, signal: AbortSignal): Promise<HTMLCanvasElement> {
+  signal.throwIfAborted();
   const container = page.ownerDocument.createElement("div");
   container.setAttribute("data-html2canvas-ignore", "true");
   container.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none";
@@ -268,7 +289,7 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
   let prepared = false;
   try {
     const controller = offlineCaptureController(page.ownerDocument);
-    const offline = controller ? await createOfflineCapture(page.ownerDocument, container, controller) : undefined;
+    const offline = controller ? await createOfflineCapture(page.ownerDocument, container, controller, signal) : undefined;
     const rendererContainer = offline ? page.ownerDocument.createElement("div") : container;
     if (offline) container.append(rendererContainer);
     const capture = html2canvas(page, {
@@ -277,23 +298,27 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
       useCORS: true,
       iframeContainer: rendererContainer,
       ignoreElements: offline?.ignoreElements,
+      // html2canvas-pro 2.6 stops its own iframe-load, stylesheet, image and paint steps at the next
+      // checkpoint. Its `fonts.ready` wait and synchronous layout/paint cannot be interrupted.
+      signal,
       onclone: async (cloneDocument, sheet) => {
+        signal.throwIfAborted();
         if (!styles || sheet.ownerDocument !== cloneDocument) throw captureLifecycleError();
-        await styles.ready(cloneDocument);
+        await abortable(styles.ready(cloneDocument), signal);
         if (offline) {
           styles.dispose();
           cloneDocument = offline.adopt(cloneDocument);
           if (sheet.ownerDocument !== cloneDocument) throw captureLifecycleError();
           styles = observeClonedStyles(container, offline.frame);
           if (!styles) throw captureLifecycleError();
-          await styles.ready(cloneDocument);
+          await abortable(styles.ready(cloneDocument), signal);
           offline.validate();
         }
         prepareRasterClone(cloneDocument, sheet, page);
         // Revealing the sheet can use fonts after html2canvas's fonts.ready
         // wait. Resolve layout first, then start a fresh font deadline.
         sheet.getBoundingClientRect();
-        await waitForClonedFonts(cloneDocument, Date.now() + 10_000);
+        await waitForClonedFonts(cloneDocument, Date.now() + 10_000, signal);
         // Measures settled geometry, so it runs once the fonts have loaded.
         unzoomShrunkBlocks(sheet);
         offline?.validate();
@@ -311,7 +336,12 @@ async function capturePage(page: HTMLElement, scale: number): Promise<HTMLCanvas
     // await. Attach now, in the same task; resource events and onclone run later.
     // Observing the capture rejection above also covers failures before mount.
     styles = observeClonedStyles(rendererContainer);
+    // The lease holder waits for the renderer itself, never just for a rejection.
     const result = await capture;
+    if (signal.aborted) {
+      if (result.ok) result.canvas.width = result.canvas.height = 0;
+      throw signal.reason;
+    }
     if (!result.ok) throw result.error;
     if (!prepared) throw captureLifecycleError();
     return result.canvas;
@@ -349,15 +379,25 @@ export async function exportPaginatedToPdf(
       ? requestedScale
       : DEFAULT_SCALE;
 
+  // Never aborts: callers that pass no signal keep the previous, uncancellable behavior.
+  const signal = opts.signal ?? new AbortController().signal;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
     if (!page) continue;
-    const canvas = await capturePage(page, scale);
-    if (i > 0) pdf.addPage(settings.paperSize, "portrait");
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, w, h, undefined, "FAST");
+    const canvas = await capturePage(page, scale, signal);
+    try {
+      signal.throwIfAborted();
+      if (i > 0) pdf.addPage(settings.paperSize, "portrait");
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, w, h, undefined, "FAST");
+    } finally {
+      // The PDF owns the encoded page; drop the full-resolution bitmap now, not at GC.
+      canvas.width = canvas.height = 0;
+    }
     opts.onProgress?.(i + 1, pages.length);
   }
 
+  // The last point at which a cancel is honored: a native dialog or browser download cannot be recalled.
+  signal.throwIfAborted();
   const filename = opts.fileName ?? "document.pdf";
   const destination = getDownloadDestination();
   opts.onSaving?.(destination ? "native" : "browser");

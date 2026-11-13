@@ -2,14 +2,26 @@ import { IDS, el } from "../app/dom";
 
 export type PdfExportStatus =
   | { phase: "idle" | "preparing" | "saving" | "downloading" | "saved" | "download-requested" | "canceled" }
+  /** A stop was requested; the renderer is still unwinding and the lease is still held (#201). */
+  | { phase: "cancel-requested" }
+  /** Stopped before any save was handed off: terminal, retry is safe. "canceled" is the save dialog's. */
+  | { phase: "export-canceled" }
   | { phase: "rendering"; done: number; total: number }
   | { phase: "failed"; message: string };
 
 /** Screen chrome outside the parked preview and the toolbar's scroll container. */
-export function mountExportStatus(root: HTMLElement): { update(status: PdfExportStatus): void; destroy(): void } {
+export function mountExportStatus(
+  root: HTMLElement,
+  onCancel: () => void = () => {},
+): { update(status: PdfExportStatus): void; destroy(): void } {
   const text = el("span", { class: "export-status-text", attrs: { "aria-hidden": "true" } });
   const progress = el("progress", { attrs: { "aria-label": "PDF pages rendered" } });
-  const content = el("div", { class: "export-status-content", hidden: true }, text, progress);
+  // Offered only while a stop can still be honored: a native dialog or browser download that has
+  // been requested cannot be recalled, so it is hidden from the saving phases on.
+  const cancel = el("button", { type: "button", class: "export-status-cancel", hidden: true,
+    onclick: () => onCancel() }, "Cancel");
+  cancel.setAttribute("aria-label", "Cancel PDF export");
+  const content = el("div", { class: "export-status-content", hidden: true }, text, progress, cancel);
   // Keep the initially empty live region mounted, even while the visual strip is
   // collapsed. Neither updates nor terminal outcomes take keyboard focus.
   const live = el("div", { id: IDS.exportStatusLive, class: "visually-hidden",
@@ -21,7 +33,8 @@ export function mountExportStatus(root: HTMLElement): { update(status: PdfExport
   function update(status: PdfExportStatus): void {
     strip.dataset.phase = status.phase;
     content.hidden = status.phase === "idle";
-    progress.hidden = !["preparing", "rendering", "saving", "downloading"].includes(status.phase);
+    progress.hidden = !["preparing", "rendering", "saving", "downloading", "cancel-requested"].includes(status.phase);
+    cancel.hidden = status.phase !== "preparing" && status.phase !== "rendering";
     let message: string;
     if (status.phase === "rendering") {
       progress.max = status.total;
@@ -44,6 +57,8 @@ export function mountExportStatus(root: HTMLElement): { update(status: PdfExport
         saved: "PDF saved.",
         "download-requested": "PDF download requested.",
         canceled: "PDF save canceled. Your document is still open.",
+        "cancel-requested": "Canceling PDF export…",
+        "export-canceled": "PDF export canceled. Nothing was saved. Your document is still open.",
       };
       if (status.phase === "failed") {
         // Error details may contain arbitrary source/engine text. Keep this

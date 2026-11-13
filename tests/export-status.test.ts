@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mountExportStatus } from "../src/ui/ExportStatus";
 
 beforeEach(() => { document.body.replaceChildren(); });
@@ -66,7 +66,31 @@ describe("PDF export status", () => {
     status.update({ phase: "preparing" });
     expect(live.textContent).toBe("Preparing PDF…");
     expect(document.querySelector("progress")!.hidden).toBe(false);
-    expect(document.querySelectorAll("button")).toHaveLength(0);
+    // Terminal outcomes and the save handoff offer no control: they cannot be recalled from here.
+    expect(document.querySelectorAll("button:not([hidden])")).toHaveLength(1);
+  });
+
+  it("offers Cancel only while a stop can still be honored, and reports the two stages of it", () => {
+    const onCancel = vi.fn();
+    const status = mountExportStatus(document.body, onCancel);
+    const live = document.querySelector("#export-status-live")!;
+    const cancel = document.querySelector<HTMLButtonElement>(".export-status-cancel")!;
+    expect(cancel.getAttribute("aria-label")).toBe("Cancel PDF export");
+    const visible = (phase: Parameters<typeof status.update>[0]) => { status.update(phase); return !cancel.hidden; };
+    expect(visible({ phase: "idle" })).toBe(false);
+    expect(visible({ phase: "preparing" })).toBe(true);
+    expect(visible({ phase: "rendering", done: 1, total: 4 })).toBe(true);
+    cancel.click();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(visible({ phase: "cancel-requested" })).toBe(false);
+    expect(live.textContent).toBe("Canceling PDF export…");
+    expect(document.querySelector("progress")!.hidden).toBe(false);
+    for (const phase of ["saving", "downloading", "saved", "download-requested", "canceled", "failed"] as const) {
+      expect(visible(phase === "failed" ? { phase, message: "x" } : { phase }), phase).toBe(false);
+    }
+    expect(visible({ phase: "export-canceled" })).toBe(false);
+    expect(live.textContent).toBe("PDF export canceled. Nothing was saved. Your document is still open.");
+    expect(document.querySelector("progress")!.hidden).toBe(true);
   });
 
   it("bounds and escapes failure detail while keeping its reason outside the preview", () => {

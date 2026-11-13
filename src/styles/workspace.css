@@ -45,6 +45,13 @@
 #app > #export-status .export-status-content[hidden], #app > #export-status progress[hidden] { display: none; }
 #app > #export-status .export-status-text { min-width: 0; overflow-wrap: anywhere; }
 #app > #export-status progress { flex: 0 1 120px; min-width: 48px; height: 6px; margin-left: auto; accent-color: var(--accent); }
+#app > #export-status .export-status-cancel {
+  flex: none; min-height: 24px; padding: 0 10px; font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-surface); color: var(--fg);
+}
+#app > #export-status .export-status-cancel:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+#app > #export-status .export-status-cancel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+#app > #export-status .export-status-cancel[hidden] { display: none; }
 /* Pulseboard Beta pill slot (Toolbar.ts). `display: contents` makes the SDK's pill and
    privacy-choices panel items of the session strip itself: the pill sits beside "Local
    session" and adds no gap while the slot is empty (SDK inert); the panel wraps onto its own

@@ -34,7 +34,7 @@ import { registerHandlersOnce, setPaginationProgress } from "../paginate/handler
 import { measurePageArea } from "../paginate/measure";
 import { exportViaPrint } from "../export/print";
 import { exportPaginatedToPdf } from "../export/download";
-import { SaveCanceled } from "../export/destination";
+import { ExportCanceled, SaveCanceled } from "../export/destination";
 import { mountToolbar } from "../ui/Toolbar";
 import type { RestoreAdmission } from "../ui/DocumentRecovery";
 import { mountCanvas } from "../ui/Canvas";
@@ -84,6 +84,15 @@ const REFLOW_KEYS: ReadonlyArray<keyof Settings> = [
 
 type Pane = "empty" | "loaded" | "error";
 
+/**
+ * Progress budget for one rasterized page, from the start of the capture or the previous page.
+ * It is a progress bound, not a document-size deadline: each page's own frame, stylesheet and font
+ * waits already total at most 30 seconds, and the renderer's image waits add up to 15 more. Past
+ * this, the export is stopped and Print is offered. A timer cannot preempt a synchronous
+ * main-thread section, so this fires only once the page yields (docs/design/RASTER_OFFLINE_CAPTURE.md).
+ */
+export const PDF_PAGE_STALL_MS = 90_000;
+
 /** One immutable in-memory request, captured before an export joins the queue. */
 interface RenderInput {
   doc: Readonly<Doc> | null;
@@ -126,6 +135,8 @@ export class App {
   /** True between the start and the end of an export (either path). */
   private exportBusy = false;
   private pdfStatus: PdfExportStatus = { phase: "idle" };
+  /** The raster export in flight: its abort handle and per-page progress watchdog (#201). */
+  private pdfExport: { abort: AbortController; timer?: number } | null = null;
 
   /** Monotonic token so a slow render can't overwrite a newer one (last-write-wins). */
   private renderToken = 0;
@@ -258,7 +269,7 @@ export class App {
     this.emptyEl = emptyEl;
 
     this.banner = mountBanner(canvasEl);
-    this.exportStatus = mountExportStatus(this.root);
+    this.exportStatus = mountExportStatus(this.root, () => this.cancelPdfExport());
     this.onExportStateChange(state => this.exportStatus.update(state.pdf));
 
     const dragOverlay = el(
@@ -467,25 +478,45 @@ export class App {
   async exportPdf(): Promise<void> {
     if (this.exportBusy) return;
     const input = this.captureRenderInput();
+    const op: NonNullable<App["pdfExport"]> = { abort: new AbortController() };
+    const { signal } = op.abort;
+    this.pdfExport = op;
+    const watch = () => {
+      window.clearTimeout(op.timer);
+      op.timer = window.setTimeout(() => this.cancelPdfExport(new Error(
+        "The PDF capture made no progress and was stopped. Try Print / Save as PDF.")), PDF_PAGE_STALL_MS);
+    };
     this.setExportBusy(true);
     this.setPdfStatus({ phase: "preparing" });
     try {
       await this.scheduler.withRenderLock(async () => {
+        // A request canceled while queued never touches the render host.
+        signal.throwIfAborted();
         await this.prepareExport(input);
+        signal.throwIfAborted();
         const snapshot = this.renderedSnapshot;
         if (!snapshot) throw new Error("No paginated document to export.");
         const base = snapshot.name.replace(/\.(md|markdown|json|jsonc|jsonl|ndjson|txt|log|yaml|yml|toml|csv|tsv)$/i, "") || "document";
         this.canvas.setBusy(true, "Preparing PDF…");
         let pages = 0;
         try {
+          watch();
           const result = await exportPaginatedToPdf(this.canvas.host, snapshot.settings, {
             fileName: `${base}.pdf`,
+            signal,
+            // Feedback from an operation that has been told to stop is obsolete.
             onProgress: (done, total) => {
+              if (signal.aborted) return;
               pages = total;
+              watch();
               this.canvas.setBusy(true, `Rendering page ${done} of ${total}…`);
               this.setPdfStatus({ phase: "rendering", done, total });
             },
-            onSaving: destination => this.setPdfStatus({ phase: destination === "native" ? "saving" : "downloading" }),
+            onSaving: destination => {
+              if (signal.aborted) return;
+              window.clearTimeout(op.timer);
+              this.setPdfStatus({ phase: destination === "native" ? "saving" : "downloading" });
+            },
           });
           // Clear this capture's failure before a queued render can publish newer feedback.
           this.banner.clearFatal();
@@ -497,13 +528,31 @@ export class App {
       });
     } catch (err) {
       if (err instanceof SaveCanceled) this.setPdfStatus({ phase: "canceled" });
+      else if (signal.aborted && signal.reason instanceof ExportCanceled) this.setPdfStatus({ phase: "export-canceled" });
       else {
         this.setPdfStatus({ phase: "failed", message: errorMessage(err) });
         this.banner.fatal(`PDF export failed: ${errorMessage(err)}`);
       }
     } finally {
+      window.clearTimeout(op.timer);
+      this.pdfExport = null;
       this.setExportBusy(false);
     }
+  }
+
+  /**
+   * Ask the running raster export to stop. Honored while it is queued, preparing or rendering;
+   * a native dialog or browser download already requested cannot be recalled, so this is then a
+   * no-op. The request is "cancel-requested": the export keeps the render lease and its busy
+   * state until the renderer has actually settled, and only then becomes terminal and retryable.
+   */
+  cancelPdfExport(reason: unknown = new ExportCanceled()): void {
+    const op = this.pdfExport;
+    const phase = this.pdfStatus.phase;
+    if (!op || op.abort.signal.aborted || (phase !== "preparing" && phase !== "rendering")) return;
+    window.clearTimeout(op.timer);
+    op.abort.abort(reason);
+    this.setPdfStatus({ phase: "cancel-requested" });
   }
 
   // ---- pipeline ------------------------------------------------------------
@@ -768,6 +817,7 @@ export class App {
     this.editor.destroy();
     this.emptyState.destroy();
     this.canvas.destroy();
+    this.pdfExport?.abort.abort(new ExportCanceled());
     this.exportStatus.destroy();
     this.settingsListeners.clear();
     this.exportListeners.clear();

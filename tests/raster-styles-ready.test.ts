@@ -243,3 +243,41 @@ it("requires onclone to have completed before using a returned canvas", async ()
   await expect(exportPaginatedToPdf(sourcePages(), DEFAULT_SETTINGS)).rejects.toThrow("capture lifecycle");
   expect(save).not.toHaveBeenCalled();
 });
+
+it("stops a stalled clone stylesheet wait on cancel, disposes its timers and listeners, and permits a retry (#201)", async () => {
+  vi.useFakeTimers();
+  const host = sourcePages();
+  const unrelated = document.createElement("iframe");
+  unrelated.className = "html2canvas-container";
+  document.body.append(unrelated);
+  const controller = new AbortController();
+  const queued = queuedClone();
+  const result = exportPaginatedToPdf(host, DEFAULT_SETTINGS, { signal: controller.signal });
+  const outcome = expect(result).rejects.toThrow("stopped by the user");
+  const { link, frame } = queued.clone;
+  const remove = vi.spyOn(link, "removeEventListener");
+  queued.enterCallback();
+  await flushCallback();
+  // The link never loads or errors: only the abort can end this wait, well inside its deadline.
+  controller.abort(new Error("stopped by the user"));
+  await vi.advanceTimersByTimeAsync(0);
+  await outcome;
+  expect(remove).toHaveBeenCalledWith("load", expect.any(Function));
+  expect(remove).toHaveBeenCalledWith("error", expect.any(Function));
+  expect(vi.getTimerCount(), "no stylesheet deadline survives the capture").toBe(0);
+  expect(document.querySelectorAll("div[data-html2canvas-ignore]")).toHaveLength(0);
+  expect(frame.isConnected).toBe(false);
+  expect(document.body.contains(unrelated)).toBe(true);
+  expect(addImage).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+
+  capture.mockImplementationOnce(async (page, options) => {
+    const mounted = mountRasterClone(page, options);
+    await Promise.resolve();
+    await mounted.options.onclone(mounted.copy, mounted.sheet);
+    mounted.frame.remove();
+    return rasterCanvas;
+  });
+  await expect(exportPaginatedToPdf(host, DEFAULT_SETTINGS)).resolves.toBe("download-requested");
+  expect(addImage).toHaveBeenCalledTimes(1);
+});

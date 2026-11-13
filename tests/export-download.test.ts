@@ -266,3 +266,130 @@ describe("exportPaginatedToPdf: progress reporting", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * #201: cooperative cancellation. The renderer is never assumed to stop on request, so every
+ * case where a page is in flight proves the export waits for it before it rejects.
+ */
+describe("exportPaginatedToPdf: cancellation", () => {
+  class Stop extends Error {}
+  const gate = () => {
+    let open!: () => void;
+    const opened = new Promise<void>(resolve => { open = resolve; });
+    return { opened, open };
+  };
+  const rendered = () => ({ toDataURL: () => "data:image/png;base64,AAAA" as const, width: 800, height: 1131 });
+  const settled = async (promise: Promise<unknown>) => {
+    let done = false;
+    void promise.then(() => { done = true; }, () => { done = true; });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return done;
+  };
+
+  it("hands the renderer its signal", async () => {
+    const controller = new AbortController();
+    await exportPaginatedToPdf(hostWithPages(1), settings(), { signal: controller.signal });
+    expect((html2canvas.mock.calls[0]?.[1] as { signal?: AbortSignal }).signal).toBe(controller.signal);
+  });
+
+  it("captures, adds and saves nothing when canceled while queued", async () => {
+    const controller = new AbortController();
+    controller.abort(new Stop());
+    const onProgress = vi.fn();
+    await expect(exportPaginatedToPdf(hostWithPages(3), settings(), { signal: controller.signal, onProgress })).rejects.toBeInstanceOf(Stop);
+    expect(html2canvas).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(output).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("keeps waiting for a renderer that ignores the signal, then drops its page and saves nothing (early/mid phase)", async () => {
+    const stalled = gate();
+    const started = gate();
+    html2canvas.mockImplementation(async () => { started.open(); await stalled.opened; return rendered(); });
+    const controller = new AbortController();
+    const onProgress = vi.fn();
+    const result = exportPaginatedToPdf(hostWithPages(3), settings(), { signal: controller.signal, onProgress });
+    await started.opened;
+    controller.abort(new Stop());
+    expect(await settled(result), "the export must not settle while the renderer can still read the host").toBe(false);
+    stalled.open();
+    await expect(result).rejects.toBeInstanceOf(Stop);
+    expect(html2canvas).toHaveBeenCalledTimes(1);
+    expect(addImage).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("reports the abort reason, not the renderer's AbortError, when a cooperative renderer rejects", async () => {
+    const started = gate();
+    html2canvas.mockImplementation((_el: HTMLElement, options: unknown) => new Promise((_resolve, reject) => {
+      const { signal } = options as { signal: AbortSignal };
+      signal.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+      started.open();
+    }));
+    const controller = new AbortController();
+    const result = exportPaginatedToPdf(hostWithPages(2), settings(), { signal: controller.signal });
+    await started.opened;
+    controller.abort(new Stop());
+    await expect(result).rejects.toBeInstanceOf(Stop);
+    expect(document.querySelectorAll("div[data-html2canvas-ignore]")).toHaveLength(0);
+  });
+
+  it("stops between pages and assembles no partial PDF (late phase)", async () => {
+    const controller = new AbortController();
+    const onProgress = vi.fn((done: number) => { if (done === 2) controller.abort(new Stop()); });
+    await expect(exportPaginatedToPdf(hostWithPages(4), settings(), { signal: controller.signal, onProgress })).rejects.toBeInstanceOf(Stop);
+    expect(html2canvas).toHaveBeenCalledTimes(2);
+    expect(addImage).toHaveBeenCalledTimes(2);
+    expect(output).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("does not encode a page that finished after the cancel, and frees its bitmap", async () => {
+    const stalled = gate();
+    const started = gate();
+    const canvas = rendered();
+    html2canvas.mockImplementation(async () => { started.open(); await stalled.opened; return canvas; });
+    const controller = new AbortController();
+    const result = exportPaginatedToPdf(hostWithPages(1), settings(), { signal: controller.signal });
+    await started.opened;
+    controller.abort(new Stop());
+    stalled.open();
+    await expect(result).rejects.toBeInstanceOf(Stop);
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+    expect(addImage).not.toHaveBeenCalled();
+  });
+
+  it("frees every page bitmap once it is encoded", async () => {
+    const canvases: Array<{ width: number; height: number }> = [];
+    html2canvas.mockImplementation(async (el: HTMLElement, options: unknown) => {
+      await simulateRasterCapture(el, options);
+      const canvas = rendered();
+      canvases.push(canvas);
+      return canvas;
+    });
+    await exportPaginatedToPdf(hostWithPages(3), settings(), { signal: new AbortController().signal });
+    expect(canvases.map(canvas => canvas.width)).toEqual([0, 0, 0]);
+  });
+
+  it("honors a cancel up to the instant before the save is handed off", async () => {
+    const controller = new AbortController();
+    const onSaving = vi.fn();
+    const onProgress = vi.fn(() => controller.abort(new Stop()));
+    await expect(exportPaginatedToPdf(hostWithPages(1), settings(), { signal: controller.signal, onProgress, onSaving })).rejects.toBeInstanceOf(Stop);
+    expect(onSaving).not.toHaveBeenCalled();
+    expect(output).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("does not try to recall a save that was already handed off", async () => {
+    const controller = new AbortController();
+    const dialog = gate();
+    setDownloadDestination(async () => { controller.abort(new Stop()); await dialog.opened; });
+    const result = exportPaginatedToPdf(hostWithPages(1), settings(), { signal: controller.signal });
+    dialog.open();
+    await expect(result).resolves.toBe("saved");
+  });
+});
