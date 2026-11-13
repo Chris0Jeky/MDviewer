@@ -249,9 +249,9 @@ conversationOverview(lens, records): void; conversationRecord(lens, value, path,
 renderConversation(lens, root, list, base?): void;   // `base`: the root's own path (`$`, or `$[i]` in a YAML stream)
 
 // src/data/{yaml,toml,csv}.ts (D4): parse to JsonValue plus problems
-prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared
+prepareYaml(): Promise<void>; parseYaml(text: string): YamlResult;   // lazy `yaml` package; throws if not prepared; composes at most MAX_YAML_DOCUMENTS (rest: `unread`)
 parseToml(text: string): ParseResult;
-parseCsv(text: string, delimiter?: string): CsvResult;               // RFC 4180; TSV passes "\t"
+parseCsv(text: string, delimiter?: string, keep?: number): CsvResult; // RFC 4180; cells kept for `keep` rows, `rows` counts all; TSV passes "\t"
 
 // src/data/escape.ts: keep data from becoming Markdown or HTML
 escapeText(text: string): string; cellText(text: string): string; fence(text: string): string;
