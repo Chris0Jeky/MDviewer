@@ -452,8 +452,41 @@ function closePdfView(): void {
   void current?.view.then(view => view.destroy(), () => undefined);
 }
 
+/** Fetch natively opened PDFs' bytes and add them as tabs; the last one shows unless Markdown came too. */
+/** Natively opened PDFs whose bytes are still being read (session restore must not take the view). */
+let pendingPdfOpens = 0;
+async function openNativePdfs(documents: OpenBatch["documents"], showLast: boolean, request: number): Promise<void> {
+  pendingPdfOpens += 1;
+  try { await addNativePdfs(documents, showLast, request); } finally { pendingPdfOpens -= 1; }
+}
+async function addNativePdfs(documents: OpenBatch["documents"], showLast: boolean, request: number): Promise<void> {
+  const problems: string[] = [];
+  let opened = false;
+  for (const doc of documents) {
+    if (!doc.token) { problems.push(`${doc.name}: this PDF is not linked to its file.`); continue; }
+    try {
+      const problem = pdfs.add(doc.name, await native.readPdf(doc.token), doc.token);
+      if (problem) { problems.push(`${doc.name}: ${problem}`); void native.releasePdf(doc.token); } else opened = true;
+    } catch (error) {
+      problems.push(`${doc.name}: ${errorText(error) === "changed" ? "the file changed after it was chosen. Open it again." : errorText(error)}`);
+      void native.releasePdf(doc.token);
+    }
+  }
+  if (problems.length) report(problems.join(" "));
+  if (!opened) return;
+  // Reading bytes takes time: only the newest open may still take the view.
+  if (app && showLast) report("The PDF opened in a tab. Return to the reading view to see it.");
+  if (showLast && request === generation && !app && !changingMode) { pdfs.activeId = pdfs.lastAdded; focusPdf(); void render(); }
+  else { pdfs.activeId ??= pdfs.lastAdded; syncDocuments(); } // a stale read adds its tab without taking the active mark
+}
+
 function commitBatch(batch: OpenBatch, request: number): void {
   if (changingMode) { queuedBatches.push({ batch, request }); return; }
+  const pdfDocuments = batch.documents.filter(doc => doc.kind === "pdf");
+  if (pdfDocuments.length) {
+    batch = { ...batch, documents: batch.documents.filter(doc => doc.kind !== "pdf") };
+    void openNativePdfs(pdfDocuments, !batch.documents.length && request === generation, request);
+  }
   const errors = batch.errors.map(error => `${error.name}: ${error.message}`);
   const previousActiveId = docs.reader.activeId;
   const keepPdf = pdfShown() && request !== generation;
@@ -477,7 +510,6 @@ async function readFiles(files: File[]): Promise<void> {
   const batch: OpenBatch = { documents: [], errors: [], canceled: false };
   let total = 0;
   let openedPdf = false;
-  const shownPdf = pdfs.activeId;
   report("");
   for (const file of files.slice(0, 32)) {
     try {
@@ -510,10 +542,10 @@ async function readFiles(files: File[]): Promise<void> {
   // A batch of only PDFs shows the last one; Markdown in the same batch takes the view instead.
   // Only the newest import may take the view (a slow PDF read must not override a later choice).
   const showPdfNow = openedPdf && !batch.documents.length && request === generation && !app && !changingMode;
-  if (showPdfNow) focusPdf();
+  if (showPdfNow) { pdfs.activeId = pdfs.lastAdded; focusPdf(); }
   commitBatch(batch, request);
   if (showPdfNow) void render(batch.errors.map(error => `${error.name}: ${error.message}`));
-  else if (openedPdf) { pdfs.activeId = shownPdf ?? pdfs.activeId; syncDocuments(); } // a stale import adds its tab without taking the active mark
+  else if (openedPdf) { pdfs.activeId ??= pdfs.lastAdded; syncDocuments(); } // a stale import adds its tab without taking the active mark
 }
 
 async function open(): Promise<void> {
@@ -855,6 +887,8 @@ function closeDocumentById(id: string): void {
     if (changingMode) return;
     const wasShown = pdfShown() && pdfs.activeId === id;
     if (pdfView?.id === id) closePdfView();
+    const token = pdfs.tabs.find(tab => tab.id === id)?.token;
+    if (token) void native.releasePdf(token).catch(() => undefined);
     pdfs.close(id);
     report("");
     if (!wasShown) { syncDocuments(); return; }
@@ -1575,7 +1609,8 @@ if (native.available) {
       const restored = await native.session.restore();
       if (restored.documents.length || restored.errors.length) {
         // Like a forwarded batch: a newer user action (an Open click) keeps ownership.
-        const owns = startedAt === generation && !docs.reader.activeId && !app;
+        // A launched PDF (shown, or its bytes still being read) keeps the view too.
+        const owns = startedAt === generation && !docs.reader.activeId && !pdfs.tabs.length && !pendingPdfOpens && !app;
         commitBatch({ ...restored, errors: restored.errors.length
           ? [{ name: "Last session", message: `${restored.errors.length} file(s) could not be reopened.` }] : [] },
         owns ? ++generation : -1);

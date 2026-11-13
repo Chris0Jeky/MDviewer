@@ -8,6 +8,8 @@ export interface OpenBatch {
     token?: string | null; path?: string; dir?: string;
     encoding?: "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be";
     eol?: "lf" | "crlf" | "cr" | "mixed" | "none";
+    /** `"pdf"`: `text` is empty, the token is a PDF token and the bytes come from `readPdf`. */
+    kind?: "pdf";
   }>;
   errors: Array<{ name: string; message: string }>;
   canceled: boolean;
@@ -102,6 +104,13 @@ export interface Host {
   openRelative(token: string, href: string): Promise<OpenBatch>;
   /** Bytes of a local image referenced by the bound document `token` (typed, 20 MB cap). */
   readAsset(token: string, src: string): Promise<ArrayBuffer>;
+  /**
+   * The bytes of a PDF the host opened (`kind: "pdf"`; 200 MB cap; PDF_WORKBENCH.md, P1b). Rejects
+   * with "changed" when the file is no longer the one that was opened, "revoked" for an unknown token.
+   */
+  readPdf(token: string): Promise<Uint8Array>;
+  /** Forget a PDF token when its tab closes. */
+  releasePdf(token: string): Promise<void>;
   /** The last session (S7): the webview sends tokens. */
   session: {
     record(tokens: string[]): Promise<void>;

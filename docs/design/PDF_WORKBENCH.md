@@ -1,7 +1,8 @@
 # PDF workbench
 
 Status: **P0 merged (#312); P1a (engine, reading view, PDF tabs; open by drop or the browser file
-picker) in progress; P1b (native `.pdf` open, `read_pdf`, Library) next.** P1 is split in two so the
+picker) merged (#322); P1b (native `.pdf` open through the picker, launch and Library, `Host.readPdf`)
+in review.** P1 is split in two so the
 native command lands as its own small reviewable change, announced to the Finish lane. Contract: [2026-11-13 complete push](2026-11-13-complete-push.md),
 track P. Baseline: main `e5e96f5`. This file holds the engine evidence, the engine decision (ADR), the
 document and save model, the CSP decision, the security rules, the caps and the proof each slice owes.

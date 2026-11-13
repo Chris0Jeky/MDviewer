@@ -23,6 +23,8 @@ fn main() {
             "library_clear",
             "open_relative",
             "read_asset",
+            "read_pdf",
+            "release_pdf",
             "session_record",
             "session_restore",
             "session_setting",

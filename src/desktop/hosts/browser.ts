@@ -30,7 +30,11 @@ const MAX_BATCH_FILES = 32;
 const DOCUMENT_TYPES: PickerType[] = [
   { description: "Markdown", accept: { "text/markdown": [".md", ".markdown"] } },
   { description: "Data and text", accept: { "text/plain": [".json", ".jsonc", ".jsonl", ".ndjson", ".txt", ".log", ".yaml", ".yml", ".toml", ".csv", ".tsv"] } },
+  { description: "PDF", accept: { "application/pdf": [".pdf"] } },
 ];
+/** PDFs (PDF_WORKBENCH.md, P1b): opened by handle, read on demand by `readPdf`, never decoded as text. */
+const MAX_PDF_BYTES = 200_000_000;
+const pdfBindings = new Map<string, { handle: Handle; size: number; modified: number }>();
 
 interface Binding {
   handle: Handle;
@@ -74,6 +78,17 @@ async function readHandles(handles: readonly Handle[]): Promise<OpenBatch> {
   for (const handle of handles.slice(0, MAX_BATCH_FILES)) {
     try {
       if (handle.kind !== "file") throw new Error("Choose a regular file, not a folder or device.");
+      if (/\.pdf$/i.test(handle.name)) {
+        if (!await permitted(handle, "read")) throw new Error("Could not read this file. Check that you have access.");
+        const file = await handle.getFile();
+        if (file.size > MAX_PDF_BYTES) throw new Error("PDFs larger than 200 MB cannot be opened.");
+        const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+        if (!String.fromCharCode(...head).includes("%PDF-")) throw new Error("This file is not a PDF.");
+        const token = newToken();
+        pdfBindings.set(token, { handle, size: file.size, modified: file.lastModified });
+        batch.documents.push({ name: handle.name, text: "", bytes: file.size, token, path: handle.name, dir: "", encoding: "utf-8", eol: "none", kind: "pdf" });
+        continue;
+      }
       if (!documentExtension(handle.name)) {
         throw new Error("Only Markdown, JSON, JSON Lines, YAML, TOML, CSV, TSV and plain text (.txt, .log) files are supported.");
       }
@@ -349,6 +364,18 @@ export const browserHost: Host = {
   },
   openRelative: unavailable("Opening linked files"),
   readAsset: unavailable("Local images"),
+  async readPdf(token) {
+    const binding = pdfBindings.get(token);
+    if (!binding) throw new Error("revoked");
+    const file = await binding.handle.getFile();
+    // The file must still be the one that was opened (no digest here: comparing size and time
+    // avoids reading 200 MB twice; the native host compares a digest).
+    if (file.size !== binding.size || file.lastModified !== binding.modified) throw new Error("changed");
+    return new Uint8Array(await file.arrayBuffer());
+  },
+  async releasePdf(token) {
+    pdfBindings.delete(token);
+  },
   session: {
     record: async () => undefined,
     restore: async () => ({ documents: [], errors: [], canceled: false }),

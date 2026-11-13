@@ -847,6 +847,14 @@ class PdfDocument { pageCount; pageSize(i); render(i, scale); textRuns(i); pageT
 mountPdf(host: HTMLElement, options: PdfViewOptions): Promise<PdfView>; // { pageCount, zoomBy, focusFind, showOutline, destroy }
 ```
 
+Native open (P1b): `file_policy.rs` admits `.pdf` (`PDF_EXTENSIONS`, `MAX_PDF_BYTES` 200 MB, `%PDF-`
+signature) outside the 25 MB text budget; `OpenBatch` documents carry `kind: "pdf"` with empty text.
+Their tokens live in a separate registry in `commands/pdf.rs`, so `save_document`, `patch_document`
+and `read_document` cannot resolve them, and PDFs are not followed by the watcher. The webview reads
+bytes through `Host.readPdf(token)` (`read_pdf`, digest-checked against the open: `changed` when the
+file differs) and calls `Host.releasePdf(token)` (`release_pdf`) when the tab closes. `commitBatch`
+splits `kind: "pdf"` documents off to `openNativePdfs`; only the newest open takes the view.
+
 Coordinates are CSS pixels at zoom 1 in the displayed orientation. Bitmaps are capped at 16,384 px
 per side and 32 M pixels; at most 12 pages hold a bitmap. Links: `page` and http(s) `uri` act,
 everything else is `blocked` with a reason. Proof: `tests/pdf-engine.test.ts` (synthetic corpus in
