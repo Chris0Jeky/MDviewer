@@ -60,6 +60,7 @@ Export click → capture document id/name/text and settings NOW
 | Edit surface: source beside the reader, patch-mode render, caret follow (S5) | `src/desktop/edit.ts`, `src/desktop/main.ts` (`setEditing`, `editInput`, `render(…, patch)`), `src/desktop/reader/patch.ts`, `src/styles/editor.css` | `tests/desktop-e2e/edit.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
 | Actionable Markdown interaction and write-back (A3) | `src/desktop/reader/{controls,writeback}.ts`, wiring in `src/desktop/main.ts` | `tests/actionable-writeback.test.ts`, `tests/desktop-actionable-save.test.ts`, `tests/desktop-e2e/actionable.spec.ts` |
 | Reader text-first paint and block patching | `src/desktop/render.ts`, `src/desktop/reader/patch.ts` | `tests/desktop-e2e/text-first.spec.ts`, `tests/reader-patch.test.ts`, spec §14 |
+| Data copy menu (value, JSONPath, jq, subtree), data-document copy reference, Save readable view as Markdown (D5, #299) | `src/desktop/reader/dataCopy.ts` (`dataCopy`, `dataReference`, `readableCopy`, `pathAt`, `trackDataTarget`); commands `data.copy.*` and `document.saveReadable` in `src/desktop/main.ts`; `MenuEntry.hidden` in `src/desktop/shell/menu.ts` | `tests/desktop-data-copy.test.ts`, `tests/desktop-e2e/data-copy.spec.ts`, spec READABLE_DATA.md "Copy" |
 | Reader source map (`data-src`) and copy toolkit | `src/desktop/reader/{sourcemap,copy}.ts`, `src/desktop/render.ts` | `tests/reader-sourcemap.test.ts`, `tests/desktop-e2e/copy.spec.ts`, spec §14 |
 | Front matter blanking, tolerant YAML reader, lint; reader Properties card | `src/render/frontmatter.ts`, `src/desktop/reader/frontmatter.ts` | `tests/frontmatter.test.ts`, `tests/desktop-e2e/frontmatter.spec.ts`, spec §3 |
 | Fine-grained Shiki + curated grammars | `src/render/highlight.ts` | `tests/highlight.test.ts` |
@@ -286,7 +287,8 @@ only where the cell cannot show the value well: JSON embedded in a string, clear
 **D5, pure part (#289, merged):** `src/data/copy.ts`: `valueAt(text, kind, path, fileName?)` re-parses and walks a
 `Readable.map` path (a table row's path returns the whole record), `copyValue` (scalars as written), `subtreeJson`
 (pretty JSON, source numbers kept), `pathForms(path, kind)` (JSONPath, jq with `jqSlurp` for JSON Lines); tests in
-`tests/data-copy.test.ts`. The webview copy menu and Save readable view as Markdown are issue #299. The native half
+`tests/data-copy.test.ts`. The webview copy menu and Save readable view as Markdown (#299) are in
+`src/desktop/reader/dataCopy.ts`: the reader's selection resolves to a `data-src` line, `Readable.map` gives its path. The native half
 of D5, agent data files in the Library, is merged (#290; see the table above).
 
 ## Actionable Markdown (A1 to A3)
