@@ -3,6 +3,7 @@
  * built here, from strings or by PDFium itself; nothing is copied from a real document.
  */
 import { readFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import type { WrappedPdfiumModule } from "@embedpdf/pdfium";
 import { heap, loadEngine } from "../../src/pdf/engine";
 
@@ -109,4 +110,35 @@ function save(P: WrappedPdfiumModule, doc: number): Uint8Array {
     M.wasmExports.free(p);
     return out;
   } finally { P.PDFiumExt_CloseFileWriter(writer); }
+}
+
+/** A 2x1 PNG: one red pixel, one blue. Built here (zlib + CRC), not copied from anywhere. */
+export function tinyPng(): Uint8Array {
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes: Uint8Array): number => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = table[(c ^ byte) & 255]! ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Uint8Array): Buffer => {
+    const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc(body), body.length + 4);
+    return out;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(2, 0);
+  header.writeUInt32BE(1, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // RGB
+  const pixels = deflateSync(Buffer.from([0, 255, 0, 0, 0, 0, 255]));
+  return new Uint8Array(Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", pixels), chunk("IEND", new Uint8Array()),
+  ]));
 }

@@ -9,7 +9,7 @@ export const MAX_HELD_PDF_BYTES = 400_000_000;
 export const MAX_PDF_TABS = 16;
 
 /** `token` is the host's PDF capability for a natively opened file (released on close). */
-export interface PdfTab { id: string; name: string; bytes: Uint8Array; token?: string }
+export interface PdfTab { id: string; name: string; bytes: Uint8Array; token?: string; dirty?: boolean }
 
 export function isPdfFile(name: string, mime = ""): boolean {
   return /\.pdf$/i.test(name) || mime === "application/pdf";

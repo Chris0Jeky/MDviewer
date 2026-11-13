@@ -27,7 +27,7 @@ import { mountSelectionCopy } from "./reader/copy";
 import { dataCopy, dataReference, dataViewOf, hasValues, readableCopy, trackDataTarget, type DataCopyKind } from "./reader/dataCopy";
 import { setControlHandler } from "./reader/controls";
 import { createWriteback, type Notice } from "./reader/writeback";
-import { SaveCanceled, setDownloadDestination } from "../export/destination";
+import { SaveCanceled, getDownloadDestination, setDownloadDestination } from "../export/destination";
 import { downloadMarkdown } from "../export/markdown";
 import { documentLabels } from "../ui/DocumentNavigation";
 
@@ -233,7 +233,7 @@ async function flushSession(): Promise<void> {
 function syncDocuments(): void {
   const { docs: open, active } = docs.list();
   const labels = documentLabels(open);
-  const pdfItems = app ? [] : pdfs.tabs.map(tab => ({ id: tab.id, label: tab.name, dirty: false }));
+  const pdfItems = app ? [] : pdfs.tabs.map(tab => ({ id: tab.id, label: tab.name, dirty: !!tab.dirty }));
   tabs.render([...open.map(doc => ({ id: doc.id, label: labels.get(doc.id)!, dirty: doc.dirty })), ...pdfItems],
     pdfShown() ? pdfs.activeId : active?.id ?? null, changingMode);
   const target = docs.saveTarget();
@@ -419,6 +419,8 @@ function showPdf(): void {
   const abort = new AbortController();
   const view = import("../pdf").then(module => module.mountPdf(pdfHost, {
     name: tab.name, bytes: tab.bytes, outline, openExternal: openWebLink, signal: abort.signal,
+    saveCopy: savePdfCopy, openPdf: openPdfBytes,
+    onDirty: dirty => { tab.dirty = dirty; syncDocuments(); },
     status: text => { if (pdfView?.id === tab.id && pdfShown()) status.textContent = text; },
   }));
   const current = { id: tab.id, view, abort };
@@ -428,6 +430,32 @@ function showPdf(): void {
     pdfView = null; // the next activation retries
     report(`Could not open ${tab.name}: ${errorText(error)}`);
   });
+}
+
+/** Save PDF bytes as a copy: the host's save dialog on Windows, a download on the web. */
+async function savePdfCopy(bytes: Uint8Array, filename: string): Promise<void> {
+  const blob = new Blob([bytes.slice().buffer], { type: "application/pdf" });
+  const destination = getDownloadDestination();
+  if (destination) return destination(blob, filename);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  try { link.click(); } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+/** Open bytes made in the PDF view (Extract) as a new, unsaved PDF tab and show it. */
+function openPdfBytes(name: string, bytes: Uint8Array): void {
+  const problem = pdfs.add(name, bytes);
+  if (problem) { report(`${name}: ${problem}`); return; }
+  pdfs.active!.dirty = true;
+  ++generation;
+  focusPdf();
+  void render();
 }
 
 function closePdfView(): void {
@@ -864,6 +892,8 @@ function closeDocument(): void {
 function closeDocumentById(id: string): void {
   if (isPdfTab(id)) {
     if (changingMode) return;
+    const tab = pdfs.tabs.find(candidate => candidate.id === id);
+    if (tab?.dirty && !window.confirm(`Discard unsaved changes to ${tab.name}?`)) return;
     const wasShown = pdfShown() && pdfs.activeId === id;
     if (pdfView?.id === id) closePdfView();
     const token = pdfs.tabs.find(tab => tab.id === id)?.token;
@@ -1458,7 +1488,7 @@ async function loadLocalImages(root: HTMLElement, token: string, current: number
 }
 
 function hasUnsavedWork(): boolean {
-  return docs.hasUnsavedWork();
+  return docs.hasUnsavedWork() || pdfs.tabs.some(tab => tab.dirty);
 }
 window.addEventListener("beforeunload", event => {
   if (!changingMode && !nativeSaveBusy && !app?.exportState.busy && !hasUnsavedWork()) return;
