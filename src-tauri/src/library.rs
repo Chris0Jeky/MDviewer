@@ -88,6 +88,12 @@ pub struct Store {
     pub session: Vec<Stamped>,
     /// "Reopen last session on launch" is on unless this is set.
     pub restore_off: bool,
+    /// Last session's files no open document stands for yet: not reopened because they were
+    /// unavailable at launch or cut by the file cap. Kept in every record until the file is open
+    /// (then the open set owns it) or the library is cleared. Memory only: it starts as the
+    /// stored session (`Library::load`) and the file already holds what it carries.
+    #[serde(skip)]
+    pub unrestored: Vec<Stamped>,
 }
 
 /// The case-folded identity of a path (Windows paths compare case-insensitively).
@@ -184,18 +190,37 @@ impl Store {
         };
     }
 
-    /// Replace the remembered session with these files (32 at most, like a session).
+    /// Replace the remembered session with the open files (32 at most, like a session), followed by
+    /// the last session's files that were never reopened, so a flaky launch never forgets them.
     pub fn record_session(&mut self, paths: &[PathBuf], at: u64) {
+        self.unrestored
+            .retain(|entry| !paths.iter().any(|path| same(path, &entry.path)));
+        let open = paths.iter().map(|path| Stamped {
+            path: path.clone(),
+            at,
+        });
         let mut unique = HashSet::new();
-        self.session = paths
-            .iter()
-            .filter(|path| storable(path) && unique.insert(seen_key(path)))
+        self.session = open
+            .chain(self.unrestored.iter().cloned())
+            .filter(|entry| storable(&entry.path) && unique.insert(seen_key(&entry.path)))
             .take(crate::file_policy::MAX_BATCH_FILES)
-            .map(|path| Stamped {
-                path: path.clone(),
-                at,
-            })
             .collect();
+    }
+
+    /// After a reopen attempt: forget a carried file only when it is definitely gone (deleted
+    /// from a folder that is still there). An unplugged drive or a locked file is kept.
+    /// A file that did reopen is owned by the open set from now on: closing it before the next
+    /// record must forget it, not carry it back.
+    pub fn settle_restore(
+        &mut self,
+        attempted: &[PathBuf],
+        reopened: &[PathBuf],
+        gone: impl Fn(&Path) -> bool,
+    ) {
+        self.unrestored.retain(|entry| {
+            !reopened.iter().any(|path| same(path, &entry.path))
+                && !(attempted.iter().any(|path| same(path, &entry.path)) && gone(&entry.path))
+        });
     }
 
     /// The files to reopen on launch, minus any already open.
@@ -326,14 +351,11 @@ pub struct Scan {
     pub truncated: bool,
 }
 
-#[cfg(windows)]
-fn is_reparse(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-#[cfg(not(windows))]
-fn is_reparse(metadata: &fs::Metadata) -> bool {
+/// A junction, symlink or other name-redirecting reparse point: never followed. Std reports
+/// exactly these (the reparse tag's name-surrogate bit) as symlinks on Windows. A OneDrive Files
+/// On-Demand placeholder is also a reparse point (cloud tag, `RECALL_ON_DATA_ACCESS` while it is
+/// not downloaded) but redirects nowhere, so a synced project folder scans like any other (#251).
+fn redirects(metadata: &fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
@@ -344,7 +366,7 @@ fn is_markdown(path: &Path) -> bool {
 }
 
 /// Bounded walk (depth, files, directories, time) of a project folder for Markdown files and agent data files (`is_agent_data`).
-/// Never follows a junction, symlink or other reparse point; skips build/dependency folders and
+/// Never follows a junction, symlink or other redirecting reparse point; skips build/dependency folders and
 /// the checkouts under `.claude/worktrees/`; includes dot-folders such as `.claude`.
 pub fn scan(root: &Path) -> Scan {
     scan_with(root, SCAN_DIRS, Instant::now() + SCAN_TIME, Instant::now)
@@ -373,7 +395,7 @@ fn scan_with(root: &Path, max_dirs: usize, deadline: Instant, now: impl Fn() -> 
             let Ok(metadata) = fs::symlink_metadata(&path) else {
                 continue;
             };
-            if is_reparse(&metadata) {
+            if redirects(&metadata) {
                 continue;
             }
             if metadata.is_dir() {
@@ -438,7 +460,7 @@ fn template_project<'a>(projects: &'a [Stamped], path: &Path) -> Option<&'a Path
 /// Read a pinned project's template (name, text) with no side effect: no binding, watcher,
 /// Recent entry or seen mark, and nothing written. Only a Markdown file directly inside a
 /// pinned project's `templates/` folder qualifies; neither that folder nor the file may be a
-/// junction, symlink or other reparse point; the usual local-path and encoding rules apply,
+/// junction, symlink or other redirecting reparse point; the usual local-path and encoding rules apply,
 /// with a 1 MB cap (`MAX_TEMPLATE_BYTES`).
 pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, String), String> {
     template_project(projects, path).ok_or("This is not a template of a pinned project.")?;
@@ -448,7 +470,7 @@ pub fn read_template(projects: &[Stamped], path: &Path) -> Result<(String, Strin
             Ok(metadata) if metadata.is_file() && metadata.len() > MAX_TEMPLATE_BYTES => {
                 return Err("This template is larger than 1 MB.".into());
             }
-            Ok(metadata) if !is_reparse(&metadata) => {}
+            Ok(metadata) if !redirects(&metadata) => {}
             Ok(_) => {
                 return Err("This template goes through a folder shortcut and is not read.".into())
             }
@@ -655,6 +677,101 @@ mod tests {
     }
 
     #[test]
+    fn a_reopened_file_closed_before_the_first_record_is_not_carried_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let [a, b] = ["a.md", "b.md"].map(|n| abs(&dir, n));
+        let stamped = |paths: &[&PathBuf]| -> Vec<Stamped> {
+            paths
+                .iter()
+                .map(|p| Stamped {
+                    path: (*p).clone(),
+                    at: 1,
+                })
+                .collect()
+        };
+        let mut store = Store {
+            session: stamped(&[&a, &b]),
+            unrestored: stamped(&[&a, &b]),
+            ..Store::default()
+        };
+        // Both reopen; the user closes a before the first (debounced) record lands.
+        store.settle_restore(&[a.clone(), b.clone()], &[a.clone(), b.clone()], |_| false);
+        store.record_session(std::slice::from_ref(&b), 5);
+        let paths: Vec<PathBuf> = store.session.iter().map(|e| e.path.clone()).collect();
+        assert_eq!(
+            paths,
+            std::slice::from_ref(&b),
+            "a was closed: it must not come back"
+        );
+    }
+
+    #[test]
+    fn unrestored_session_files_are_carried_until_opened_gone_or_cleared() {
+        let dir = tempfile::tempdir().unwrap();
+        let [a, b, c] = ["a.md", "b.md", "c.md"].map(|n| abs(&dir, n));
+        let stamped = |paths: &[&PathBuf]| -> Vec<Stamped> {
+            paths
+                .iter()
+                .map(|p| Stamped {
+                    path: (*p).clone(),
+                    at: 1,
+                })
+                .collect()
+        };
+        let mut store = Store {
+            session: stamped(&[&a, &b, &c]),
+            unrestored: stamped(&[&a, &b, &c]),
+            ..Store::default()
+        };
+        let paths = |store: &Store| -> Vec<PathBuf> {
+            store.session.iter().map(|e| e.path.clone()).collect()
+        };
+        // Launch: only a is open (the others were unavailable); a record before any restore.
+        store.record_session(std::slice::from_ref(&a), 5);
+        assert_eq!(paths(&store), [a.clone(), b.clone(), c.clone()]);
+        // The user closes a: it is forgotten, the unreopened ones are still carried.
+        store.record_session(&[], 6);
+        assert_eq!(paths(&store), [b.clone(), c.clone()]);
+        // A carried file that opens later is owned by the open set; closing it forgets it.
+        store.record_session(&[abs(&dir, "B.md")], 7);
+        store.record_session(&[], 8);
+        assert_eq!(paths(&store), std::slice::from_ref(&c));
+        // Only a file that is definitely gone is dropped after a reopen attempt.
+        store.settle_restore(std::slice::from_ref(&c), &[], |_| false);
+        assert_eq!(
+            paths(&store),
+            std::slice::from_ref(&c),
+            "unavailable, not gone: kept"
+        );
+        store.settle_restore(std::slice::from_ref(&b), &[], |_| true);
+        store.record_session(&[], 9);
+        assert_eq!(
+            paths(&store),
+            std::slice::from_ref(&c),
+            "not attempted: kept"
+        );
+        store.settle_restore(std::slice::from_ref(&c), &[], |_| true);
+        store.record_session(&[], 10);
+        assert!(store.session.is_empty());
+        // Open files take the cap; carried ones fill what is left.
+        store.unrestored = stamped(&[&a]);
+        let many: Vec<_> = (0..crate::file_policy::MAX_BATCH_FILES)
+            .map(|n| abs(&dir, &format!("{n}.md")))
+            .collect();
+        store.record_session(&many, 11);
+        assert_eq!(store.session.len(), crate::file_policy::MAX_BATCH_FILES);
+        assert!(!paths(&store).contains(&a));
+        store.record_session(&many[..3], 12);
+        assert_eq!(
+            paths(&store).last(),
+            Some(&a),
+            "carried after the open files"
+        );
+        store.clear();
+        assert!(store.unrestored.is_empty() && store.session.is_empty());
+    }
+
+    #[test]
     fn a_corrupt_store_is_set_aside_and_replaced_by_an_empty_library() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("library.json");
@@ -821,6 +938,27 @@ mod tests {
             .collect();
         assert_eq!(files, ["mine.md"]);
         fs::remove_dir(&link).unwrap(); // Removes the junction only.
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn scan_never_follows_a_directory_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("secret.md"), b"x").unwrap();
+        fs::write(dir.path().join("mine.md"), b"x").unwrap();
+        let link = dir.path().join("linked");
+        // Creating a symlink needs a privilege some machines do not grant: skip there.
+        if std::os::windows::fs::symlink_dir(outside.path(), &link).is_err() {
+            return;
+        }
+        let files: Vec<_> = scan(dir.path())
+            .files
+            .into_iter()
+            .map(|f| f.relative)
+            .collect();
+        assert_eq!(files, ["mine.md"]);
+        fs::remove_dir(&link).unwrap();
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! native folder picker. Display paths go to the webview; paths never come back.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -26,7 +26,8 @@ pub(crate) struct Library {
 
 impl Library {
     fn load(file: Option<PathBuf>) -> Self {
-        let (store, writable) = file.as_deref().map(library::load).unwrap_or_default();
+        let (mut store, writable) = file.as_deref().map(library::load).unwrap_or_default();
+        store.unrestored = store.session.clone();
         Self {
             file,
             writable,
@@ -41,6 +42,64 @@ impl Library {
             _ => false,
         }
     }
+
+    /// Apply a change the user asked for. `Err` when it holds only for this run: a read-only
+    /// session (the store was unreadable) or a failed write. The change itself stays in memory.
+    fn change(
+        &mut self,
+        at: u64,
+        act: impl FnOnce(&mut Store, u64) -> bool,
+    ) -> Result<bool, String> {
+        let changed = act(&mut self.store, at);
+        if changed && !self.persist() {
+            return Err(NOT_SAVED.into());
+        }
+        Ok(changed)
+    }
+
+    /// Record opened files as recent (and, from the library, as seen) unless a Clear came after
+    /// the open started: Clear must not be undone by a read that was already in flight.
+    fn record_opens(&mut self, started: u64, paths: &[PathBuf], at: u64, seen: bool) -> bool {
+        if clears() != started {
+            return false;
+        }
+        for path in paths {
+            self.store.opened(path, at);
+            if seen {
+                self.store.mark_seen(path, at);
+            }
+        }
+        let _ = self.persist();
+        true
+    }
+
+    /// Forget everything. Clearing is an explicit request: it writes even after an unreadable load.
+    fn clear(&mut self) -> Result<(), String> {
+        CLEARS.fetch_add(1, Ordering::AcqRel);
+        self.store.clear();
+        self.ids.clear();
+        self.writable = true;
+        if let Some(file) = &self.file {
+            library::remove_leftovers(file);
+        }
+        if self.persist() {
+            Ok(())
+        } else {
+            Err(
+                "The library file could not be cleared. Check access to the app's data folder."
+                    .into(),
+            )
+        }
+    }
+}
+
+const NOT_SAVED: &str =
+    "The library file could not be saved, so this change lasts only until MDviewer closes.";
+
+/// Bumped by every Clear. An open remembers the value it started under (see `record_opens`).
+static CLEARS: AtomicU64 = AtomicU64::new(0);
+fn clears() -> u64 {
+    CLEARS.load(Ordering::Acquire)
 }
 
 pub(crate) fn with_library<T>(app: &AppHandle, act: impl FnOnce(&mut Library) -> T) -> T {
@@ -69,12 +128,10 @@ pub(crate) fn remember(app: &AppHandle, paths: impl IntoIterator<Item = PathBuf>
     }
     let app = app.clone();
     let at = library::now_ms();
+    let started = clears();
     tauri::async_runtime::spawn_blocking(move || {
         with_library(&app, |library| {
-            for path in &paths {
-                library.store.opened(path, at);
-            }
-            let _ = library.persist();
+            library.record_opens(started, &paths, at, false)
         });
     });
 }
@@ -196,6 +253,7 @@ pub(crate) async fn library_open(
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<OpenBatch, String> {
+    let started = clears();
     let path = with_library(&app, |library| library.ids.path(&id).map(Path::to_path_buf))
         .ok_or("This library entry is no longer available.")?;
     let read = path.clone();
@@ -214,9 +272,7 @@ pub(crate) async fn library_open(
     if opened {
         let at = library::now_ms();
         with_library(&app, |library| {
-            library.store.opened(&path, at);
-            library.store.mark_seen(&path, at);
-            let _ = library.persist();
+            library.record_opens(started, std::slice::from_ref(&path), at, true)
         });
     }
     Ok(batch)
@@ -252,15 +308,9 @@ pub(crate) async fn library_read_template(
         .map(|(name, text)| TemplateText { name, text })
 }
 
-fn mutate(app: &AppHandle, act: impl FnOnce(&mut Store, u64) -> bool) -> bool {
+fn mutate(app: &AppHandle, act: impl FnOnce(&mut Store, u64) -> bool) -> Result<bool, String> {
     let at = library::now_ms();
-    with_library(app, |library| {
-        let changed = act(&mut library.store, at);
-        if changed {
-            let _ = library.persist();
-        }
-        changed
-    })
+    with_library(app, |library| library.change(at, act))
 }
 
 /// Pin an open document by its capability token, or a listed entry by id.
@@ -270,7 +320,7 @@ pub(crate) fn library_pin(
     state: State<'_, DesktopState>,
     token: Option<String>,
     id: Option<String>,
-) -> bool {
+) -> Result<bool, String> {
     let path = match (token.as_deref().and_then(Token::parse), id) {
         (Some(token), _) => state
             .registry
@@ -281,37 +331,51 @@ pub(crate) fn library_pin(
         (None, Some(id)) => with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)),
         (None, None) => None,
     };
-    path.is_some_and(|path| mutate(&app, |store, at| store.pin_file(&path, at)))
-}
-
-#[tauri::command]
-pub(crate) fn library_unpin(app: AppHandle, id: String) {
-    if let Some(path) = with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)) {
-        mutate(&app, |store, _| {
-            store.unpin(&path);
-            true
-        });
+    match path {
+        Some(path) => mutate(&app, |store, at| store.pin_file(&path, at)),
+        None => Ok(false),
     }
 }
 
 #[tauri::command]
-pub(crate) fn library_forget(app: AppHandle, id: String) {
-    if let Some(path) = with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)) {
-        mutate(&app, |store, _| {
+pub(crate) fn library_unpin(app: AppHandle, id: String) -> Result<(), String> {
+    match with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)) {
+        Some(path) => mutate(&app, |store, _| {
+            store.unpin(&path);
+            true
+        })
+        .map(|_| ()),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+pub(crate) fn library_forget(app: AppHandle, id: String) -> Result<(), String> {
+    match with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)) {
+        Some(path) => mutate(&app, |store, _| {
             store.forget(&path);
             true
-        });
+        })
+        .map(|_| ()),
+        None => Ok(()),
     }
 }
 
 #[tauri::command]
 pub(crate) fn library_mark_seen(app: AppHandle, id: String) {
     if let Some(path) = with_library(&app, |l| l.ids.path(&id).map(Path::to_path_buf)) {
-        mutate(&app, |store, at| {
+        // Bookkeeping, not a claim to the user: a failed write only means "unseen" returns.
+        let _ = mutate(&app, |store, at| {
             store.mark_seen(&path, at);
             true
         });
     }
+}
+
+/// Why a picked folder cannot be pinned, apart from the pin cap.
+fn folder_refusal(folder: &Path) -> Option<&'static str> {
+    (!crate::file_policy::is_local_file_path(folder))
+        .then_some("Network folders cannot be pinned. Choose a folder on a local drive.")
 }
 
 /// Mark every listed entry seen and persist once (`library_mark_seen` writes per call).
@@ -325,7 +389,8 @@ pub(crate) fn library_mark_seen_many(app: AppHandle, ids: Vec<String>) {
             .collect()
     });
     if !paths.is_empty() {
-        mutate(&app, |store, at| {
+        // A failed write is ignored, as for `library_mark_seen`: seen marks are a convenience.
+        let _ = mutate(&app, |store, at| {
             store.mark_seen_many(&paths, at);
             true
         });
@@ -359,10 +424,10 @@ pub(crate) async fn library_add_project(
     else {
         return Ok(None);
     };
-    if !folder.is_absolute() {
-        return Err("Choose a local folder.".into());
+    if let Some(refusal) = folder_refusal(&folder) {
+        return Err(refusal.into());
     }
-    if !mutate(&app, |store, at| store.pin_project(&folder, at)) {
+    if !mutate(&app, |store, at| store.pin_project(&folder, at))? {
         return Err("Unpin a project first: at most 64 can be pinned.".into());
     }
     Ok(Some(with_library(&app, |l| l.ids.id(&folder))))
@@ -371,23 +436,7 @@ pub(crate) async fn library_add_project(
 /// "Clear library": forget every recent file, pin, project and seen stamp.
 #[tauri::command]
 pub(crate) fn library_clear(app: AppHandle) -> Result<(), String> {
-    with_library(&app, |library| {
-        library.store.clear();
-        library.ids.clear();
-        // Clearing is an explicit request: write even after an unreadable load.
-        library.writable = true;
-        if let Some(file) = &library.file {
-            library::remove_leftovers(file);
-        }
-        if library.persist() {
-            Ok(())
-        } else {
-            Err(
-                "The library file could not be cleared. Check access to the app's data folder."
-                    .into(),
-            )
-        }
-    })
+    with_library(&app, Library::clear)
 }
 
 pub(crate) type LibrarySlot = Mutex<Option<Library>>;
@@ -427,6 +476,12 @@ pub(crate) async fn session_record(
     .map_err(|_| "The session could not be recorded.".to_string())
 }
 
+/// True when the file was deleted from a folder that is still there (not an unplugged drive).
+fn is_gone(path: &Path) -> bool {
+    matches!(std::fs::metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+        && path.parent().is_some_and(Path::is_dir)
+}
+
 /// Reopen the last session's files that are not already open (setting on by default).
 #[tauri::command]
 pub(crate) async fn session_restore(
@@ -457,9 +512,14 @@ pub(crate) async fn session_restore(
         .await
         .map_err(|_| "The last session could not be read.".to_string())?
     };
+    let attempted = restore.clone();
     let batch = tauri::async_runtime::spawn_blocking(move || read_batch(restore, capture_revision))
         .await
         .map_err(|_| "The last session could not be reopened.".to_string())?;
+    let reopened: Vec<PathBuf> = batch.documents.iter().map(|doc| doc.path.clone()).collect();
+    with_library(&app, |library| {
+        library.store.settle_restore(&attempted, &reopened, is_gone)
+    });
     Ok(OpenBatch::from_read_batch(
         batch,
         &mut state
@@ -486,6 +546,7 @@ pub(crate) fn session_setting(app: AppHandle, restore: Option<bool>) -> SessionS
             library.store.restore_off = !restore;
             if !restore {
                 library.store.session.clear();
+                library.store.unrestored.clear();
             }
             persisted = library.persist();
         }
@@ -522,6 +583,63 @@ mod tests {
         );
         assert!(library.store.recent.is_empty() && library.store.seen.is_empty());
         assert_eq!(template_target(&library, "l999"), None);
+    }
+
+    #[test]
+    fn a_change_that_cannot_be_written_is_reported_not_claimed() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("library.json");
+        let pin = |store: &mut Store, at| store.pin_file(&dir.path().join("a.md"), at);
+        // Read-only session: the store existed but could not be read.
+        let mut library = Library::load(Some(file.clone()));
+        library.writable = false;
+        assert_eq!(library.change(1, pin), Err(NOT_SAVED.to_string()));
+        assert_eq!(
+            library.store.pinned_files.len(),
+            1,
+            "it still holds for this run"
+        );
+        assert!(!file.exists(), "nothing was written");
+        // A change that did nothing (the cap) is not a write failure.
+        library.store.pinned_files.clear();
+        assert_eq!(library.change(2, |_, _| false), Ok(false));
+        // A writable session reports success only once the file is on disk.
+        let mut library = Library::load(Some(file.clone()));
+        assert_eq!(library.change(3, pin), Ok(true));
+        assert!(file.exists());
+    }
+
+    #[test]
+    fn clear_wins_over_an_open_that_started_before_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("library.json");
+        let notes = dir.path().join("notes.md");
+        let mut library = Library::load(Some(file));
+        // One test, so no parallel test moves the shared Clear counter in between.
+        let started = clears();
+        assert!(library.record_opens(started, std::slice::from_ref(&notes), 1, true));
+        assert_eq!(library.store.recent.len(), 1);
+        let in_flight = clears();
+        library.clear().unwrap();
+        assert!(
+            !library.record_opens(in_flight, std::slice::from_ref(&notes), 2, true),
+            "an open read before Clear is not written back after it"
+        );
+        assert!(library.store.recent.is_empty() && library.store.seen.is_empty());
+        assert!(library.record_opens(clears(), std::slice::from_ref(&notes), 3, false));
+        assert_eq!(
+            library.store.recent.len(),
+            1,
+            "opens after Clear are remembered"
+        );
+    }
+
+    #[test]
+    fn a_network_folder_is_refused_in_its_own_words() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(folder_refusal(dir.path()), None);
+        let unc = Path::new(r"\\server\share\project");
+        assert!(folder_refusal(unc).is_some_and(|text| text.contains("Network folders")));
     }
 
     fn fs_write(path: &Path, text: &str) {

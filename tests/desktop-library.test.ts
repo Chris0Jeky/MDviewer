@@ -84,4 +84,19 @@ describe("desktop library seam", () => {
     await vi.waitFor(() => expect(boundary.clear).toHaveBeenCalledOnce());
     confirm.mockRestore();
   });
+
+  it("a pin that could not be saved is reported as an error, not as pinned", async () => {
+    const { runCommand } = await import("../src/desktop/commands");
+    boundary.libraryOpen.mockResolvedValueOnce(batch("notes.md", "# Notes"));
+    const { openLibraryEntry } = await import("../src/desktop/library");
+    await openLibraryEntry("l1");
+    await vi.waitFor(() => expect(shown()).toBe("# Notes"));
+    boundary.pin.mockRejectedValueOnce(new Error("The library file could not be saved, so this change lasts only until MDviewer closes."));
+    runCommand("library.pinDocument");
+    await vi.waitFor(() => expect(notice()).toContain("could not be saved"));
+    expect(notice()).not.toContain("Pinned");
+    boundary.addProject.mockRejectedValueOnce(new Error("Network folders cannot be pinned. Choose a folder on a local drive."));
+    runCommand("library.addProject");
+    await vi.waitFor(() => expect(notice()).toContain("Network folders cannot be pinned"));
+  });
 });

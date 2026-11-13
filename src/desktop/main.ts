@@ -211,6 +211,17 @@ function errorText(error: unknown): string {
 let sessionReady = false;
 let sessionTimer: ReturnType<typeof setTimeout> | undefined;
 let lastSession = "";
+// Records run one after another, so a flush at close can never be overtaken by an older list (#250).
+let recording: Promise<void> = Promise.resolve();
+function sendSession(tokens: string[]): Promise<void> {
+  const key = tokens.join(",");
+  const sent = recording.then(async () => {
+    if (key === lastSession) return;
+    await native.session.record(tokens);
+    lastSession = key;
+  });
+  return recording = sent.catch(() => undefined);
+}
 function recordSession(): void {
   if (!native.available || !sessionReady) return;
   // A mode transition empties one owner before the other takes over: never record that.
@@ -218,22 +229,22 @@ function recordSession(): void {
   clearTimeout(sessionTimer);
   sessionTimer = setTimeout(() => {
     if (changingMode) return; // finishMode syncs and schedules again.
-    const tokens = docs.boundTokens();
-    const key = tokens.join(",");
-    if (key === lastSession) return;
-    lastSession = key;
-    void native.session.record(tokens).catch(() => undefined);
+    void sendSession(docs.boundTokens());
   }, 500);
 }
 
-/** On window close: send the current open set now instead of after the debounce. */
+/**
+ * On window close: send the current open set now, after any record still in flight. Safe before the
+ * last session is restored: the host keeps every entry that has not been reopened yet (#305).
+ */
+// A session write that never lands (a locked or scanned library.json) must not keep the window open.
+const FLUSH_WAIT_MS = 2000;
 async function flushSession(): Promise<void> {
-  if (!native.available || !sessionReady) return;
+  if (!native.available) return;
   clearTimeout(sessionTimer);
-  const tokens = docs.boundTokens();
-  if (tokens.join(",") === lastSession) return;
-  lastSession = tokens.join(",");
-  await native.session.record(tokens);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([sendSession(docs.boundTokens()), new Promise<void>(resolve => { timer = setTimeout(resolve, FLUSH_WAIT_MS); })]);
+  clearTimeout(timer);
 }
 
 /** Back to clean while the file changed (Keep mine, then undo): follow the file, once per change (#234). */
@@ -1540,14 +1551,18 @@ if (native.available) {
     run: async () => {
       const target = docs.saveTarget();
       if (!target?.binding) return;
-      report(await native.library.pinDocument(target.binding.token)
-        ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+      // A pin that holds only for this run (library file unwritable) is an error, never "Pinned".
+      try {
+        report(await native.library.pinDocument(target.binding.token)
+          ? `Pinned ${target.name}.` : "Unpin a file first: at most 64 can be pinned.");
+      } catch (error) { report(errorText(error)); }
       window.dispatchEvent(new Event("mdviewer:library-changed"));
     } });
   registerCommand({ id: "library.addProject", title: "Pin a project folder…", enabled: () => !changingMode && !nativeSaveBusy,
     run: async () => {
-      try { if (await native.library.addProject()) { report("Project pinned to the library."); window.dispatchEvent(new Event("mdviewer:library-changed")); } }
+      try { if (await native.library.addProject()) report("Project pinned to the library."); }
       catch (error) { report(errorText(error)); }
+      window.dispatchEvent(new Event("mdviewer:library-changed"));
     } });
   registerCommand({ id: "session.toggleRestore", title: "Reopen last session on launch (on/off)",
     run: async () => {
@@ -1592,8 +1607,7 @@ if (native.available) {
     catch (error) { report(`Could not open launched files: ${errorText(error)}`); }
   });
   void (async () => {
-    await native.onPending(() => { void drain(); });
-    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
+    // First, before any other awaited step: a close during startup still checks unsaved work and flushes (#305).
     await native.onClose(() => {
       if (changingMode || nativeSaveBusy || app?.exportState.busy) {
         report("Please wait for the current operation to finish before closing MDviewer.");
@@ -1601,6 +1615,8 @@ if (native.available) {
       }
       return !hasUnsavedWork() || window.confirm("Close MDviewer and discard unsaved edits? Use Save (Ctrl+S) to keep them.");
     }, flushSession);
+    await native.onPending(() => { void drain(); });
+    await native.onFilesChanged(tokens => { for (const token of tokens) void followChange(token); });
     await drain();
     // Reopen the last session's files after launch files, without taking focus
     // from them (paths only; the preference is on by default).
