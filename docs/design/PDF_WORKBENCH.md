@@ -113,22 +113,31 @@ calls PDFium.
 - **Original bytes are kept.** Opening a PDF keeps its original bytes (`originalLength`, SHA-256)
   for the life of the tab. Nothing is written until the user saves.
 - **Edit journal.** Every change is a journal entry `{op, page, target, before, after}` applied to the
-  live PDFium document. Undo replays the journal from the original bytes up to entry *n − 1* (cheap: E6
-  load is milliseconds; a page-level entry re-applies only its page). Redo re-applies. The journal is in
-  memory only, like Markdown sessions.
-- **Incremental by default.** Annotations, form values, text edits in place, rotations, metadata,
-  attachments and page moves save with `FPDF_INCREMENTAL` (E11): the original stays a byte prefix and
-  earlier signatures stay verifiable.
-- **Full rewrite, said first.** Page deletion, redaction, repair of a damaged xref and "compact" use
-  `FPDF_NO_INCREMENTAL` (E12, E13, E18). The save dialog says so before writing, because only a full
-  rewrite removes old bytes (an incremental save after a delete or redaction would keep the removed
-  content in the earlier revision).
-- **Revert to original.** For a file whose current bytes begin with the recorded original (SHA-256 of
-  the prefix matches), Revert truncates to `originalLength` and reopens. Otherwise Revert reloads the
-  bytes kept in memory. Both are offered only with a dirty-state confirmation.
-- **Copy by default.** The first save of a PDF is Save As a copy. In-place Save is allowed on a bound
-  file with the Markdown conflict rules, and the first in-place PDF save in a session asks once
-  (named assumption).
+  live PDFium document. Undo reopens the original bytes and replays entries 1 to *n − 1* in order (E6:
+  opening is milliseconds). No partial replay: page moves and deletes change indices, so every undo
+  replays the whole journal. Redo re-applies. The journal is in memory only, like Markdown sessions.
+- **Incremental by default, for additions only.** A save whose journal only *adds or changes without
+  removing* (new annotations, form values, rotations, page moves, new attachments, new metadata values)
+  uses `FPDF_INCREMENTAL` (E11): the original stays a byte prefix and earlier signatures stay
+  verifiable.
+- **Any removal defaults to a full rewrite, said first.** If the journal removes or replaces content
+  (retyped text on any rung, removed objects, page deletion, redaction, removed annotations or
+  attachments, cleared metadata, repair, compact) the save defaults to `FPDF_NO_INCREMENTAL` (E12,
+  E13, E18) and says why before writing: an incremental save keeps the old content readable in the
+  earlier revision. The user may still choose incremental for a non-redaction removal; redaction is
+  always a full rewrite.
+- **Encryption is kept.** Saving an encrypted file keeps its encryption unless the user removes it;
+  P2 proves a saved encrypted corpus file reopens only with its password, for both save modes.
+- **Revert to original** never truncates or writes in place outside the save primitive
+  (`FILE_LIFECYCLE.md`: no truncate-then-write). It is offered only when the bytes on disk begin with
+  the recorded original (SHA-256 of the prefix matches). It always confirms that saved edits on disk
+  will be discarded, and its default action is "Save the original as a copy". "Revert this file"
+  writes the original-length prefix through `save_pdf` and `replace.rs` with the generation and
+  conflict checks, like any Save. Without a binding (web download), Revert reopens the original bytes
+  kept in memory.
+- **Copy by default.** The first save of a PDF in a session is Save As a copy, also on `Ctrl+S`. After
+  that, `Ctrl+S` on a bound PDF asks once per session ("Save over the original file?") and then saves in
+  place with the Markdown conflict rules (named assumption).
 
 ## CSP decision
 
@@ -144,8 +153,11 @@ extended `tests/desktop-csp.test.ts`; it is not assumed now.
 1. **No PDF JavaScript.** Never call `FORM_DoDocumentJSAction`, `FORM_DoDocumentOpenAction`,
    `FORM_DoDocumentAAction` or `FORM_DoPageAAction`. Document-level JavaScript is listed in
    Properties as "contains scripts (not run)".
-2. **No launch actions.** A link or bookmark whose action is Launch or a remote GoTo to a file is
-   shown, never followed.
+2. **An allowlist of actions.** Only two actions act: an internal GoTo (a page jump) and a URI whose
+   scheme is `http`, `https` or `mailto`. Every other action (Launch, remote or embedded GoTo,
+   JavaScript, SubmitForm, ImportData, ResetForm, Named, Rendition, Sound, Movie, a URI with any other
+   scheme such as `javascript:` or `file:`) is shown with its kind and never followed. The document's
+   OpenAction and additional actions are never run.
 3. **Embedded files are never opened automatically.** They are listed; saving one is an explicit user
    action through the normal save path. Opening one inside MDviewer is allowed only for kinds MDviewer
    already opens, as a new in-memory document.
@@ -153,22 +165,34 @@ extended `tests/desktop-csp.test.ts`; it is not assumed now.
    confirm and `noopener` on the web). Internal destinations jump in the view.
 5. **Passwords** live in memory only, for the tab's lifetime; never persisted, logged, sent to
    Pulseboard or placed in a URL. Saving keeps the file's encryption unless the user removes it.
-6. **Parsing is untrusted input.** The engine runs inside WASM memory; a failed open is an error state
-   with a code, never a crash of the shell. Pulseboard events carry closed enums and buckets only.
-7. **Redaction claims are exact.** "Redacted" is shown only after a full rewrite and a check that the
-   phrase is absent from the saved bytes' text extraction; Redact also strips matches from
-   annotations, bookmarks and metadata.
+6. **Parsing is untrusted input.** The engine runs inside WASM memory; a failed open or a WASM trap
+   (including out-of-memory) is an error state with a code that closes only that PDF. The caps below
+   bound bitmaps and heap. A main-thread hang inside PDFium cannot be interrupted; that residual risk
+   is accepted for P1 and is the trigger for the worker decision in "CSP decision". Names that come
+   from the file (attachments, titles) are display text only and are sanitised before being offered
+   as a save-name suggestion (path separators, control and reserved characters removed, length
+   capped). Pulseboard events carry closed enums and buckets only.
+7. **Redaction claims are exact and scoped.** The claim is "text removed": glyphs inside the
+   redaction areas are deleted from the content stream (E13). "Redacted" is shown only after a full
+   rewrite and a scan of the saved raw bytes *and* every inflated stream finds no match. Redact also
+   removes matches from annotation contents, bookmark titles and Info metadata. What it does not
+   cover is said in the dialog: text drawn as images or vector outlines, XMP metadata, attachments,
+   form field values and structure-tree alternate text under the area. P4 either clears those (XMP
+   and attachments need P6's object access) or keeps the warning.
 
 ## Caps
 
 | Limit | Value | Where enforced |
 | --- | --- | --- |
 | File size to open | 200 MB | native `read_pdf`; web before reading the file |
-| Saved PDF size | 200 MB | native `save_pdf`; web before download |
-| Pages rendered at once | visible pages plus one screen ahead; bitmaps of others released | P1 view |
+| Saved PDF size | 200 MB; an incremental save that would pass it is offered as a full rewrite (which drops earlier revisions) or refused | native `save_pdf`; web before download |
+| One page bitmap | 16,384 px per side and 32 million pixels; the zoom clamps to fit | `src/pdf` engine |
+| Pages rendered at once | visible pages plus one screen ahead, at most 12 live bitmaps; others released | P1 view |
 | Pages | no hard cap; 1,000 pages must stay responsive (P1 proof) | — |
+| PDF bytes held in memory | 400 MB across all open PDFs (each file's original bytes are kept for Revert) | shell PDF tabs |
+| WASM heap | open refused, with an error, when the engine reports out-of-memory; that PDF closes | `src/pdf` engine |
 | Undo journal | 500 entries; older entries fold into the base | `src/pdf` |
-| Merge or insert inputs | 50 files per operation, each within the open cap | P2 |
+| Merge or insert inputs | 50 files and 400 MB in total per operation | P2 |
 
 ## Retype ladder (P4) mapped to the engine
 
@@ -196,8 +220,8 @@ standard fonts, subset TrueType, CID with ToUnicode, rotated pages, encrypted, l
 
 | Slice | Proof |
 | --- | --- |
-| P1 open and read | P1-1 unit: open each corpus file, page count, text and char boxes; P1-2 Playwright (web and desktop configs): open, scroll a 1,000-page file with bounded live bitmaps, find, outline, thumbnail, zoom, password prompt; P1-3 cold start: no `src/pdf` chunk or wasm before a PDF opens; P1-4 native: the built app opens a PDF under the real CSP with no violation; P1-5 a link with a Launch action is not followed |
-| P2 pages | unit: move, rotate, delete, duplicate, extract, split, merge, insert image and blank page, insert Markdown pages via the paginated export; every output reopened in PDFium and pdf.js with page count and text asserted; incremental prefix kept where promised |
+| P1 open and read | P1-1 unit: open each corpus file, page count, text and char boxes; P1-2 Playwright (web and desktop configs): open, scroll a 1,000-page file with bounded live bitmaps, find, outline, thumbnail, zoom, password prompt; P1-3 cold start: no `src/pdf` chunk or wasm before a PDF opens; P1-4 native: the built app opens a PDF under the real CSP with no violation; P1-5 links with Launch, JavaScript, SubmitForm and `javascript:` URI actions, and a document OpenAction, are shown and not followed |
+| P2 pages | unit: move, rotate, delete, duplicate, extract, split, merge, insert image and blank page, insert Markdown pages via the paginated export; every output reopened in PDFium and pdf.js with page count and text asserted; incremental prefix kept where promised; after deleting a page and a full rewrite, the deleted page's text is absent from the raw and inflated bytes; a saved encrypted file reopens only with its password in both save modes |
 | P3 annotate, fill, sign | unit + Playwright: each annotation type round-trips with an appearance stream and is listed by pdf.js; form values round-trip; flatten removes the fields and keeps the look; the signature stamp says it is not a cryptographic signature |
 | P4 edit on the page | per rung: a corpus case that forces it, the reported rung, text extracted after save equals the intended text in both parsers; redaction: phrase absent from the bytes and from both parsers' text, annotations, bookmarks and metadata; `deep-reviewer` lens |
 | P5 decompile and source PDFs | unit: tagged and untagged corpus to Markdown (headings, lists, tables, code, links, overview line); a source-carrying export round-trips byte-identical Markdown; no-cutoff suite green |
