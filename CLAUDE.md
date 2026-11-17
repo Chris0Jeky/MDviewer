@@ -1,5 +1,7 @@
 # Claude Operating Contract — MDviewer
 
+@AGENTS.md
+
 Compact session contract for Claude Code in `MDviewer/`. Keep it short. Put repeatable
 procedures in `.claude/skills/*/SKILL.md` and deep detail in `docs/*`.
 
@@ -28,14 +30,13 @@ When sources conflict, follow the higher source and report the conflict.
 
 ## First 5 Minutes
 
-1. Read `ACTION_ITEMS.md` (human-owned tasks + current-state snapshot).
-2. Read `AGENTS.md`.
-3. Read `ORCHESTRATOR.md` (resumable live state and next work).
-4. Read `docs/Project_Roadmap.md`.
-5. Read `docs/design/IMPLEMENTATION_SPEC.md` and `autodoc/AGENT_INDEX.md`.
-6. Pick one primary skill and at most one support skill.
-7. Identify the smallest safe, reviewable change.
-8. State blockers, assumptions, the verification target, and the docs-sync target before editing.
+1. Read the top status block of `ACTION_ITEMS.md` (human-owned tasks + current-state snapshot); the rest is history, read on demand.
+2. Read the CURRENT CHECKPOINT block of `ORCHESTRATOR.md` (resumable live state and next work); the rest is history, read on demand.
+3. Read `docs/Project_Roadmap.md`.
+4. Read `docs/design/IMPLEMENTATION_SPEC.md` and `autodoc/AGENT_INDEX.md`.
+5. Pick one primary skill and at most one support skill.
+6. Identify the smallest safe, reviewable change.
+7. State blockers, assumptions, the verification target, and the docs-sync target before editing.
 
 Do not bulk-read `node_modules`, `dist`, build output, or generated artifacts unless the task requires it.
 
@@ -64,14 +65,14 @@ live-site passes, install, print, keyboard and Narrator) are **agent QA work** b
 
 ## Git Workflow
 
-Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). The
-`pre_tool_use.py` hook enforces the safety rules.
+Full detail: [`docs/agentic/GIT_WORKFLOW.md`](docs/agentic/GIT_WORKFLOW.md). Rules below are
+agent-held: `scripts/agent_hooks/pre_tool_use.py` exists but is not wired as a hook.
 
-- **Protected branches** (`main`, `master`, `develop`, `release`): no rebase, force-push, hard/soft/mixed reset, `commit --amend`, `checkout -- <path>`, `restore`, `pull --rebase`. Hook-blocked.
-- **Always blocked**: `rm -rf`, `sudo`, `chmod -R 777`, bare force-push, `git clean -f`, `curl|sh`, `npm publish`.
+- **Protected branches** (`main`, `master`, `develop`, `release`): no rebase, force-push, hard/soft/mixed reset, `commit --amend`, `checkout -- <path>`, `restore`, `pull --rebase`.
+- **Never run**: `rm -rf`, `sudo`, `chmod -R 777`, bare force-push, `git clean -f`, `curl|sh`, `npm publish`.
 - **Update branch:** `git merge main` (not rebase). **Diverged remote:** `git merge origin/<branch>`.
 - **Never `git commit --amend` after pushing.** New commit instead.
-- **Commits have no `Co-Authored-By` trailer** (`includeCoAuthoredBy: false`).
+- **Commits have no `Co-Authored-By` trailer** (attribution is empty in `.claude/settings.json`).
 - Before any history-rewriting/discarding command: explain it in plain language, state the risk and reversibility, and let the user run it.
 
 ## Default Work Style
@@ -159,7 +160,7 @@ in the current environment.
 
 ## Local Settings
 
-Committed `.claude/settings.json` holds shared guardrails (`bypassPermissions` + the safety
-hooks in `scripts/agent_hooks/*`). Use `.claude/settings.local.json` only for machine-specific
+Committed `.claude/settings.json` holds allow/deny guardrails and the logging hooks; it sets no
+`defaultMode` (the permission mode is the user's). Use `.claude/settings.local.json` only for machine-specific
 overrides (gitignored). MCP defaults live in `.mcp.json` (credential-free: context7, playwright,
 ripgrep) — verify a server is live via `/mcp` before relying on it.
