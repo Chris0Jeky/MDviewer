@@ -29,8 +29,9 @@ When sources conflict, follow the higher source and report the conflict.
 
 ## First 5 Minutes
 
-`ACTION_ITEMS.md` → `AGENTS.md` → `ORCHESTRATOR.md` → `docs/Project_Roadmap.md` →
-`docs/design/IMPLEMENTATION_SPEC.md` → `autodoc/AGENT_INDEX.md`. Then pick the smallest
+The top status block of `ACTION_ITEMS.md` → `AGENTS.md` → the CURRENT CHECKPOINT block of
+`ORCHESTRATOR.md` → `docs/Project_Roadmap.md` → `docs/design/IMPLEMENTATION_SPEC.md` →
+`autodoc/AGENT_INDEX.md`. The rest of `ACTION_ITEMS.md` and `ORCHESTRATOR.md` is history: read it on demand. Then pick the smallest
 safe, reviewable slice and state blockers, assumptions, verification target, and docs-sync
 target before editing.
 
@@ -66,6 +67,9 @@ autodoc/        AGENT_INDEX.md code map
 - `npm run test` — Vitest unit suite. `npm run test:e2e` — Playwright (real Chromium).
 - `npm run agent:check` — typecheck + lint + unit tests in one shot.
 - `npm run agent:hooks:smoke` / `npm run agent:skills:validate` — validate agentic tooling before handoff.
+- Desktop (`.github/workflows/desktop.yml`): `npm run desktop:build:web`, `npm run desktop:test` (Playwright, desktop config).
+  Native, from `src-tauri/`: `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --release --locked`.
+- `npm run test:authoring` — production authoring and accessibility regressions (run by `.github/workflows/ci.yml`).
 
 ## The Load-Bearing Render Order (never reorder)
 
@@ -96,17 +100,27 @@ page breaks and breaks the no-slice guarantee. This is the single most important
 - Git: branch off `main`; `merge` not `rebase`; no force-push or history rewrite on protected
   branches; explain destructive ops first; no `Co-Authored-By` trailer. See `docs/agentic/GIT_WORKFLOW.md`.
 - Publication is standing-authorized: keep commits small and logical, push scoped branches, and open
-  draft PRs after relevant local checks. A PR is aged once an independent adversarial review has
+  ready-for-review PRs after relevant local checks (draft only while the work is still being written; never merged from draft). A PR is aged once an independent adversarial review has
   examined its latest head, exact-head CI has completed green, every comment is triaged, and the
   head has aged at least three minutes (global law 2f). The repository is T2 with push and merge free
   (`.agent-harness/tier.json`, owner decision 2026-10-15); merging is not deploying (AI-9). Actionable findings require finding → commit
   evidence, while informational/bot notices require an explicit non-finding triage. Any head change
   resets review and CI evidence. Preserve commits with a merge commit—never squash-merge.
+- Deploy: `.github/workflows/deploy.yml` is `workflow_dispatch` only, and merging is not deploying. Never launch the
+  native app without backing up its `library.json` and checking that no `mdviewer` process is running (the app is
+  single-instance; a running one is the owner's); open only invented files. See `docs/WINDOWS_DESKTOP.md`, "Protect the owner's state".
 - Questions: ask only true blockers, batched; otherwise proceed with a recorded assumption. See `docs/agentic/QUESTION_PROTOCOL.md`.
 - Failures: never skip a finding as "non-blocking"; fix now or seed a tracked follow-up. See `docs/agentic/FAILURE_LEDGER.md`.
 - Review/merge gates: correctness (no-slice holds), CI/tests green, a post-merge agent QA acceptance
   check for UI/pagination/export on the next green build (`docs/qa/ACCEPTANCE.md`; mechanical acceptance is agent work by owner
   decision 2026-11-13, never an owner task), zero tech debt, docs sync. Detail in `CLAUDE.md` › Review & Merge Gates.
+
+## Work classes
+
+- **Hard:** `src-tauri` (file policy, export policy, commands, capabilities) and the render-order and pagination core.
+  These take the session driver plus a second review lens before merge.
+- **Mechanical:** docs sync, fixtures, autodoc, QA charters. These suit the quick-mechanical tier.
+- Models and effort: the `model-effort-routing` skill.
 
 ## Security / Privacy Guardrails
 
