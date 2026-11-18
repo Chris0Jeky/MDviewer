@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace, selectDocument } from "./helpers";
+import { test, expect, documentTabs, openFiles, openPdf, readyWorkspace, selectDocument, saveCopy } from "./helpers";
 
 /** Readable data (D3; docs/design/READABLE_DATA.md). Every fixture here is invented. */
 const CONFIG = JSON.stringify({
@@ -69,7 +69,7 @@ test("Edit shows the raw text, the preview follows typing, and an unedited save 
   await ready(page);
   // Saving the untouched data document writes its raw text, byte for byte.
   const saving = page.waitForEvent("download");
-  await page.keyboard.press("Control+s");
+  await saveCopy(page, page.locator("body"));
   const saved = await saving;
   expect(saved.suggestedFilename()).toBe("service.json");
   expect(await readFile((await saved.path())!, "utf8")).toBe(CONFIG);

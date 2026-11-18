@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { test, expect, RICH_MARKDOWN, chooseWithShortcut, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, selectDocument, showOutline, openPdf } from "./helpers";
+import { test, expect, RICH_MARKDOWN, documentTabs, dropFiles, moreMenu, openFiles, readyReader, readyWorkspace, saveCopy, selectDocument, showOutline, openPdf } from "./helpers";
 import { pdfRegionInk, type PdfRegion } from "./pdfPixels";
 
 test("production reader renders rich Markdown without loading the editing workspace", async ({ page, audit }) => {
@@ -339,9 +339,8 @@ test("workspace teardown releases global listeners and later input fires once", 
   }
   await openPdf(page);
   await readyWorkspace(page, "# One");
-  const chooser = chooseWithShortcut(page);
   // Native and File API paths must share BOM-aware decoding in the workspace.
-  await (await chooser).setFiles({ name: "two.md", mimeType: "text/markdown", buffer: Buffer.from("\ufeff# Two", "utf16le") });
+  await openFiles(page, [{ name: "two.md", bytes: Buffer.from("\ufeff# Two", "utf16le") }], "shortcut");
   await readyWorkspace(page, "# Two");
   await expect(page.getByRole("combobox", { name: "Active document" }).locator("option")).toHaveText(["one.md", "two.md"]);
   await dropFiles(page, [{ name: "three.md", text: "# Three" }], "#desktop-workspace");
@@ -350,7 +349,7 @@ test("workspace teardown releases global listeners and later input fires once", 
   const downloads: string[] = [];
   page.on("download", download => downloads.push(download.suggestedFilename()));
   const download = page.waitForEvent("download");
-  await page.keyboard.press("Control+s");
+  await saveCopy(page, page.locator("body"));
   const saved = await download;
   const path = test.info().outputPath("shortcut-saved.md");
   await saved.saveAs(path);
@@ -378,9 +377,7 @@ test("document-authored input IDs cannot intercept the workspace file picker", a
   await readyReader(page, "Authored input ID");
   await openPdf(page);
   await readyWorkspace(page, markdown);
-  const chooser = page.waitForEvent("filechooser", { timeout: 5_000 });
-  await page.getByRole("button", { name: "Open Markdown", exact: true }).click();
-  await (await chooser).setFiles({ name: "next.md", mimeType: "text/markdown", buffer: Buffer.from("# Next document") });
+  await openFiles(page, [{ name: "next.md", text: "# Next document" }], () => page.getByRole("button", { name: "Open Markdown", exact: true }).click());
   await readyWorkspace(page, "# Next document");
   await expect(page.getByRole("combobox", { name: "Active document" }).locator("option")).toHaveText(["input-id.md", "next.md"]);
 });

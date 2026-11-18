@@ -1,10 +1,22 @@
 import type { Page } from "@playwright/test";
-import { test, expect, openFiles, readyReader } from "./helpers";
+import { test, expect, onBrowserHost, openFiles, readyReader } from "./helpers";
 import { encrypted, linkedDocument, longDocument } from "../helpers/pdfCorpus";
 
 const pdfAsset = /\/assets\/(?:pdf-[^/]+\.(?:js|css)|pdfium-[^/]+\.(?:js|wasm))$/;
 
 async function openPdfFile(page: Page, name: string, bytes: Uint8Array): Promise<void> {
+  if (onBrowserHost()) {
+    // The browser host's Open offers documents only until the host can read PDFs (readPdf, P1b);
+    // a dropped PDF opens as a copy, through the same reader.
+    const transfer = await page.evaluateHandle(({ name, base64 }) => {
+      const data = new DataTransfer();
+      data.items.add(new File([Uint8Array.from(atob(base64), char => char.charCodeAt(0))], name, { type: "application/pdf" }));
+      return data;
+    }, { name, base64: Buffer.from(bytes).toString("base64") });
+    await page.locator("#reader-shell").dispatchEvent("drop", { dataTransfer: transfer });
+    await transfer.dispose();
+    return;
+  }
   const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("Control+O");
   await (await chooser).setFiles([{ name, mimeType: "application/pdf", buffer: Buffer.from(bytes) }]);
@@ -33,6 +45,8 @@ test("the PDF chunk and engine load only when a PDF is opened, and the PDF reads
 
   // Bookmarks become the outline and jump.
   await page.keyboard.press("Control+B");
+  // With a file host the panel opens on its Library tab (as on Windows); the Outline is the next tab.
+  if (onBrowserHost()) await page.locator("#shell-panel").getByRole("tab", { name: "Outline", exact: true }).click();
   const outline = page.locator("#reader-outline");
   await expect(outline.getByRole("button", { name: "Introduction" })).toBeVisible();
   await outline.getByRole("button", { name: "Second page" }).click();

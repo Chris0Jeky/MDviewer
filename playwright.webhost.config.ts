@@ -9,7 +9,6 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 const baseURL = `http://127.0.0.1:${port}/desktop.html`;
 
 export default defineConfig({
-  testDir: "tests/webhost-e2e",
   outputDir: "test-results/webhost",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -25,7 +24,10 @@ export default defineConfig({
     timeout: 120_000,
   },
   projects: [
-    { name: "webhost-chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "webhost-firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webhost-chromium", testDir: "tests/webhost-e2e", use: { ...devices["Desktop Chrome"] } },
+    { name: "webhost-firefox", testDir: "tests/webhost-e2e", use: { ...devices["Desktop Firefox"] } },
+    // The whole Windows shell suite on the browser host (web parity W2a). Specs that fake the
+    // Tauri host (fakeHost.ts) keep running the Tauri host, as they do in the desktop config.
+    { name: "webhost-desktop", testDir: "tests/desktop-e2e", use: { ...devices["Desktop Chrome"] } },
   ],
 });

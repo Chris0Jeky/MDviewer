@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, documentTabs, moreMenu, openFiles, readyReader } from "./helpers";
+import { test, expect, documentTabs, moreMenu, openFiles, readyReader, saveCopy } from "./helpers";
 
 /** Readable data D5: copy a value, a path or a subtree, and save the readable view. Invented fixtures. */
 const SERVICE = JSON.stringify({
@@ -131,7 +131,7 @@ test("Save readable view as Markdown writes the render text and leaves the docum
   // The open document is unchanged: not dirty, and Save still writes the raw CSV under its own name.
   await expect(documentTabs(page)).toHaveText(["people.csv"]);
   const raw = page.waitForEvent("download");
-  await page.keyboard.press("Control+s");
+  await saveCopy(page, page.locator("body"));
   const rawSaved = await raw;
   expect(rawSaved.suggestedFilename()).toBe("people.csv");
   expect(await readFile((await rawSaved.path())!, "utf8")).toBe(PEOPLE);
