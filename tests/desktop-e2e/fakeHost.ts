@@ -21,10 +21,12 @@ export interface FakeSeed {
   templates?: Record<string, [string, string]>;
   /** Where Save As "chooses" to write. */
   saveAs?: { name: string; dir: string };
+  /** Files passed at launch, [name, text]: the first `take_pending_files` returns them, bound. */
+  pending?: Array<[string, string]>;
   /** PDFs by library id: [name, bytes as base64]. `library_open` returns them as `kind: "pdf"`. */
   pdfs?: Record<string, [string, string]>;
 }
-export interface FakeState { calls: Array<[string, Record<string, unknown>]> }
+export interface FakeState { calls: Array<[string, Record<string, unknown>]>; files: Record<string, string> }
 declare global { interface Window { __fake: FakeState } }
 
 export const fakeEntry = (id: string, name: string, dir: string): FakeEntry => ({ id, name, dir, path: `${dir}\\${name}`, at: 1 });
@@ -36,12 +38,31 @@ export async function installFakeHost(page: Page, seed: FakeSeed = {}): Promise<
       recent: [...(seed.recent ?? [])], pinned: [...(seed.pinned ?? [])], projects: [...(seed.projects ?? [])],
       seen: new Set<string>(),
     };
-    const fake: FakeState = { calls: [] };
+    const fake: FakeState = { calls: [], files: {} };
     window.__fake = fake;
     let callback = 0;
     let saved = 0;
     const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
-      take_pending_files: () => empty,
+      take_pending_files: () => {
+        const launch = (seed.pending ?? []).splice(0).map(([name, text], index) => {
+          const token = `p${index}`.padEnd(32, "0");
+          fake.files[token] = text;
+          return { name, text, bytes: text.length, token, path: `C:\\work\\${name}`, dir: "C:\\work", encoding: "utf-8", eol: "lf" };
+        });
+        return { documents: launch, errors: [], canceled: false };
+      },
+      // The A2 line patch: each patch replaces one line whose current text is `expect`.
+      patch_document: ({ token, patches }) => {
+        const text = fake.files[token as string];
+        if (text === undefined) return { outcome: "failed", code: "revoked" };
+        const lines = text.split("\n");
+        for (const patch of patches as Array<{ line: number; expect: string; replace: string }>) {
+          if (lines[patch.line - 1] !== patch.expect) return { outcome: "unplaced", index: 0, text };
+          lines[patch.line - 1] = patch.replace;
+        }
+        fake.files[token as string] = lines.join("\n");
+        return { outcome: "saved", generation: ++saved, text: fake.files[token as string] };
+      },
       session_restore: () => empty,
       library_list: () => ({ recent: state.recent, pinned: state.pinned, projects: state.projects }),
       library_read_template: ({ id }) => {

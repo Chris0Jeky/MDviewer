@@ -106,6 +106,14 @@ function showActionNotice(notice: Notice | null): void {
     action.type = "button";
     action.className = "am-notice-action";
     action.textContent = notice.action.label;
+    if (notice.action.keys) {
+      const keys = document.createElement("kbd");
+      keys.className = "am-notice-keys";
+      keys.textContent = notice.action.keys;
+      action.append(" ", keys);
+      action.setAttribute("aria-keyshortcuts", notice.action.keys.replace("Ctrl", "Control"));
+      action.setAttribute("aria-label", notice.action.label); // the name stays "Undo"; the shortcut is its own property
+    }
     action.addEventListener("click", () => notice.action!.run());
     actionNotice.append(action);
   }
@@ -133,10 +141,17 @@ const writeback = createWriteback({
     return docs.applyReload(target, { outcome: "changed", text, generation, encoding: doc.binding.encoding, eol: doc.binding.eol });
   },
   setText: (doc, text) => { doc.text = text; doc.dirty = true; ++generation; syncDocuments(); },
-  // A write re-renders the document: return focus to the same control so keyboard users keep their place.
+  // A write patches only the changed block (as Edit typing does): a full render would reset and restore the
+  // offset across the code and diagram upgrades above it, and the view would jump (#334). Focus returns
+  // to the same control so keyboard users keep their place.
   rerender: () => {
     const key = (document.activeElement as HTMLElement | null)?.dataset?.amKey;
-    void render().then(() => {
+    // If the render cannot patch (the shown document is not the one recorded as rendered) it falls back
+    // to a full render, which restores the saved position: save this document's position first.
+    const shown = docs.reader.active;
+    if (shown) docs.reader.positions.set(shown.id, { ...docs.reader.positions.get(shown.id), reader: { scrollTop: scroll.scrollTop, scrollLeft: scroll.scrollLeft } });
+    syncEditor(); // a patch render leaves Edit's text alone; the write changed the source it shows
+    void render([], true).then(() => {
       if (key && !document.querySelector(".am-menu")) content.querySelector<HTMLElement>(`[data-am-key="${key}"]`)?.focus({ preventScroll: true });
     });
   },
@@ -144,6 +159,15 @@ const writeback = createWriteback({
   report,
 });
 setControlHandler((control, action) => { void writeback.change(control, action); });
+// Ctrl+Z in the reader undoes the last saved change (#335). Text fields keep their own undo, and Edit
+// and the workspace own Ctrl+Z there; a shortcut with nothing to undo is left to the browser.
+window.addEventListener("keydown", event => {
+  if (event.defaultPrevented || event.isComposing || event.repeat || app || editing || modalOpen() || document.querySelector(".am-menu")) return;
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+  if (writeback.undoLast()) event.preventDefault();
+});
 
 // Screen theme: a fixed choice, or follow Windows (light or dark) when the setting says so.
 const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -1117,7 +1141,11 @@ async function followChange(token: string): Promise<void> {
     syncDocuments();
     return;
   }
+  // Our own write echoing back (the reply to a write can arrive after its watcher event): the text
+  // is what is shown already, so only the binding moves; a full re-render would reset the view (#345).
+  const same = result.text === current.text;
   if (!docs.applyReload(current, { ...result, text: result.text })) return;
+  if (same) { refollowed.delete(token); syncDocuments(); return; }
   refollowed.delete(token);
   if (current.owner === "reader") {
     const doc = docs.reader.documents.find(open => open.id === current.id);

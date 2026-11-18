@@ -21,7 +21,7 @@ param(
     # Internal out-of-process UIA worker. It uses Windows PowerShell's framework UIA.
     [switch]$Probe,
     [long]$WindowHandle,
-    [ValidateSet('heading', 'button', 'toggle', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
+    [ValidateSet('heading', 'button', 'toggle', 'locate', 'save-dialog', 'screenshot')][string]$ProbeAction = 'heading',
     [string]$ButtonName,
     [string]$SavePath,
     [string]$DialogTitle = 'Save export',
@@ -144,6 +144,20 @@ public static class SmokeWindow {
             Write-ProbePhase 'getting-window-element'
             $window = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$WindowHandle)
             Write-ProbePhase 'window-element-ready'
+            if ($ProbeAction -eq 'locate') {
+                # Where a named element is on screen, and whether it lies inside the window (#334, #335).
+                Write-ProbePhase 'locating'
+                $located = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $ButtonName))
+                if ($null -eq $located) { throw 'The requested element is not there yet.' }
+                $box = $located.Current.BoundingRectangle
+                $windowBox = $window.Current.BoundingRectangle
+                $result.top = $box.Y
+                $result.inWindow = ($box.Top -ge $windowBox.Top) -and ($box.Bottom -le $windowBox.Bottom)
+                $result.found = $true
+                Write-ProbeResult
+                exit 0
+            }
             if ($ProbeAction -eq 'button') {
                 Write-ProbePhase 'finding-button'
                 $button = Find-Button $window $ButtonName
@@ -184,6 +198,18 @@ public static class SmokeWindow {
                 Write-ProbePhase 'getting-toggle-pattern'
                 $pattern = $checkbox.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
                 $result.found = $true
+                # #334: the checkbox sits mid-document; a write-back must not move the view. Bring it
+                # into view, note where it is on screen, and compare after the re-render below.
+                $scrollItem = $null
+                if ($checkbox.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scrollItem)) {
+                    $scrollItem.ScrollIntoView()
+                    Start-Sleep -Milliseconds 500
+                }
+                $result.checkboxTopBefore = $checkbox.Current.BoundingRectangle.Y
+                # A neighbour that does not change measures the view; the toggled box redraws itself.
+                $reference = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Keep this one (Done)'))
+                if ($null -ne $reference) { $result.referenceTopBefore = $reference.Current.BoundingRectangle.Y }
                 Write-ProbeResult
                 Write-ProbePhase 'toggling-checkbox'
                 $pattern.Toggle()
@@ -643,7 +669,7 @@ function Invoke-SmokeAction([string]$Action, [string]$Name = '', [string]$Destin
         if ($null -ne $evidence.result) {
             $result = $evidence.result
             if (-not $result.runtimeReady) { throw "Native UI '$Action' worker bootstrap failed: $($result.reason)" }
-            if ($result.found) { return }
+            if ($result.found) { $script:lastProbeResult = $result; return }
             $lastReason = $result.reason
         } else {
             throw "The UI Automation worker exited with code $($evidence.exitCode) before returning a probe. See its captured stdout/stderr."
@@ -791,7 +817,9 @@ try {
     $tasksHeading = 'MDviewer native tasks'
     $tasksName = 'tasks.md'
     $tasksPath = Join-Path $fixtureDirectory $tasksName
-    $tasksText = "# $tasksHeading`r`n`r`n- [ ] Ship the smoke`r`n- [x] Keep this one`r`n"
+    # Long enough to scroll, with the task in the middle (#334: a write-back keeps the view still).
+    $tasksFiller = (1..40 | ForEach-Object { "Paragraph $_ of the native task smoke, invented text.`r`n`r`n" }) -join ''
+    $tasksText = "# $tasksHeading`r`n`r`n$tasksFiller- [ ] Ship the smoke`r`n- [x] Keep this one`r`n`r`n$tasksFiller"
     $tasksBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText)
     $toggledBytes = [System.Text.UTF8Encoding]::new($false).GetBytes($tasksText.Replace('- [ ] Ship', '- [x] Ship'))
     [System.IO.File]::WriteAllBytes($tasksPath, $tasksBytes)
@@ -801,10 +829,24 @@ try {
     }
     [void](Wait-ForHeading $tasksHeading 'tasks-document.png')
     Invoke-SmokeAction 'toggle' 'Ship the smoke (To do)'
+    $script:lastToggleResult = $script:lastProbeResult
+    $topBefore = $script:lastProbeResult.checkboxTopBefore
     $toggledEvidence = Wait-ExportFile $tasksPath {
         param([byte[]]$bytes)
         [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($toggledBytes)
     }
+    # #334: the toggled item is where it was on screen; #335: Undo is inside the window.
+    Start-Sleep -Milliseconds 700
+    $referenceBefore = $script:lastToggleResult.referenceTopBefore
+    Invoke-SmokeAction 'locate' 'Ship the smoke (Done)'
+    $taskAfter = $script:lastProbeResult.top
+    Invoke-SmokeAction 'locate' 'Keep this one (Done)'
+    $referenceAfter = $script:lastProbeResult.top
+    if ($null -eq $referenceBefore -or [Math]::Abs($referenceAfter - $referenceBefore) -gt 2) {
+        throw "The view moved after the write-back: the next item was at $referenceBefore and is at $referenceAfter (the task: $topBefore, then $taskAfter)."
+    }
+    Invoke-SmokeAction 'locate' 'Undo'
+    if (-not $script:lastProbeResult.inWindow) { throw 'The Undo control is outside the window after a write-back.' }
     Invoke-SmokeAction 'button' 'Undo'
     $undoneEvidence = Wait-ExportFile $tasksPath {
         param([byte[]]$bytes)
