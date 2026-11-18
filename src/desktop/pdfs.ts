@@ -51,6 +51,7 @@ export class PdfTabs {
     const index = this.tabs.findIndex(tab => tab.id === id);
     if (index < 0) return;
     this.tabs.splice(index, 1);
+    if (this.lastAdded === id) this.lastAdded = null;
     if (this.activeId === id) this.activeId = this.tabs[Math.max(0, index - 1)]?.id ?? null;
   }
 }

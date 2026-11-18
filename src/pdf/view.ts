@@ -24,6 +24,8 @@ export interface PdfView {
   focusFind(): void;
   /** Re-fill the shell outline (after the shell switched back to this PDF). */
   showOutline(): void;
+  /** Release every drawn page (the tab is hidden); pages redraw when it is shown again. */
+  suspend(): void;
   destroy(): void;
 }
 
@@ -78,6 +80,7 @@ export async function mountPdf(host: HTMLElement, options: PdfViewOptions): Prom
     zoomBy: step => view?.zoomBy(step),
     focusFind: () => view?.focusFind(),
     showOutline: () => view?.showOutline(),
+    suspend: () => view?.suspend(),
     destroy: () => { destroyed = true; view?.destroy(); root.remove(); },
   };
 
@@ -506,6 +509,7 @@ function buildView(root: HTMLElement, doc: PdfDocument, options: PdfViewOptions)
   return {
     pageCount: doc.pageCount,
     zoomBy,
+    suspend: () => { for (const i of [...live.keys()]) release(i); },
     focusFind: () => { find.focus(); find.select(); },
     showOutline,
     destroy: () => {
