@@ -42,6 +42,10 @@ const UNSAFE_CSS_FUNCTION =
   /(?:@import|expression\s*\(|(?:-webkit-)?image-set\s*\(|cross-fade\s*\(|element\s*\(|paint\s*\()/i;
 const CSS_URL = /url\s*\(\s*(["']?)(.*?)\1\s*\)/gi;
 const CSS_OBFUSCATION = /\\|\/\*/;
+// Any url( whose target is not a fragment, including an unterminated one (CSS still fetches it).
+const CSS_ANY_URL = /url\s*\(\s*["']?(?![\s"']*#)/i;
+// A document must not place content over the app's own controls (inline styles only).
+const CSS_OVERLAY = /position\s*:\s*(?:fixed|sticky)/i;
 const SVG_RESOURCE_ATTRS = new Set([
   "fill",
   "stroke",
@@ -69,6 +73,7 @@ function hasUnsafeCssResource(value: string): boolean {
   // Generated Mermaid CSS does not need either construct, so fail closed.
   if (CSS_OBFUSCATION.test(value)) return true;
   if (UNSAFE_CSS_FUNCTION.test(value)) return true;
+  if (CSS_ANY_URL.test(value)) return true;
   CSS_URL.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = CSS_URL.exec(value)) !== null) {
@@ -107,7 +112,7 @@ function sanitizeHtml(html: string, allowSvgStyles: boolean): SanitizedHtml {
     }
 
     const style = element.getAttribute("style");
-    if (style && hasUnsafeCssResource(style)) {
+    if (style && (hasUnsafeCssResource(style) || CSS_OVERLAY.test(style))) {
       element.removeAttribute("style");
       removedCount += 1;
     }

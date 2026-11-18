@@ -1,4 +1,4 @@
-export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv" | "text";
+export type DataKind = "json" | "jsonl" | "yaml" | "toml" | "csv" | "text" | "html";
 
 export interface ReadableOptions {
   fileName?: string;
