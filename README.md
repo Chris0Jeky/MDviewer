@@ -20,9 +20,8 @@ editor loads only when you edit, and pagination only when you choose Export PDF�
 [Download/build instructions, shortcuts and current limits](docs/WINDOWS_DESKTOP.md).
 
 **Next development:** [prioritized work and acceptance criteria](docs/FUTURE_WORK.md),
-tracked in [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Save/Save As and
-optional crash recovery have reviewed designs and remain implementation work; the current app saves explicit
-copies and keeps open documents in memory.
+tracked in [#195](https://github.com/Chris0Jeky/MDviewer/issues/195). Windows [Save and Save As](docs/design/FILE_LIFECYCLE.md) are implemented. Optional crash recovery
+remains design-only; unsaved edits stay in memory. The web app still downloads an explicit Markdown copy.
 
 - [What it is](#what-it-is)
 - [Why it exists](#why-it-exists)
@@ -136,7 +135,7 @@ Only what the code actually does:
 - **Screen chrome only:** light / dark / sepia. Does not recolour the page sheets or the PDF.
 - **Preview zoom** — Fit / 100% / 50%. Paint-only (`transform: scale`); it never changes page breaks. A pinned page chip tracks which sheet you are on.
 - **Ingestion.** Drag-and-drop, paste, file picker, or **Open Markdown** (`Ctrl/Cmd+O`). Non-Markdown files are skipped with a banner; reads that fail are reported as unreadable, not as the wrong type. Soft confirm at 250 kB; hard refuse at 25 MB.
-- **Source download.** **Save Markdown** (`Ctrl/Cmd+S`) writes the exact in-memory text to a file. It does not persist the document in the app. On the Windows app, **Save** (`Ctrl+S`) and **Save As** (`Ctrl+Shift+S`) write the open document back to its own file, keeping its encoding and line endings, and refuse to overwrite a file another program changed; **Save Markdown** stays a copy.
+- **Source download.** **Save Markdown** (`Ctrl/Cmd+S`) writes the exact in-memory text to a file. It does not persist the document in the app. On Windows, **Save** (`Ctrl+S`) writes back to the bound file, preserving its encoding and line endings, and refuses to overwrite outside changes. **Save As** (`Ctrl+Shift+S`) saves to a chosen file and binds the open document there; **Save Markdown** stays a separate copy.
 - **Close recovery.** Undo the latest close in this tab. Reload or closing the tab clears it. No history store.
 - **Installable PWA** with a prompt-based update (never an unattended swap under a live document) and a Workbox precache of the lazy feature chunks and KaTeX fonts, so Print and math still work offline.
 - **Sanitized HTML.** `markdown-it` runs with `html: true` for KaTeX/Mermaid output; every fragment is run through DOMPurify and a second pass that strips automatic remote-resource loads. Embedded raster data URLs are the only images allowed in the browser; the Windows app also shows local images a document references by a relative path (PNG, JPEG, GIF, WebP, SVG as an image; `../` may reach elsewhere on the same drive), read from disk, never fetched, and shown only in its own window.
@@ -271,7 +270,7 @@ From [`docs/Project_Roadmap.md`](docs/Project_Roadmap.md) and the open GitHub is
 | --- | --- | --- |
 | P0 Scaffolding | Done | Repo, Vite/Vitest/Playwright, pinned design specs |
 | P1 Core pipeline | Done | Render → paginate → both export paths; no-slice e2e; Gate 3 (manual Chrome PDF inspection) accepted |
-| P2 Desktop authoring and UX | In progress | New, Format, guarded undo, Find/Replace, session positions/navigation, visible PDF progress and second-engine/accessibility regressions are shipped. File ownership/recovery implementation and human acceptance remain in [Future work](docs/FUTURE_WORK.md). |
+| P2 Desktop authoring and UX | In progress | New, Format, guarded undo, Find/Replace, session positions/navigation, visible PDF progress, second-engine/accessibility regression coverage and Windows Save/Save As are shipped. Optional crash recovery remains design-only; see [Future work](docs/FUTURE_WORK.md) and the [QA charters](docs/qa/ACCEPTANCE.md) for remaining work. |
 | P3 Hardening and distribution | In progress | Windows reader/installer preview, sanitization, offline PDF qualification and performance tooling are shipped. [#169](https://github.com/Chris0Jeky/MDviewer/issues/169) retains native acceptance; [#201](https://github.com/Chris0Jeky/MDviewer/issues/201)/[#202](https://github.com/Chris0Jeky/MDviewer/issues/202) track cancellation and measured responsiveness. Live/PWA acceptance is agent QA work ([acceptance](docs/qa/ACCEPTANCE.md)); the first automated promotion remains a human gate (AI-9). |
 | P4 Stretch | Deferred | Extra paper sizes/orientations; custom user themes |
 
